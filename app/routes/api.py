@@ -195,3 +195,84 @@ async def update_viewer_context(request: Request):
     except Exception as e:
         logger.error(f"Erreur update_context: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+# ==========================================================
+# 5. SONDAGES EN DIRECT (Pour widget_sondage.html)
+# ==========================================================
+@router.get("/poll/active")
+async def get_active_poll(twitch_id: str = None):
+    """Envoie les données du sondage actuel au site web."""
+    conn = get_db()
+    try:
+        poll = conn.execute("SELECT * FROM polls WHERE is_active = 1 ORDER BY id DESC LIMIT 1").fetchone()
+        
+        if not poll:
+            conn.close()
+            return {"active": False}
+            
+        poll_dict = dict(poll)
+        
+        # On calcule les votes totaux et les pourcentages
+        votes = conn.execute("SELECT option_index, COUNT(*) as count FROM poll_votes WHERE poll_id = ? GROUP BY option_index", (poll_dict['id'],)).fetchall()
+        
+        results = {1: 0, 2: 0, 3: 0, 4: 0}
+        total_votes = 0
+        for v in votes:
+            results[v['option_index']] = v['count']
+            total_votes += v['count']
+            
+        # Si le viewer est connecté, on regarde ce qu'il a déjà voté
+        user_vote = None
+        if twitch_id:
+            uv = conn.execute("SELECT option_index FROM poll_votes WHERE poll_id = ? AND twitch_id = ?", (poll_dict['id'], twitch_id)).fetchone()
+            if uv:
+                user_vote = uv['option_index']
+                
+        conn.close()
+        
+        return {
+            "active": True,
+            "id": poll_dict['id'],
+            "question": poll_dict['question'],
+            "options": {
+                1: poll_dict['option1'],
+                2: poll_dict['option2'],
+                3: poll_dict['option3'],
+                4: poll_dict['option4']
+            },
+            "results": results,
+            "total_votes": total_votes,
+            "user_vote": user_vote
+        }
+        
+    except Exception as e:
+        if conn: conn.close()
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@router.post("/poll/vote")
+async def submit_vote(request: Request):
+    """Reçoit le clic du viewer depuis le site web et l'enregistre."""
+    try:
+        data = await request.json()
+        poll_id = data.get("poll_id")
+        twitch_id = data.get("twitch_id")
+        option_idx = data.get("option_index")
+        
+        if not all([poll_id, twitch_id, option_idx]):
+            return JSONResponse(status_code=400, content={"error": "Données manquantes"})
+            
+        conn = get_db()
+        # Insertion ou modification du vote (grâce au UNIQUE de la BDD)
+        conn.execute("""
+            INSERT INTO poll_votes (poll_id, twitch_id, option_index) 
+            VALUES (?, ?, ?)
+            ON CONFLICT(poll_id, twitch_id) DO UPDATE SET option_index = excluded.option_index
+        """, (poll_id, twitch_id, option_idx))
+        
+        conn.commit()
+        conn.close()
+        return {"status": "success"}
+        
+    except Exception as e:
+        logger.error(f"Erreur vote API: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})

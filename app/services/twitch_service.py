@@ -64,7 +64,8 @@ class MasthbotTwitch(commands.Bot):
                 'streamers_channel_id': s.get('streamers_channel_id', ""),
                 'discord_notify_message': s.get('discord_notify_message', ""),
                 'exp_per_message': s.get('exp_per_message', 2),
-                'exp_per_watchtime': s.get('exp_per_watchtime', 5)
+                'exp_per_watchtime': s.get('exp_per_watchtime', 5),
+                'personal_last_live_id': s.get('personal_last_live_id', "")
             }
         except Exception as e:
             logger.error(f"❌ [DB ERROR] : {e}")
@@ -155,21 +156,24 @@ class MasthbotTwitch(commands.Bot):
         # 🎬 GÉNÉRIQUE DE FIN : LE TRI PARFAIT (MODO/VIP/CHATTER)
         # =========================================================
         # On vérifie les badges Twitch
-        badges = message.author.badges or {}
+                badges = message.author.badges or {}
         is_owner = username == self.channel_name
         is_mod = message.author.is_mod or ("moderator" in badges) or is_owner
         is_vip = message.author.is_vip or ("vip" in badges)
 
-        # On l'inscrit dans les compteurs de temps (0 pour l'initialiser s'il vient d'arriver)
-        credits_service.add_watchtime(display_name, 0)
+        # ✅ VÉRIFICATION DU LIVE
+        is_live = bool(config.get('personal_last_live_id', ""))
 
-        # Et on le place dans la BONNE catégorie
-        if is_mod:
-            credits_service.log_event("moderators", display_name)
-        elif is_vip:
-            credits_service.log_event("vips", display_name)
-        else:
-            credits_service.log_event("chatters", display_name)
+        # On n'inscrit dans le générique QUE si on est en live !
+        if is_live:
+            credits_service.add_watchtime(display_name, 0)
+            if is_mod:
+                credits_service.log_event("moderators", display_name)
+            elif is_vip:
+                credits_service.log_event("vips", display_name)
+            else:
+                credits_service.log_event("chatters", display_name)
+
         # =========================================================
 
         if not is_mod:
@@ -190,6 +194,9 @@ class MasthbotTwitch(commands.Bot):
             exp_msg = int(config.get('exp_per_message', 2) or 2)
         except (ValueError, TypeError):
             exp_msg = 2
+
+        if not is_live:
+            exp_msg = 0
 
         await viewer_repo.update_viewer_stats(
             username=username, 
@@ -657,6 +664,9 @@ class MasthbotTwitch(commands.Bot):
         if not self.broadcaster_id: return
 
         config = self.get_db_config()
+        if not config.get('personal_last_live_id'):
+            return
+
         exp_to_give = config.get('exp_per_watchtime', 5)
         
         try:

@@ -1,15 +1,20 @@
-import os
-import logging
 import asyncio
 import subprocess
 import contextlib
+import os
+import logging
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 
+# --- IMPORT DES ROUTES ---
 from app.routes import admin, viewers, api, announcements, stats, public, overlays, polls
+# ✅ IMPORT DIRECT (Contourne le blocage de __init__.py)
+from app.routes.credits import router as credits_router 
+
+# --- IMPORT DES SERVICES ---
 from app.services.twitch_service import twitch_bot
 from app.repositories import viewer_repo
 from app.services.live_monitor import check_twitch_lives_routine
@@ -74,7 +79,6 @@ app.add_middleware(
     ],
     allow_credentials=True, # Autorise les échanges sécurisés (cookies/headers)
     allow_methods=["*"],
-    # ✅ LE FIX EST ICI : On autorise TOUS les headers sans exception
     allow_headers=["*"],
     expose_headers=["*"]
 )
@@ -96,8 +100,7 @@ app.include_router(announcements.router)
 app.include_router(stats.router)
 app.include_router(overlays.router)
 app.include_router(polls.router)
-
-# L'ancienne route racine (@app.get("/")) a été supprimée pour laisser la place au site !
+app.include_router(credits_router) # ✅ On branche le routeur direct du générique !
 
 if __name__ == "__main__":
     import uvicorn
