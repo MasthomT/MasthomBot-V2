@@ -1,0 +1,218 @@
+﻿:root {
+    --bg: #18181b;
+    --surface: #2a2a2d;
+    --sidebar: #2c2f33;
+    --border: #36363a;
+    --text-main: #f0f0f0;
+    --text-dim: #b9bbbe;
+    --accent: #00f5c3;
+    --danger: #ff6b6b;
+    --live: #e91e63;
+    --twitch: #9146FF;
+}
+
+/* --- BASE --- */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body { 
+    background: var(--bg); 
+    color: var(--text-main); 
+    font-family: 'Inter', sans-serif; 
+    display: flex; 
+    height: 100vh; 
+    overflow: hidden; 
+}
+
+/* --- SIDEBAR (PC) & TAB BAR (MOBILE) --- */
+.sidebar { 
+    width: 250px; 
+    background: var(--sidebar); 
+    border-right: 1px solid var(--border); 
+    display: flex; 
+    flex-direction: column; 
+    padding: 1rem; 
+    flex-shrink: 0; 
+    z-index: 1000;
+}
+
+.logo { 
+    display: flex; 
+    align-items: center; 
+    gap: 10px; 
+    margin-bottom: 2rem; 
+    text-decoration: none; 
+    color: white; 
+    font-weight: bold; 
+    font-size: 1.2rem; 
+}
+
+.logo img { 
+    width: 40px; 
+    height: 40px; 
+    border-radius: 50%; 
+    border: 2px solid var(--accent); 
+}
+
+.nav-link { 
+    display: flex; 
+    align-items: center; 
+    gap: 12px; 
+    padding: 12px; 
+    color: var(--text-dim); 
+    text-decoration: none; 
+    border-radius: 8px; 
+    transition: 0.2s; 
+    margin-bottom: 5px; 
+    font-size: 0.95rem;
+}
+
+.nav-link:hover, .nav-link.active { 
+    background: var(--surface); 
+    color: white; 
+}
+
+.nav-link.active { 
+    border-left: 3px solid var(--accent); 
+}
+
+.nav-link svg { 
+    width: 22px; 
+    height: 22px; 
+    flex-shrink: 0;
+}
+
+.logout { margin-top: auto; color: var(--danger); }
+
+/* --- CONTENU --- */
+main { 
+    flex-grow: 1; 
+    padding: 2rem; 
+    overflow-y: auto; 
+    -webkit-overflow-scrolling: touch; /* Scroll fluide iOS */
+}
+
+h1 { 
+    font-size: 2rem; 
+    margin-bottom: 1.5rem; 
+    border-bottom: 1px solid var(--border); 
+    padding-bottom: 10px; 
+}
+
+/* --- GRILLES RESPONSIVES --- */
+.grid { 
+    display: grid; 
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
+    gap: 1.5rem; 
+}
+
+.card { 
+    background: var(--surface); 
+    border: 1px solid var(--border); 
+    border-radius: 12px; 
+    padding: 1.5rem; 
+}
+
+/* --- TABLEAUX (PC) --- */
+table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+th { text-align: left; color: var(--text-dim); padding: 10px; border-bottom: 1px solid var(--border); }
+td { padding: 15px 10px; border-bottom: 1px solid var(--border); }
+
+/* --- PODIUM --- */
+.podium-container { display: flex; justify-content: center; align-items: flex-end; gap: 15px; margin: 2rem 0; }
+.podium-item { display: flex; flex-direction: column; align-items: center; }
+.podium-avatar { width: 60px; height: 60px; border-radius: 50%; border: 3px solid var(--border); }
+.place-1 .podium-avatar { width: 90px; height: 90px; border-color: #FFD700; }
+
+/* =============================================
+   📱 OPTIMISATION MOBILE (ÉCRANS < 800px)
+   ============================================= */
+@media (max-width: 800px) {
+    body { 
+        height: auto !important; 
+        overflow: visible !important; 
+    }
+
+    /* 1. Sidebar devient Tab Bar */
+    .sidebar {
+        width: 100% !important;
+        height: 70px !important;
+        position: fixed !important;
+        bottom: 0 !important;
+        top: auto !important;
+        left: 0 !important;
+        flex-direction: row !important;
+        padding: 0 !important;
+        justify-content: space-around !important;
+        border-right: none !important;
+        border-top: 1px solid var(--border) !important;
+        background: var(--sidebar) !important;
+    }
+
+    .sidebar .logo, .sidebar .logout { display: none !important; }
+
+    .nav-link {
+        flex-direction: column !important;
+        gap: 4px !important;
+        padding: 10px 0 !important;
+        font-size: 0.65rem !important;
+        width: 18% !important;
+        justify-content: center !important;
+        border-radius: 0 !important;
+        margin: 0 !important;
+        text-align: center;
+    }
+
+    .nav-link.active { border-left: none !important; border-bottom: 3px solid var(--accent); }
+    .nav-link svg { width: 22px !important; height: 22px !important; }
+
+    /* 2. Ajustement Main */
+    main, main.content {
+        margin-left: 0 !important;
+        padding: 1.5rem 1rem 100px 1rem !important; /* Padding bas pour Tab Bar */
+        width: 100% !important;
+    }
+
+    h1 { font-size: 1.6rem !important; text-align: center; }
+
+    /* 3. Transformation des Tableaux en Cartes */
+    table, thead, tbody, th, td, tr { display: block !important; }
+    thead tr { position: absolute; top: -9999px; left: -9999px; } /* Masquer header */
+    
+    tr { 
+        background: var(--surface); 
+        margin-bottom: 1rem; 
+        border: 1px solid var(--border); 
+        border-radius: 12px; 
+        padding: 10px;
+    }
+
+    td {
+        border: none !important;
+        padding: 8px 5px 8px 50% !important;
+        position: relative !important;
+        text-align: right !important;
+        font-size: 0.9rem;
+    }
+
+    td::before {
+        content: attr(data-label);
+        position: absolute;
+        left: 10px;
+        width: 45%;
+        text-align: left;
+        font-weight: bold;
+        color: var(--accent);
+        text-transform: uppercase;
+        font-size: 0.75rem;
+    }
+
+    /* 4. Podium Compact */
+    .podium-avatar { width: 50px !important; height: 50px !important; }
+    .place-1 .podium-avatar { width: 75px !important; height: 75px !important; }
+    
+    /* 5. Grilles (Stats, Profil) */
+    .stats-mini-grid, .metrics-grid, .id-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 10px !important;
+    }
+}

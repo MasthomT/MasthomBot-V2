@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <meta charset="UTF-8">
+    <title>Générique de Fin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;600;900&display=swap" rel="stylesheet">
+    <style>
+        /* ==================== CONFIGURATION COULEURS ==================== */
+        :root {
+            --color-chatters: #00e5ff;   /* Cyan */
+            --color-followers: #a970ff;  /* Violet */
+            --color-subs: #ffd700;       /* Or */
+            --color-bits: #ff4500;       /* Rouge */
+            --color-raiders: #ff9100;    /* Orange */
+            --color-gifters: #00ff7f;    /* Vert */
+            --color-vips: #ff69b4;       /* Rose */
+            --color-mods: #00ff00;       /* Vert Flash */
+            --color-viewers: #6c757d;    /* Gris */
+        }
+
+        body, html { 
+            margin: 0; padding: 0; 
+            width: 100%; height: 100%; 
+            overflow: hidden; 
+            background: transparent; 
+            font-family: 'Kanit', sans-serif; 
+            color: white; 
+        }
+        
+        #scroll-container {
+            position: absolute; 
+            top: 100vh; 
+            left: 0; 
+            width: 100%;
+            display: flex; 
+            flex-direction: column; 
+            align-items: center;
+        }
+
+        /* ==================== TYPOGRAPHIE ==================== */
+        .main-title { 
+            font-size: 6rem; 
+            font-weight: 900; 
+            text-transform: uppercase; 
+            margin: 0; 
+            text-shadow: 0 0 20px rgba(255,255,255,0.6); 
+            text-align: center; 
+        }
+        
+        .subtitle { 
+            font-size: 2.5rem; 
+            font-weight: 300; 
+            color: #ccc; 
+            letter-spacing: 8px; 
+            text-align: center; 
+            margin: 0; 
+            text-transform: uppercase;
+        }
+        
+        .section-header { margin-top: 50px; margin-bottom: 20px; text-align: center; }
+        
+        .section-title { 
+            font-size: 3rem; 
+            font-weight: 700; 
+            text-transform: uppercase; 
+            border-bottom: 4px solid currentColor; 
+            padding: 0 40px 5px; 
+            display: inline-block; 
+            letter-spacing: 3px;
+        }
+        
+        .names-wrapper { 
+            width: 85%; 
+            display: flex; 
+            flex-wrap: wrap; 
+            justify-content: center; 
+            gap: 15px 40px; 
+        }
+        
+        .name-card { 
+            font-size: 2.2rem; 
+            font-weight: 600; 
+            display: flex; 
+            align-items: center; 
+            gap: 12px; 
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8); 
+            white-space: nowrap;
+        }
+        
+        .badge-info {
+	    font-family: 'Kanit', sans-serif;
+	    font-size: 0.7em;
+	    font-weight: 600;
+	    padding: 2px 8px;
+	    background: rgba(255, 255, 255, 0.15);
+	    border-radius: 10px;
+	    margin-left: 10px;
+	    white-space: nowrap; /* Empêche l'emoji de passer à la ligne */
+	    display: inline-flex;
+	    align-items: center;
+	    gap: 4px; /* Espace entre l'emoji et le chiffre */
+	}
+
+        /* ==================== STYLES DYNAMIQUES (FIXÉS) ==================== */
+        
+        /* Modérateurs */
+        .style-moderators, .title-moderators { color: var(--color-mods) !important; text-shadow: 0 0 15px rgba(0,255,0,0.4); }
+        
+        /* Followers */
+        .style-follows, .title-follows, .style-followers, .title-followers { color: var(--color-followers) !important; text-shadow: 0 0 15px rgba(169,112,255,0.4); }
+        
+        /* Raiders */
+        .style-raids, .title-raids, .style-raiders, .title-raiders { color: var(--color-raiders) !important; text-shadow: 0 0 15px rgba(255,145,0,0.6); }
+        
+        /* Chatters */
+        .style-chatters, .title-chatters { color: var(--color-chatters) !important; text-shadow: 0 0 15px rgba(0,229,255,0.4); }
+        
+        /* Subs */
+        .style-subs, .title-subs, .style-resubs, .title-resubs, .style-subscribers { color: var(--color-subs) !important; text-shadow: 0 0 15px rgba(255,215,0,0.4); }
+        
+        /* Bits */
+        .style-bits, .title-bits { color: var(--color-bits) !important; text-shadow: 0 0 15px rgba(255,69,0,0.4); }
+        
+        /* Cadeaux */
+        .style-subgifts, .title-subgifts { color: var(--color-gifters) !important; text-shadow: 0 0 15px rgba(0,255,127,0.4); }
+        
+        /* VIPs */
+        .style-vips, .title-vips { color: var(--color-vips) !important; text-shadow: 0 0 15px rgba(255,105,180,0.4); }
+        
+        /* Viewers */
+        .style-viewers, .title-viewers { color: var(--color-viewers) !important; }
+
+    </style>
+</head>
+<body>
+
+    <div id="scroll-container">
+        </div>
+
+<script>
+    const LABELS = {
+	subs: 'ABONNÉS',
+	resubs: '',
+	subgifts: 'CADEAUX',
+        bits: 'BITS',
+        raids: 'RAIDS',
+        follows: 'NEW FOLLOWS',
+        moderators: 'MODOS',
+        vips: 'VIP',
+        chatters: 'CHATTERS',
+        viewers: 'SPECTATEURS'
+    };
+
+    async function initCredits() {
+        try {
+            const response = await fetch('/api/credits/data');
+            const data = await response.json();
+
+            const container = document.getElementById('scroll-container');
+            container.innerHTML = '';
+
+            // 1. Titre Principal
+            const h1 = document.createElement('h1');
+            h1.className = 'main-title';
+            h1.innerText = data.config.main_title || "MERCI !";
+            container.appendChild(h1);
+
+            const spacerTop = document.createElement('div');
+            spacerTop.style.height = '40px';
+            container.appendChild(spacerTop);
+
+            // 2. Boucle sur l'ordre des sections
+            const order = data.config.order || Object.keys(LABELS);
+
+            order.forEach(key => {
+                const items = data.stats[key] || [];
+
+                if (items.length > 0) {
+                    // Header de section
+                    const sectionDiv = document.createElement('div');
+                    sectionDiv.className = 'section-header';
+
+                    const title = document.createElement('div');
+                    title.className = `section-title title-${key}`;
+                    title.innerText = LABELS[key] || key.toUpperCase();
+
+                    // ✅ LE FIX : On applique la couleur dynamique
+                    // On utilise une clé de repli si le nom complet (ex: subscribers) 
+                    // ne matche pas ton CSS court (ex: --color-subs)
+                    let colorKey = key;
+                    if (key === 'subscribers') colorKey = 'subs';
+                    if (key === 'moderators') colorKey = 'mods';
+                    
+                    title.style.color = `var(--color-${colorKey})`;
+
+                    sectionDiv.appendChild(title);
+                    container.appendChild(sectionDiv);
+
+                    // Conteneur des noms
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'names-wrapper';
+
+                    // Boucle sur les noms dans la catégorie
+
+                    items.forEach(item => {
+                        const card = document.createElement('div');
+                        card.className = `name-card style-${key}`;
+
+                        // On trouve la clé couleur
+                        let cKey = key;
+                        if(key === 'subscribers') cKey = 'subs';
+                        if(key === 'moderators') cKey = 'mods';
+                        if(key === 'followers') cKey = 'follows';
+
+                        // ✅ ON APPLIQUE LA COULEUR ICI
+                        const color = getComputedStyle(document.documentElement).getPropertyValue(`--color-${cKey}`).trim();
+                        if (color) {
+                            card.style.color = color;
+                            card.style.borderColor = color;
+                        }
+
+                        let name = item.name || "Inconnu";
+                        let label = item.label || "";
+                        card.innerHTML = `${name} ${label ? `<span class="badge-info">${label}</span>` : ''}`;
+
+                        wrapper.appendChild(card);
+                    });
+                    container.appendChild(wrapper);
+                }
+            });
+
+            // 3. Sous-titre et fin de générique
+            const spacerFinal = document.createElement('div');
+            spacerFinal.style.height = '150px';
+            container.appendChild(spacerFinal);
+
+            const h2 = document.createElement('h2');
+            h2.className = 'subtitle';
+            h2.innerText = data.config.subtitle || "À BIENTÔT";
+            container.appendChild(h2);
+
+            const exitSpacer = document.createElement('div');
+            exitSpacer.style.height = '100vh';
+            container.appendChild(exitSpacer);
+
+            // 4. Lancement du défilement
+            startAnimation(data.config.duration || 60);
+
+        } catch (e) {
+            console.error("Erreur API:", e);
+        }
+    }
+
+    function startAnimation(duration) {
+        const container = document.getElementById('scroll-container');
+        setTimeout(() => {
+            const totalDistance = container.offsetHeight + window.innerHeight;
+            container.style.transition = `transform ${duration}s linear`;
+            container.style.transform = `translateY(-${totalDistance}px)`;
+        }, 1000);
+    }
+
+    window.onload = initCredits;
+</script>
+</body>
+</html>

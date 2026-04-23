@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <meta charset="UTF-8">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root { --hue-speed: 60s; } /* Vitesse très lente */
+
+        body, html { 
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; background: transparent; 
+            font-family: 'Kanit', sans-serif; 
+        }
+
+        #timer-container {
+            position: absolute;
+            top: 15px; left: 0; width: 100vw;
+            display: flex; justify-content: center;
+            align-items: flex-start; gap: 10px;
+        }
+
+        .timer-widget {
+            padding: 8px 20px; /* Compact */
+            background: rgba(10, 10, 15, 0.4);
+            backdrop-filter: blur(8px);
+            border-left: 4px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+            text-align: center;
+            min-width: 180px;
+            border-radius: 6px;
+        }
+
+        .label {
+            font-size: 1.2rem; /* Titre équilibré */
+            font-weight: 700;
+            text-transform: uppercase;
+            color: white;
+            letter-spacing: 2px;
+            display: block;
+            margin-bottom: 0px;
+            opacity: 0.9;
+        }
+
+        .display {
+            font-size: 2.8rem; /* Chiffres grands mais pas énormes */
+            font-weight: 900;
+            margin: 0; line-height: 1;
+            color: #00f2ff; /* Couleur unie */
+            /* Animation douce de changement de couleur sur tout le spectre */
+            animation: spectrum-cycle var(--hue-speed) linear infinite;
+        }
+
+        @keyframes spectrum-cycle {
+            from { filter: hue-rotate(0deg) drop-shadow(0 0 8px rgba(0, 242, 255, 0.3)); }
+            to { filter: hue-rotate(360deg) drop-shadow(0 0 8px rgba(0, 242, 255, 0.3)); }
+        }
+    </style>
+</head>
+<body>
+    <div id="timer-container"></div>
+    <script>
+        const socket = io();
+        const container = document.getElementById('timer-container');
+
+        socket.on('new_event', (data) => {
+            if (data.type === 'time_event') {
+                const d = data.details;
+                if (d.action === 'reset' || d.action === 'stop') { 
+                    container.innerHTML = ''; 
+                }
+                else if (d.action === 'start') { 
+                    createTimer(d); 
+                }
+            }
+        });
+
+        function createTimer(config) {
+            const widget = document.createElement('div');
+            widget.className = 'timer-widget next-anim';
+            
+            const labelEl = document.createElement('span');
+            labelEl.className = 'label';
+            labelEl.innerText = config.label || "OBJECTIF";
+
+            const displayEl = document.createElement('div');
+            displayEl.className = 'display';
+            displayEl.innerText = "00:00";
+
+            widget.appendChild(labelEl);
+            widget.appendChild(displayEl);
+            container.appendChild(widget);
+
+            let startTime = Date.now();
+            
+            const interval = setInterval(() => {
+                const now = Date.now();
+                const diff = Math.floor((now - startTime) / 1000);
+                let t = config.mode === 'chrono' ? diff : config.duration - diff;
+
+                if (t <= 0 && config.mode === 'timer') {
+                    t = 0;
+                    clearInterval(interval);
+                    displayEl.style.color = "#ff4b2b";
+                    setTimeout(() => {
+                        widget.style.opacity = '0';
+                        widget.style.transition = 'opacity 1s';
+                        setTimeout(() => widget.remove(), 1000);
+                    }, 5000);
+                }
+
+                const m = Math.floor(Math.abs(t) / 60);
+                const s = Math.abs(t) % 60;
+                displayEl.innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+            }, 250);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <meta charset="UTF-8">
+    <title>Connexion MasthomBot</title>
+    <style>
+        body { background-color: #23272a; color: white; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .box { background: #2c2f33; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.5); text-align: center; }
+        input { padding: 10px; border-radius: 4px; border: 1px solid #444; background: #23272a; color: white; margin-bottom: 15px; width: 100%; box-sizing: border-box; }
+        button { background: #7289da; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold; }
+        button:hover { background: #5b6eae; }
+        .alert { color: #f04747; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2>🔐 Accès Panel</h2>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <form method="POST">
+            <input type="password" name="password" placeholder="Mot de passe..." required autofocus>
+            <button type="submit">Se connecter</button>
+        </form>
+    </div>
+</body>
+</html>
+

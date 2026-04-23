@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
+    <meta charset="UTF-8">
+    <title>Éditeur Visuel - MasthomBot</title>
+    
+</head>
+<body>
+
+    <h1>📐 Éditeur de Position (Drag & Drop)</h1>
+    
+    <div class="controls">
+        <a href="/admin/alerts"><button class="btn-back">← Retour Réglages</button></a>
+        <button class="btn-save" onclick="saveAll()">💾 SAUVEGARDER POSITIONS</button>
+        <span id="status" style="margin-left:10px; color:#aaa;"></span>
+    </div>
+
+    <div id="virtual-screen">
+        
+        <div id="follow-box" class="draggable-alert" 
+             style="left: {{ config.follow.x }}%; top: {{ config.follow.y }}%;"
+             onmousedown="startDrag(event, this)">
+            <div class="label">Alerte Follow</div>
+            <img src="{{ config.follow.image }}" alt="img">
+            <div>{{ config.follow.message }}</div>
+        </div>
+
+        <div id="sub-box" class="draggable-alert" 
+             style="left: {{ config.sub.x }}%; top: {{ config.sub.y }}%; border-color: orange;"
+             onmousedown="startDrag(event, this)">
+            <div class="label">Alerte Sub</div>
+            <img src="{{ config.sub.image }}" alt="img">
+            <div>{{ config.sub.message }}</div>
+        </div>
+
+    </div>
+
+    <script>
+        let selectedElement = null;
+
+        // Fonction pour démarrer le drag
+        function startDrag(evt, el) {
+            selectedElement = el;
+            // Calculer l'offset pour ne pas que l'élément saute
+            const rect = el.getBoundingClientRect();
+        }
+
+        // Fonction qui suit la souris (sur tout l'écran)
+        document.addEventListener('mousemove', (evt) => {
+            if (selectedElement) {
+                const screen = document.getElementById('virtual-screen');
+                const screenRect = screen.getBoundingClientRect();
+
+                // Calcul de la position relative dans le cadre (en pixels)
+                let x = evt.clientX - screenRect.left;
+                let y = evt.clientY - screenRect.top;
+
+                // Conversion en Pourcentage (%) pour être responsive
+                let xPercent = (x / screenRect.width) * 100;
+                let yPercent = (y / screenRect.height) * 100;
+
+                // Limites (0% à 100%)
+                xPercent = Math.max(0, Math.min(100, xPercent));
+                yPercent = Math.max(0, Math.min(100, yPercent));
+
+                // Appliquer
+                selectedElement.style.left = xPercent + '%';
+                selectedElement.style.top = yPercent + '%';
+            }
+        });
+
+        // Lâcher la souris
+        document.addEventListener('mouseup', () => {
+            selectedElement = null;
+        });
+
+        // Sauvegarder via API
+        function saveAll() {
+            const follow = document.getElementById('follow-box');
+            const sub = document.getElementById('sub-box');
+
+            // On envoie Follow
+            sendPosition('follow', parseFloat(follow.style.left), parseFloat(follow.style.top));
+            
+            // On envoie Sub
+            sendPosition('sub', parseFloat(sub.style.left), parseFloat(sub.style.top));
+        }
+
+        function sendPosition(type, x, y) {
+            fetch('/api/save_position', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: type, x: x, y: y })
+            })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('status').innerText = "Positions sauvegardées !";
+                setTimeout(() => document.getElementById('status').innerText = "", 2000);
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <meta charset="UTF-8">
+    <title>BRB Clips Player</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { 
+            margin: 0; padding: 0; overflow: hidden; 
+            background: transparent; /* Fond transparent pour s'intégrer à ta scène */
+        }
+
+        #clip-player {
+            position: fixed; inset: 0; 
+            width: 100vw; height: 100vh;
+            object-fit: contain; /* Garde le ratio de la vidéo sans la couper */
+            opacity: 0; transition: opacity 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body>
+
+    <video id="clip-player" playsinline></video>
+
+    <script>
+        const socket = io();
+        const video = document.getElementById('clip-player');
+
+        // Volume du lecteur (0.0 à 1.0)
+        const VOLUME = 0.5;
+
+        // 1. Connexion et demande du premier clip
+        socket.on('connect', () => {
+            console.log("[BRB] Connecté, demande de clip...");
+            socket.emit('get_brb_clip');
+        });
+
+        // 2. Réception et lecture
+        socket.on('play_brb_clip', (data) => {
+            console.log("Lecture :", data.title);
+            
+            video.src = data.url;
+            video.volume = VOLUME;
+            video.muted = false; // Tente d'activer le son
+
+            video.play()
+                .then(() => {
+                    video.style.opacity = 1; // Apparition fluide
+                })
+                .catch(e => {
+                    console.warn("Autoplay bloqué, tentative muet", e);
+                    video.muted = true;
+                    video.play();
+                    video.style.opacity = 1;
+                });
+        });
+
+        // 3. Fin du clip -> On enchaîne
+        video.onended = () => {
+            video.style.opacity = 0; // Disparition fluide
+            
+            // Petite pause de 1s au noir (ou transparent) avant le suivant
+            setTimeout(() => {
+                socket.emit('get_brb_clip');
+            }, 1000);
+        };
+    </script>
+</body>
+</html>
+

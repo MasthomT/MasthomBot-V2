@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <meta charset="UTF-8" /><title>MasthomBot - Giveaway</title>
+    <style>
+        
+		/* Navigation Latérale */
+		
+
+		
+
+		
+
+		
+
+		
+        main.content { flex-grow: 1; padding: 3rem; overflow-y: auto; }
+        h1 { font-size: 2.2rem; margin-bottom: 2rem; color: #fff; }
+        .flash { padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; font-weight: 600; color: #fff;}
+        .flash.success { background-color: #28a745; }
+        .flash.error { background-color: #dc3545; }
+        .page-grid { display: grid; grid-template-columns: 1fr 1.5fr; gap: 2rem; align-items: start; }
+        .card { background-color: #2c2f33; border-radius: 8px; padding: 1.5rem; border: 1px solid #40444b; }
+        .card-header h2 { font-size: 1.4rem; color: #fff; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #40444b;}
+        label { display: block; font-weight: 600; margin-bottom: 0.5rem; }
+        input[type="text"] { width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #40444b; background-color: #23272a; color: #dcddde; margin-bottom: 1rem;}
+        .btn-primary { background-color: #7289da; color: #fff; border: none; padding: 12px 20px; font-weight: 600; border-radius: 6px; cursor: pointer; }
+        .history-item { display: flex; justify-content: space-between; align-items: center; padding: 0.8rem 0; border-bottom: 1px solid #40444b; }
+        .history-info .winner { font-weight: 600; color: #fff; }
+        .history-info .link, .history-info .prize { color: #b9bbbe; font-size: 0.9rem; }
+        .history-date { font-size: 0.9rem; color: #8e9297; }
+        .btn-delete { background: none; border: none; color: #dc3545; cursor: pointer; font-size: 1.2rem; }
+    </style>
+</head>
+<body>
+{% include 'sidebar.html' %}
+
+
+    <main class="content">
+        <h1>Annonce de Giveaway</h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}{% for category, message in messages %}<div class="flash {{ category }}">{{ message }}</div>{% endfor %}{% endif %}
+        {% endwith %}
+        <div class="page-grid">
+            <div class="card">
+                <div class="card-header"><h2>Envoyer l'annonce du gagnant</h2></div>
+                <form method="post">
+                    <input type="hidden" name="action" value="add">
+                    <label for="winner_name">Nom du Vainqueur</label>
+                    <input type="text" id="winner_name" name="winner_name" required placeholder="Pseudo">
+                    <label for="prize_name">Lot remporté</label>
+                    <input type="text" id="prize_name" name="prize_name" required placeholder="Prix">
+                    <button type="submit" class="btn-primary">Envoyer l'annonce</button>
+                </form>
+            </div>
+            <div class="card">
+                <div class="card-header"><h2>Historique</h2></div>
+                {% if history %}
+                    {% for item in history %}
+                        <div class="history-item">
+                            <div class="history-info">
+                                <span class="winner">{{ item.winner }}</span><br>
+                                <span class="prize">a gagné : {{ item.prize }}</span>
+                            </div>
+                            <span class="history-date">{{ item.date }}</span>
+                            <form method="post" style="display: inline;">
+                                <input type="hidden" name="action" value="delete">
+                                <input type="hidden" name="giveaway_id" value="{{ item.id }}">
+                                <button type="submit" class="btn-delete" title="Supprimer">🗑️</button>
+                            </form>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <p>Aucun giveaway annoncé pour le moment.</p>
+                {% endif %}
+            </div>
+        </div>
+    </main>
+</body>
+</html>

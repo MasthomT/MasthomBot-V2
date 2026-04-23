@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profil : {{ viewer.username }} - MasthomBot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #6366f1; outline: none; ring: 2px ring-indigo-500/20; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .label-tech { font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 0.5rem; display: block; letter-spacing: 0.05em; }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen overflow-hidden">
+    
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 md:p-10 overflow-y-auto custom-scrollbar h-screen">
+        <form action="/admin/viewer/{{ viewer.twitch_id }}/save" method="POST">
+            
+            <!-- HEADER -->
+            <header class="mb-10 flex flex-col md:flex-row justify-between items-center gap-6">
+                <div class="flex items-center gap-5">
+                    <a href="/admin/viewer_manager.html" class="w-12 h-12 bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400 hover:text-white border border-slate-700 hover:border-indigo-500 transition-all shadow-lg">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                    <div>
+                        <h1 class="text-3xl font-black text-white italic tracking-tight">
+                            Fiche de <span class="text-indigo-400">{{ viewer.username }}</span>
+                            <span class="text-lg bg-indigo-600 text-white px-3 py-1 rounded-xl ml-3 not-italic shadow-lg shadow-indigo-500/20 align-middle">Lvl {{ viewer.level | default(1) }}</span>
+                        </h1>
+                        <p class="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">ID {{ viewer.twitch_id }} • Dernier passage : {{ viewer.last_seen_readable | default('Inconnu') }}</p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-4">
+                    {% if request.query_params.get('saved') %}
+                    <div id="save-toast" class="bg-emerald-500/10 text-emerald-400 px-6 py-3 rounded-2xl font-bold border border-emerald-500/20 flex items-center gap-2 animate-pulse">
+                        <i class="fas fa-check-circle"></i> Données synchronisées
+                    </div>
+                    <script>setTimeout(() => document.getElementById('save-toast').style.display='none', 3000)</script>
+                    {% endif %}
+                    
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-3 rounded-2xl font-black text-sm shadow-xl shadow-indigo-500/20 transition-all flex items-center gap-3 active:scale-95">
+                        <i class="fas fa-save"></i> SAUVEGARDER LE PROFIL
+                    </button>
+                </div>
+            </header>
+
+            <!-- GRILLE DE STATISTIQUES RÉSUMÉES (4 Colonnes) -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+                <div class="config-card p-6 rounded-3xl shadow-xl flex items-center gap-5 border-b-4 border-b-indigo-500">
+                    <div class="w-12 h-12 bg-indigo-500/10 rounded-xl flex items-center justify-center text-indigo-400 border border-indigo-500/20"><i class="fas fa-layer-group"></i></div>
+                    <div>
+                        <div class="text-[10px] font-black text-slate-500 uppercase">Niveau Actuel</div>
+                        <div class="text-2xl font-black text-indigo-400">Lvl {{ viewer.level | default(1) }}</div>
+                    </div>
+                </div>
+                <div class="config-card p-6 rounded-3xl shadow-xl flex items-center gap-5 border-b-4 border-b-sky-500">
+                    <div class="w-12 h-12 bg-sky-500/10 rounded-xl flex items-center justify-center text-sky-400 border border-sky-500/20"><i class="fas fa-comment-alt"></i></div>
+                    <div>
+                        <div class="text-[10px] font-black text-slate-500 uppercase">Messages</div>
+                        <div class="text-2xl font-black text-white">{{ viewer.messages }}</div>
+                    </div>
+                </div>
+                <div class="config-card p-6 rounded-3xl shadow-xl flex items-center gap-5 border-b-4 border-b-teal-500">
+                    <div class="w-12 h-12 bg-teal-500/10 rounded-xl flex items-center justify-center text-teal-400 border border-teal-500/20"><i class="fas fa-clock"></i></div>
+                    <div>
+                        <div class="text-[10px] font-black text-slate-500 uppercase">Watchtime</div>
+                        <div class="text-2xl font-black text-white">{{ viewer.watchtime_readable | default('00:00') }}</div>
+                    </div>
+                </div>
+                <div class="config-card p-6 rounded-3xl shadow-xl flex items-center gap-5 border-b-4 border-b-amber-500">
+                    <div class="w-12 h-12 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-400 border border-amber-500/20"><i class="fas fa-star"></i></div>
+                    <div>
+                        <div class="text-[10px] font-black text-slate-500 uppercase">Points (EXP)</div>
+                        <div class="text-2xl font-black text-amber-400">{{ viewer.points }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 xl:grid-cols-12 gap-8">
+                
+                <!-- COLONNE GAUCHE : CONTEXTE IA (8/12) -->
+                <div class="xl:col-span-8 space-y-8">
+                    
+                    <!-- SECTION 1 : IDENTITÉ -->
+                    <section class="config-card p-8 rounded-3xl shadow-2xl">
+                        <h2 class="text-xs font-black text-indigo-400 uppercase tracking-[0.2em] mb-8 flex items-center gap-2">
+                            <i class="fas fa-id-card text-lg"></i> Carte d'Identité (Contexte IA)
+                        </h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <span class="label-tech">Surnom du Viewer</span>
+                                <input type="text" name="nickname" value="{{ viewer.nickname or '' }}" class="w-full input-dark rounded-xl p-3 text-sm" placeholder="Son vrai prénom ou pseudo usuel">
+                            </div>
+                            <div>
+                                <span class="label-tech">Son surnom pour FÉLIX</span>
+                                <input type="text" name="nickname_for_bot" value="{{ viewer.nickname_for_bot or '' }}" class="w-full input-dark rounded-xl p-3 text-sm border-indigo-500/30" placeholder="Comment Félix doit l'appeler">
+                            </div>
+                            <div>
+                                <span class="label-tech">Anniversaire</span>
+                                <input type="text" name="birthday" value="{{ viewer.birthday or '' }}" class="w-full input-dark rounded-xl p-3 text-sm" placeholder="Ex: 12 Octobre">
+                            </div>
+                            <div>
+                                <span class="label-tech">Rythme de vie</span>
+                                <select name="sleep_pattern" class="w-full input-dark rounded-xl p-3 text-sm">
+                                    <option value="none" {% if viewer.sleep_pattern == 'none' %}selected{% endif %}>Non précisé</option>
+                                    <option value="night_owl" {% if viewer.sleep_pattern == 'night_owl' %}selected{% endif %}>Oiseau de nuit</option>
+                                    <option value="early_bird" {% if viewer.sleep_pattern == 'early_bird' %}selected{% endif %}>Lève-tôt</option>
+                                </select>
+                            </div>
+                            <div>
+                                <span class="label-tech">Pronoms</span>
+                                <input type="text" name="pronouns" value="{{ viewer.pronouns or '' }}" class="w-full input-dark rounded-xl p-3 text-sm" placeholder="Il/Elle/Iel...">
+                            </div>
+                            <div>
+                                <span class="label-tech">Vibe / Personnalité</span>
+                                <input type="text" name="vibe" value="{{ viewer.vibe or '' }}" class="w-full input-dark rounded-xl p-3 text-sm" placeholder="Ex: Taquin, calme, expert gaming">
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- SECTION 2 : GAMING & STREAM -->
+                    <section class="config-card p-8 rounded-3xl shadow-2xl">
+                        <h2 class="text-xs font-black text-emerald-400 uppercase tracking-[0.2em] mb-8 flex items-center gap-2">
+                            <i class="fas fa-gamepad text-lg"></i> Gaming & Stream
+                        </h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <span class="label-tech">Jeu Favori</span>
+                                <input type="text" name="favorite_game" value="{{ viewer.favorite_game or '' }}" class="w-full input-dark rounded-xl p-3 text-sm">
+                            </div>
+                            <div>
+                                <span class="label-tech">Jeu "Doudou"</span>
+                                <input type="text" name="comfort_game" value="{{ viewer.comfort_game or '' }}" class="w-full input-dark rounded-xl p-3 text-sm">
+                            </div>
+                            <div>
+                                <span class="label-tech">Emote Signature</span>
+                                <input type="text" name="signature_emote" value="{{ viewer.signature_emote or '' }}" class="w-full input-dark rounded-xl p-3 text-sm">
+                            </div>
+                            <div>
+                                <span class="label-tech">Style de jeu</span>
+                                <select name="play_style" class="w-full input-dark rounded-xl p-3 text-sm">
+                                    <option value="chill" {% if viewer.play_style == 'chill' %}selected{% endif %}>Détente / Chill</option>
+                                    <option value="tryhard" {% if viewer.play_style == 'tryhard' %}selected{% endif %}>Tryhard / Compétitif</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mt-6">
+                            <span class="label-tech">Talent inutile / Passion</span>
+                            <input type="text" name="useless_talent" value="{{ viewer.useless_talent or '' }}" class="w-full input-dark rounded-xl p-3 text-sm" placeholder="Cuisine, jonglage, imitations...">
+                        </div>
+                    </section>
+
+                    <!-- SECTION 3 : PRÉFÉRENCES & ROAST -->
+                    <section class="config-card p-8 rounded-3xl shadow-2xl">
+                        <h2 class="text-xs font-black text-rose-400 uppercase tracking-[0.2em] mb-8 flex items-center gap-2">
+                            <i class="fas fa-grin-tongue-wink text-lg"></i> Relation & Goûts
+                        </h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <span class="label-tech">Niveau de Taquinerie (Roast 1-10)</span>
+                                <input type="number" name="roast_level" min="1" max="10" value="{{ viewer.roast_level or 5 }}" class="w-full input-dark rounded-xl p-3 text-sm font-black text-rose-400 text-center">
+                            </div>
+                            <div>
+                                <span class="label-tech">Fonction préférée de Félix</span>
+                                <input type="text" name="favorite_feature" value="{{ viewer.favorite_feature or '' }}" class="w-full input-dark rounded-xl p-3 text-sm">
+                            </div>
+                            <div>
+                                <span class="label-tech">Snack Favori</span>
+                                <input type="text" name="favorite_food" value="{{ viewer.favorite_food or '' }}" class="w-full input-dark rounded-xl p-3 text-sm">
+                            </div>
+                            <div>
+                                <span class="label-tech">Boisson Favorie</span>
+                                <input type="text" name="favorite_drink" value="{{ viewer.favorite_drink or '' }}" class="w-full input-dark rounded-xl p-3 text-sm">
+                            </div>
+                        </div>
+                        <div class="mt-6">
+                            <span class="label-tech italic">Zone de Note Libre (Message direct pour le cerveau de Félix)</span>
+                            <textarea name="free_message" rows="5" class="w-full input-dark rounded-xl p-4 text-sm resize-none leading-relaxed" placeholder="Ajoute ici n'importe quel détail que Félix doit garder en mémoire pour ce viewer...">{{ viewer.free_message or '' }}</textarea>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- COLONNE DROITE : HISTORIQUES (4/12) -->
+                <div class="xl:col-span-4 space-y-8">
+                    
+                    <!-- ACTIVITÉ JOURNALIÈRE -->
+                    <section class="config-card p-6 rounded-3xl shadow-xl flex flex-col h-[500px]">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fas fa-calendar-alt text-indigo-400"></i> Activité Récente
+                            </h2>
+                            <span class="text-[9px] font-bold text-slate-600">30j</span>
+                        </div>
+                        <div class="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-2">
+                            {% for day in daily_stats %}
+                            <div class="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 hover:border-slate-700 transition-colors">
+                                <div class="flex justify-between items-center mb-1">
+                                    <span class="text-[10px] font-black text-slate-500 uppercase tracking-tighter">{{ day.day }}</span>
+                                    <span class="text-[10px] font-black text-emerald-400">+{{ day.points_gained }} EXP</span>
+                                </div>
+                                <div class="flex gap-4">
+                                    <span class="text-[10px] font-bold text-sky-400"><i class="fas fa-comment-dots mr-1 opacity-50"></i>{{ day.messages }}</span>
+                                    <span class="text-[10px] font-bold text-teal-400"><i class="fas fa-eye mr-1 opacity-50"></i>{{ day.watchtime_readable }}</span>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="h-full flex flex-col items-center justify-center opacity-20 italic text-sm">
+                                <i class="fas fa-history text-4xl mb-4"></i>
+                                <p>Aucune donnée journalière.</p>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </section>
+
+                    <!-- LOGS ÉVÉNEMENTS SPÉCIAUX -->
+                    <section class="config-card p-6 rounded-3xl shadow-xl flex flex-col h-[500px]">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fas fa-star text-amber-500"></i> Historique d'EXP
+                            </h2>
+                            <span class="text-[9px] font-bold text-slate-600">Events</span>
+                        </div>
+                        <div class="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-2">
+                            {% for ev in special_events %}
+                            <div class="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 hover:border-amber-500/30 transition-all group">
+                                <div class="flex justify-between items-center mb-1">
+                                    <span class="text-[10px] font-black text-white uppercase tracking-wider">{{ ev.event_type }}</span>
+                                    <span class="text-[8px] font-bold text-slate-600 tracking-tighter">{{ ev.timestamp }}</span>
+                                </div>
+                                <p class="text-[10px] text-slate-400 leading-tight italic">"{{ ev.details }}"</p>
+                                <div class="text-right mt-2">
+                                    <span class="text-xs font-black text-amber-400">+{{ ev.amount }}</span>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="h-full flex flex-col items-center justify-center opacity-20 italic text-sm">
+                                <i class="fas fa-bolt text-4xl mb-4"></i>
+                                <p>Aucun événement spécial.</p>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </section>
+
+                </div>
+
+            </div>
+        </form>
+    </main>
+</body>
+</html>

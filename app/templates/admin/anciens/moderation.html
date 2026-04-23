@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <meta charset="UTF-8" />
+    <title>MasthomBot - Modération</title>
+    <style>
+        
+        
+        /* Navigation (inchangée) */
+                
+
+        
+
+        
+
+        
+
+        
+
+        main.content { flex-grow: 1; padding: 2rem; overflow-y: auto; }
+        h1 { font-weight: 700; font-size: 2rem; margin-bottom: 1.5rem; color: #fff; }
+        
+        .flash { padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; font-weight: 600; color: #fff; }
+        .flash.success { background-color: #28a745; }
+        .flash.error { background-color: #dc3545; }
+
+        .content-grid { display: flex; align-items: flex-start; gap: 1.5rem; flex-wrap: wrap; }
+        .settings-column { flex: 3; min-width: 600px; display: flex; flex-direction: column; gap: 1.5rem; }
+        .lists-column { flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 1.5rem; }
+        
+        .card { background-color: #2c2f33; border-radius: 8px; padding: 1.5rem; border: 1px solid #40444b; }
+        .card-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 1rem; margin-bottom: 1rem; border-bottom: 1px solid #40444b; }
+        .card-header h2 { font-size: 1.2rem; color: #fff; margin: 0; }
+        
+        /* Styles spécifiques pour la Matrice */
+        .matrix-container { overflow-x: auto; margin-top: 1rem; }
+        .matrix-title { color: #7289da; font-weight: bold; margin: 1rem 0 0.5rem 0; text-transform: uppercase; letter-spacing: 1px; }
+        table.matrix-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        table.matrix-table th, table.matrix-table td { border: 1px solid #40444b; padding: 8px; text-align: center; }
+        table.matrix-table th { background-color: #23272a; color: #fff; }
+        table.matrix-table tr:nth-child(even) { background-color: #303338; }
+        
+        .action-group { display: flex; gap: 5px; justify-content: center; }
+        select.tiny-select { width: 90px; padding: 4px; font-size: 0.8rem; background: #23272a; border: 1px solid #40444b; color: white; border-radius: 4px; }
+        input.tiny-input { width: 60px; padding: 4px; font-size: 0.8rem; background: #23272a; border: 1px solid #40444b; color: white; border-radius: 4px; text-align: center; }
+
+        /* Autres styles */
+        .settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
+        .setting-item { display: flex; flex-direction: column; gap: 0.4rem; }
+        .setting-item label { font-size: 0.9rem; font-weight: 600; color: #8e9297; }
+        .checkbox-item { display: flex; align-items: center; gap: 0.5rem; color: #fff; }
+        
+        input[type="number"], input[type="text"] { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #40444b; background-color: #23272a; color: #fff; }
+        
+        .btn { background-color: #7289da; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+        .btn:hover { background-color: #677bc4; }
+        .update-all-btn { width: 100%; padding: 12px; font-size: 1rem; margin-top: 1rem; background-color: #43b581; }
+        .update-all-btn:hover { background-color: #3ca374; }
+
+        .list-group { list-style: none; padding: 0; max-height: 200px; overflow-y: auto; }
+        .list-item { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid #40444b; }
+        .btn-delete { background: none; border: none; color: #dc3545; font-size: 1.2rem; cursor: pointer; }
+    </style>
+</head>
+<body>
+{% include 'sidebar.html' %}
+<main class="content">
+    <h1>Configuration Modération</h1>
+
+    <div class="content-grid">
+        <div class="settings-column">
+            
+            <form method="post">
+                <input type="hidden" name="action" value="update_matrix">
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Matrice de Sanctions (Strikes)</h2>
+                        <div style="font-size:0.8rem; color:#aaa;">Configurez ici les sanctions par palier</div>
+                    </div>
+
+                    {% set matrix = settings.get('moderation_matrix', {}) %}
+                    {% set infractions = {'spam': 'Spam', 'link': 'Lien/Pub', 'caps': 'Majuscules', 'banned_word': 'Mot Interdit'} %}
+
+                    <div class="matrix-title">🛑 NON FOLLOWER</div>
+                    <div class="matrix-container">
+                        <table class="matrix-table">
+                            <thead>
+                                <tr><th>PALIERS</th>{% for key, label in infractions.items() %} <th>{{ label }}</th> {% endfor %}</tr>
+                            </thead>
+                            <tbody>
+                                {% for lvl in range(1, 5) %}
+                                <tr>
+                                    <td><strong>Palier {{ lvl }}</strong></td>
+                                    {% for key, label in infractions.items() %}
+                                        {% set rule = matrix.get('false', {}).get(key, {}).get(lvl|string, ['delete', 0]) %}
+                                        <td>
+                                            <div class="action-group">
+                                                <select name="matrix_non_follower_{{key}}_{{lvl}}_action" class="tiny-select">
+                                                    <option value="delete" {% if rule[0] == 'delete' %}selected{% endif %}>Suppr</option>
+                                                    <option value="timeout" {% if rule[0] == 'timeout' %}selected{% endif %}>TimeOut</option>
+                                                    <option value="ban" {% if rule[0] == 'ban' %}selected{% endif %}>Ban Def</option>
+                                                </select>
+                                                <input type="number" name="matrix_non_follower_{{key}}_{{lvl}}_duration" value="{{ rule[1] }}" class="tiny-input" placeholder="sec">
+                                            </div>
+                                        </td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="matrix-title">💙 FOLLOWER</div>
+                    <div class="matrix-container">
+                        <table class="matrix-table">
+                            <thead>
+                                <tr><th>PALIERS</th>{% for key, label in infractions.items() %} <th>{{ label }}</th> {% endfor %}</tr>
+                            </thead>
+                            <tbody>
+                                {% for lvl in range(1, 5) %}
+                                <tr>
+                                    <td><strong>Palier {{ lvl }}</strong></td>
+                                    {% for key, label in infractions.items() %}
+                                        {% set rule = matrix.get('true', {}).get(key, {}).get(lvl|string, ['delete', 0]) %}
+                                        <td>
+                                            <div class="action-group">
+                                                <select name="matrix_follower_{{key}}_{{lvl}}_action" class="tiny-select">
+                                                    <option value="delete" {% if rule[0] == 'delete' %}selected{% endif %}>Suppr</option>
+                                                    <option value="timeout" {% if rule[0] == 'timeout' %}selected{% endif %}>TimeOut</option>
+                                                    <option value="ban" {% if rule[0] == 'ban' %}selected{% endif %}>Ban Def</option>
+                                                </select>
+                                                <input type="number" name="matrix_follower_{{key}}_{{lvl}}_duration" value="{{ rule[1] }}" class="tiny-input" placeholder="sec">
+                                            </div>
+                                        </td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <button type="submit" class="btn update-all-btn" style="background-color: #7289da; margin-top:15px;">Sauvegarder la Matrice</button>
+                </div>
+            </form>
+
+            <form method="post">
+                <input type="hidden" name="action" value="update_automod">
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Réglages Automod</h2>
+                        <div class="checkbox-item">
+                            <input type="checkbox" name="strike_system_enabled" {% if settings.get('strike_system_enabled', True) %}checked{% endif %}>
+                            <label>Activer le système de Sanctions</label>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-item" style="border-bottom:1px solid #444; padding-bottom:15px; margin-bottom:15px;">
+                        <label style="color:#fff;">Reset automatique des Strikes après (heures) :</label>
+                        <input type="number" name="strike_reset_hours" value="{{ settings.get('strike_reset_hours', 24) }}" style="width: 100px;">
+                        <small style="color:#888;">Les sanctions reviennent à zéro après ce délai sans infraction.</small>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:1rem;">
+                        
+                        <div class="setting-item">
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="caps_filter_enabled" {% if settings.get('caps_filter_enabled', True) %}checked{% endif %}> 
+                                <label>Anti-Majuscules</label>
+                            </div>
+                            <div style="margin-left:20px; margin-top:10px;">
+                                <label style="font-size:0.8rem; display:block;">Longueur min:</label>
+                                <input type="number" name="caps_min_length" value="{{ settings.get('caps_min_length', 15) }}" style="width:70px;">
+                                <label style="font-size:0.8rem; display:block; margin-top:5px;">% Max:</label>
+                                <input type="number" name="caps_percent_threshold" value="{{ settings.get('caps_percent_threshold', 70) }}" style="width:70px;">
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="spam_filter_enabled" {% if settings.get('spam_filter_enabled', True) %}checked{% endif %}> 
+                                <label>Anti-Spam</label>
+                            </div>
+                            <div style="margin-left:20px; margin-top:10px;">
+                                <label style="font-size:0.8rem; display:block;">Répétitions max:</label>
+                                <input type="number" name="spam_allowed_repetitions" value="{{ settings.get('spam_allowed_repetitions', 3) }}" style="width:70px;">
+                                <label style="font-size:0.8rem; display:block; margin-top:5px;">Fenêtre (sec):</label>
+                                <input type="number" name="spam_time_window_seconds" value="{{ settings.get('spam_time_window_seconds', 5) }}" style="width:70px;">
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="checkbox-item" style="margin-bottom:10px;">
+                                <input type="checkbox" name="ad_filter_enabled" {% if settings.get('ad_filter_enabled', True) %}checked{% endif %}> 
+                                <label>Anti-Liens / Pubs</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="banned_words_enabled" {% if settings.get('banned_words_enabled', True) %}checked{% endif %}> 
+                                <label>Mots Interdits</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn update-all-btn" style="background-color: #43b581; margin-top:15px;">Sauvegarder l'Automod</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="lists-column">
+            <div class="card">
+                <div class="card-header"><h2>Mots Interdits</h2></div>
+                <form method="post" style="display:flex; gap:5px; margin-bottom:10px;">
+                    <input type="hidden" name="action" value="add_banned_word">
+                    <input type="text" name="new_word" placeholder="Mot..." required style="flex:1;">
+                    <button type="submit" class="btn">+</button>
+                </form>
+                <ul class="list-group">
+                    {% for item in banned_words %}
+                    <li class="list-item">
+                        <span style="display:flex; align-items:center; gap:10px;">
+                            <span style="color:white; font-weight:bold;">{{ item.word }}</span>
+                            <span style="font-size:0.7em; background:#444; padding:2px 6px; border-radius:4px; color:#aaa;">Niv. {{ item.severity }}</span>
+                        </span>
+                        
+                        <form method="post" style="margin:0;">
+                            <input type="hidden" name="action" value="delete_banned_word">
+                            <input type="hidden" name="word_to_delete" value="{{ item.word }}">
+                            <button type="submit" class="btn-delete" title="Supprimer">&times;</button>
+                        </form>
+                    </li>
+                    {% else %}
+                    <li class="list-item" style="color:#666; justify-content:center;">Aucun mot interdit</li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h2>Whitelist Liens</h2></div>
+                <form method="post" style="display:flex; gap:5px; margin-bottom:10px;">
+                    <input type="hidden" name="action" value="add_whitelist_user">
+                    <input type="text" name="new_whitelist_user" placeholder="Pseudo..." required style="flex:1;">
+                    <button type="submit" class="btn">+</button>
+                </form>
+                <ul class="list-group">
+                    {% for user in settings.link_permit_whitelist %}
+                    <li class="list-item">
+                        <span>{{ user }}</span>
+                        <form method="post" style="margin:0;">
+                            <input type="hidden" name="action" value="delete_whitelist_user">
+                            <input type="hidden" name="user_to_delete" value="{{ user }}">
+                            <button type="submit" class="btn-delete">&times;</button>
+                        </form>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            
+            <div class="card">
+                <div class="card-header"><h2>Historique Sanctions</h2></div>
+                <ul class="list-group" style="max-height: 400px; overflow-y: auto;">
+    {# ✅ FILTRE : On n'affiche QUE les vraies sanctions de viewers #}
+    {% for item in sanction_history if item.action in ['ban', 'timeout', 'delete', 'warn'] %}
+    
+    <li class="list-item" style="flex-direction: column; align-items: flex-start; gap: 4px; border-bottom: 1px solid #40444b; padding: 10px 0;">
+        
+        <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+            <div>
+                <strong style="color: #fff;">{{ item.username }}</strong>
+                <span style="font-size: 0.75rem; color: #888; margin-left: 5px;">{{ item.timestamp }}</span>
+            </div>
+            
+            <form method="post" style="margin:0;">
+                <input type="hidden" name="action" value="delete_sanction_entry">
+                <input type="hidden" name="id_to_delete" value="{{ item.id }}">
+                <button type="submit" class="btn-delete" title="Supprimer ce strike" style="font-size: 1.2rem; line-height: 1;">&times;</button>
+            </form>
+        </div>
+
+        <div style="font-size: 0.85rem; color: #b9bbbe; width: 100%;">
+            {# ✅ On affiche l'action en MAJUSCULES pour que ce soit clair #}
+            <span style="color: #f04747; font-weight: bold;">{{ item.action | upper }}</span>
+            <span style="color: #72767d;"> - {{ item.reason }}</span>
+        </div>
+    </li>
+    
+    {% else %}
+    <li class="list-item" style="justify-content:center; color:#666; padding: 20px;">Aucun strike viewer enregistré.</li>
+    {% endfor %}
+</ul>
+                <div style="margin-top: 10px; text-align: center;">
+                    <a href="#" style="font-size: 0.8rem; color: #7289da; text-decoration: none;">Voir tout l'historique</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+</body>
+</html>

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <meta charset="UTF-8" />
+    <title>MasthomBot - Chargement...</title>
+    <style>
+        
+        
+        
+        
+        nav.sidebar a span { display: inline-block; transition: transform 0.2s ease; }
+        
+        nav.sidebar a:hover span { transform: translateX(5px); }
+        
+        nav.sidebar a.active span { transform: translateX(5px); }
+        main.content { flex-grow: 1; padding: 3rem; overflow-y: auto; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+        h1 { font-weight: 700; font-size: 2.2rem; margin-bottom: 1rem; color: #fff; }
+        p { color: #8e9297; font-size: 1.1rem; }
+    </style>
+</head>
+<body>
+{% include 'sidebar.html' %}
+    <main class="content">
+        <h1>{{ page_name }}</h1>
+        <p>{{ message or 'Cette page est en cours de construction.' }}</p>
+    </main>
+</body>
+</html>

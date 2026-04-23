@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestion Viewers & EXP - MasthomBot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #6366f1; outline: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen overflow-hidden">
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 md:p-10 flex flex-col h-screen overflow-y-auto custom-scrollbar">
+        <header class="mb-8 flex justify-between items-start md:items-center">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">Gestion des Viewers & EXP</h1>
+                <p class="text-slate-400 mt-1">Consultez le classement et ajustez l'économie d'EXP de votre communauté.</p>
+            </div>
+            {% if request.query_params.get('success') %}
+            <div id="toast1" class="bg-emerald-500/10 text-emerald-400 px-6 py-3 rounded-2xl font-bold border border-emerald-500/20 shadow-xl flex items-center gap-3 animate-pulse">
+                <i class="fas fa-check-circle"></i> EXP Viewer mise à jour !
+            </div>
+            <script>setTimeout(() => document.getElementById('toast1').style.display='none', 3000)</script>
+            {% endif %}
+            {% if request.query_params.get('settings_saved') %}
+            <div id="toast2" class="bg-amber-500/10 text-amber-400 px-6 py-3 rounded-2xl font-bold border border-amber-500/20 shadow-xl flex items-center gap-3 animate-pulse">
+                <i class="fas fa-coins"></i> Barème sauvegardé !
+            </div>
+            <script>setTimeout(() => document.getElementById('toast2').style.display='none', 3000)</script>
+            {% endif %}
+        </header>
+
+        <!-- GESTION DU BARÈME D'EXP AUTOMATIQUE -->
+        <section class="config-card mb-8 rounded-3xl shadow-xl p-6">
+            <h2 class="text-xs font-black text-amber-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                <i class="fas fa-chart-line text-lg"></i> Barème des Gains Automatiques
+            </h2>
+            <form action="/admin/viewer/update_exp_settings" method="POST">
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-6">
+                    <!-- Abonnements -->
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Sub Tier 1</label>
+                        <input type="number" name="exp_sub_t1" value="{{ exp_settings.exp_sub_t1|default(500) }}" class="w-full input-dark rounded-xl p-3 text-sm text-center font-bold text-emerald-400">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Sub Tier 2</label>
+                        <input type="number" name="exp_sub_t2" value="{{ exp_settings.exp_sub_t2|default(1000) }}" class="w-full input-dark rounded-xl p-3 text-sm text-center font-bold text-blue-400">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Sub Tier 3</label>
+                        <input type="number" name="exp_sub_t3" value="{{ exp_settings.exp_sub_t3|default(2500) }}" class="w-full input-dark rounded-xl p-3 text-sm text-center font-bold text-purple-400">
+                    </div>
+
+                    <!-- Subgifts -->
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Subgift Tier 1 (Donneur)</label>
+                        <input type="number" name="exp_subgift_t1" value="{{ exp_settings.exp_subgift_t1|default(500) }}" class="w-full input-dark rounded-xl p-3 text-sm text-center font-bold text-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Subgift Tier 2 (Donneur)</label>
+                        <input type="number" name="exp_subgift_t2" value="{{ exp_settings.exp_subgift_t2|default(1000) }}" class="w-full input-dark rounded-xl p-3 text-sm text-center font-bold text-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Subgift Tier 3 (Donneur)</label>
+                        <input type="number" name="exp_subgift_t3" value="{{ exp_settings.exp_subgift_t3|default(2500) }}" class="w-full input-dark rounded-xl p-3 text-sm text-center font-bold text-purple-500">
+                    </div>
+
+                    <!-- Raids -->
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Raid (EXP / Viewer)</label>
+                        <input type="number" name="exp_raid_per_viewer" value="{{ exp_settings.exp_raid_per_viewer }}" class="w-full input-dark rounded-xl p-3 text-sm text-center font-bold text-rose-400">
+                    </div>
+                    <!-- Bits -->
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Bits (EXP / Bit)</label>
+                        <input type="number" name="exp_bits_multiplier" value="{{ exp_settings.exp_bits_multiplier }}" class="w-full input-dark rounded-xl p-3 text-sm text-center font-bold text-amber-400">
+                    </div>
+                    <!-- Chat & Présence -->
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Message (EXP/Msg)</label>
+                        <input type="number" name="exp_per_message" value="{{ exp_settings.exp_per_message }}" class="w-full input-dark rounded-xl p-3 text-sm text-center font-bold text-sky-400" title="Cooldown de 5s auto">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Présence (EXP/Min)</label>
+                        <input type="number" name="exp_per_watchtime" value="{{ exp_settings.exp_per_watchtime }}" class="w-full input-dark rounded-xl p-3 text-sm text-center font-bold text-teal-400">
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end">
+                     <button type="submit" class="bg-amber-600/20 text-amber-400 hover:bg-amber-600 hover:text-white border border-amber-500/30 px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2">
+                         <i class="fas fa-save"></i> Enregistrer le barème
+                     </button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Barre de Recherche -->
+        <div class="mb-6 relative">
+            <i class="fas fa-search absolute left-5 top-5 text-slate-500"></i>
+            <input type="text" id="searchInput" onkeyup="filterTable()" class="w-full input-dark rounded-2xl p-4 pl-14 text-sm font-bold shadow-lg" placeholder="Rechercher un pseudo (ex: masthom)...">
+        </div>
+
+        <!-- Tableau des Viewers -->
+        <div class="config-card flex-1 rounded-3xl shadow-2xl overflow-hidden flex flex-col min-h-[400px]">
+            <div class="overflow-y-auto flex-1 custom-scrollbar">
+                <table class="w-full text-left border-collapse" id="viewersTable">
+                    <thead class="sticky top-0 bg-[#1e293b] z-10 shadow-md">
+                        <tr class="text-[10px] uppercase tracking-widest text-slate-500 border-b border-slate-800">
+                            <th class="p-5 font-black">Pseudo</th>
+                            <th class="p-5 font-black text-center">Niveau</th>
+                            <th class="p-5 font-black">Messages</th>
+                            <th class="p-5 font-black">Watchtime</th>
+                            <th class="p-5 font-black text-amber-400"><i class="fas fa-star mr-1"></i> EXP (Points)</th>
+                            <th class="p-5 font-black text-right">Gérer l'EXP</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-sm">
+                        {% for v in viewers %}
+                        <tr class="border-b border-slate-800/50 hover:bg-slate-800/40 transition-colors viewer-row">
+                            <td class="p-5 font-bold text-white pseudo-cell">
+                                <a href="/admin/viewer/{{ v.twitch_id }}/history" class="flex items-center gap-3 hover:text-indigo-400 transition-all group">
+                                    <div class="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 border border-indigo-500/30 group-hover:border-indigo-400 group-hover:scale-110 transition-all">
+                                        <i class="fas fa-user-circle text-xs"></i>
+                                    </div>
+                                    <div class="flex flex-col">
+                                        <span>{{ v.username }}</span>
+                                        <span class="text-[9px] text-slate-500 font-mono tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity">ID: {{ v.twitch_id }}</span>
+                                    </div>
+                                </a>
+                            </td>
+                            
+                            <!-- COLONNE NIVEAU -->
+                            <td class="p-5 text-center">
+                                <span class="bg-indigo-600 text-white text-xs font-black px-2 py-1 rounded-lg shadow-md shadow-indigo-500/20">Lvl {{ v.level | default(1) }}</span>
+                            </td>
+
+                            <td class="p-5 text-slate-400 font-mono">{{ v.messages }}</td>
+                            <!-- AFFICHAGE HH:MM DÉFINITIF -->
+                            <td class="p-5 text-slate-400 font-mono">
+                                {% if v.watchtime_hhmm %}
+                                    {{ v.watchtime_hhmm }}
+                                {% else %}
+                                    {% set h = v.watchtime // 3600 %}{% set m = (v.watchtime % 3600) // 60 %}
+                                    {{ "%02d:%02d"|format(h, m) }}
+                                {% endif %}
+                            </td>
+                            <td class="p-5 font-black text-amber-400 text-lg font-mono">{{ v.points }}</td>
+                            <td class="p-5 text-right">
+                                <form action="/admin/viewer/update_exp" method="POST" class="flex items-center justify-end gap-2">
+                                    <input type="hidden" name="twitch_id" value="{{ v.twitch_id }}">
+                                    <input type="number" name="amount" value="100" min="1" class="input-dark rounded-xl p-2 w-24 text-center text-xs font-bold" required>
+                                    
+                                    <button type="submit" name="action" value="add" class="bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600 hover:text-white border border-emerald-500/30 w-9 h-9 rounded-xl transition-all" title="Ajouter">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                    <button type="submit" name="action" value="remove" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600 hover:text-white border border-rose-500/30 w-9 h-9 rounded-xl transition-all" title="Retirer">
+                                        <i class="fas fa-minus"></i>
+                                    </button>
+                                    <button type="submit" name="action" value="set" class="bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600 hover:text-white border border-indigo-500/30 w-9 h-9 rounded-xl transition-all" title="Écraser (Définir à la valeur exacte)">
+                                        <i class="fas fa-pen"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <!-- Colspan ajusté à 6 pour prendre toute la largeur -->
+                            <td colspan="6" class="p-12 text-center text-slate-500 italic">
+                                <i class="fas fa-ghost text-4xl mb-4 opacity-50 block"></i>
+                                Aucun viewer enregistré pour le moment.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function filterTable() {
+            let input = document.getElementById("searchInput");
+            let filter = input.value.toLowerCase();
+            let rows = document.getElementsByClassName("viewer-row");
+
+            for (let i = 0; i < rows.length; i++) {
+                let pseudo = rows[i].querySelector(".pseudo-cell").textContent.toLowerCase();
+                if (pseudo.includes(filter)) {
+                    rows[i].style.display = "";
+                } else {
+                    rows[i].style.display = "none";
+                }
+            }
+        }
+    </script>
+</body>
+</html>

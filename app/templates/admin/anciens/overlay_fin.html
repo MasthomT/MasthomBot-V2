@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <meta charset="UTF-8">
+    <title>Générique de Fin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;700;900&display=swap" rel="stylesheet">
+    <style>
+        /* --- STYLE DU GÉNÉRIQUE --- */
+        :root {
+            --text-white: #f0f8ff; 
+            
+            /* Couleurs par catégorie (Néon) */
+            --color-chatters: #00FFFF;   /* Cyan */
+            --color-followers: #9146FF;  /* Violet Twitch */
+            --color-subs: #FFD700;       /* Or */
+            --color-bits: #FF4500;       /* Orange/Rouge */
+            --color-raiders: #FF8C00;    /* Orange Foncé */
+            --color-gifters: #00FF7F;    /* Vert Printemps */
+            --color-vips: #FF69B4;       /* Rose */
+            --color-mods: #00FF00;       /* Vert Hacker */
+        }
+        
+        body, html {
+            margin: 0; padding: 0; 
+            width: 100%; height: 100%; 
+            overflow: hidden; 
+            background: transparent; 
+            font-family: 'Kanit', sans-serif;
+        }
+
+        #scroll-container {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            color: var(--text-white);
+            /* L'animation est gérée par le JS */
+        }
+
+        /* Titres Principaux */
+        h1 {
+            font-size: 5em;
+            font-weight: 900;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            color: transparent;
+            -webkit-text-stroke: 2px var(--text-white);
+            text-shadow: 0 0 15px rgba(255,255,255,0.5);
+        }
+        
+        h2 {
+            font-size: 2em;
+            font-weight: 300;
+            margin-bottom: 100px;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+        }
+
+        /* Sections */
+        .section {
+            margin-bottom: 80px;
+        }
+
+        .section-title {
+            font-size: 3em;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 30px;
+            text-transform: uppercase;
+            text-shadow: 0 0 10px currentColor; /* Lueur de la couleur du texte */
+            border-bottom: 3px solid currentColor;
+            display: inline-block;
+            padding-bottom: 5px;
+        }
+
+        /* Listes */
+        .name-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .name-item {
+            font-size: 2em; 
+            margin: 15px 0;
+            font-weight: 500;
+            text-shadow: 0 0 5px rgba(0,0,0,0.8);
+        }
+        
+        .name-item strong {
+            font-weight: 700;
+            /* La couleur sera définie par la classe de la section */
+        }
+        
+        /* Détails (Mois, Bits...) */
+        .detail-tag {
+            font-size: 0.6em;
+            color: #fff;
+            background-color: rgba(255,255,255,0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-left: 15px;
+            vertical-align: middle;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 400;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        
+        /* Classes de couleurs spécifiques */
+        .cat-chatters { color: var(--color-chatters); text-shadow: 0 0 10px var(--color-chatters); }
+        .cat-followers { color: var(--color-followers); text-shadow: 0 0 10px var(--color-followers); }
+        .cat-subscribers, .cat-subs { color: var(--color-subs); text-shadow: 0 0 10px var(--color-subs); }
+        .cat-bits { color: var(--color-bits); text-shadow: 0 0 10px var(--color-bits); }
+        .cat-raiders { color: var(--color-raiders); text-shadow: 0 0 10px var(--color-raiders); }
+        .cat-gifters { color: var(--color-gifters); text-shadow: 0 0 10px var(--color-gifters); }
+        .cat-vips { color: var(--color-vips); text-shadow: 0 0 10px var(--color-vips); }
+        .cat-moderators { color: var(--color-mods); text-shadow: 0 0 10px var(--color-mods); }
+
+    </style>
+</head>
+<body>
+
+    <div id="scroll-container">
+        <h1>{{ settings.main_title }}</h1>
+        <h2>{{ settings.subtitle }}</h2>
+
+        {% for key, section in settings.sections.items() %}
+        
+            {# Correction Mapping Clés #}
+            {% set data_key = key %}
+            {% if key == 'subs' %}{% set data_key = 'subscribers' %}{% endif %}
+            
+            {# Détermination de la classe CSS de couleur #}
+            {% set color_class = 'cat-' + key %}
+            
+            {# On n'affiche que si activé ET s'il y a des données #}
+            {% if section.enabled and data.get(data_key) and data[data_key]|length > 0 %}
+                
+                <div class="section">
+                    <div class="section-title {{ color_class }}">{{ section.title }}</div>
+                    
+                    <ul class="name-list">
+                        
+                        {# --- ABONNEMENTS (MOIS & TIER) --- #}
+                        {% if key == 'subscribers' or key == 'subs' %}
+                             {% for sub in data[data_key] %}
+                                <li class="name-item">
+                                    <strong class="{{ color_class }}">{{ sub.user }}</strong>
+                                    {# Affichage des Mois si > 1 #}
+                                    {% if sub.months and sub.months|int > 1 %}
+                                        <span class="detail-tag">{{ sub.months }} mois</span>
+                                    {% endif %}
+                                    {# Affichage Tier si différent de 1 #}
+                                    {% if sub.tier and sub.tier|string != '1000' and sub.tier|string != '1' %}
+                                        <span class="detail-tag">T{{ sub.tier[0] }}</span>
+                                    {% endif %}
+                                </li>
+                             {% endfor %}
+
+                        {# --- OFFREURS DE SUBS (NOMBRE) --- #}
+                        {% elif key == 'gifters' %}
+                             {% for gifter in data[data_key] %}
+                                <li class="name-item">
+                                    <strong class="{{ color_class }}">{{ gifter.name }}</strong>
+                                    <span class="detail-tag">x{{ gifter.count }} Offerts</span>
+                                </li>
+                             {% endfor %}
+
+                        {# --- BITS --- #}
+                        {% elif key == 'bits' %}
+                             {% for cheer in data[data_key] %}
+                                <li class="name-item">
+                                    <strong class="{{ color_class }}">{{ cheer.name }}</strong>
+                                    <span class="detail-tag">{{ cheer.amount }} Bits</span>
+                                </li>
+                             {% endfor %}
+
+                        {# --- RAIDERS --- #}
+                        {% elif key == 'raiders' %}
+                             {% for raid in data[data_key] %}
+                                <li class="name-item">
+                                    <strong class="{{ color_class }}">{{ raid.name }}</strong>
+                                    <span class="detail-tag">{{ raid.viewers }} viewers</span>
+                                </li>
+                             {% endfor %}
+                             
+                        {# --- FOLLOWERS --- #}
+                        {% elif key == 'followers' %}
+                             {% for follow in data[data_key] %}
+                                <li class="name-item">
+                                    <strong class="{{ color_class }}">{{ follow.user }}</strong>
+                                </li>
+                             {% endfor %}
+
+                        {# --- AUTRES (CHATTERS, MODS, VIPS) --- #}
+                        {% else %}
+                             {% for item in data[data_key] %}
+                                <li class="name-item">
+                                    <strong class="{{ color_class }}">{{ item }}</strong>
+                                </li>
+                             {% endfor %}
+                        {% endif %}
+
+                    </ul>
+                </div>
+
+            {% endif %}
+        {% endfor %}
+        
+        <div style="height: 100vh;"></div> 
+    </div>
+
+    <script>
+        const DURATION = {{ settings.duration or 60 }};
+        
+        window.onload = function() {
+            const container = document.getElementById('scroll-container');
+            const contentHeight = container.offsetHeight;
+            const windowHeight = window.innerHeight;
+            
+            // Calcul distance : doit sortir complètement de l'écran vers le haut
+            const totalDistance = contentHeight + windowHeight; 
+            
+            // Astuce : petit délai pour s'assurer que le CSS est prêt
+            setTimeout(() => {
+                container.style.transition = `transform ${DURATION}s linear`;
+                container.style.transform = `translateY(-${totalDistance}px)`;
+            }, 100);
+        };
+    </script>
+
+</body>
+</html>

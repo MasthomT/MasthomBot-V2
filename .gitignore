@@ -1,0 +1,42 @@
+==========================================
+
+🛑 FICHIERS SENSIBLES (NE JAMAIS PARTAGER)
+
+==========================================
+
+.env
+*.db
+*.db.bak
+*.sqlite3
+credits_session.json
+
+==========================================
+
+🐍 DOSSIERS PYTHON & ENVIRONNEMENT VIRTUEL
+
+==========================================
+
+pycache/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+
+==========================================
+
+📦 NODE.JS
+
+==========================================
+
+node_modules/
+npm-debug.log*
+
+==========================================
+
+📝 LOGS ET FICHIERS TEMPORAIRES
+
+==========================================
+
+*.log
+.DS_Store

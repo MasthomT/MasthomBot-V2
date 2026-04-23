@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sondages en direct - MasthomBot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #6366f1; outline: none; ring: 2px ring-indigo-500/20; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen">
+    
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 md:p-10 flex flex-col h-screen overflow-hidden">
+        <header class="mb-8 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">Sondages en direct</h1>
+                <p class="text-slate-400 mt-1">Créez un sondage interactif pour vos viewers sur leur profil web.</p>
+            </div>
+        </header>
+
+        <!-- La grille avec items-start pour que la carte de droite ne s'étire pas -->
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 flex-1 overflow-hidden items-start">
+            
+            <!-- CRÉATION DE SONDAGE -->
+            <div class="h-full overflow-y-auto pr-2 custom-scrollbar">
+                <form action="/admin/polls/create" method="POST" class="config-card p-8 rounded-3xl shadow-2xl space-y-6">
+                    <h2 class="text-xl font-bold text-white flex items-center gap-3 mb-6">
+                        <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-plus text-white"></i>
+                        </div>
+                        Lancer un sondage
+                    </h2>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-widest">Question du sondage</label>
+                            <input type="text" name="question" required class="w-full input-dark rounded-xl p-4 text-sm font-bold text-white" placeholder="Ex: Quel jeu on fait ce soir ?">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Choix 1 (Requis)</label>
+                                <input type="text" name="option1" required class="w-full input-dark rounded-xl p-3 text-sm" placeholder="Option A">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Choix 2 (Requis)</label>
+                                <input type="text" name="option2" required class="w-full input-dark rounded-xl p-3 text-sm" placeholder="Option B">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Choix 3 (Optionnel)</label>
+                                <input type="text" name="option3" class="w-full input-dark rounded-xl p-3 text-sm" placeholder="Option C">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Choix 4 (Optionnel)</label>
+                                <input type="text" name="option4" class="w-full input-dark rounded-xl p-3 text-sm" placeholder="Option D">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-4 rounded-2xl shadow-lg transition-all mt-6 active:scale-95">
+                        <i class="fas fa-rocket mr-2"></i> PUBLIER LE SONDAGE MAINTENANT
+                    </button>
+                    <p class="text-xs text-center text-slate-500 mt-2 italic">Lancer un nouveau sondage clôturera automatiquement le précédent.</p>
+                </form>
+            </div>
+
+            <!-- RÉSULTATS EN DIRECT -->
+            <div>
+                <div class="config-card rounded-3xl shadow-2xl flex flex-col overflow-hidden p-8">
+                    <h2 class="text-xl font-bold text-white flex items-center justify-between mb-8 border-b border-slate-800 pb-6">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-poll text-emerald-400 text-2xl"></i> En direct du stream
+                        </div>
+                        {% if active_poll %}
+                        <form action="/admin/polls/close" method="POST">
+                            <button type="submit" class="bg-rose-500/10 text-rose-400 hover:bg-rose-600 hover:text-white px-4 py-2 rounded-xl text-xs font-bold transition-colors">
+                                Clôturer les votes
+                            </button>
+                        </form>
+                        {% endif %}
+                    </h2>
+
+                    {% if active_poll %}
+                    <div class="flex-1">
+                        <h3 class="text-2xl font-black text-white mb-8">"{{ active_poll.question }}"</h3>
+                        
+                        <div class="space-y-2" id="live-results">
+                            {% for i in range(1, 5) %}
+                                {% set opt_key = 'option' ~ i %}
+                                {% if active_poll[opt_key] %}
+                                    {% set votes = active_poll.results[i] %}
+                                    {% set pct = ((votes / active_poll.total_votes) * 100)|round|int if active_poll.total_votes > 0 else 0 %}
+                                    
+                                    <div class="relative">
+                                        <div class="flex justify-between text-sm font-bold text-slate-300 mb-2 relative z-10 px-2">
+                                            <span>{{ active_poll[opt_key] }}</span>
+                                            <span id="admin-txt-{{ i }}">{{ pct }}% ({{ votes }})</span>
+                                        </div>
+                                        <div class="w-full bg-slate-900 rounded-full h-8 overflow-hidden border border-slate-700 relative mb-3">
+                                            <div id="admin-bar-{{ i }}" class="bg-emerald-500 h-8 transition-all duration-1000" style="width: {{ pct }}%"></div>
+                                        </div>
+                                        <!-- LISTE DES VOTANTS -->
+                                        <div id="voters-list-{{ i }}" class="text-[10px] px-2 flex flex-wrap gap-1.5 mb-5 min-h-[20px]">
+                                            {% for voter in active_poll.voters[i] %}
+                                                <span class="bg-slate-800 text-slate-300 px-2 py-1 rounded-md border border-slate-700 font-bold">{{ voter }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="mt-8 text-center text-slate-500 font-bold uppercase tracking-widest text-sm border-t border-slate-800 pt-6">
+                            Total : <span id="admin-total" class="text-emerald-400">{{ active_poll.total_votes }} vote(s)</span>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="flex-1 flex flex-col items-center justify-center opacity-30 italic py-10">
+                        <i class="fas fa-bed text-5xl mb-4"></i>
+                        <p>Aucun sondage n'est en cours actuellement.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Script de rafraîchissement en direct pour le panel Admin -->
+    <script>
+        {% if active_poll %}
+        async function refreshResults() {
+            try {
+                const res = await fetch('/api/v1/poll/active');
+                const data = await res.json();
+                if(data.active) {
+                    for(let i=1; i<=4; i++) {
+                        if(data.options[i]) {
+                            const votes = data.results[i] || 0;
+                            const pct = data.total_votes > 0 ? Math.round((votes/data.total_votes)*100) : 0;
+                            
+                            const bar = document.getElementById('admin-bar-'+i);
+                            const txt = document.getElementById('admin-txt-'+i);
+                            const votersList = document.getElementById('voters-list-'+i);
+                            
+                            if(bar) bar.style.width = pct + '%';
+                            if(txt) txt.textContent = pct + '% (' + votes + ')';
+                            
+                            // Mise à jour de la liste des votants en direct
+                            if(votersList && data.voters && data.voters[i]) {
+                                votersList.innerHTML = data.voters[i].map(v => 
+                                    `<span class="bg-slate-800 text-slate-300 px-2 py-1 rounded-md border border-slate-700 font-bold">${v}</span>`
+                                ).join('');
+                            }
+                        }
+                    }
+                    document.getElementById('admin-total').textContent = data.total_votes + " vote(s)";
+                } else {
+                    location.reload(); // Si le sondage a été fermé depuis ailleurs
+                }
+            } catch(e) {}
+        }
+        // Met à jour les barres et les noms toutes les 2 secondes sans recharger la page
+        setInterval(refreshResults, 2000);
+        {% endif %}
+    </script>
+</body>
+</html>

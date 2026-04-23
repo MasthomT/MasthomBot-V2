@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Générique Manager - MasthomBot</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+
+    <style>
+        /* CORRECTIF PRIORITAIRE : On force le thème sombre de MasthomBot contre Bootstrap */
+        body { 
+            background-color: #23272a !important; 
+            display: flex !important; 
+            color: #b9bbbe !important;
+        }
+
+        main.content { 
+            flex-grow: 1; 
+            padding: 2.5rem 3rem; 
+            overflow-y: auto; 
+            height: 100%;
+        }
+
+        h1 { font-weight: 700; font-size: 2.2rem; margin-bottom: 2rem; color: #fff; }
+        label { color: #fff; font-weight: 600; margin-bottom: 0.5rem; display: block; }
+
+        /* CARTES DE CONFIGURATION */
+        .card-custom { 
+            background-color: #2c2f33; 
+            border: 1px solid #40444b; 
+            padding: 1.5rem; 
+            border-radius: 8px; 
+            margin-bottom: 1.5rem; 
+            color: #fff; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+
+        .form-control { 
+            background-color: #23272a !important; 
+            color: #fff !important; 
+            border: 1px solid #40444b !important; 
+        }
+        
+        .form-control:focus { 
+            border-color: #7289da !important; 
+            box-shadow: none !important; 
+        }
+
+        /* DRAG & DROP ITEMS (Générique) */
+        .draggable-item {
+            background-color: #32353b; 
+            border: 1px solid #40444b; 
+            border-left: 5px solid #555;
+            border-radius: 6px; 
+            margin-bottom: 10px;
+            overflow: hidden;
+            transition: transform 0.1s;
+        }
+        
+        .item-header {
+            padding: 12px;
+            display: flex; align-items: center; justify-content: space-between;
+            background-color: #383c42;
+            cursor: grab;
+        }
+        
+        .item-header:active { cursor: grabbing; }
+        .drag-handle { margin-right: 15px; color: #aaa; font-size: 1.2rem; }
+
+        .preview-box {
+            background-color: #2f3136;
+            padding: 10px;
+            font-size: 0.85rem;
+            color: #dcddde;
+            max-height: 150px; 
+            overflow-y: auto;
+            border-top: 1px solid #40444b;
+        }
+
+        .preview-line {
+            padding: 4px 0;
+            border-bottom: 1px solid #3c3f45;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .preview-line:last-child { border-bottom: none; }
+        
+        .val-badge { 
+            background: #4f545c; color: #fff; 
+            padding: 1px 6px; border-radius: 4px; font-size: 0.75rem; 
+        }
+
+        /* Application de la couleur sur le titre à l'intérieur de la carte */
+.border-subs .fw-bold      { color: #ffd700 !important; }
+.border-gifters .fw-bold   { color: #00ff7f !important; }
+.border-bits .fw-bold      { color: #ff4500 !important; }
+.border-raiders .fw-bold   { color: #ff9100 !important; }
+.border-followers .fw-bold { color: #a970ff !important; } /* Violet Followers */
+.border-vips .fw-bold      { color: #ff69b4 !important; }
+.border-mods .fw-bold      { color: #00ff00 !important; }
+.border-chatters .fw-bold  { color: #00e5ff !important; }
+.border-viewers .fw-bold   { color: #6c757d !important; }
+
+/* Style des lignes d'aperçu pour éviter le blanc pur */
+.preview-line {
+    color: #b9bbbe; /* Gris clair */
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+    font-size: 0.9rem;
+}
+.val-badge {
+    color: #ffffff;
+    background: rgba(255,255,255,0.1);
+    padding: 0 5px;
+    border-radius: 3px;
+    font-size: 0.8rem;
+}
+        .ghost { opacity: 0.5; background: #40444b; border: 2px dashed #999; }
+    </style>
+</head>
+<body>
+
+{% include 'sidebar.html' %}
+
+<main class="content">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0">🎬 Studio Générique</h1>
+        <div class="btn-group">
+            <button onclick="generateTestData()" class="btn btn-outline-warning">🧪 Générer Test</button>
+            <button onclick="clearData()" class="btn btn-outline-danger">🗑️ Vider Données</button>
+            <a href="/credits" target="_blank" class="btn btn-primary btn-lg ms-2">▶️ VOIR LE RÉSULTAT</a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-5">
+            <div class="card-custom" style="border-top: 4px solid #7289da;">
+                <h3 class="h5 mb-3 text-white">📝 Configuration</h3>
+                <div class="mb-3">
+                    <label>Titre Principal</label>
+                    <input type="text" id="titleInput" class="form-control form-control-lg" placeholder="MERCI !">
+                </div>
+                <div class="mb-3">
+                    <label>Sous-titre (Fin de générique)</label>
+                    <input type="text" id="subtitleInput" class="form-control" placeholder="À LA PROCHAINE !">
+                </div>
+                <div class="mb-3">
+                    <label>Durée du défilement (secondes)</label>
+                    <input type="number" id="durationInput" class="form-control" value="60">
+                </div>
+                <div class="d-grid mt-4">
+                    <button class="btn btn-success w-100 fw-bold" onclick="saveConfig()">💾 ENREGISTRER LA CONFIGURATION</button>
+                    <div id="statusMessage" class="text-center mt-2 fw-bold" style="height: 24px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-7">
+            <div class="card bg-dark text-white border-0 shadow">
+                <div class="card-header bg-secondary text-white fw-bold">🔃 Ordre & Aperçu des Données</div>
+                <div class="card-body p-3" style="background-color: #2c2f33;">
+                    <div id="modules-container" class="list-group"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script>
+const MODULES = {
+    'subscribers': { label: '🌟 Abonnés',           css: 'border-subs' },      // Or
+    'gifters':     { label: '🎁 Mécènes (Gifts)',   css: 'border-gifters' },   // Vert
+    'bits':        { label: '💎 Bits & Donations',  css: 'border-bits' },      // Rouge
+    'raiders':     { label: '🚀 Raids Reçus',       css: 'border-raiders' },   // Orange
+    'followers':   { label: '💙 Nouveaux Followers', css: 'border-followers' }, // Violet (Correction du nom)
+    'moderators':  { label: '🛡️ Modérateurs',       css: 'border-mods' },      // Vert Flash
+    'vips':        { label: '⭐ VIPs (Guests)',      css: 'border-vips' },      // Rose
+    'chatters':    { label: '💬 Chatters',          css: 'border-chatters' },  // Cyan
+    'viewers':     { label: '👀 Viewers',           css: 'border-viewers' }    // Gris
+};
+
+    const container = document.getElementById('modules-container');
+    const sortable = new Sortable(container, {
+        animation: 150,
+        ghostClass: 'ghost',
+        handle: '.item-header'
+    });
+
+    async function loadData() {
+        try {
+            const response = await fetch('/api/credits/data');
+            const result = await response.json();
+
+            if(result.config) {
+                const titleInp = document.getElementById('titleInput');
+                const subInp = document.getElementById('subtitleInput');
+                const durInp = document.getElementById('durationInput');
+
+                // ✅ RÈGLE D'OR : On n'écrase JAMAIS si la case a le focus
+                // ET on ajoute un petit délai après une sauvegarde
+                if (document.activeElement !== titleInp) {
+                    titleInp.value = result.config.main_title || "";
+                }
+                if (document.activeElement !== subInp) {
+                    subInp.value = result.config.subtitle || "";
+                }
+                if (document.activeElement !== durInp) {
+                    durInp.value = result.config.duration || 60;
+                }
+            }
+
+            let order = (result.config && result.config.order) ? result.config.order : [];
+            
+            Object.keys(MODULES).forEach(key => {
+                if (!order.includes(key)) order.push(key);
+            });
+
+            container.innerHTML = '';
+            order.forEach(key => {
+                if (MODULES[key]) {
+                    // ✅ FIX : On utilise .stats car c'est ce que renvoie ton API (vu au curl)
+                    const sectionData = (result.stats && result.stats[key]) ? result.stats[key] : [];
+                    renderModuleCard(key, MODULES[key], sectionData);
+                }
+            });
+        } catch (e) { console.error("Erreur chargement:", e); }
+    }
+
+    function renderModuleCard(key, config, items) {
+        const div = document.createElement('div');
+        div.className = `draggable-item ${config.css}`;
+        div.setAttribute('data-key', key);
+
+        let previewHtml = '';
+        if (!items || items.length === 0) {
+            previewHtml = '<div class="text-muted fst-italic p-2">Aucune donnée...</div>';
+        } else {
+            items.forEach(item => {
+                const name = item.name || "Inconnu";
+                let label = item.label || "";
+                // Nettoyage des emojis pour l'aperçu propre
+                const cleanBadge = label.replace(/[🌟🚀💎🛡️🎁💬🕒]/g, '').trim();
+
+                previewHtml += `
+                    <div class="preview-line">
+                        <span>${name}</span>
+                        ${cleanBadge ? `<span class="val-badge">${cleanBadge}</span>` : ''}
+                    </div>`;
+            });
+        }
+
+        div.innerHTML = `
+            <div class="item-header">
+                <div class="d-flex align-items-center">
+                    <span class="drag-handle">☰</span>
+                    <span class="fw-bold">${config.label}</span>
+                </div>
+                <span class="badge bg-dark border border-secondary">${items.length}</span>
+            </div>
+            <div class="preview-box">${previewHtml}</div>
+        `;
+        container.appendChild(div);
+    }
+
+    async function saveConfig() {
+        const payload = {
+            main_title: document.getElementById('titleInput').value,
+            subtitle: document.getElementById('subtitleInput').value,
+            duration: parseInt(document.getElementById('durationInput').value),
+            order: Array.from(document.querySelectorAll('.draggable-item')).map(el => el.getAttribute('data-key'))
+        };
+
+        try {
+            const res = await fetch('/api/credits/config', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            if(res.ok) {
+                showStatus("✅ Configuration enregistrée !", "success");
+                // On recharge tout de suite pour "verrouiller" les valeurs dans le manager
+                loadData(); 
+            }
+        } catch(e) { showStatus("❌ Erreur réseau", "error"); }
+    }
+
+    async function generateTestData() {
+        if(!confirm("Injecter des données de test ?")) return;
+        const res = await fetch('/api/credits/test', { method: 'POST' });
+        if(res.ok) { showStatus("🧪 Test généré !", "success"); loadData(); }
+    }
+
+    async function clearData() {
+        if(!confirm("⚠️ Vider le générique ?")) return;
+        const res = await fetch('/api/session/reset', { method: 'POST' });
+        if(res.ok) { 
+            showStatus("✅ Base nettoyée !", "success"); 
+            setTimeout(() => location.reload(), 1000); 
+        }
+    }
+
+    function showStatus(msg, type) {
+        const status = document.getElementById('statusMessage');
+        const color = type === 'success' ? '#43b581' : '#f04747';
+        status.innerHTML = `<span style="color: ${color}">${msg}</span>`;
+        setTimeout(() => status.innerHTML='', 3000);
+    }
+
+    document.addEventListener('DOMContentLoaded', loadData);
+    setInterval(loadData, 10000);
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

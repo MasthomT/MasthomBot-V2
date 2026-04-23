@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MasthomBot - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .stat-card { background-color: #1e293b; border: 1px solid #334155; }
+        .quick-card { background-color: #1e293b; border: 1px solid #334155; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .quick-card:hover { border-color: #6366f1; transform: translateY(-4px); box-shadow: 0 15px 30px -5px rgba(0, 0, 0, 0.5); }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen overflow-hidden">
+    
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 md:p-10 flex flex-col h-screen overflow-y-auto custom-scrollbar">
+        <header class="mb-10 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">Tableau de Bord</h1>
+                <p class="text-slate-400 mt-1">Bienvenue sur le centre de contrôle de Félix et du Stream.</p>
+            </div>
+            <div class="hidden md:flex items-center gap-2 px-4 py-2 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20 shadow-lg">
+                <div class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                <span class="text-xs font-black uppercase tracking-widest">Système Actif</span>
+            </div>
+        </header>
+
+        <!-- Grille de Statistiques -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            <div class="stat-card p-6 rounded-3xl shadow-xl flex flex-col justify-between">
+                <div class="text-slate-500 text-[10px] font-black uppercase mb-4 tracking-widest flex items-center gap-2">
+                    <i class="fas fa-microchip text-indigo-400"></i> Processus & Serveur
+                </div>
+                <div class="text-3xl font-black text-white mb-3">{{ stats.uptime }}</div>
+                <div class="flex gap-4 border-t border-slate-800 pt-3">
+                    <div class="text-xs font-bold text-slate-400">CPU <span class="text-indigo-400">{{ stats.cpu }}%</span></div>
+                    <div class="text-xs font-bold text-slate-400">RAM <span class="text-indigo-400">{{ stats.ram }}%</span></div>
+                </div>
+            </div>
+
+            <div class="stat-card p-6 rounded-3xl shadow-xl flex flex-col justify-between">
+                <div class="text-slate-500 text-[10px] font-black uppercase mb-4 tracking-widest flex items-center gap-2">
+                    <i class="fab fa-twitch text-purple-400"></i> Connexion Twitch
+                </div>
+                <div class="text-3xl font-black text-purple-400 mb-3 flex items-center gap-3">
+                    <i class="fas fa-link text-xl opacity-50"></i> Connecté
+                </div>
+                <div class="text-xs font-bold text-slate-400 border-t border-slate-800 pt-3 italic">
+                    Écoute active sur le salon : <span class="text-white">#masthom_</span>
+                </div>
+            </div>
+
+            <div class="stat-card p-6 rounded-3xl shadow-xl flex flex-col justify-between">
+                <div class="text-slate-500 text-[10px] font-black uppercase mb-4 tracking-widest flex items-center gap-2">
+                    <i class="fas fa-brain text-emerald-400"></i> Intelligence Artificielle
+                </div>
+                <div class="text-3xl font-black text-white mb-3 flex items-center gap-3">
+                    <i class="fas fa-cat text-emerald-400 text-xl"></i> Félix V2
+                </div>
+                <div class="text-xs font-bold text-emerald-400 border-t border-slate-800 pt-3 flex items-center gap-2">
+                    <i class="fas fa-check-circle"></i> Moteur IA prêt à répondre
+                </div>
+            </div>
+        </div>
+
+        <h2 class="text-xs font-black text-slate-500 uppercase mb-6 tracking-[0.2em] flex items-center gap-2">
+            <i class="fas fa-rocket text-indigo-500"></i> Tous les outils
+        </h2>
+
+        <!-- Grille de Navigation Intégrale -->
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 pb-10">
+            
+            <!-- 1. Félix IA -->
+            <a href="/admin/felix_ai" class="quick-card p-6 rounded-3xl shadow-lg group flex items-start gap-5">
+                <div class="w-14 h-14 shrink-0 bg-indigo-600/10 rounded-2xl flex items-center justify-center group-hover:bg-indigo-600 transition-colors">
+                    <i class="fas fa-brain text-indigo-500 text-xl group-hover:text-white"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-white text-lg mb-1 group-hover:text-indigo-400 transition-colors">Cerveau de Félix</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Ajustez son caractère, sa répartie et ses probabilités d'intervention.</p>
+                </div>
+            </a>
+
+            <!-- 2. Modération -->
+            <a href="/admin/moderation" class="quick-card p-6 rounded-3xl shadow-lg group flex items-start gap-5">
+                <div class="w-14 h-14 shrink-0 bg-red-600/10 rounded-2xl flex items-center justify-center group-hover:bg-red-600 transition-colors">
+                    <i class="fas fa-shield-alt text-red-500 text-xl group-hover:text-white"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-white text-lg mb-1 group-hover:text-red-400 transition-colors">Modération</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Pilotez le bouclier anti-spam, le filtre de liens et les mots interdits.</p>
+                </div>
+            </a>
+
+            <!-- 3. Sondages -->
+            <a href="/admin/polls" class="quick-card p-6 rounded-3xl shadow-lg group flex items-start gap-5">
+                <div class="w-14 h-14 shrink-0 bg-sky-600/10 rounded-2xl flex items-center justify-center group-hover:bg-sky-600 transition-colors">
+                    <i class="fas fa-poll text-sky-500 text-xl group-hover:text-white"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-white text-lg mb-1 group-hover:text-sky-400 transition-colors">Sondages en direct</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Lancez des votes interactifs sur le profil web des viewers.</p>
+                </div>
+            </a>
+
+            <!-- 4. Notifications -->
+            <a href="/admin/notifications" class="quick-card p-6 rounded-3xl shadow-lg group flex items-start gap-5">
+                <div class="w-14 h-14 shrink-0 bg-orange-600/10 rounded-2xl flex items-center justify-center group-hover:bg-orange-600 transition-colors">
+                    <i class="fas fa-bell text-orange-500 text-xl group-hover:text-white"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-white text-lg mb-1 group-hover:text-orange-400 transition-colors">Notifications</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Gérez les alertes Discord pour vos lives et ceux des partenaires.</p>
+                </div>
+            </a>
+
+            <!-- 5. Régie & Shoutout -->
+            <a href="/admin/shoutout" class="quick-card p-6 rounded-3xl shadow-lg group flex items-start gap-5">
+                <div class="w-14 h-14 shrink-0 bg-emerald-600/10 rounded-2xl flex items-center justify-center group-hover:bg-emerald-600 transition-colors">
+                    <i class="fas fa-broadcast-tower text-emerald-500 text-xl group-hover:text-white"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-white text-lg mb-1 group-hover:text-emerald-400 transition-colors">Régie & Overlays</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Lancez des Shoutouts vidéo, jouez des replays ou activez le mode Pause.</p>
+                </div>
+            </a>
+
+            <!-- 6. Studio Générique -->
+            <a href="/admin/credits_manager" class="quick-card p-6 rounded-3xl shadow-lg group flex items-start gap-5">
+                <div class="w-14 h-14 shrink-0 bg-amber-600/10 rounded-2xl flex items-center justify-center group-hover:bg-amber-600 transition-colors">
+                    <i class="fas fa-film text-amber-500 text-xl group-hover:text-white"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-white text-lg mb-1 group-hover:text-amber-400 transition-colors">Studio Générique</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Générez l'overlay de fin de live pour remercier vos viewers et subs.</p>
+                </div>
+            </a>
+
+            <!-- 7. Annonces Auto -->
+            <a href="/admin/announcements" class="quick-card p-6 rounded-3xl shadow-lg group flex items-start gap-5">
+                <div class="w-14 h-14 shrink-0 bg-teal-600/10 rounded-2xl flex items-center justify-center group-hover:bg-teal-600 transition-colors">
+                    <i class="fas fa-bullhorn text-teal-500 text-xl group-hover:text-white"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-white text-lg mb-1 group-hover:text-teal-400 transition-colors">Annonces Auto</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Programmez les messages automatiques de Félix dans le chat.</p>
+                </div>
+            </a>
+
+            <!-- 8. Giveaways -->
+            <a href="/admin/giveaway.html" class="quick-card p-6 rounded-3xl shadow-lg group flex items-start gap-5">
+                <div class="w-14 h-14 shrink-0 bg-pink-600/10 rounded-2xl flex items-center justify-center group-hover:bg-pink-600 transition-colors">
+                    <i class="fas fa-gift text-pink-500 text-xl group-hover:text-white"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-white text-lg mb-1 group-hover:text-pink-400 transition-colors">Giveaways</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Lancez des tirages au sort interactifs avec votre communauté.</p>
+                </div>
+            </a>
+
+            <!-- 9. Gestion Viewers -->
+            <a href="/admin/viewer_manager.html" class="quick-card p-6 rounded-3xl shadow-lg group flex items-start gap-5">
+                <div class="w-14 h-14 shrink-0 bg-purple-600/10 rounded-2xl flex items-center justify-center group-hover:bg-purple-600 transition-colors">
+                    <i class="fas fa-users text-purple-500 text-xl group-hover:text-white"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-white text-lg mb-1 group-hover:text-purple-400 transition-colors">Gestion Viewers</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Consultez les fiches IA, les niveaux et distribuez manuellement de l'EXP.</p>
+                </div>
+            </a>
+
+            <!-- 10. Statistiques -->
+            <a href="/admin/stats" class="quick-card p-6 rounded-3xl shadow-lg group flex items-start gap-5">
+                <div class="w-14 h-14 shrink-0 bg-rose-600/10 rounded-2xl flex items-center justify-center group-hover:bg-rose-600 transition-colors">
+                    <i class="fas fa-chart-pie text-rose-500 text-xl group-hover:text-white"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-white text-lg mb-1 group-hover:text-rose-400 transition-colors">Statistiques</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Suivez le fil d'actualité en direct, les traîtres et les classements.</p>
+                </div>
+            </a>
+
+            <!-- 11. Data & Logs -->
+            <a href="/admin/data_logs" class="quick-card p-6 rounded-3xl shadow-lg group flex items-start gap-5">
+                <div class="w-14 h-14 shrink-0 bg-slate-600/10 rounded-2xl flex items-center justify-center group-hover:bg-slate-600 transition-colors">
+                    <i class="fas fa-database text-slate-400 text-xl group-hover:text-white"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-white text-lg mb-1 group-hover:text-slate-300 transition-colors">Data & Configuration</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Gérez les jetons API sensibles, les bases de données et les clés secrètes.</p>
+                </div>
+            </a>
+
+        </div>
+    </main>
+</body>
+</html>

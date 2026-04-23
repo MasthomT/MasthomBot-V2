@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
+    <meta charset="UTF-8">
+    <title>MasthomBot Overlay</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;800&family=Roboto:wght@400;700&family=Bangers&family=Montserrat:wght@800&display=swap" rel="stylesheet">
+    
+</head>
+<body>
+
+    <div id="alert-container"></div>
+    <audio id="alert-sound"></audio>
+
+    <script>
+        const container = document.getElementById('alert-container');
+        const audioEl = document.getElementById('alert-sound');
+        let isAlertPlaying = false;
+
+        function checkAlerts() {
+            if (isAlertPlaying) return;
+            fetch('/api/get_alert').then(res => res.json()).then(resp => {
+                if (resp.status === "active") playAlert(resp.data);
+            }).catch(e => console.error(e));
+        }
+
+        function playAlert(data) {
+            isAlertPlaying = true;
+            container.innerHTML = ''; // Nettoyer
+
+            // 1. Jouer le son
+            if(data.sound) { audioEl.src = data.sound; audioEl.volume = 0.5; audioEl.play().catch(e=>console.log(e)); }
+
+            // 2. Créer chaque élément
+            const elements = data.elements || {};
+            for (const [key, elemData] of Object.entries(elements)) {
+                const el = document.createElement('div');
+                el.className = 'alert-element';
+                
+                // Position & Scale
+                el.style.left = elemData.x + '%';
+                el.style.top = elemData.y + '%';
+                el.style.transform = `translate(-50%, -50%) scale(${elemData.scale || 1.0})`;
+
+                // Contenu
+                if (elemData.type === 'image' && elemData.file) {
+                    el.innerHTML = `<img src="${elemData.file}" class="elem-img">`;
+                } else if (elemData.type === 'text') {
+                    // Remplacements dynamiques
+                    let txt = (elemData.content || "").replace('{user}', data.user).replace('{amount}', data.amount || '0');
+                    el.innerHTML = `<div class="elem-text" style="color:${elemData.color}; font-family:${elemData.font}; font-size: 2.5rem;">${txt}</div>`;
+                }
+
+                container.appendChild(el);
+                
+                // Petite animation d'entrée décalée
+                setTimeout(() => el.classList.add('active'), 100);
+            }
+
+            // 3. Fin de l'alerte
+            setTimeout(() => {
+                document.querySelectorAll('.alert-element').forEach(e => e.classList.remove('active'));
+                setTimeout(() => {
+                    fetch('/api/ack_alert', { method: 'POST' });
+                    isAlertPlaying = false;
+                    container.innerHTML = '';
+                }, 500);
+            }, data.duration || 5000);
+        }
+
+        setInterval(checkAlerts, 1000);
+    </script>
+</body>
+</html>

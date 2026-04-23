@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration Système - MasthomBot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+        
+        body { background-color: #0f172a; color: #e2e8f0; }
+        
+        .config-card { 
+            background: #1e293b; 
+            border: 1px solid #334155; 
+            border-radius: 1.5rem; 
+            padding: 2rem; 
+            transition: transform 0.2s ease;
+        }
+
+        .input-config { 
+            background: #0f172a; 
+            border: 1px solid #334155; 
+            color: #f1f5f9; 
+            font-family: 'JetBrains Mono', monospace; 
+            font-size: 0.9rem; 
+            width: 100%; 
+            padding: 0.8rem 1rem; 
+            border-radius: 0.85rem; 
+            margin-top: 0.4rem;
+        }
+
+        .input-config:focus { 
+            border-color: #6366f1; 
+            outline: none; 
+            ring: 2px ring-indigo-500/20;
+            background: #161e2e;
+        }
+
+        .label-tech { 
+            font-size: 11px; 
+            font-weight: 800; 
+            color: #94a3b8; 
+            text-transform: uppercase; 
+            letter-spacing: 0.1em; 
+            display: block;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen">
+    
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 lg:p-12 overflow-y-auto custom-scrollbar">
+        <form action="/admin/data_logs/save" method="POST">
+            
+            <header class="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-12 gap-6">
+                <div>
+                    <h1 class="text-4xl font-black text-white tracking-tight">Data & Configuration</h1>
+                    <p class="text-slate-400 mt-2 text-lg">Gestion centralisée des variables d'environnement (.env)</p>
+                </div>
+                <div class="flex gap-4">
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-black px-8 py-4 rounded-2xl shadow-2xl transition-all active:scale-95 flex items-center gap-3">
+                        <i class="fas fa-save text-xl"></i> SAUVEGARDER & REDÉMARRER
+                    </button>
+                </div>
+            </header>
+
+            {% if request.query_params.get('saved') %}
+            <div id="toast" class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-5 rounded-2xl font-bold mb-10 flex items-center gap-4 animate-bounce">
+                <i class="fas fa-check-circle text-2xl"></i> 
+                <div>
+                    <p>Fichier .env mis à jour avec succès !</p>
+                    <p class="text-[10px] opacity-70 uppercase tracking-widest">Le bot recharge les nouveaux paramètres...</p>
+                </div>
+            </div>
+            <script>setTimeout(() => document.getElementById('toast').style.display='none', 5000)</script>
+            {% endif %}
+
+            <div class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-10">
+                
+                <div class="config-card space-y-6">
+                    <h2 class="text-indigo-400 font-black text-xs uppercase tracking-[0.2em] flex items-center gap-3 mb-4">
+                        <i class="fab fa-discord text-xl"></i> Application Discord
+                    </h2>
+                    <div class="space-y-4">
+                        <div>
+                            <span class="label-tech">Bot Token</span>
+                            <input type="password" name="DISCORD_TOKEN" value="{{ env.DISCORD_TOKEN }}" class="input-config">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <span class="label-tech">Guild ID (Serveur)</span>
+                                <input type="text" name="GUILD_ID" value="{{ env.GUILD_ID }}" class="input-config">
+                            </div>
+                            <div>
+                                <span class="label-tech">Discord Guild ID</span>
+                                <input type="text" name="DISCORD_GUILD_ID" value="{{ env.DISCORD_GUILD_ID }}" class="input-config">
+                            </div>
+                        </div>
+                        <div>
+                            <span class="label-tech">Webhook Modération (URL)</span>
+                            <input type="text" name="DISCORD_MOD_LOG_WEBHOOK" value="{{ env.DISCORD_MOD_LOG_WEBHOOK }}" class="input-config text-[10px]">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="config-card space-y-6">
+                    <h2 class="text-purple-400 font-black text-xs uppercase tracking-[0.2em] flex items-center gap-3 mb-4">
+                        <i class="fab fa-twitch text-xl"></i> API Twitch Helix
+                    </h2>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <span class="label-tech">Client ID</span>
+                            <input type="password" name="TWITCH_CLIENT_ID" value="{{ env.TWITCH_CLIENT_ID }}" class="input-config">
+                        </div>
+                        <div>
+                            <span class="label-tech">Client Secret</span>
+                            <input type="password" name="TWITCH_CLIENT_SECRET" value="{{ env.TWITCH_CLIENT_SECRET }}" class="input-config">
+                        </div>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <span class="label-tech">Bot Oauth Token (Chat)</span>
+                            <input type="password" name="TWITCH_BOT_OAUTH_TOKEN" value="{{ env.TWITCH_BOT_OAUTH_TOKEN }}" class="input-config">
+                        </div>
+                        <div>
+                            <span class="label-tech">User Access Token (Stats/Points)</span>
+                            <input type="password" name="TWITCH_ACCESS_TOKEN" value="{{ env.TWITCH_ACCESS_TOKEN }}" class="input-config">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <span class="label-tech">User ID</span>
+                                <input type="text" name="TWITCH_USER_ID" value="{{ env.TWITCH_USER_ID }}" class="input-config">
+                            </div>
+                            <div>
+                                <span class="label-tech">Broadcaster ID</span>
+                                <input type="text" name="TWITCH_BROADCASTER_ID" value="{{ env.TWITCH_BROADCASTER_ID }}" class="input-config">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="config-card">
+                    <h2 class="text-rose-400 font-black text-xs uppercase tracking-[0.2em] flex items-center gap-3 mb-8">
+                        <i class="fas fa-hashtag text-xl"></i> Identifiants des Salons
+                    </h2>
+                    <div class="grid grid-cols-2 gap-x-8 gap-y-5">
+                        <div><span class="label-tech">Live Perso</span><input type="text" name="NOTIF_LIVE_CHANNEL_ID" value="{{ env.NOTIF_LIVE_CHANNEL_ID }}" class="input-config"></div>
+                        <div><span class="label-tech">Partenaires</span><input type="text" name="STREAMERS_CHANNEL_ID" value="{{ env.STREAMERS_CHANNEL_ID }}" class="input-config"></div>
+                        <div><span class="label-tech">Salon Clips</span><input type="text" name="CLIP_CHANNEL_ID" value="{{ env.CLIP_CHANNEL_ID }}" class="input-config"></div>
+                        <div><span class="label-tech">Annonces</span><input type="text" name="ANNONCE_CHANNEL_ID" value="{{ env.ANNONCE_CHANNEL_ID }}" class="input-config"></div>
+                        <div><span class="label-tech">TikTok</span><input type="text" name="TIKTOK_CHANNEL_ID" value="{{ env.TIKTOK_CHANNEL_ID }}" class="input-config"></div>
+                        <div><span class="label-tech">YouTube</span><input type="text" name="YOUTUBE_CHANNEL_ID" value="{{ env.YOUTUBE_CHANNEL_ID }}" class="input-config"></div>
+                        <div><span class="label-tech">Giveaway</span><input type="text" name="GIVEAWAY_CHANNEL_ID" value="{{ env.GIVEAWAY_CHANNEL_ID }}" class="input-config"></div>
+                        <div><span class="label-tech">Mod Logs</span><input type="text" name="MODERATION_LOG_CHANNEL_ID" value="{{ env.MODERATION_LOG_CHANNEL_ID }}" class="input-config"></div>
+                    </div>
+                </div>
+
+                <div class="config-card space-y-6">
+                    <h2 class="text-emerald-400 font-black text-xs uppercase tracking-[0.2em] flex items-center gap-3 mb-4">
+                        <i class="fas fa-desktop text-xl"></i> Régie & Streaming
+                    </h2>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><span class="label-tech">OBS Host</span><input type="text" name="OBS_HOST" value="{{ env.OBS_HOST }}" class="input-config"></div>
+                        <div><span class="label-tech">OBS Port</span><input type="text" name="OBS_PORT" value="{{ env.OBS_PORT }}" class="input-config"></div>
+                    </div>
+                    <div><span class="label-tech">OBS Password</span><input type="password" name="OBS_PASSWORD" value="{{ env.OBS_PASSWORD }}" class="input-config"></div>
+                    <hr class="border-slate-700">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><span class="label-tech">StreamerBot IP</span><input type="text" name="STREAMERBOT_WS_IP" value="{{ env.STREAMERBOT_WS_IP }}" class="input-config"></div>
+                        <div><span class="label-tech">WS Port</span><input type="text" name="STREAMERBOT_WS_PORT" value="{{ env.STREAMERBOT_WS_PORT }}" class="input-config"></div>
+                    </div>
+                </div>
+
+                <div class="config-card space-y-6">
+                    <h2 class="text-amber-400 font-black text-xs uppercase tracking-[0.2em] flex items-center gap-3 mb-4">
+                        <i class="fas fa-brain text-xl"></i> IA & Services Web
+                    </h2>
+                    <div>
+                        <span class="label-tech">OpenAI API Key (Félix AI)</span>
+                        <input type="password" name="OPENAI_API_KEY" value="{{ env.OPENAI_API_KEY }}" class="input-config">
+                    </div>
+                    <div>
+                        <span class="label-tech">Firebase DB URL</span>
+                        <input type="text" name="FIREBASE_DB_URL" value="{{ env.FIREBASE_DB_URL }}" class="input-config text-[10px]">
+                    </div>
+                    <div>
+                        <span class="label-tech">Redirect URI (Twitch Auth)</span>
+                        <input type="text" name="TWITCH_REDIRECT_URI" value="{{ env.TWITCH_REDIRECT_URI }}" class="input-config text-[10px]">
+                    </div>
+                </div>
+
+                <div class="config-card space-y-6">
+                    <h2 class="text-slate-400 font-black text-xs uppercase tracking-[0.2em] flex items-center gap-3 mb-4">
+                        <i class="fas fa-cog text-xl"></i> Paramètres Généraux
+                    </h2>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><span class="label-tech">Twitch Channel</span><input type="text" name="TWITCH_CHANNEL" value="{{ env.TWITCH_CHANNEL }}" class="input-config"></div>
+                        <div><span class="label-tech">Twitch Username</span><input type="text" name="TWITCH_USERNAME" value="{{ env.TWITCH_USERNAME }}" class="input-config"></div>
+                    </div>
+                    <div>
+                        <span class="label-tech">Flask Secret Key</span>
+                        <input type="password" name="FLASK_SECRET_KEY" value="{{ env.FLASK_SECRET_KEY }}" class="input-config">
+                    </div>
+                </div>
+
+            </div>
+        </form>
+    </main>
+</body>
+</html>

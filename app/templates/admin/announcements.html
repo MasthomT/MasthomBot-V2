@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Annonces Automatiques - MasthomBot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #6366f1; outline: none; ring: 2px ring-indigo-500; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .tag-badge { background: #312e81; color: #a5b4fc; border: 1px solid #4338ca; cursor: pointer; transition: 0.2s; }
+        .tag-badge:hover { background: #4338ca; color: #fff; }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen">
+    
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 md:p-10 flex flex-col h-screen overflow-hidden">
+        <header class="mb-8 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">Annonces Automatiques</h1>
+                <p class="text-slate-400 mt-1">Configurez les messages périodiques de Félix dans le chat.</p>
+            </div>
+            <div id="clock" class="text-xl font-mono font-bold text-indigo-400 bg-indigo-500/10 px-4 py-2 rounded-xl border border-indigo-500/20">00:00</div>
+        </header>
+
+        <div class="grid grid-cols-1 xl:grid-cols-12 gap-8 flex-1 overflow-hidden">
+            
+            <div class="xl:col-span-5 h-full overflow-y-auto pr-2 custom-scrollbar">
+                <div class="config-card p-8 rounded-3xl shadow-2xl space-y-6">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-plus text-white" id="icon-action"></i>
+                        </div>
+                        <h2 class="text-xl font-bold text-white" id="title-action">Créer une annonce</h2>
+                    </div>
+
+                    <input type="hidden" id="ann-id">
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-widest">Nom de l'annonce (Admin)</label>
+                            <input type="text" id="ann-label" class="w-full input-dark rounded-xl p-4 text-sm" placeholder="Ex: Rappel Discord">
+                        </div>
+
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-widest">Message à diffuser</label>
+                            <textarea id="ann-template" rows="5" class="w-full input-dark rounded-xl p-4 text-sm resize-none leading-relaxed" placeholder="Écrivez votre message ici..."></textarea>
+                        </div>
+
+                        <div class="bg-slate-900/50 p-4 rounded-2xl border border-slate-800">
+                            <span class="block text-[9px] font-bold text-indigo-400 uppercase mb-3">Tags Dynamiques</span>
+                            <div class="flex flex-wrap gap-2">
+                                <span class="tag-badge px-3 py-1 rounded-lg text-[10px] font-bold" onclick="insertTag('{viewers}')">{viewers}</span>
+                                <span class="tag-badge px-3 py-1 rounded-lg text-[10px] font-bold" onclick="insertTag('{uptime}')">{uptime}</span>
+                                <span class="tag-badge px-3 py-1 rounded-lg text-[10px] font-bold" onclick="insertTag('{game}')">{game}</span>
+                                <span class="tag-badge px-3 py-1 rounded-lg text-[10px] font-bold" onclick="insertTag('{top5}')">{top5}</span>
+                                <span class="tag-badge px-3 py-1 rounded-lg text-[10px] font-bold" onclick="insertTag('{shoutout}')">{shoutout}</span>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Déclencheur</label>
+                                <select id="ann-trigger" class="w-full input-dark rounded-xl p-4 text-sm">
+                                    <option value="interval">Intervalle (Minutes)</option>
+                                    <option value="stream_start">Début de Stream</option>
+                                    <option value="once">Une seule fois</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Minutes / Valeur</label>
+                                <input type="number" id="ann-interval" value="30" class="w-full input-dark rounded-xl p-4 text-sm">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-widest">Groupe (Rotation)</label>
+                            <input type="text" id="ann-group" class="w-full input-dark rounded-xl p-4 text-sm" placeholder="Ex: reseaux_sociaux">
+                        </div>
+                    </div>
+
+                    <div class="pt-4 space-y-3">
+                        <button onclick="saveAnnouncement()" id="main-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-3 active:scale-95">
+                            <i class="fas fa-save"></i> SAUVEGARDER L'ANNONCE
+                        </button>
+                        <button onclick="resetForm()" id="cancel-btn" class="hidden w-full bg-slate-800 hover:bg-slate-700 text-slate-400 font-bold py-3 rounded-2xl transition-all">
+                            Annuler la modification
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="xl:col-span-7 h-full flex flex-col overflow-hidden">
+                <div class="config-card flex-1 rounded-3xl shadow-2xl flex flex-col overflow-hidden">
+                    <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/20">
+                        <h2 class="font-black text-xs uppercase tracking-[0.2em] text-slate-500">
+                            <i class="fas fa-list-ul mr-2 text-indigo-400"></i> Annonces enregistrées
+                        </h2>
+                        <span id="ann-count" class="bg-indigo-500/10 text-indigo-400 text-[10px] font-bold px-3 py-1 rounded-full border border-indigo-500/20">0 ANNONCE</span>
+                    </div>
+
+                    <div id="ann-list" class="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+                        <div class="flex flex-col items-center justify-center py-20 opacity-20 italic">
+                            <i class="fas fa-bullhorn text-5xl mb-4"></i>
+                            <p>Chargement des annonces...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Gestion de l'horloge
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').textContent = now.toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        let currentAnnouncements = [];
+
+        // Charger les annonces
+        async function fetchAnnouncements() {
+            try {
+                const response = await fetch('/api/announcements');
+                const data = await response.json();
+                currentAnnouncements = data;
+                renderAnnouncements();
+            } catch (error) {
+                console.error("Erreur chargement annonces:", error);
+            }
+        }
+
+        // Afficher la liste
+        function renderAnnouncements() {
+            const container = document.getElementById('ann-list');
+            const countBadge = document.getElementById('ann-count');
+            countBadge.textContent = `${currentAnnouncements.length} ANNONCE${currentAnnouncements.length > 1 ? 'S' : ''}`;
+
+            if (currentAnnouncements.length === 0) {
+                container.innerHTML = `<div class="text-center py-20 text-slate-600 italic text-sm">Aucune annonce configurée.</div>`;
+                return;
+            }
+
+            container.innerHTML = currentAnnouncements.map(ann => `
+                <div class="bg-slate-900/40 border border-slate-800 p-5 rounded-2xl hover:border-indigo-500/30 transition-all group">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <span class="text-white font-bold text-sm block">${ann.label}</span>
+                            <span class="text-[9px] font-black uppercase text-indigo-400 tracking-tighter">
+                                <i class="fas fa-clock mr-1"></i> ${ann.trigger_type} (${ann.interval_minutes}m)
+                                <span class="mx-2 text-slate-700">|</span>
+                                <i class="fas fa-folder mr-1"></i> ${ann.group_name || 'Solo'}
+                            </span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="editAnnouncement(${ann.id})" class="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:bg-indigo-600 hover:text-white transition-all">
+                                <i class="fas fa-pen text-[10px]"></i>
+                            </button>
+                            <button onclick="deleteAnnouncement(${ann.id})" class="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:bg-rose-600 hover:text-white transition-all">
+                                <i class="fas fa-trash text-[10px]"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-slate-400 text-xs line-clamp-2 bg-slate-950/30 p-3 rounded-xl border border-slate-800/50 italic">
+                        "${ann.message_template}"
+                    </p>
+                </div>
+            `).join('');
+        }
+
+        // Sauvegarder
+        async function saveAnnouncement() {
+            const id = document.getElementById('ann-id').value;
+            const payload = {
+                id: id ? parseInt(id) : null,
+                label: document.getElementById('ann-label').value || "Annonce sans titre",
+                message_template: document.getElementById('ann-template').value,
+                trigger_type: document.getElementById('ann-trigger').value,
+                interval_minutes: parseInt(document.getElementById('ann-interval').value),
+                group_name: document.getElementById('ann-group').value,
+                is_enabled: 1
+            };
+
+            if (!payload.message_template) return alert("Le message est vide !");
+
+            try {
+                const response = await fetch('/api/announcements/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                if (result.status === "success") {
+                    resetForm();
+                    fetchAnnouncements();
+                }
+            } catch (error) {
+                alert("Erreur lors de la sauvegarde.");
+            }
+        }
+
+        // Editer
+        function editAnnouncement(id) {
+            const ann = currentAnnouncements.find(a => a.id === id);
+            if (!ann) return;
+
+            document.getElementById('ann-id').value = ann.id;
+            document.getElementById('ann-label').value = ann.label;
+            document.getElementById('ann-template').value = ann.message_template;
+            document.getElementById('ann-trigger').value = ann.trigger_type;
+            document.getElementById('ann-interval').value = ann.interval_minutes;
+            document.getElementById('ann-group').value = ann.group_name || "";
+
+            document.getElementById('title-action').textContent = "Modifier l'annonce";
+            document.getElementById('icon-action').className = "fas fa-pen text-white";
+            document.getElementById('main-btn').innerHTML = `<i class="fas fa-check"></i> METTRE À JOUR`;
+            document.getElementById('cancel-btn').classList.remove('hidden');
+        }
+
+        // Supprimer
+        async function deleteAnnouncement(id) {
+            if (!confirm("Supprimer cette annonce ?")) return;
+            try {
+                await fetch(`/api/announcements/delete/${id}`, { method: 'DELETE' });
+                fetchAnnouncements();
+            } catch (error) {
+                alert("Erreur suppression.");
+            }
+        }
+
+        function resetForm() {
+            document.getElementById('ann-id').value = "";
+            document.getElementById('ann-label').value = "";
+            document.getElementById('ann-template').value = "";
+            document.getElementById('ann-interval').value = "30";
+            document.getElementById('ann-group').value = "";
+            document.getElementById('ann-trigger').value = "interval";
+
+            document.getElementById('title-action').textContent = "Créer une annonce";
+            document.getElementById('icon-action').className = "fas fa-plus text-white";
+            document.getElementById('main-btn').innerHTML = `<i class="fas fa-save"></i> SAUVEGARDER L'ANNONCE`;
+            document.getElementById('cancel-btn').classList.add('hidden');
+        }
+
+        function insertTag(tag) {
+            const area = document.getElementById('ann-template');
+            const start = area.selectionStart;
+            const end = area.selectionEnd;
+            area.value = area.value.substring(0, start) + tag + area.value.substring(end);
+            area.focus();
+            area.selectionStart = area.selectionEnd = start + tag.length;
+        }
+
+        window.onload = fetchAnnouncements;
+    </script>
+</body>
+</html>

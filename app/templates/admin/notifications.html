@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notifications Live - MasthomBot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #6366f1; outline: none; ring: 2px ring-indigo-500; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen">
+    
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 md:p-10">
+        <header class="mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">Notifications de Live</h1>
+                <p class="text-slate-400 mt-1">Gérez vos alertes Twitch via votre Bot Discord App.</p>
+            </div>
+            {% if request.query_params.get('saved') %}
+            <div id="toast" class="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold shadow-xl flex items-center gap-3 animate-pulse">
+                <i class="fas fa-check-circle"></i> Paramètres enregistrés !
+            </div>
+            <script>setTimeout(() => document.getElementById('toast').style.display='none', 3000)</script>
+            {% endif %}
+        </header>
+
+        <form action="/admin/notifications/settings" method="POST">
+            <div class="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+                
+                <!-- BLOC 1 : MON LIVE PERSONNEL (5/12) -->
+                <div class="xl:col-span-5 space-y-6">
+                    <!-- h-fit empêche la carte de s'étirer -->
+                    <div class="config-card p-8 rounded-3xl shadow-2xl space-y-8 h-fit">
+                        <div class="flex items-center justify-between">
+                            <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fas fa-broadcast-tower text-indigo-400 text-lg"></i> Mon Alerte Live
+                            </h2>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" name="discord_notify_enabled" class="sr-only peer" {% if settings.discord_notify_enabled %}checked{% endif %}>
+                                <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                            </label>
+                        </div>
+
+                        <div class="space-y-5">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">ID Salon Discord (Mon Live)</label>
+                                <input type="text" name="notif_live_channel_id" value="{{ settings.notif_live_channel_id }}" class="w-full input-dark rounded-xl p-4 text-xs font-mono" placeholder="ID Salon (ex: 123456789)">
+                            </div>
+
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Message Personnalisé</label>
+                                <textarea name="discord_notify_message" rows="6" class="w-full input-dark rounded-xl p-4 text-sm resize-none leading-relaxed" placeholder="@everyone Félix annonce : Masthom est en LIVE !">{{ settings.discord_notify_message }}</textarea>
+                                <p class="text-[9px] text-slate-500 mt-2 italic">Ce message sera envoyé par votre Bot Discord.</p>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-3 active:scale-95">
+                            <i class="fas fa-save"></i> SAUVEGARDER RÉGLAGES
+                        </button>
+                    </div>
+                </div>
+
+                <!-- BLOC 2 : SURVEILLANCE DES PARTENAIRES (7/12) -->
+                <div class="xl:col-span-7 space-y-6">
+                    <section class="config-card p-8 rounded-3xl shadow-2xl h-fit">
+                        <div class="flex items-center justify-between mb-8">
+                            <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fas fa-satellite-dish text-indigo-400 text-lg"></i> Surveillance Partenaires
+                            </h2>
+                        </div>
+
+                        <div class="space-y-6 mb-8">
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">ID Salon Discord (Notif Partenaires)</label>
+                            <input type="text" name="streamers_channel_id" value="{{ settings.streamers_channel_id }}" class="w-full input-dark rounded-xl p-4 text-xs font-mono" placeholder="ID Salon Partenaires">
+                        </div>
+
+                        <hr class="border-slate-800 mb-8">
+
+                        <!-- Ajout Rapide -->
+                        <div class="space-y-4 mb-6">
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase">Ajouter un streamer à surveiller</label>
+                            <div class="flex gap-2">
+                                <input type="text" id="new-streamer" placeholder="Pseudo Twitch (ex: siphano)" class="flex-1 input-dark rounded-xl p-4 text-sm">
+                                <button type="button" onclick="addStreamer()" class="bg-indigo-600 hover:bg-indigo-500 px-8 rounded-xl text-white font-black text-xs transition-all shadow-lg active:scale-95">
+                                    AJOUTER
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Liste avec Scroll (max-h ajouté ici) -->
+                        <div class="overflow-y-auto pr-3 custom-scrollbar space-y-3 min-h-[250px] max-h-[400px]">
+                            {% for s in tracked_streamers %}
+                            <div class="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 flex justify-between items-center group hover:border-indigo-500/30 transition-all hover:bg-slate-900">
+                                <div class="flex items-center gap-4">
+                                    <div class="relative">
+                                        <div class="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/10">
+                                            <i class="fab fa-twitch text-indigo-400 text-xl"></i>
+                                        </div>
+                                        <div class="absolute -top-1 -right-1 w-4 h-4 rounded-full border-4 border-[#1e293b] 
+                                            {% if s.is_online %}bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.6)] animate-pulse{% else %}bg-rose-500{% endif %}">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <span class="text-sm font-black text-slate-200 block">{{ s.login }}</span>
+                                        <span class="text-[10px] font-bold uppercase tracking-tighter {% if s.is_online %}text-emerald-400{% else %}text-slate-500{% endif %}">
+                                            {% if s.is_online %}• En Live{% else %}• Hors Ligne{% endif %}
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                <button type="button" onclick="deleteStreamer({{ s.id }})" class="p-3 text-slate-600 hover:text-rose-500 transition-colors" title="Supprimer">
+                                    <i class="fas fa-trash-alt text-xs"></i>
+                                </button>
+                            </div>
+                            {% else %}
+                            <div class="h-full flex flex-col items-center justify-center py-12 border-2 border-dashed border-slate-800 rounded-3xl">
+                                <i class="fas fa-user-secret text-slate-700 text-3xl mb-4"></i>
+                                <p class="text-slate-500 text-sm italic">Aucun partenaire sous surveillance.</p>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </section>
+                </div>
+
+            </div>
+        </form>
+    </main>
+
+    <script>
+        function addStreamer() {
+            const login = document.getElementById('new-streamer').value;
+            if(!login) return;
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/admin/notifications/streamer/add';
+            const input = document.createElement('input');
+            input.name = 'login';
+            input.value = login;
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+        }
+
+        function deleteStreamer(id) {
+            if(!confirm('Supprimer ce streamer de la surveillance ?')) return;
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/admin/notifications/streamer/delete/' + id;
+            document.body.appendChild(form);
+            form.submit();
+        }
+    </script>
+</body>
+</html>

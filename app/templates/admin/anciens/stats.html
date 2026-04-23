@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MasthomBot - Statistiques</title>
+    <style>
+        /* --- RESET & BASE --- */
+        
+
+        /* Navigation Latérale */
+        
+
+        
+
+        
+
+        
+
+        
+        
+        /* --- CONTENU PRINCIPAL --- */
+        main.content { 
+            flex-grow: 1; 
+            padding: 2rem; 
+            overflow-y: auto; 
+        }
+        header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 2rem; 
+        }
+        h1 { color: #fff; font-size: 1.8rem; }
+        .current-time { font-size: 1.1rem; font-weight: bold; color: #7289da; }
+
+        /* --- GRILLE DES STATS --- */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 1.5rem;
+        }
+
+        /* --- CARTES --- */
+        .card {
+            background-color: #2c2f33;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+        }
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid #23272a;
+            padding-bottom: 0.5rem;
+            justify-content: space-between;
+        }
+        .card-header h2 { font-size: 1.2rem; color: #fff; }
+        .card-header svg { width: 24px; height: 24px; }
+
+        /* --- LISTES DANS LES CARTES --- */
+        .stats-list { list-style: none; }
+        .stats-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.6rem 0;
+            border-bottom: 1px solid #23272a;
+            font-size: 0.95rem;
+        }
+        .stats-item:last-child { border-bottom: none; }
+        .stats-item span:last-child { color: #fff; font-weight: 600; }
+
+        /* --- TABLEAUX (Unfollows) --- */
+        .history-list {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #23272a;
+            border-radius: 4px;
+            padding: 0.5rem;
+        }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #23272a; font-size: 0.9rem; }
+        th { color: #7289da; font-weight: 600; }
+        
+        /* --- TIMELINE ÉVÉNEMENTS --- */
+        .timeline-date {
+            font-weight: 700; color: #b9bbbe;
+            margin: 1.5rem 0 0.5rem 0;
+            padding-bottom: 0.5rem; border-bottom: 1px solid #444;
+        }
+        
+        /* --- STYLE DES BOUTONS FILTRES --- */
+        .filter-btn {
+            background: transparent;
+            border: 1px solid #444;
+            color: #888;
+            padding: 4px 10px;
+            border-radius: 15px; 
+            cursor: pointer;
+            font-size: 12px;
+            font-family: inherit;
+            transition: all 0.2s ease;
+        }
+        .filter-btn:hover {
+            border-color: #777;
+            color: #ccc;
+        }
+        .filter-btn.active {
+            background-color: #7289da; 
+            border-color: #7289da;
+            color: white;
+            font-weight: 600;
+        }
+
+        /* --- STYLE DU FLUX --- */
+        #eventsList {
+            display: flex;
+            flex-direction: column;
+            max-height: 500px; 
+            overflow-y: auto;
+            min-height: 100px;
+        }
+
+        .event-item {
+            display: flex;
+            align-items: baseline;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        .event-item:hover { background: rgba(255,255,255,0.02); }
+        .event-item:last-child { border-bottom: none; }
+
+        .time {
+            font-family: 'Consolas', monospace;
+            font-size: 0.85em;
+            color: #555;
+            margin-right: 10px;
+            min-width: 45px;
+        }
+
+        /* Couleurs et Icones */
+        .e-icon { width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; margin-right: 8px; font-size: 14px;}
+        
+        .type-follow { background: rgba(145, 70, 255, 0.2); color: #9146FF; }
+        .type-sub { background: rgba(255, 215, 0, 0.2); color: #FFD700; }
+        .type-subgift { background: rgba(255, 182, 193, 0.2); color: #FFB6C1; }
+        .type-cheer { background: rgba(255, 69, 0, 0.2); color: #FF4500; }
+        .type-raid, .type-raid_out { background: rgba(255, 140, 0, 0.2); color: #FF8C00; }
+        .type-timeout { background: rgba(230, 126, 34, 0.2); color: #e67e22; }
+        .type-ban { background: rgba(231, 76, 60, 0.2); color: #e74c3c; }
+        .type-backup { background: rgba(67, 181, 129, 0.2); border: 1px solid #43b581; }
+
+        /* Titres de date */
+        .date-header {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #7289da; 
+            border-bottom: 1px solid #36393f;
+            margin-top: 15px;
+            margin-bottom: 5px;
+            padding-bottom: 2px;
+            font-weight: 700;
+        }
+
+        /* Mots-clés colorés */
+        .kw-user { color: #fff; font-weight: 700; margin-right: 5px; }
+        .kw-raid { color: #ff5e57; font-weight: 600; }
+        .kw-tip { color: #2ecc71; font-weight: 600; }
+        .kw-sub { color: #f1c40f; font-weight: 600; }
+        .kw-gift { color: #ff78d6; font-weight: 600; }
+        .kw-cheer { color: #be2edd; font-weight: 600; }
+        .kw-follow { color: #3498db; font-weight: 600; }
+        .kw-mod { color: #95a5a6; font-weight: 600; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #23272a; }
+        ::-webkit-scrollbar-thumb { background: #202225; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #7289da; }
+        
+        .btn-small {
+            background-color: #7289da; color: white; padding: 4px 8px;
+            border-radius: 4px; text-decoration: none; font-size: 0.8rem; margin-left: auto;
+        }
+        .btn-small:hover { background-color: #5b6eae; }
+    </style>
+</head>
+<body>
+
+{% include 'sidebar.html' %}
+
+<main class="content">
+    <header>
+        <h1>Tableau de Bord & Statistiques</h1>
+        <div class="current-time" id="clock">--:--</div>
+    </header>
+
+    <div class="stats-grid">
+        
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#9146FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2H3v16h5v4l4-4h5l4-4V2zm-10 9V7m5 4V7"/></svg>
+                    <h2 style="display:inline-block; margin-left: 10px;">Twitch</h2>
+                </div>
+            </div>
+            <ul class="stats-list">
+                <li class="stats-item"><span>Chaîne</span><span>{{ twitch_stats.username }}</span></li>
+                <li class="stats-item"><span>Statut</span>
+                    <span style="color: {{ '#43b581' if twitch_stats.is_live else '#f04747' }}; font-weight:800;">
+                        {{ 'EN LIVE 🔴' if twitch_stats.is_live else 'HORS LIGNE' }}
+                    </span>
+                </li>
+                <li class="stats-item"><span>Jeu Actuel</span><span>{{ twitch_stats.game_name }}</span></li>
+                <li class="stats-item"><span>Viewers</span><span>{{ twitch_stats.viewers }}</span></li>
+                <li class="stats-item"><span>Followers</span><span>{{ twitch_stats.followers }}</span></li>
+                <li class="stats-item"><span>Vues Totales</span><span>{{ twitch_stats.total_views }}</span></li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#5865F2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><path d="M7.5 7.5c3.5-1 5.5-1 9 0 1.5 3.6 3 8 3 9.5-3.5 1.5-5.5 1.5-9 0-1.5-3.6-3-8-3-9.5z"/><path d="M7 16.5c3.5 1 6.5 1 10 0"/></svg>
+                    <h2 style="display:inline-block; margin-left: 10px;">Discord</h2>
+                </div>
+            </div>
+            <ul class="stats-list">
+                <li class="stats-item"><span>Serveur</span><span>{{ discord_stats.server_name }}</span></li>
+                <li class="stats-item"><span>Membres</span><span>{{ discord_stats.member_count }}</span></li>
+                <li class="stats-item"><span>Création</span><span>{{ discord_stats.created_at }}</span></li>
+                <li class="stats-item"><span>Salons Text/Voc</span><span>{{ discord_stats.text_channels }} / {{ discord_stats.voice_channels }}</span></li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#faa61a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                    <h2 style="display:inline-block; margin-left: 10px;">Système & Bot</h2>
+                </div>
+            </div>
+            <ul class="stats-list">
+                <li class="stats-item"><span>Uptime</span><span>{{ process_stats.uptime }}</span></li>
+                <li class="stats-item"><span>CPU / RAM</span><span>{{ process_stats.cpu }}% / {{ process_stats.ram }}%</span></li>
+                <li class="stats-item"><span>Ping Discord</span><span>{{ bot_status.ping }} ms</span></li>
+                <li class="stats-item"><span>Tâche Live Perso</span><span style="color: {{ '#43b581' if tasks_status.own_channel == 'Actif' else '#f04747' }};">{{ tasks_status.own_channel }}</span></li>
+                <li class="stats-item"><span>Tâche Live Amis</span><span style="color: {{ '#43b581' if tasks_status.friends_channels == 'Actif' else '#f04747' }};">{{ tasks_status.friends_channels }}</span></li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#eb459e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+                    <h2 style="display:inline-block; margin-left: 10px;">Activité (Récent)</h2>
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div style="background: #23272a; padding: 10px; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 0.8rem; color: #8e9297;">Follows</div>
+                    <div style="font-size: 1.2rem; font-weight: bold; color: #fff;">{{ event_counts.follow }}</div>
+                </div>
+                <div style="background: #23272a; padding: 10px; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 0.8rem; color: #8e9297;">Subs/Gifts</div>
+                    <div style="font-size: 1.2rem; font-weight: bold; color: #fff;">{{ event_counts.sub + event_counts.subgift + event_counts.resub }}</div>
+                </div>
+                <div style="background: #23272a; padding: 10px; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 0.8rem; color: #8e9297;">Raids</div>
+                    <div style="font-size: 1.2rem; font-weight: bold; color: #fff;">{{ event_counts.raid }}</div>
+                </div>
+                <div style="background: #23272a; padding: 10px; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 0.8rem; color: #8e9297;">Bits</div>
+                    <div style="font-size: 1.2rem; font-weight: bold; color: #fff;">{{ event_counts.total_bits }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="grid-row: span 2;">
+            <div class="card-header">
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#f1c40f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+                    <h2 style="display:inline-block; margin-left: 10px;">Top 10 Viewers</h2>
+                </div>
+            </div>
+            <ul class="stats-list">
+                {% for viewer in leaderboard %}
+                <li class="stats-item">
+                    <span style="color: #fff;">{{ loop.index }}. {{ viewer.username }}</span>
+                    <span>Niv. {{ viewer.level }} <small style="color:#7289da">({{ viewer.xp }} XP)</small></span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#2ecc71" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+                    <h2 style="display:inline-block; margin-left: 10px;">Derniers Gagnants</h2>
+                </div>
+            </div>
+            <ul class="stats-list">
+                <li class="stats-item">
+                    <span>Dernier Giveaway</span>
+                    <span style="color: #fff; text-align:right;">
+                        {% if last_giveaway %}
+                            {{ last_giveaway.winner }}<br>
+                            <small style="color:#8e9297">{{ last_giveaway.prize }}</small>
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </span>
+                </li>
+                <li class="stats-item" style="margin-top:10px;">
+                    <span>Clip du Mois</span>
+                    <span style="color: #fff; text-align:right;">
+                         {% if last_clip %}
+                            {{ last_clip.winner }}<br>
+                            <a href="{{ last_clip.link }}" target="_blank" style="font-size:0.8rem; color:#7289da;">Voir le clip</a>
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="card" style="grid-column: 1 / -1;">
+            <div class="card-header">
+                <h2>🔴 Fil d'actualité du Stream</h2>
+            </div>
+            <div class="card-body">
+                <div id="feedFilters" style="display: flex; gap: 6px; margin-bottom: 15px; flex-wrap: wrap;">
+                    <button class="filter-btn active" onclick="filtrerFlux('all')">Tout</button>
+                    <button class="filter-btn" onclick="filtrerFlux('follows')">Follows</button>
+                    <button class="filter-btn" onclick="filtrerFlux('subs')">Subs</button>
+                    <button class="filter-btn" onclick="filtrerFlux('gifts')">Cadeaux</button>
+                    <button class="filter-btn" onclick="filtrerFlux('bits')">Bits</button>
+                    <button class="filter-btn" onclick="filtrerFlux('raid_in')">Raids Reçus</button>
+                    <button class="filter-btn" onclick="filtrerFlux('raid_out')">Raids Envoyés</button>
+                    <button class="filter-btn" onclick="filtrerFlux('mod')">Modération</button>
+                </div>
+
+                <div id="eventsList" style="min-height: 50px; max-height: 500px; overflow-y: auto;">
+                    
+                    {% if not events %}
+                        <div style="padding: 20px; text-align: center; color:#666; font-style:italic;">
+                            Chargement ou aucun événement...
+                        </div>
+                    {% else %}
+                    
+                        {% for event in events %}
+                            {% set filter_class = event.type %}
+                            {% if event.type == 'resub' or event.type == 'subgift' %} {% set filter_class = 'sub' %} {% endif %}
+                            {% if event.type == 'raid_out' %} {% set filter_class = 'raid' %} {% endif %}
+
+                            <div class="event-item" data-filter="{{ filter_class }}">
+                                <span class="time">{{ event.time_str }}</span>
+                                
+                                {% if event.type == 'follow' %}
+                                    <div class="e-icon type-follow">💙</div>
+                                {% elif event.type in ['sub', 'resub'] %}
+                                    <div class="e-icon type-sub">⭐</div>
+                                {% elif event.type == 'subgift' %}
+                                    <div class="e-icon type-subgift">🎁</div>
+                                {% elif event.type == 'cheer' %}
+                                    <div class="e-icon type-cheer">💎</div>
+                                {% elif event.type == 'raid' %}
+                                    <div class="e-icon type-raid">🚀</div>
+                                {% elif event.type == 'raid_out' %}
+                                    <div class="e-icon type-raid_out">✈️</div>
+                                {% elif event.type == 'timeout' %}
+                                    <div class="e-icon type-timeout">⏱️</div>
+                                {% elif event.type == 'ban' %}
+                                    <div class="e-icon type-ban">🔨</div>
+                                {% endif %}
+                                
+                                <div class="e-text">
+                                    <strong class="kw-user">{{ event.username }}</strong>
+                                    
+                                    {% if event.type == 'follow' %} <span class="kw-follow">Follow</span>
+                                    {% elif event.type == 'sub' %} <span class="kw-sub">Abonnement</span> (Tier {{ event.parsed_details.tier | default('1') }})
+                                    {% elif event.type == 'resub' %} <span class="kw-sub">Resub</span> ({{ event.parsed_details.months | default('?') }} mois)
+                                    {% elif event.type == 'subgift' %} <span class="kw-gift">Cadeau</span> offert ({{ event.parsed_details.gifts | default('1') }} subs)
+                                    {% elif event.type == 'cheer' %} <span class="kw-cheer">Cheer</span> {{ event.parsed_details.bits | default('0') }} bits !
+                                    {% elif event.type == 'raid' %} <span class="kw-raid">Raid Reçu</span> ({{ event.parsed_details.viewers | default('?') }} viewers)
+                                    {% elif event.type == 'raid_out' %}
+                                        <span class="kw-raid">RAID ENVOYÉ</span> vers <strong>{{ event.parsed_details.target | default('Inconnu') }}</strong> ({{ event.parsed_details.viewers | default('?') }} v)
+                                    {% elif event.type == 'timeout' %}
+                                        <span class="kw-mod">TIMEOUT</span> {{ event.parsed_details.duration | default('?') }} sec. 
+                                        {% if event.parsed_details.reason %}(Raison: "{{ event.parsed_details.reason }}"){% endif %}
+                                    {% elif event.type == 'ban' %}
+                                        <span class="kw-mod">BANNI</span> définitivement. 
+                                        {% if event.parsed_details.reason %}(Raison: "{{ event.parsed_details.reason }}"){% endif %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="grid-column: 1 / -1;">
+            <div class="card-header">
+                <h2>Historique des Unfollows</h2>
+                <a href="#" class="btn-small">Forcer la vérification</a>
+            </div>
+            <div class="history-list">
+                <table id="unfollow-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Utilisateur</th>
+                            <th style="text-align: right;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div> 
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+
+        let currentFilter = 'all';
+        let allEventsCache = []; 
+
+        window.filtrerFlux = function(categorie) {
+            currentFilter = categorie;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.innerText.toLowerCase().includes(categorie.replace('raid_',''))) btn.classList.add('active');
+                if (categorie === 'all' && btn.innerText === 'Tout') btn.classList.add('active');
+            });
+            // Pour le filtrage, on re-déclenche l'affichage JS si dispo, sinon on cache les divs HTML
+            if(allEventsCache.length > 0) {
+                afficherEvenements(allEventsCache);
+            } else {
+                // Fallback pour le contenu statique
+                document.querySelectorAll('.event-item').forEach(item => {
+                    let type = item.getAttribute('data-filter');
+                    let show = false;
+                    if(categorie === 'all') show = true;
+                    else if(categorie === 'follows' && type.includes('follow')) show = true;
+                    else if(categorie === 'subs' && (type === 'sub' || type === 'resub')) show = true;
+                    else if(categorie === 'gifts' && type === 'subgift') show = true;
+                    else if(categorie === 'bits' && type === 'cheer') show = true;
+                    else if(categorie === 'raid_in' && type === 'raid') show = true;
+                    else if(categorie === 'raid_out' && type === 'raid_out') show = true;
+                    else if(categorie === 'mod' && (type === 'timeout' || type === 'ban')) show = true;
+                    
+                    item.style.display = show ? 'flex' : 'none';
+                });
+            }
+        }
+
+        window.supprimerEvent = function(id, btn) {
+            if(!confirm("Supprimer définitivement cet événement ?")) return;
+            fetch(`/api/event/delete/${id}`, { method: 'DELETE' })
+                .then(response => {
+                    if(response.ok) {
+                        const ligne = btn.closest('.event-item');
+                        ligne.remove();
+                    }
+                });
+        }
+
+        function chargerEvenements() {
+            fetch('/api/recent-events')
+                .then(r => r.json())
+                .then(data => {
+                    if (JSON.stringify(data) !== JSON.stringify(allEventsCache)) {
+                        allEventsCache = data;
+                        afficherEvenements(data);
+                    }
+                })
+                .catch(e => console.error("Erreur Events:", e));
+        }
+
+function afficherEvenements(data) {
+    const container = document.getElementById('eventsList');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (!data || data.length === 0) {
+        container.innerHTML = '<div style="padding:15px; color:#666; text-align:center;">Aucun événement.</div>';
+        return;
+    }
+
+    // --- 1. NETTOYAGE ET TRI CHRONOLOGIQUE ---
+    // On ignore les dates invalides ou proches de 1970 (inférieures à l'année 2000)
+    let sortedData = data.filter(evt => {
+        const ts = parseFloat(evt.timestamp);
+        return ts > 946684800; // Filtre tout ce qui est avant l'an 2000
+    });
+
+    // Tri du plus récent au plus ancien
+    sortedData.sort((a, b) => parseFloat(b.timestamp) - parseFloat(a.timestamp));
+
+    let lastDateLabel = "";
+    const processedSubs = new Set();
+
+    sortedData.forEach((evt, index) => {
+        const type = (evt.type || '').toLowerCase();
+        
+        // --- 2. FILTRAGE ---
+        let show = (currentFilter === 'all');
+        if(currentFilter === 'follows' && type.includes('follow')) show = true;
+        else if(currentFilter === 'subs' && (type.includes('sub') || type.includes('subscribe'))) show = true;
+        else if(currentFilter === 'bits' && (type.includes('cheer') || type.includes('bits'))) show = true;
+        else if(currentFilter === 'raid_in' && type === 'raid' && !type.includes('sent')) show = true;
+        else if(currentFilter === 'raid_out' && (type.includes('sent') || type.includes('out'))) show = true;
+
+        if(!show) return;
+
+        // --- 3. DÉTAILS & PSEUDO ---
+        let d = {};
+        try { d = (typeof evt.details === 'string') ? JSON.parse(evt.details) : (evt.details || {}); } catch(e) { d = {}; }
+        let pseudo = evt.user_name || evt.username || d.display_name || d.user_name || evt.user || 'Inconnu';
+
+        // --- 4. FUSION SUB / RESUB ---
+        const timeKey = new Date(parseFloat(evt.timestamp) * 1000).toISOString().substring(0, 16);
+        const subKey = `${pseudo}_${timeKey}`;
+        if (type.includes('sub') || type.includes('subscribe')) {
+            if (processedSubs.has(subKey)) return;
+            processedSubs.add(subKey);
+        }
+
+        // --- 5. GESTION DE LA DATE & SÉPARATEUR ---
+        let dateObj = new Date(parseFloat(evt.timestamp) * 1000);
+        let timeStr = dateObj.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+        let dateLabel = dateObj.toLocaleDateString('fr-FR', {day:'numeric', month:'long', year:'numeric'}).toUpperCase();
+
+        if (dateLabel !== lastDateLabel) {
+            const header = document.createElement('div');
+            header.style = "background: rgba(114, 137, 218, 0.1); padding: 8px 12px; margin: 20px 0 10px 0; color: #7289da; font-weight: bold; border-radius: 4px; font-size: 0.8rem; border-left: 4px solid #7289da; display: block; clear: both; width: fit-content;";
+            header.innerHTML = `📅 ${dateLabel}`;
+            container.appendChild(header);
+            lastDateLabel = dateLabel;
+        }
+
+        // --- 6. TRADUCTION ---
+        let icon = '❓';
+        let actionHTML = `Action: <strong>${type}</strong>`;
+
+        if (type.includes('bits') || type.includes('cheer')) {
+            icon = '💎'; actionHTML = `a envoyé <span class="kw-cheer">${d.bits || d.amount || '?'} Bits</span>`;
+        } 
+        else if (type.includes('sub') || type.includes('subscribe')) {
+            icon = '⭐'; 
+            let mois = (d.months || d.cumulative_months) ? ` (x${d.months || d.cumulative_months})` : "";
+            actionHTML = `<span class="kw-sub">Abonnement</span>${mois}`;
+        }
+        else if (type.includes('follow')) {
+            icon = '💙'; actionHTML = `vient de <span class="kw-follow">Follow</span>`;
+        }
+        else if (type.includes('sent') || type.includes('out')) {
+            icon = '✈️'; pseudo = ""; 
+            let cible = d.target || d.to_name || d.target_name || "Inconnu";
+            actionHTML = `Raid lancé vers <span class="kw-user">${cible}</span>`;
+        }
+        else if (type.includes('backup') || type.includes('sauvegarde')) {
+            icon = '🛡️'; pseudo = 'SYSTÈME'; actionHTML = '<span style="color:#43b581">Sauvegarde terminée</span>';
+        }
+
+        const item = document.createElement('div');
+        item.className = 'event-item';
+        item.innerHTML = `
+            <span class="time" style="color: #666; font-size: 0.8rem; min-width: 45px;">${timeStr}</span>
+            <div class="e-icon" style="margin: 0 15px; font-size: 1.2rem;">${icon}</div>
+            <div class="e-text">
+                ${pseudo ? `<strong class="kw-user" style="color: #fff;">${pseudo}</strong>` : ''} ${actionHTML}
+            </div>`;
+        container.appendChild(item);
+    });
+}
+        function loadUnfollows() {
+            fetch('/api/unfollow-log')
+                .then(r => r.json())
+                .then(data => {
+                    const tbody = document.querySelector('#unfollow-table tbody');
+                    if(!tbody) return;
+                    
+                    if(data.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#666;padding:10px;">Aucun unfollow récent.</td></tr>';
+                        return;
+                    }
+                    
+                    let html = '';
+                    data.forEach(u => {
+                        html += `<tr><td>${u.date}</td><td><strong>${u.username}</strong></td><td style="text-align:right;"><button onclick="deleteUnfollow(${u.id}, this)" style="border:none;background:none;color:#f04747;cursor:pointer;font-weight:bold;">✕</button></td></tr>`;
+                    });
+                    if(tbody.innerHTML !== html) tbody.innerHTML = html;
+                })
+                .catch(e => console.error(e));
+        }
+
+        window.deleteUnfollow = function(id, btn) {
+            if(confirm("Retirer cet unfollow ?")) {
+                fetch(`/api/unfollow/delete/${id}`, {method:'DELETE'})
+                    .then(r => { if(r.ok) btn.closest('tr').remove(); });
+            }
+        }
+
+        function updateClock() {
+            const el = document.getElementById('clock');
+            if(el) el.textContent = new Date().toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+        }
+
+        updateClock();
+        loadUnfollows();
+        // Lancer le chargement auto JS après coup pour rafraîchir
+        setInterval(chargerEvenements, 5000);
+        setInterval(loadUnfollows, 10000);
+        setInterval(updateClock, 1000);
+    });
+</script>
+</body>
+</html>

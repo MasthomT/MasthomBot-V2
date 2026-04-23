@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FEL-X : Portail Viewer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --bg: #18181b; --surface: #2a2a2d; --border: #36363a; --text: #f0f0f0; --accent: #00f5c3; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: var(--bg); color: var(--text); font-family: "Inter", sans-serif; display: grid; place-items: center; min-height: 90vh; margin: 0; }
+        #logo-container { text-align: center; margin-bottom: 2rem; }
+        h1 { font-size: 4rem; color: var(--accent); margin: 0; }
+        img { width: 120px; height: 120px; border-radius: 50%; border: 3px solid var(--accent); margin: 1rem auto; display: block; box-shadow: 0 0 20px rgba(0,245,195,0.2); }
+        .btn-primary { 
+            background: var(--accent); color: #18181b; padding: 1rem 2rem; border-radius: 8px; 
+            text-decoration: none; font-weight: 800; font-size: 1.2rem; display: inline-block; transition: 0.3s;
+        }
+        .btn-primary:hover { background: white; transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,245,195,0.3); }
+    </style>
+</head>
+<body>
+    <main>
+        <div id="logo-container">
+            <h1>FEL-X</h1>
+            <!-- On utilise /static/ pour charger les images depuis le Raspberry Pi -->
+            <img src="/static/logo-felix.png" alt="Logo" onerror="this.style.display='none'">
+            <p style="font-size: 1.1rem; color: #b9bbbe; margin-bottom: 2rem;">Connectez-vous avec Twitch pour gérer votre profil IA.</p>
+        </div>
+        <div style="text-align: center;">
+            <!-- Ce bouton appelle la route Python qui gère la redirection sécurisée vers Twitch -->
+            <a class="btn-primary" href="/login">Se connecter avec Twitch</a>
+        </div>
+    </main>
+</body>
+</html>

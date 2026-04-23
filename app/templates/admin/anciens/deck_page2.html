@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Félix Deck - Page 2 (OBS)</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-color: #121212; --btn-bg: #1e1e1e; --accent: #9146FF;
+            --danger: #ff4444; --success: #00C851; --warning: #ffbb33;
+            --scene-color: #4285F4; --cam-color: #00BCD4;
+            --nav-bg: #1a1a1a; --nav-text: #888;
+        }
+        body {
+            background-color: var(--bg-color); color: white; font-family: 'Segoe UI', sans-serif;
+            margin: 0; padding: 15px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box;
+        }
+        .grid-container {
+            display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(3, 1fr);
+            gap: 15px; flex-grow: 1; margin-bottom: 15px; 
+        }
+        .deck-btn {
+            background-color: var(--btn-bg); border: 2px solid #333; border-radius: 12px;
+            color: #ddd; font-size: 1rem; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; cursor: pointer;
+            user-select: none; -webkit-tap-highlight-color: transparent; text-align: center; padding: 5px; font-weight: 600;
+            transition: transform 0.1s, background 0.2s;
+        }
+        .deck-btn:active { transform: scale(0.95); background-color: #333; }
+        .deck-btn i { font-size: 1.8rem; margin-bottom: 8px; }
+
+        .btn-start { border-color: var(--accent); color: var(--accent); }
+        .btn-scene { border-color: var(--scene-color); color: var(--scene-color); }
+        .btn-hybrid { border-color: var(--warning); color: var(--warning); }
+        .btn-audio { border-color: var(--danger); color: var(--danger); }
+        .btn-end { border-color: #ff4444; background-color: #2c0b0e; color: #ff4444; }
+        .btn-cam { border-color: var(--cam-color); color: var(--cam-color); }
+        .empty-slot { border: 2px dashed #222; background: transparent; cursor: default; }
+
+        .bottom-navbar {
+            display: flex; justify-content: space-around; align-items: center;
+            background-color: var(--nav-bg); padding: 10px 0; border-radius: 15px; flex-shrink: 0;
+        }
+        .nav-item {
+            color: var(--nav-text); text-decoration: none; display: flex;
+            flex-direction: column; align-items: center; font-size: 0.7rem; flex-grow: 1; transition: color 0.2s;
+        }
+        .nav-item i { font-size: 1.4rem; margin-bottom: 4px; }
+        .nav-item.active { color: var(--accent); }
+    </style>
+</head>
+<body>
+
+    <div class="grid-container">
+        <div class="deck-btn btn-start" id="btn-BEGGIN" onclick="sendAction('obs_change_scene', 'BEGGIN')">
+            <i class="fa-solid fa-rocket"></i> BEGGIN
+        </div>
+        <div class="deck-btn btn-scene" id="btn-INTRO" onclick="sendAction('obs_change_scene', 'INTRO')">
+            <i class="fa-solid fa-clapperboard"></i> INTRO
+        </div>
+        <div class="deck-btn btn-hybrid" id="btn-CHATTING" onclick="sendAction('mode_chatting_filters', 'CHATTING/GAMING')">
+            <i class="fa-solid fa-mug-hot"></i> CHATTING
+        </div>
+        <div class="deck-btn btn-hybrid" id="btn-GAMING" onclick="sendAction('mode_gaming_filters', 'CHATTING/GAMING')">
+            <i class="fa-solid fa-gamepad"></i> GAMING
+        </div>
+
+        <div class="deck-btn btn-scene" id="btn-ON-BREAK" onclick="sendAction('obs_change_scene', 'ON BREAK')">
+            <i class="fa-solid fa-pause"></i> PAUSE
+        </div>
+        <div class="deck-btn btn-end" id="btn-END" onclick="sendAction('obs_change_scene', 'END')">
+            <i class="fa-solid fa-flag-checkered"></i> FIN STREAM
+        </div>
+        <div class="deck-btn btn-audio" id="mic-btn" onclick="sendAction('obs_toggle_mute', 'Micro')">
+            <i class="fa-solid fa-microphone-slash"></i> MUTE MIC
+        </div>
+        <div class="deck-btn btn-cam" id="cam-btn" onclick="sendAction('obs_toggle_source', 'WEBCAM')">
+            <i class="fa-solid fa-eye"></i> WEBCAM
+        </div>
+        
+        <div class="deck-btn" style="background-color: #e67e22;" onclick="sendAction('refresh_obs')">
+            <i class="fa-solid fa-rotate"></i> F9
+        </div>
+        <div class="empty-slot"></div>
+        <div class="empty-slot"></div>
+        <div class="empty-slot"></div>
+    </div>
+
+    <nav class="bottom-navbar">
+        <a href="index.html" class="nav-item"><i class="fa-solid fa-comments"></i> T'chat</a>
+        <a href="deck_page2.html" class="nav-item active"><i class="fa-solid fa-desktop"></i> OBS</a>
+        <a href="deck_page3.html" class="nav-item"><i class="fa-solid fa-music"></i> Sons/Img</a>
+    </nav>
+    <div id="toast">Message</div>
+<script>
+    const RASPBERRY_PI_URL = 'http://192.168.1.109:8080';
+
+    // --- GESTION DES NOTIFICATIONS (TOAST) ---
+    function showToast(msg, type) {
+        const x = document.getElementById("toast");
+        if (!x) return; // Sécurité si la div n'existe pas
+        x.textContent = msg;
+        x.className = "show " + (type || "");
+        setTimeout(() => { x.className = x.className.replace("show", ""); }, 3000);
+    }
+
+    // --- FEEDBACK VISUEL (OBS) ---
+    async function updateDeckFeedback() {
+        try {
+            // J'ai ajouté un timeout pour ne pas bloquer si le serveur est lent
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+            const response = await fetch(RASPBERRY_PI_URL + '/api/deck/status', { signal: controller.signal });
+            clearTimeout(timeoutId);
+
+            if (!response.ok) return; // Le serveur répond une erreur, on ignore silencieusement
+            
+            const status = await response.json();
+
+            // 1. MICRO
+            const micBtn = document.getElementById('mic-btn');
+            if (micBtn) {
+                if (status.obs.mic_muted) {
+                    micBtn.style.setProperty('background-color', 'var(--danger)', 'important');
+                    micBtn.style.setProperty('color', 'white', 'important');
+                    micBtn.innerHTML = '<i class="fa-solid fa-microphone-slash"></i> MUTE MIC';
+                } else {
+                    micBtn.style.setProperty('background-color', 'var(--success)', 'important');
+                    micBtn.style.setProperty('color', 'white', 'important');
+                    micBtn.innerHTML = '<i class="fa-solid fa-microphone"></i> MIC ON';
+                }
+            }
+
+            // 2. WEBCAM
+            const camBtn = document.getElementById('cam-btn');
+            if (camBtn) {
+                if (status.obs.cam_visible) {
+                    camBtn.style.setProperty('background-color', 'var(--cam-color)', 'important');
+                    camBtn.style.setProperty('color', 'black', 'important');
+                } else {
+                    camBtn.style.removeProperty('background-color');
+                    camBtn.style.removeProperty('color');
+                }
+            }
+
+            // 3. SCÈNES
+            const current = status.obs.scene; 
+            const scenes = { 
+    		'BEGGIN': 'btn-BEGGIN', 
+    		'INTRO': 'btn-INTRO', 
+    		'ON BREAK': 'btn-ON-BREAK', 
+    		'END': 'btn-END' 
+		};
+
+            for (const [name, id] of Object.entries(scenes)) {
+                const btn = document.getElementById(id);
+                if (btn) {
+                    if (current === name) {
+                        btn.style.setProperty('background-color', 'var(--accent)', 'important');
+                        btn.style.setProperty('color', 'white', 'important');
+                    } else {
+                        btn.style.removeProperty('background-color');
+                        btn.style.removeProperty('color');
+                    }
+                }
+            }
+
+            // 4. SCÈNE HYBRIDE (Chatting/Gaming)
+            const chatBtn = document.getElementById('btn-CHATTING');
+            const gameBtn = document.getElementById('btn-GAMING');
+            
+            if (current === "CHATTING/GAMING") {
+                if(chatBtn) {
+                    chatBtn.style.setProperty('background-color', 'var(--accent)', 'important');
+                    chatBtn.style.setProperty('color', 'white', 'important');
+                }
+                if(gameBtn) {
+                    gameBtn.style.setProperty('background-color', 'var(--accent)', 'important');
+                    gameBtn.style.setProperty('color', 'white', 'important');
+                }
+            } else {
+                if(chatBtn) {
+                    chatBtn.style.removeProperty('background-color');
+                    chatBtn.style.removeProperty('color');
+                }
+                if(gameBtn) {
+                    gameBtn.style.removeProperty('background-color');
+                    gameBtn.style.removeProperty('color');
+                }
+            }
+
+        } catch (e) { 
+            // On attrape l'erreur silencieusement dans la boucle pour ne pas spammer la console
+            // console.warn("Feedback OBS inaccessible"); 
+        }
+    }
+    
+    // On lance la boucle
+    setInterval(updateDeckFeedback, 1000);
+
+    // --- ENVOI D'ACTIONS ---
+    function sendAction(action, param = null) {
+        if (navigator.vibrate) navigator.vibrate(50);
+        
+        fetch(RASPBERRY_PI_URL + '/api/deck/action', {
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: action, param: param })
+        })
+        .then(response => {
+            if (!response.ok) showToast("Erreur Serveur", "error");
+        })
+        .catch(error => {
+            console.error(error);
+            showToast("Erreur Connexion", "error");
+        });
+    }
+
+    // --- NAVIGATION SWIPE ---
+    let touchstartX = 0;
+    document.addEventListener('touchstart', e => { touchstartX = e.changedTouches[0].screenX; });
+    document.addEventListener('touchend', e => {
+        let touchendX = e.changedTouches[0].screenX;
+        // Swipe Gauche -> Page 3
+        if (touchendX < touchstartX - 70) window.location.href = "deck_page3.html";
+        // Swipe Droite -> Page 1
+        if (touchendX > touchstartX + 70) window.location.href = "index.html";
+    });
+</script>
+</body>
+</html>

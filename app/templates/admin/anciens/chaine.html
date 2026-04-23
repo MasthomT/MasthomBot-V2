@@ -1,0 +1,83 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <meta charset="UTF-8" /><title>MasthomBot - Chaîne</title>
+    <style>
+        
+		/* Navigation Latérale */
+		
+
+		
+
+		
+
+		
+
+		
+        main.content { flex-grow: 1; padding: 3rem; overflow-y: auto; }
+        h1 { font-weight: 700; font-size: 2.2rem; margin-bottom: 2rem; color: #fff; }
+        .flash { padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; font-weight: 600; color: #fff; }
+        .flash.success { background-color: #28a745; }
+        .flash.error { background-color: #dc3545; }
+        .page-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start; }
+        .card { background-color: #2c2f33; border-radius: 8px; padding: 1.5rem; border: 1px solid #40444b; }
+        .card-header { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; padding-bottom: 1rem; margin-bottom: 1.5rem; border-bottom: 1px solid #40444b; }
+        .card-header-title { display: flex; align-items: center; gap: 0.8rem; }
+        .card-header svg { width: 24px; height: 24px; color: #b9bbbe; }
+        .card-header h2 { font-size: 1.4rem; color: #fff; }
+        .card-body { display: flex; flex-direction: column; gap: 1.5rem; }
+        .form-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        label { font-weight: 600; font-size: 1rem; color: #b9bbbe; }
+        textarea { width: 100%; min-height: 120px; padding: 10px 12px; border-radius: 6px; border: 1px solid #40444b; background-color: #23272a; color: #dcddde; font-size: 1rem; resize: vertical; }
+        .btn-primary { background-color: #7289da; color: #fff; border: none; padding: 12px 20px; font-weight: 600; font-size: 1rem; border-radius: 6px; cursor: pointer; width: fit-content; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.6rem; }
+        .placeholders-info { font-size: 0.9rem; color: #8e9297; }
+        .placeholders-info code { background-color: #23272a; padding: 2px 4px; border-radius: 4px; }
+        .btn-naked { background: none; border: none; padding: 0; cursor: pointer; color: #8e9297; line-height: 0; }
+        .btn-naked:hover { color: #fff; }
+        .btn-naked svg { width: 20px; height: 20px; }
+        .btn-naked svg path { fill: currentColor; stroke: currentColor; }
+    </style>
+</head>
+<body>
+{% include 'sidebar.html' %}
+<main class="content">
+        <h1>Gestion de la Chaîne</h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}{% for category, message in messages %}<div class="flash {{ category }}">{{ message }}</div>{% endfor %}{% endif %}
+        {% endwith %}
+        
+        <form method="post" action="#">
+            <div class="page-grid">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-header-title">
+                            <svg style="fill: currentColor;" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M18.8943 4.34399C17.5183 3.71467 16.057 3.256 14.5317 3C14.3396 3.33067 14.1263 3.77866 13.977 4.13067C12.3546 3.89599 10.7439 3.89599 9.14391 4.13067C8.99457 3.77866 8.77056 3.33067 8.58922 3C7.05325 3.256 5.59191 3.71467 4.22552 4.34399C1.46286 8.41865 0.716188 12.3973 1.08952 16.3226C2.92418 17.6559 4.69486 18.4666 6.4346 19C6.86126 18.424 7.24527 17.8053 7.57594 17.1546C6.9466 16.92 6.34927 16.632 5.77327 16.2906C5.9226 16.184 6.07194 16.0667 6.21061 15.9493C9.68793 17.5387 13.4543 17.5387 16.889 15.9493C17.0383 16.0667 17.177 16.184 17.3263 16.2906C16.7503 16.632 16.153 16.92 15.5236 17.1546C15.8543 17.8053 16.2383 18.424 16.665 19C18.4036 18.4666 20.185 17.6559 22.01 16.3226C22.4687 11.7787 21.2836 7.83202 18.8943 4.34399ZM8.05593 13.9013C7.01058 13.9013 6.15725 12.952 6.15725 11.7893C6.15725 10.6267 6.98925 9.67731 8.05593 9.67731C9.11191 9.67731 9.97588 10.6267 9.95454 11.7893C9.95454 12.952 9.11191 13.9013 8.05593 13.9013ZM15.065 13.9013C14.0196 13.9013 13.1652 12.952 13.1652 11.7893C13.1652 10.6267 13.9983 9.67731 15.065 9.67731C16.121 9.67731 16.985 10.6267 16.9636 11.7893C16.9636 12.952 16.1317 13.9013 15.065 13.9013Z" /></svg>
+                            <h2>Notification Discord</h2>
+                        </div>
+                        <button type="submit" class="btn-naked"
+                                formaction="#"
+                                formmethod="post"
+                                title="Envoyer une alerte de test">
+                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"><path d="M21.3687 13.5827C21.4144 13.3104 21.2306 13.0526 20.9583 13.0069C20.686 12.9612 20.4281 13.1449 20.3825 13.4173L21.3687 13.5827ZM12 20.5C7.30558 20.5 3.5 16.6944 3.5 12H2.5C2.5 17.2467 6.75329 21.5 12 21.5V20.5ZM3.5 12C3.5 7.30558 7.30558 3.5 12 3.5V2.5C6.75329 2.5 2.5 6.75329 2.5 12H3.5ZM12 3.5C15.3367 3.5 18.2252 5.4225 19.6167 8.22252L20.5122 7.77748C18.9583 4.65062 15.7308 2.5 12 2.5V3.5ZM20.3825 13.4173C19.7081 17.437 16.2112 20.5 12 20.5V21.5C16.7077 21.5 20.6148 18.0762 21.3687 13.5827L20.3825 13.4173Z"></path><path d="M20.4716 2.42157V8.07843H14.8147" stroke="#000000"></path></g></svg>
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label for="live_notification_message">Message de la notification</label>
+                            <textarea id="live_notification_message" name="live_notification_message">{{ discord_message }}</textarea>
+                            <div class="placeholders-info">
+                                <p>Variables : <code>{streamer}</code>, <code>{titre}</code>, <code>{jeu}</code>, <code>{lien}</code></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            <button class="btn-primary" type="submit">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M6 4h10l4 4v10a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2" /><path d="M12 14m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" /><path d="M14 4l0 4l-6 0l0 -4" /></svg>
+                <span>Sauvegarder</span>
+            </button>
+        </form>
+    </main>
+</body>
+</html>

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <meta charset="UTF-8">
+    <title>Shoutout Player</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&display=swap" rel="stylesheet">
+    <style>
+        body { margin: 0; background: transparent; overflow: hidden; font-family: 'Montserrat', sans-serif; }
+        
+        /* Stinger (Intro) - Plein écran au-dessus */
+        #stinger { position: fixed; inset: 0; display: none; z-index: 9999; background: transparent; }
+        #stinger video { width: 100%; height: 100%; object-fit: contain; }
+
+        /* Conteneur Principal */
+        #main {
+            position: fixed; inset: 0;
+            display: flex; flex-direction: column; /* Vertical */
+            align-items: center; justify-content: center;
+            gap: 30px; /* ESPACE entre les infos et le clip */
+            opacity: 0; transition: opacity 0.5s;
+        }
+
+        /* Largeur commune */
+        .common-width { width: 85vw; max-width: 1100px; }
+
+        /* 1. Bloc Infos (Au-dessus) */
+        .info-block {
+            background: rgba(15, 15, 15, 0.95);
+            border: 4px solid var(--c, #9146FF);
+            border-radius: 50px; /* Arrondi "Pilule" */
+            padding: 15px 40px;
+            display: flex; align-items: center; gap: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+            backdrop-filter: blur(10px);
+        }
+
+        .avatar {
+            width: 90px; height: 90px; object-fit: cover; flex-shrink: 0;
+            border: 4px solid var(--c, #9146FF); border-radius: 50%;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        .text-content { display: flex; flex-direction: column; justify-content: center; }
+
+        .name {
+            font-size: 3em; font-weight: 900; color: #fff;
+            text-transform: uppercase; line-height: 1; margin: 0;
+            text-shadow: 3px 3px 0 #000; /* Lisibilité max */
+        }
+
+        .meta {
+            font-size: 1.4em; color: #ddd; margin-top: 5px; font-weight: 700;
+            text-shadow: 2px 2px 4px #000;
+        }
+
+        /* 2. Bloc Vidéo (En dessous) */
+        .video-block {
+            background: #000;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.9);
+            border: 4px solid var(--c, #9146FF); /* Rappel couleur */
+            position: relative;
+            aspect-ratio: 16/9;
+        }
+
+        video#clip { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+        .progress { position: absolute; bottom: 0; left: 0; width: 100%; height: 10px; background: rgba(0,0,0,0.5); }
+        .fill { height: 100%; width: 0%; background: var(--c, #9146FF); transition: width 0.1s linear; }
+
+    </style>
+</head>
+<body>
+
+    <!-- Stinger -->
+    <div id="stinger"><video id="stv" playsinline></video></div>
+
+    <!-- Contenu -->
+    <div id="main">
+        
+        <!-- Infos -->
+        <div class="info-block common-width">
+            <img id="ava" class="avatar" src="">
+            <div class="text-content">
+                <div id="name" class="name">PSEUDO</div>
+                <div id="meta" class="meta">Jeu • Titre</div>
+            </div>
+        </div>
+
+        <!-- Clip -->
+        <div class="video-block common-width">
+            <video id="clip" playsinline></video>
+            <div class="progress"><div class="fill"></div></div>
+        </div>
+
+    </div>
+
+    <script>
+        const main = document.getElementById('main');
+        const clip = document.getElementById('clip');
+        const stv = document.getElementById('stv');
+        const stingerDiv = document.getElementById('stinger');
+        
+        const ava = document.getElementById('ava');
+        const nameEl = document.getElementById('name');
+        const metaEl = document.getElementById('meta');
+        const fill = document.querySelector('.fill');
+
+        // Écoute SSE
+        const evtSource = new EventSource('/events');
+
+        evtSource.onmessage = (e) => {
+            const d = JSON.parse(e.data);
+            if (d.type !== 'play') return;
+            
+            const m = d.meta;
+
+            // Fonction pour lancer le clip (après stinger ou direct)
+            const playContent = () => {
+                // Application des styles dynamiques
+                document.documentElement.style.setProperty('--c', m.border || '#9146FF');
+                
+                // Remplissage Données
+                ava.src = m.avatar;
+                ava.style.display = m.showAvatar ? 'block' : 'none';
+                if(m.avatarShape === 'square') ava.style.borderRadius = '15px';
+                else ava.style.borderRadius = '50%';
+
+                nameEl.textContent = m.name;
+                // On force le blanc pour le texte pour lisibilité, la bordure est colorée
+                nameEl.style.color = m.textColor || '#fff'; 
+
+                const metas = [];
+                if (m.showGame && m.game) metas.push(m.game);
+                if (m.showViews) metas.push(m.views + ' vues');
+                if (m.showDate) metas.push(new Date(m.date).toLocaleDateString('fr-FR'));
+                metaEl.textContent = metas.join(' • ');
+
+                // Configuration Vidéo
+                clip.src = d.url;
+                clip.volume = m.volume / 100;
+                clip.muted = false; // SON ACTIVÉ
+
+                // Affichage
+                main.style.opacity = 1;
+                
+                clip.play().catch(err => {
+                    console.log("Autoplay bloqué, essai muet", err);
+                    clip.muted = true;
+                    clip.play();
+                });
+
+                // Auto-stop à la fin de la durée prévue
+                setTimeout(() => {
+                    main.style.opacity = 0;
+                    setTimeout(() => { clip.pause(); clip.src = ""; }, 1000);
+                }, m.duration * 1000);
+            };
+
+            // Logique Stinger
+            if (m.stinger && m.stingerUrl) {
+                stingerDiv.style.display = 'block';
+                stv.src = m.stingerUrl;
+                stv.currentTime = 0;
+                stv.muted = false; // Son stinger activé aussi
+                stv.play();
+
+                // À la FIN du stinger, on lance le contenu
+                stv.onended = () => {
+                    stingerDiv.style.display = 'none';
+                    playContent();
+                };
+            } else {
+                playContent();
+            }
+        };
+
+        // Barre de progression
+        clip.ontimeupdate = () => {
+            if (clip.duration) fill.style.width = (clip.currentTime / clip.duration * 100) + '%';
+        };
+    </script>
+</body>
+</html>

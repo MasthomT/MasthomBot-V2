@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Félix Deck - Page 3 (Sons/Img)</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-color: #121212; --btn-bg: #1e1e1e; --accent: #9146FF;
+            --nav-bg: #1a1a1a; --nav-text: #888;
+            --sound-color: #ffbb33; --img-color: #ff79c6;
+            --danger: #ff4444; --success: #00C851;
+        }
+        body {
+            background-color: var(--bg-color); color: white;
+            font-family: 'Segoe UI', sans-serif; margin: 0; padding: 15px;
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+            box-sizing: border-box;
+        }
+        .header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 10px; padding: 0 5px;
+        }
+        .header-title { color: #666; font-weight: bold; text-transform: uppercase; font-size: 0.8rem; }
+        
+        .edit-switch { display: flex; align-items: center; gap: 5px; font-size: 0.8rem; }
+        .switch-input { display: none; }
+        .switch-label {
+            width: 40px; height: 20px; background: #333; border-radius: 20px;
+            position: relative; cursor: pointer; transition: 0.3s;
+        }
+        .switch-label::after {
+            content: ''; position: absolute; top: 2px; left: 2px;
+            width: 16px; height: 16px; background: white; border-radius: 50%;
+            transition: 0.3s;
+        }
+        .switch-input:checked + .switch-label { background: var(--accent); }
+        .switch-input:checked + .switch-label::after { transform: translateX(20px); }
+
+        .grid-container {
+            display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(3, 1fr);
+            gap: 10px; flex-grow: 1; margin-bottom: 15px;
+        }
+        .deck-btn {
+            background-color: var(--btn-bg); border: 2px solid #333; border-radius: 12px;
+            color: #ddd; font-size: 0.9rem; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; cursor: pointer;
+            position: relative; overflow: hidden; text-align: center;
+            word-break: break-word; padding: 5px;
+            transition: transform 0.1s, background 0.2s; 
+            touch-action: manipulation; user-select: none;
+        }
+        .deck-btn:active { transform: scale(0.95); background-color: #333; }
+        .deck-btn.empty { opacity: 0.3; border-style: dashed; }
+        .btn-sound { border-color: var(--sound-color); color: var(--sound-color); }
+        .btn-image { border-color: var(--img-color); color: var(--img-color); }
+
+        body.editing .deck-btn { animation: pulse-border 2s infinite; }
+        @keyframes pulse-border { 50% { border-color: #555; } }
+        body.editing .deck-btn::after {
+            content: '\f304'; font-family: "Font Awesome 6 Free"; font-weight: 900;
+            position: absolute; top: 5px; right: 5px; font-size: 0.8rem; color: white;
+            background: rgba(0,0,0,0.7); border-radius: 50%; padding: 3px;
+        }
+
+        .bottom-navbar {
+            display: flex; justify-content: space-around; align-items: center;
+            background-color: var(--nav-bg); padding: 10px 0; border-radius: 15px; flex-shrink: 0;
+        }
+        .nav-item {
+            color: var(--nav-text); text-decoration: none; display: flex;
+            flex-direction: column; align-items: center; font-size: 0.7rem; flex-grow: 1;
+            transition: color 0.2s;
+        }
+        .nav-item i { font-size: 1.4rem; margin-bottom: 4px; }
+        .nav-item.active { color: var(--accent); }
+
+        #toast {
+            visibility: hidden; min-width: 250px; margin-left: -125px;
+            background-color: #333; color: #fff; text-align: center;
+            border-radius: 50px; padding: 16px; position: fixed; z-index: 100;
+            left: 50%; bottom: 80px; font-size: 16px; border: 1px solid #555;
+            box-shadow: 0px 5px 15px rgba(0,0,0,0.5);
+        }
+        #toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
+        #toast.error { border-color: var(--danger); color: var(--danger); }
+        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 80px; opacity: 1;} }
+        @keyframes fadeout { from {bottom: 80px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); z-index: 100; justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background: #222; padding: 20px; border-radius: 15px; width: 80%; max-width: 300px;
+            border: 1px solid #444; color: white;
+        }
+        .modal input, .modal select {
+            width: 100%; margin-bottom: 10px; padding: 8px; background: #333;
+            border: 1px solid #555; color: white; border-radius: 5px; box-sizing: border-box;
+        }
+        .modal-btns { display: flex; justify-content: space-between; margin-top: 15px; }
+        .save-btn { background: var(--success); border: none; padding: 8px 15px; color: white; border-radius: 5px; }
+        .cancel-btn { background: var(--danger); border: none; padding: 8px 15px; color: white; border-radius: 5px; }
+    </style>
+</head>
+<body onload="loadButtons()">
+    <div class="header">
+        <div class="header-title">SONS & IMAGES</div>
+        <div class="edit-switch">
+            <span>Éditer</span>
+            <input type="checkbox" id="editMode" class="switch-input" onchange="toggleEditMode()">
+            <label for="editMode" class="switch-label"></label>
+        </div>
+    </div>
+
+    <div class="grid-container" id="button-grid"></div>
+
+    <nav class="bottom-navbar">
+        <a href="index.html" class="nav-item"><i class="fa-solid fa-comments"></i> T'chat</a>
+        <a href="deck_page2.html" class="nav-item"><i class="fa-solid fa-desktop"></i> OBS</a>
+        <a href="deck_page3.html" class="nav-item active"><i class="fa-solid fa-music"></i> Sons/Img</a>
+    </nav>
+
+    <div id="toast">Message</div>
+
+    <div id="editModal" class="modal">
+        <form class="modal-content" action="" method="POST" enctype="multipart/form-data"> 
+            <h3 style="margin-top:0;">Configurer Bouton</h3>
+            <input type="hidden" name="id" id="modalId">
+            <input type="hidden" name="current_file" id="modalCurrentFile">
+            <label>Nom du bouton</label>
+            <input type="text" name="label" id="modalLabel" required>
+            <label>Type</label>
+            <select name="type" id="modalType">
+                <option value="sound">Son (MP3/WAV)</option>
+                <option value="image">Image/GIF</option>
+                <option value="none">Vide / Effacer</option>
+            </select>
+            <label id="modeLabel" style="display: none;">Mode Lecture</label>
+            <select name="mode" id="modalMode" style="display: none;">
+                <option value="click">Clic simple</option>
+                <option value="hold">Maintenir (Hold)</option>
+            </select>
+            <label>Fichier</label>
+            <input type="file" name="file" accept="audio/*,image/*">
+            <div class="modal-btns">
+                <button type="button" class="cancel-btn" onclick="closeModal()">Annuler</button>
+                <button type="submit" class="save-btn">Sauvegarder</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        const RASPBERRY_PI_URL = 'http://192.168.1.109:8080';
+        let currentHoldEffectId = null; 
+        let isEditMode = false;
+        
+        document.querySelector('#editModal form').action = RASPBERRY_PI_URL + "/api/deck/edit_button";
+
+        function showToast(msg, type) {
+            const x = document.getElementById("toast");
+            x.textContent = msg;
+            x.className = "show " + type;
+            setTimeout(() => { x.className = x.className.replace("show", ""); }, 3000);
+        }
+
+        function loadButtons() {
+            fetch(RASPBERRY_PI_URL + '/api/deck/buttons')
+                .then(r => r.json())
+                .then(buttons => renderButtons(buttons))
+                .catch(e => console.error("Erreur Load Buttons:", e));
+        }
+
+        function escapeStr(str) { 
+            if (!str) return ''; 
+            return str.replace(/'/g, "\\'").replace(/"/g, '&quot;'); 
+        }
+
+        function renderButtons(buttons) {
+            const grid = document.getElementById('button-grid');
+            grid.innerHTML = ''; 
+            buttons.forEach(btn => {
+                const btn_mode = btn.mode || 'click';
+                const cleanFileName = btn.file ? btn.file.split('/').pop() : null;
+                const safeFile = escapeStr(btn.file);
+                const safeLabel = escapeStr(btn.label);
+                const safeType = escapeStr(btn.type);
+                const safeCleanName = escapeStr(cleanFileName);
+
+                let icon = '<i class="fa-solid fa-plus"></i>';
+                let className = 'deck-btn';
+                let actionAttributes = '';
+
+                if (btn.type === 'sound') {
+                    className += ' btn-sound';
+                    icon = '<i class="fa-solid fa-music"></i>';
+                } else if (btn.type === 'image') {
+                    className += ' btn-image';
+                    icon = '<i class="fa-solid fa-image"></i>';
+                } else {
+                    className += ' empty';
+                }
+                
+                if (btn_mode === 'hold' && btn.type === 'sound') {
+                    actionAttributes += ` ontouchstart="if(!isEditMode) startHoldEffect('${safeCleanName}')" onmousedown="if(!isEditMode) startHoldEffect('${safeCleanName}')"`;
+                    actionAttributes += ` ontouchend="if(!isEditMode) stopHoldEffect()" ontouchcancel="if(!isEditMode) stopHoldEffect()" onmouseup="if(!isEditMode) stopHoldEffect()"`;
+                    actionAttributes += ` onclick="handleClick(${btn.id}, '${safeType}', '${safeFile}', '${safeLabel}', '${btn_mode}', event);"`;
+                } else {
+                    actionAttributes += ` onclick="handleClick(${btn.id}, '${safeType}', '${safeFile}', '${safeLabel}', '${btn_mode}', event);"`;
+                }
+                
+                grid.innerHTML += `<div class="${className}" id="btn-${btn.id}" ${actionAttributes}>
+                    ${icon}
+                    <div>${btn.label}</div>
+                    ${btn_mode === 'hold' ? '<small>(Hold)</small>' : ''}
+                </div>`;
+            });
+        }
+
+        function toggleEditMode() {
+            isEditMode = document.getElementById('editMode').checked;
+            document.body.classList.toggle('editing', isEditMode);
+        }
+        function closeModal() { document.getElementById('editModal').style.display = 'none'; }
+        
+        function updateModalFields() {
+            const selectedType = document.getElementById('modalType').value;
+            const show = selectedType === 'sound';
+            document.getElementById('modalMode').style.display = show ? 'block' : 'none';
+            document.getElementById('modeLabel').style.display = show ? 'block' : 'none';
+        }
+        document.getElementById('modalType').onchange = updateModalFields;
+
+        function startHoldEffect(cleanFileName) {
+            if (currentHoldEffectId || isEditMode) return; 
+            currentHoldEffectId = 'hold_' + Date.now();
+            fetch(RASPBERRY_PI_URL + '/api/trigger-effect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'sound', filename: cleanFileName, loop: true, id: currentHoldEffectId })
+            }).then(() => { if (navigator.vibrate) navigator.vibrate(50); });
+        }
+
+        function stopHoldEffect() {
+            if (isEditMode || currentHoldEffectId === null) return; 
+            const idToStop = currentHoldEffectId;
+            currentHoldEffectId = null; 
+            fetch(RASPBERRY_PI_URL + '/api/stop-effect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ effect_id: idToStop })
+            });
+        }
+
+        function handleClick(id, type, filename, label, mode, event) {
+            if (isEditMode) {
+                if (event) { event.stopPropagation(); event.preventDefault(); }
+                document.getElementById('modalId').value = id;
+                document.getElementById('modalLabel').value = label;
+                document.getElementById('modalType').value = type;
+                document.getElementById('modalCurrentFile').value = filename;
+                document.getElementById('modalMode').value = mode || 'click'; 
+                updateModalFields(); 
+                document.getElementById('editModal').style.display = 'flex';
+                return;
+            }
+            if (mode === 'click' && type !== 'none' && filename) {
+                const cleanFileName = filename.split('/').pop();
+                if (navigator.vibrate) navigator.vibrate(50);
+                fetch(RASPBERRY_PI_URL + '/api/trigger-effect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: type, filename: cleanFileName, loop: false }) 
+                });
+            }
+        }
+        
+        let touchstartX = 0;
+        document.addEventListener('touchstart', e => { touchstartX = e.changedTouches[0].screenX; });
+        document.addEventListener('touchend', e => {
+            let touchendX = e.changedTouches[0].screenX;
+            if (touchendX < touchstartX - 50) window.location.href = "index.html";
+            if (touchendX > touchstartX + 50) window.location.href = "deck_page2.html";
+        });
+    </script>
+</body>
+</html>

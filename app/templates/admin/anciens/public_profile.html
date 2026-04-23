@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profil de {{ display_name }}</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #23272a; color: #dcddde; margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .profile-card { background-color: #2c2f33; width: 100%; max-width: 600px; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .header { background: linear-gradient(90deg, #7289da 0%, #5865F2 100%); padding: 30px 20px; text-align: center; color: white; }
+        .avatar { width: 100px; height: 100px; border-radius: 50%; border: 4px solid #2c2f33; margin-bottom: 10px; }
+        h1 { margin: 0; font-size: 1.8rem; }
+        .level-badge { background-color: #f1c40f; color: #2c2f33; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 0.9rem; display: inline-block; margin-top: 5px; }
+        .stats-row { display: flex; justify-content: space-around; padding: 20px; border-bottom: 1px solid #40444b; }
+        .stat-box { text-align: center; }
+        .stat-value { font-size: 1.4rem; font-weight: bold; color: #fff; display: block; }
+        .stat-label { font-size: 0.85rem; color: #8e9297; text-transform: uppercase; letter-spacing: 0.5px; }
+        .history-section { padding: 20px; }
+        h3 { color: #fff; border-bottom: 2px solid #40444b; padding-bottom: 10px; margin-top: 0; }
+        .history-list { list-style: none; padding: 0; margin: 0; }
+        .history-item { padding: 10px 0; border-bottom: 1px solid #40444b; font-size: 0.95rem; display: flex; justify-content: space-between; }
+        .history-reason { color: #fff; }
+        .history-date { color: #7289da; font-size: 0.85rem; }
+        .logout-btn { display: block; text-align: center; padding: 15px; background-color: #23272a; color: #f04747; text-decoration: none; font-weight: bold; }
+        .logout-btn:hover { background-color: #1e2124; }
+    </style>
+</head>
+<body>
+    <div class="profile-card">
+        <div class="header">
+            <img src="{{ pfp_url }}" alt="Avatar" class="avatar">
+            <h1>{{ display_name }}</h1>
+            <div class="level-badge">Niveau {{ user_level }}</div>
+        </div>
+        
+        <div class="stats-row">
+            <div class="stat-box">
+                <span class="stat-value">{{ user_xp }}</span>
+                <span class="stat-label">Points XP</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-value">
+                    {% if follow_status.is_follower %}
+                        {{ follow_status.follow_age_days | int }}j
+                    {% else %}
+                        -
+                    {% endif %}
+                </span>
+                <span class="stat-label">Suivi depuis</span>
+            </div>
+        </div>
+
+        <div class="history-section">
+            <h3>Dernières activités</h3>
+            <ul class="history-list">
+                {% if user_history %}
+                    {% for item in user_history %}
+                    <li class="history-item">
+                        <span class="history-reason">{{ item.reason }} <span style="color:#43b581">(+{{ item.amount }})</span></span>
+                        <span class="history-date">{{ item.date_formatted }}</span>
+                    </li>
+                    {% endfor %}
+                {% else %}
+                    <li class="history-item" style="color:#8e9297; justify-content: center;">Aucune activité récente enregistrée.</li>
+                {% endif %}
+            </ul>
+        </div>
+        
+        <a href="#" class="logout-btn">Se déconnecter</a>
+    </div>
+</body>
+</html>

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bouclier de Modération - MasthomBot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #6366f1; outline: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    </style>
+    <script>
+        function toggleDuration(selectElement, inputId) {
+            const input = document.getElementById(inputId);
+            if (selectElement.value === 'timeout') {
+                input.style.display = 'block';
+            } else {
+                input.style.display = 'none';
+            }
+        }
+        window.onload = function() {
+            const selects = document.querySelectorAll('select.action-select');
+            selects.forEach(s => {
+                const targetId = s.name.replace('_act', '_dur');
+                if(document.getElementById(targetId)) {
+                    toggleDuration(s, targetId);
+                }
+            });
+        };
+    </script>
+</head>
+<body class="font-sans antialiased flex min-h-screen">
+    
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 md:p-10">
+        <header class="mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">Bouclier de Modération</h1>
+                <p class="text-slate-400 mt-1">Matrice de sanctions automatisées (Followers vs Non-Followers).</p>
+            </div>
+            {% if request.query_params.get('saved') %}
+            <div id="toast" class="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold shadow-xl flex items-center gap-3 animate-pulse">
+                <i class="fas fa-shield-alt"></i> Matrice mise à jour !
+            </div>
+            <script>setTimeout(() => document.getElementById('toast').style.display='none', 3000)</script>
+            {% endif %}
+        </header>
+
+        <div class="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+            
+            <!-- BLOC 1 : LA MATRICE (7/12) -->
+            <div class="xl:col-span-7 space-y-6">
+                <form action="/admin/moderation/settings" method="POST">
+                    <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl space-y-6 h-fit">
+                        <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-6">
+                            <i class="fas fa-gavel text-indigo-400 text-lg"></i> Matrice des Sanctions
+                        </h2>
+
+                        <!-- MACRO JINJA POUR GÉNÉRER LES BLOCS -->
+                        {% macro mod_block(rule_id, title, desc, f_act, f_dur, nf_act, nf_dur, enabled) %}
+                        <div class="bg-slate-900/50 rounded-2xl border border-slate-800 p-5 hover:border-indigo-500/30 transition-all">
+                            <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-4">
+                                <div>
+                                    <h3 class="text-sm font-bold text-white">{{ title }}</h3>
+                                    <p class="text-[10px] text-slate-400 mt-1">{{ desc }}</p>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" name="{{ rule_id }}_enabled" class="sr-only peer" {% if enabled %}checked{% endif %}>
+                                    <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                                </label>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <!-- FOLLOWER -->
+                                <div class="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+                                    <h4 class="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        <i class="fas fa-heart"></i> Si Follower
+                                    </h4>
+                                    <div class="flex gap-2">
+                                        <select name="{{ rule_id }}_f_act" onchange="toggleDuration(this, '{{ rule_id }}_f_dur')" class="action-select flex-1 input-dark rounded-lg p-2 text-xs font-bold">
+                                            <option value="delete" {% if f_act == 'delete' %}selected{% endif %}>Supprimer le message</option>
+                                            <option value="timeout" {% if f_act == 'timeout' %}selected{% endif %}>Timeout (TO)</option>
+                                            <option value="ban" {% if f_act == 'ban' %}selected{% endif %}>Ban Définitif</option>
+                                        </select>
+                                        <input type="number" id="{{ rule_id }}_f_dur" name="{{ rule_id }}_f_dur" value="{{ f_dur }}" placeholder="Sec..." class="w-20 input-dark rounded-lg p-2 text-xs text-center" style="display:none;">
+                                    </div>
+                                </div>
+                                <!-- NON FOLLOWER -->
+                                <div class="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+                                    <h4 class="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        <i class="fas fa-user-secret"></i> Si Non-Follower
+                                    </h4>
+                                    <div class="flex gap-2">
+                                        <select name="{{ rule_id }}_nf_act" onchange="toggleDuration(this, '{{ rule_id }}_nf_dur')" class="action-select flex-1 input-dark rounded-lg p-2 text-xs font-bold">
+                                            <option value="delete" {% if nf_act == 'delete' %}selected{% endif %}>Supprimer le message</option>
+                                            <option value="timeout" {% if nf_act == 'timeout' %}selected{% endif %}>Timeout (TO)</option>
+                                            <option value="ban" {% if nf_act == 'ban' %}selected{% endif %}>Ban Définitif</option>
+                                        </select>
+                                        <input type="number" id="{{ rule_id }}_nf_dur" name="{{ rule_id }}_nf_dur" value="{{ nf_dur }}" placeholder="Sec..." class="w-20 input-dark rounded-lg p-2 text-xs text-center" style="display:none;">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- SOUS-RÉGLAGES SPÉCIFIQUES -->
+                            {% if rule_id == 'spam' %}
+                            <div class="mt-4 pt-4 border-t border-slate-800/50 flex flex-wrap gap-4">
+                                <div class="flex-1">
+                                    <label class="text-[9px] font-bold text-indigo-400 uppercase mb-1 block">Combien de messages identiques ?</label>
+                                    <input type="number" name="spam_limit" value="{{ settings.spam_limit|default(4) }}" class="input-dark rounded-lg p-2 text-xs w-full">
+                                </div>
+                                <div class="flex-1">
+                                    <label class="text-[9px] font-bold text-indigo-400 uppercase mb-1 block">Dans un délai de (Secondes)</label>
+                                    <input type="number" name="spam_timeframe" value="{{ settings.spam_timeframe|default(30) }}" class="input-dark rounded-lg p-2 text-xs w-full">
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            {% if rule_id == 'caps' %}
+                            <div class="mt-4 pt-4 border-t border-slate-800/50 flex flex-wrap gap-4">
+                                <div class="flex-1">
+                                    <label class="text-[9px] font-bold text-indigo-400 uppercase mb-1 block">Longueur minimum (Lettres)</label>
+                                    <input type="number" name="caps_min_length" value="{{ settings.caps_min_length|default(10) }}" class="input-dark rounded-lg p-2 text-xs w-full" placeholder="Ex: 10">
+                                </div>
+                                <div class="flex-1">
+                                    <label class="text-[9px] font-bold text-indigo-400 uppercase mb-1 block">Pourcentage de Majuscules (%)</label>
+                                    <input type="number" name="caps_percent" value="{{ settings.caps_percent|default(70) }}" class="input-dark rounded-lg p-2 text-xs w-full" placeholder="Ex: 70">
+                                </div>
+                            </div>
+                            {% endif %}
+
+                        </div>
+                        {% endmacro %}
+
+                        {{ mod_block('banned_words', 'Mots Interdits', 'Déclenchement instantané si le mot est dans le dictionnaire.', settings.words_f_act, settings.words_f_dur, settings.words_nf_act, settings.words_nf_dur, settings.banned_words_enabled) }}
+                        {{ mod_block('links', 'Bloqueur de Liens', 'Interdit tout format de lien (ignoré pour les VIPs et les Modos).', settings.links_f_act, settings.links_f_dur, settings.links_nf_act, settings.links_nf_dur, settings.links_enabled) }}
+                        {{ mod_block('spam', 'Anti-Spam (Copier-Coller)', 'Détecte les répétitions excessives selon vos critères.', settings.spam_f_act, settings.spam_f_dur, settings.spam_nf_act, settings.spam_nf_dur, settings.spam_enabled) }}
+                        {{ mod_block('caps', 'Abus de Majuscules', 'Tolérance paramétrable selon la longueur du message.', settings.caps_f_act, settings.caps_f_dur, settings.caps_nf_act, settings.caps_nf_dur, settings.caps_enabled) }}
+
+                        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-3 active:scale-95">
+                            <i class="fas fa-save"></i> METTRE À JOUR LA MATRICE
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- COLONNE DROITE : MOTS + HISTORIQUE (5/12) -->
+            <div class="xl:col-span-5 space-y-8">
+                
+                <!-- DICTIONNAIRE DES MOTS BANNIS -->
+                <section class="config-card p-6 md:p-8 rounded-3xl shadow-2xl h-fit">
+                    <div class="flex items-center justify-between mb-8">
+                        <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                            <i class="fas fa-book-dead text-rose-500 text-lg"></i> Mots Interdits
+                        </h2>
+                        <span class="bg-rose-500/10 text-rose-400 text-[10px] font-bold px-3 py-1 rounded-full border border-rose-500/20">
+                            {{ banned_words|length }} MOT(S)
+                        </span>
+                    </div>
+
+                    <form action="/admin/moderation/words/add" method="POST" class="space-y-4 mb-8">
+                        <div class="flex gap-2">
+                            <input type="text" name="word" placeholder="Nouveau mot banni..." required class="flex-1 input-dark rounded-xl p-3 text-sm font-mono">
+                            <button type="submit" class="bg-rose-600 hover:bg-rose-500 px-6 rounded-xl text-white font-black text-xs transition-all shadow-lg active:scale-95">
+                                AJOUTER
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="flex flex-wrap gap-2 max-h-[250px] overflow-y-auto custom-scrollbar pr-2">
+                        {% for word in banned_words %}
+                        <div class="group flex items-center gap-2 bg-slate-900/80 border border-slate-700 hover:border-rose-500/50 pl-3 pr-1 py-1 rounded-full transition-all">
+                            <span class="text-xs font-bold text-slate-300">{{ word.word }}</span>
+                            <form action="/admin/moderation/words/delete/{{ word.id }}" method="POST" class="inline">
+                                <button type="submit" class="w-5 h-5 rounded-full bg-slate-800 text-slate-500 group-hover:bg-rose-500/20 group-hover:text-rose-400 transition-colors flex items-center justify-center">
+                                    <i class="fas fa-times text-[10px]"></i>
+                                </button>
+                            </form>
+                        </div>
+                        {% else %}
+                        <p class="text-slate-500 text-xs italic">Aucun mot banni.</p>
+                        {% endfor %}
+                    </div>
+                </section>
+
+                <!-- HISTORIQUE DES SANCTIONS (NOUVEAU) -->
+                <section class="config-card p-6 md:p-8 rounded-3xl shadow-2xl h-fit">
+                    <div class="flex items-center justify-between mb-8">
+                        <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                            <i class="fas fa-history text-amber-500 text-lg"></i> Historique des Sanctions
+                        </h2>
+                    </div>
+
+                    <div class="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+                        {% for s in recent_sanctions %}
+                        <div class="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 hover:border-amber-500/30 transition-all group">
+                            <div class="flex justify-between items-start mb-2">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-6 h-6 rounded-lg bg-amber-500/10 flex items-center justify-center border border-amber-500/20 text-amber-400">
+                                        <i class="fas fa-gavel text-[10px]"></i>
+                                    </div>
+                                    <span class="text-xs font-black text-slate-200">{{ s.username }}</span>
+                                </div>
+                                <span class="text-[9px] font-black uppercase text-slate-600">{{ s.timestamp }}</span>
+                            </div>
+                            
+                            <!-- C'EST CE BLOC QUI AFFICHE TES NOUVEAUX LIBELLÉS -->
+                            <div class="mt-2 pl-3 ml-1 border-l-2 border-slate-700 space-y-1">
+                                <p class="text-[11px] text-slate-400"><strong class="text-slate-300">Sanction :</strong> <span class="text-rose-400 font-bold">{{ s.details_json.sanction }}</span></p>
+                                <p class="text-[11px] text-slate-400"><strong class="text-slate-300">Raison :</strong> {{ s.details_json.raison }}</p>
+                                <p class="text-[11px] text-slate-400"><strong class="text-slate-300">Modo :</strong> <span class="text-indigo-400">{{ s.details_json.modo }}</span></p>
+                            </div>
+                            <p class="text-[11px] text-slate-500 italic leading-relaxed border-l-2 border-slate-700 pl-3 ml-1">
+                                {{ s.details_json.reason|default('Sanction automatique') }}
+                            </p>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-12 opacity-30 italic text-sm">
+                            <i class="fas fa-shield-check text-4xl mb-4 block"></i>
+                            Aucune sanction récente.
+                        </div>
+                        {% endfor %}
+                    </div>
+                </section>
+            </div>
+
+        </div>
+    </main>
+</body>
+</html>

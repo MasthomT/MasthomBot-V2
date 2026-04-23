@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
+    <meta charset="UTF-8">
+    <title>MasthomBot - Éditeur Alertes</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@800&family=Roboto:wght@700&display=swap" rel="stylesheet">
+    
+</head>
+<body>
+
+    <div class="sidebar">
+        <h1>🎨 Éditeur Visuel</h1>
+        
+        <div class="tabs">
+            <button class="tab-btn active" onclick="openTab('follow')">🔔 Follow</button>
+            <button class="tab-btn" onclick="openTab('sub')">⭐ Sub</button>
+        </div>
+
+        <form method="POST" id="configForm" enctype="multipart/form-data">
+            
+            <div id="follow" class="tab-content active">
+                <div class="card">
+                    <h2>Configuration Follow</h2>
+                    
+                    <label>Message</label>
+                    <input type="text" name="follow_message" value="{{ config.follow.message }}" oninput="updatePreview('follow')">
+                    
+                    <label>Image de l'alerte</label>
+                    <div class="current-file">Actuel : {{ config.follow.image }}</div>
+                    <input type="file" name="follow_image_file" accept="image/*">
+                    
+                    <label>Son de l'alerte</label>
+                    <div class="current-file">Actuel : {{ config.follow.sound }}</div>
+                    <input type="file" name="follow_sound_file" accept="audio/*">
+
+                    <hr style="border: 0; border-top: 1px solid #444; margin: 15px 0;">
+
+                    <label>Disposition</label>
+                    <select name="follow_layout" onchange="updatePreview('follow')">
+                        <option value="column" {% if config.follow.layout == 'column' %}selected{% endif %}>Image au-dessus</option>
+                        <option value="row" {% if config.follow.layout == 'row' %}selected{% endif %}>Image à gauche</option>
+                    </select>
+
+                    <label>Position X / Y</label>
+                    <input type="range" name="follow_pos_x" min="0" max="100" value="{{ config.follow.get('pos_x', 50) }}" oninput="updatePreview('follow')">
+                    <input type="range" name="follow_pos_y" min="0" max="100" value="{{ config.follow.get('pos_y', 50) }}" oninput="updatePreview('follow')">
+
+                    <label>Taille Image / Texte</label>
+                    <input type="range" name="follow_img_size" min="50" max="800" value="{{ config.follow.get('img_size', 300) }}" oninput="updatePreview('follow')">
+                    <input type="range" name="follow_txt_size" min="10" max="100" value="{{ config.follow.get('txt_size', 42) }}" oninput="updatePreview('follow')">
+
+                    <label>Couleur</label>
+                    <input type="color" name="follow_color" value="{{ config.follow.color }}" oninput="updatePreview('follow')">
+                    
+                    <input type="hidden" name="follow_active" value="active">
+                    <input type="hidden" name="follow_duration" value="{{ config.follow.duration }}">
+                    <input type="hidden" id="follow_image_hidden" value="{{ config.follow.image }}">
+                </div>
+            </div>
+
+            <div id="sub" class="tab-content">
+                <div class="card" style="border-color: #fca311;">
+                    <h2>Configuration Sub</h2>
+                    
+                    <label>Message</label>
+                    <input type="text" name="sub_message" value="{{ config.sub.message }}" oninput="updatePreview('sub')">
+                    
+                    <label>Image</label>
+                    <div class="current-file">Actuel : {{ config.sub.image }}</div>
+                    <input type="file" name="sub_image_file" accept="image/*">
+                    
+                    <label>Son</label>
+                    <div class="current-file">Actuel : {{ config.sub.sound }}</div>
+                    <input type="file" name="sub_sound_file" accept="audio/*">
+
+                    <hr style="border: 0; border-top: 1px solid #444; margin: 15px 0;">
+
+                    <label>Disposition</label>
+                    <select name="sub_layout" onchange="updatePreview('sub')">
+                        <option value="column" {% if config.sub.layout == 'column' %}selected{% endif %}>Image au-dessus</option>
+                        <option value="row" {% if config.sub.layout == 'row' %}selected{% endif %}>Image à gauche</option>
+                    </select>
+
+                    <label>Position X / Y</label>
+                    <input type="range" name="sub_pos_x" min="0" max="100" value="{{ config.sub.get('pos_x', 50) }}" oninput="updatePreview('sub')">
+                    <input type="range" name="sub_pos_y" min="0" max="100" value="{{ config.sub.get('pos_y', 50) }}" oninput="updatePreview('sub')">
+                    
+                    <label>Tailles</label>
+                    <input type="range" name="sub_img_size" min="50" max="800" value="{{ config.sub.get('img_size', 300) }}" oninput="updatePreview('sub')">
+                    <input type="range" name="sub_txt_size" min="10" max="100" value="{{ config.sub.get('txt_size', 42) }}" oninput="updatePreview('sub')">
+                    
+                    <label>Couleur</label>
+                    <input type="color" name="sub_color" value="{{ config.sub.color }}" oninput="updatePreview('sub')">
+                    
+                    <input type="hidden" name="sub_active" value="active">
+                    <input type="hidden" name="sub_duration" value="{{ config.sub.duration }}">
+                    <input type="hidden" id="sub_image_hidden" value="{{ config.sub.image }}">
+                </div>
+            </div>
+
+            <button type="submit" class="btn-save">💾 SAUVEGARDER & UPLOAD</button>
+        </form>
+    </div>
+
+    <div class="preview-area">
+        <div style="position:absolute; top:10px; left:10px; color:#aaa;">APERÇU</div>
+        <div id="preview-box">
+            <img id="preview-img" src="" alt="Alerte">
+            <div id="preview-text">TEXTE ICI</div>
+        </div>
+    </div>
+
+    <script>
+        function openTab(type) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(type).classList.add('active');
+            event.target.classList.add('active');
+            updatePreview(type);
+        }
+
+        function updatePreview(type) {
+            const box = document.getElementById('preview-box');
+            const img = document.getElementById('preview-img');
+            const txt = document.getElementById('preview-text');
+
+            const msg = document.getElementsByName(type + '_message')[0].value;
+            // Pour l'aperçu, on utilise l'image actuelle (hidden field) car on ne peut pas prévisualiser l'upload facilement sans JS complexe
+            const imgSrc = document.getElementById(type + '_image_hidden').value;
+            
+            const layout = document.getElementsByName(type + '_layout')[0].value;
+            const posX = document.getElementsByName(type + '_pos_x')[0].value;
+            const posY = document.getElementsByName(type + '_pos_y')[0].value;
+            const imgSize = document.getElementsByName(type + '_img_size')[0].value;
+            const txtSize = document.getElementsByName(type + '_txt_size')[0].value;
+            const color = document.getElementsByName(type + '_color')[0].value;
+            
+            txt.innerText = msg.replace('{user}', 'PseudoTest');
+            img.src = imgSrc;
+            
+            box.style.left = posX + '%';
+            box.style.top = posY + '%';
+            box.style.flexDirection = layout;
+            img.style.width = imgSize + 'px';
+            txt.style.fontSize = txtSize + 'px';
+            txt.style.color = color;
+            txt.style.fontFamily = 'Kanit, sans-serif';
+        }
+
+        updatePreview('follow');
+    </script>
+</body>
+</html>

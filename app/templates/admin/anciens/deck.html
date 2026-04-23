@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Félix Deck - T'chat</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-color: #121212; --btn-bg: #1e1e1e; --accent: #9146FF;
+            --danger: #ff4444; --success: #00C851; --warning: #ffbb33;
+            --nav-bg: #1a1a1a; --nav-text: #888;
+        }
+        body {
+            background-color: var(--bg-color); color: white;
+            font-family: 'Segoe UI', sans-serif; margin: 0; padding: 15px;
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+            box-sizing: border-box;
+        }
+        .grid-container {
+            display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(3, 1fr);
+            gap: 15px; flex-grow: 1; margin-bottom: 15px;
+        }
+        .deck-btn {
+            background-color: var(--btn-bg); border: 2px solid #333; border-radius: 12px;
+            color: #ddd; font-size: 1.1rem; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; cursor: pointer;
+            transition: transform 0.1s, background 0.2s;
+            user-select: none; -webkit-tap-highlight-color: transparent; text-align: center; padding: 5px;
+        }
+        .deck-btn:active { transform: scale(0.95); background-color: #333; }
+        .deck-btn i { font-size: 1.8rem; margin-bottom: 8px; }
+        
+        /* Tes classes de couleurs */
+        .btn-danger { border-color: var(--danger); color: var(--danger); }
+        .btn-success { border-color: var(--success); color: var(--success); }
+        .btn-twitch { border-color: var(--accent); color: var(--accent); }
+        .btn-warn { border-color: var(--warning); color: var(--warning); }
+        .so { background: linear-gradient(135deg, #9146FF 0%, #6441A5 100%); border: none;}
+        
+        .bottom-navbar {
+            display: flex; justify-content: space-around; align-items: center;
+            background-color: var(--nav-bg); padding: 10px 0; border-radius: 15px; flex-shrink: 0;
+        }
+        .nav-item {
+            color: var(--nav-text); text-decoration: none; display: flex;
+            flex-direction: column; align-items: center; font-size: 0.7rem; flex-grow: 1;
+            transition: color 0.2s;
+        }
+        .nav-item i { font-size: 1.4rem; margin-bottom: 4px; }
+        .nav-item.active { color: var(--accent); }
+
+        #toast {
+            visibility: hidden; min-width: 250px; margin-left: -125px;
+            background-color: #333; color: #fff; text-align: center;
+            border-radius: 50px; padding: 16px; position: fixed; z-index: 100;
+            left: 50%; bottom: 80px; font-size: 16px; border: 1px solid #555;
+            box-shadow: 0px 5px 15px rgba(0,0,0,0.5);
+        }
+        #toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
+        #toast.error { border-color: var(--danger); color: var(--danger); }
+        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 80px; opacity: 1;} }
+        @keyframes fadeout { from {bottom: 80px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+    </style>
+</head>
+<body>
+    <div class="grid-container">
+        <div class="deck-btn btn-danger" onclick="sendAction('clear')"><i class="fa-solid fa-broom"></i> CLEAR</div>
+        <div class="deck-btn btn-twitch" onclick="sendAction('ad', '180')"><i class="fa-solid fa-rectangle-ad"></i> PUB 3m</div>
+        <div class="deck-btn btn-twitch" onclick="sendAction('marker')"><i class="fa-solid fa-bookmark"></i> MARKER</div>
+        
+        <div class="deck-btn btn-warn" id="btn-brb" onclick="toggleBrb()"><i class="fa-solid fa-bed"></i> BRB</div>
+        
+        <div class="deck-btn" id="btn-emote" onclick="sendAction('chat_mode', 'emote')"><i class="fa-solid fa-face-smile"></i> Emote Only</div>
+        <div class="deck-btn" id="btn-follow" onclick="sendAction('chat_mode', 'follower')"><i class="fa-solid fa-users"></i> Follow Only</div>
+        <div class="deck-btn" id="btn-slow" onclick="sendAction('chat_mode', 'slow')"><i class="fa-solid fa-hourglass-half"></i> Slow Mode</div>
+        
+        <div class="deck-btn btn-success" onclick="sendAction('chat_mode', 'normal')"><i class="fa-solid fa-unlock"></i> CHAT NORMAL</div>
+        <div class="deck-btn so" onclick="askShoutout()"><i class="fa-solid fa-bullhorn"></i> S.O. (Input)</div>
+        <div class="deck-btn" onclick="triggerReplay()"><i class="fa-brands fa-twitch"></i> REPLAY</div>
+        <div class="deck-btn" onclick="window.location.href='http://192.168.1.109:8080/stats'"><i class="fa-solid fa-chart-line"></i> STATS</div>
+        <div class="deck-btn" style="opacity: 0.2; border: 2px dashed #444;"></div>
+    </div>
+
+    <nav class="bottom-navbar">
+        <a href="index.html" class="nav-item active"><i class="fa-solid fa-comments"></i> T'chat</a>
+        <a href="deck_page2.html" class="nav-item"><i class="fa-solid fa-desktop"></i> OBS</a>
+        <a href="deck_page3.html" class="nav-item"><i class="fa-solid fa-music"></i> Sons/Img</a>
+    </nav>
+
+    <div id="toast">Message</div>
+
+    <script>
+        const RASPBERRY_PI_URL = 'http://192.168.1.109:8080';
+
+        // --- FEEDBACK VISUEL (T'CHAT) ---
+        async function syncTwitchStatus() {
+            try {
+                const response = await fetch(RASPBERRY_PI_URL + '/api/deck/status');
+                if (!response.ok) return;
+                const status = await response.json();
+
+                // 1. BRB
+                const brbBtn = document.getElementById('btn-brb');
+                if (brbBtn) {
+                    if (status.twitch.brb_active) {
+                        brbBtn.style.setProperty('background-color', 'var(--warning)', 'important');
+                        brbBtn.style.setProperty('color', 'black', 'important');
+                        brbBtn.innerHTML = '<i class="fa-solid fa-person-walking-arrow-right"></i> REVENIR';
+                    } else {
+                        brbBtn.style.removeProperty('background-color');
+                        brbBtn.style.removeProperty('color');
+                        brbBtn.innerHTML = '<i class="fa-solid fa-bed"></i> BRB MODE';
+                    }
+                }
+
+                // 2. MODES DE CHAT
+                const modes = [
+                    { id: 'btn-emote', active: status.twitch.emote_only },
+                    { id: 'btn-follow', active: status.twitch.follower_only },
+                    { id: 'btn-slow', active: status.twitch.slow_mode }
+                ];
+
+                modes.forEach(m => {
+                    const btn = document.getElementById(m.id);
+                    if(btn) {
+                        if (m.active) {
+                            btn.style.setProperty('background-color', 'var(--accent)', 'important');
+                            btn.style.setProperty('color', 'white', 'important');
+                        } else {
+                            btn.style.removeProperty('background-color');
+                            btn.style.removeProperty('color');
+                        }
+                    }
+                });
+
+            } catch (e) { console.error("Sync Error:", e); }
+        }
+        setInterval(syncTwitchStatus, 2000);
+
+        function showToast(msg, type) {
+            const x = document.getElementById("toast");
+            x.textContent = msg;
+            x.className = "show " + type;
+            setTimeout(() => { x.className = x.className.replace("show", ""); }, 3000);
+        }
+
+        function sendAction(action, param = null) {
+            if (navigator.vibrate) navigator.vibrate(50);
+            fetch(RASPBERRY_PI_URL + '/api/deck/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: action, param: param })
+            }).catch(error => { console.error(error); showToast("Erreur Connexion", "error"); });
+        }
+
+        function askShoutout() {
+            let name = prompt("Pseudo ?");
+            if (name) sendAction('shoutout', name);
+        }
+
+        function toggleBrb() { sendAction('brb_toggle'); }
+
+        function triggerReplay() {
+            if (navigator.vibrate) navigator.vibrate(50);
+            showToast("Recherche...", "info");
+            fetch(RASPBERRY_PI_URL + '/api/instant-replay', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if(data.status === 'success') showToast("Replay lancé !", "success");
+                else showToast("Erreur Replay", "error");
+            });
+        }
+
+        // SWIPE
+        let touchstartX = 0;
+        document.addEventListener('touchstart', e => { touchstartX = e.changedTouches[0].screenX; });
+        document.addEventListener('touchend', e => {
+            let touchendX = e.changedTouches[0].screenX;
+            if (touchendX < touchstartX - 70) window.location.href = "deck_page2.html";
+            if (touchendX > touchstartX + 70) window.location.href = "deck_page3.html";
+        });
+    </script>
+</body>
+</html>

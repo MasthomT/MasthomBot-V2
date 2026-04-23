@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <meta charset="UTF-8">
+    <title>Félix Alerts Overlay</title>
+    <style>
+    body { margin: 0; padding: 0; overflow: hidden; background-color: transparent; }
+        
+        #visual-container {
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+        }
+
+        img, video {
+            max-width: 80%;
+            max-height: 80%;
+            display: none;
+            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            object-fit: contain;
+        }
+
+        @keyframes popIn {
+            from { transform: scale(0); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div id="visual-container"></div>
+
+    <script>
+        // Vérifie les effets toutes les 100ms (Réactif)
+        setInterval(checkEffects, 100);
+
+        function checkEffects() {
+            fetch('/api/poll-effects')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.has_effect) {
+                        playEffect(data.effect);
+                    }
+                })
+                .catch(err => console.error("Erreur polling:", err));
+        }
+
+        const activeEffects = {};
+
+        function playEffect(effect) {
+            console.log("Lecture effet:", effect);
+            
+            // CAS 1 : STOP
+            if (effect.type === 'stop') {
+                const idToStop = effect.id_to_stop;
+                if (activeEffects[idToStop]) {
+                    console.log("STOP EFFECT : Arrêt de l'effet " + idToStop);
+                    
+                    // Arrêt Audio
+                    if (activeEffects[idToStop].audio) {
+                        activeEffects[idToStop].audio.pause();
+                        activeEffects[idToStop].audio.currentTime = 0;
+                    }
+                    
+                    // Arrêt Vidéo/Image
+                    if (activeEffects[idToStop].media) {
+                        activeEffects[idToStop].media.pause();
+                        activeEffects[idToStop].media.remove();
+                    }
+                    
+                    // Arrêt Timer
+                    if (activeEffects[idToStop].timeout) {
+                        clearTimeout(activeEffects[idToStop].timeout);
+                    }
+                    
+                    delete activeEffects[idToStop];
+                }
+                return;
+            } 
+            
+            // CAS 2 : SON (Correctement fermé cette fois !)
+            else if (effect.type === 'sound') {
+    
+                // 1. Définir l'ID et l'état de boucle
+                const effectId = effect.id || 'temp_' + Date.now();
+                const isLooping = effect.loop || false; 
+
+                let audio = new Audio('/static/uploads/' + effect.filename);
+                audio.volume = 0.8; 
+                audio.loop = isLooping; 
+
+                // Stockage et lancement...
+                activeEffects[effectId] = { audio: audio, type: 'sound' };
+    
+                audio.play().catch(e => console.error("Erreur Audio JS (OBS) : ", e));
+
+                // Gestion de la fin (uniquement si pas de boucle)
+                if (!isLooping) {
+                    audio.onended = () => {
+                        delete activeEffects[effectId];
+                        console.log("Fin de lecture simple. ID supprimé.");
+                    }; 
+                } 
+            } // <--- FIN DU BLOC SON (Pas de doublon ici)
+
+            // CAS 3 : IMAGE / GIF / WEBM / VIDÉO
+            else if (effect.type === 'image') {
+                const effectId = effect.id || 'temp_' + Date.now();
+                const duration = effect.duration || 5000;
+                
+                const container = document.getElementById('visual-container');
+                
+                // Nettoyage ancien si même ID
+                if (activeEffects[effectId]) {
+                    if (activeEffects[effectId].media) activeEffects[effectId].media.remove();
+                    if (activeEffects[effectId].timeout) clearTimeout(activeEffects[effectId].timeout);
+                }
+
+                let media;
+                const ext = effect.filename.toLowerCase().split('.').pop();
+
+                // Gestion Vidéo (WebM / MP4)
+                if (['webm', 'mp4', 'ogg', 'ogv'].includes(ext)) {
+                    media = document.createElement('video');
+                    media.muted = false;          
+                    media.volume = 0.8;           
+                    media.playsInline = true;
+                    media.autoplay = true;
+                    // Auto-suppression à la fin de la vidéo
+                    media.onended = () => {
+                        media.remove();
+                        delete activeEffects[effectId];
+                        console.log("Vidéo terminée :", effect.filename);
+                    };
+                    media.play().catch(e => console.error("Erreur lecture vidéo :", e));
+                } else {
+                    // Gestion Image / GIF
+                    media = document.createElement('img');
+                }
+
+                media.src = '/static/uploads/' + effect.filename + '?t=' + Date.now();
+                media.style.display = 'block';
+
+                container.appendChild(media);
+
+                // Timeout de sécurité (et durée d'affichage pour les images)
+                const safetyTimeout = setTimeout(() => {
+                    if (media.parentNode) media.remove();
+                    delete activeEffects[effectId];
+                }, duration + 2000); // +2s de marge pour les vidéos
+
+                activeEffects[effectId] = { 
+                    media: media, 
+                    type: 'media', 
+                    timeout: safetyTimeout 
+                };
+            }
+        }
+    </script>
+</body>
+</html>

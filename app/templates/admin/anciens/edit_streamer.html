@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <meta charset="UTF-8" />
+    <title>Modifier le Streamer</title>
+    <style>
+        
+		/* Navigation Latérale */
+		
+
+		
+
+		
+
+		
+
+		
+        main.content { flex-grow: 1; padding: 2rem; overflow-y: auto; }
+        .card { background-color: #2c2f33; border-radius: 8px; padding: 1.5rem; border: 1px solid #40444b; max-width: 700px; margin: auto; }
+        h1 { font-size: 1.8rem; color: #fff; margin-bottom: 1.5rem; }
+        .form-group { margin-bottom: 1.5rem; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
+        input[type="text"], textarea { 
+            width: 100%; 
+            padding: 0.75rem; 
+            background-color: #23272a; 
+            border: 1px solid #40444b; 
+            color: #dcddde; 
+            border-radius: 4px; 
+            font-size: 1rem;
+        }
+        textarea { min-height: 100px; resize: vertical; }
+        .placeholders-info { font-size: 0.9rem; color: #8e9297; margin-top: 0.5rem; }
+        .placeholders-info code { background-color: #23272a; padding: 2px 4px; border-radius: 4px; }
+        button { 
+            background-color: #7289da; 
+            color: #fff; 
+            padding: 0.75rem 1.5rem; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-weight: bold; 
+        }
+        button:hover { background-color: #677bc4; }
+    </style>
+</head>
+<body>
+{% include 'sidebar.html' %}
+
+    <main class="content">
+        <div class="card">
+            <h1>Modifier le Streamer : {{ streamer.name }}</h1>
+            <form method="POST">
+                <div class="form-group">
+                    <label for="name">Nom d'utilisateur Twitch</label>
+                    <input type="text" id="name" name="name" value="{{ streamer.name }}" required>
+                </div>
+                <div class="form-group">
+                    <label for="custom_message">Message de notification personnalisé</label>
+                    <textarea id="custom_message" name="custom_message">{{ streamer.message }}</textarea>
+                    <div class="placeholders-info">
+                        <p>Variables disponibles : <code>{streamer}</code>, <code>{titre}</code>, <code>{jeu}</code>, <code>{lien}</code></p>
+                    </div>
+                </div>
+                <button type="submit">Sauvegarder les modifications</button>
+            </form>
+        </div>
+    </main>
+</body>
+</html>

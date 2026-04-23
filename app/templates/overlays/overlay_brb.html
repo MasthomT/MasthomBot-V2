@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Overlay BRB - Mode Shoutout + Stinger</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+
+    
+</head>
+<body>
+
+    <div id="brb-container">
+        <div id="stinger-layer">
+            <video id="stinger-video" muted playsinline></video>
+        </div>
+
+        <div id="clip-layer">
+            <div class="gradient-border"></div>
+            <div class="brb-badge">PAUSE CAFÉ ☕</div>
+            <video id="player" autoplay></video>
+            <div class="meta-info">
+                <div class="meta-title" id="clip-title">Replay</div>
+                <div class="meta-sub" id="clip-game">Meilleurs moments</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io('http://' + window.location.hostname + ':3005');
+        
+        const container = document.getElementById('brb-container');
+        const stingerLayer = document.getElementById('stinger-layer');
+        const stingerVideo = document.getElementById('stinger-video');
+        const mainVideo = document.getElementById('player');
+        
+        // Configuration locale
+        let settings = {
+            stinger_enabled: false,
+            stinger_path: ""
+        };
+
+        // 1. Charger la config depuis le serveur (pour savoir s'il y a un stinger)
+        async function loadSettings() {
+            try {
+                const res = await fetch('/api/shoutout-config');
+                if (res.ok) {
+                    settings = await res.json();
+                    console.log("Config Shoutout chargée :", settings);
+                }
+            } catch (e) { console.error("Erreur chargement config:", e); }
+        }
+        loadSettings(); // Lancer au démarrage
+
+        // 2. Écoute des événements
+        socket.on('shoutout', (data) => startSequence(data));
+        socket.on('play_clip', (data) => startSequence(data));
+
+        function startSequence(data) {
+            if (!data || !data.clipUrl) return;
+
+            // Mise à jour des textes
+            document.getElementById('clip-title').innerText = data.user || "Replay";
+            document.getElementById('clip-game').innerText = data.game || "Moment Épique";
+            
+            // Préparer le clip principal
+            mainVideo.src = data.clipUrl;
+            mainVideo.volume = 0.6;
+
+            // --- LOGIQUE STINGER ---
+            // On vérifie si l'intro est activée et si le fichier existe
+            if (settings.stinger_enabled && settings.stinger_path) {
+                playWithStinger();
+            } else {
+                playDirect();
+            }
+        }
+
+        function playWithStinger() {
+            // A. Afficher le conteneur
+            container.style.display = 'block';
+            container.style.animation = 'popIn 0.5s forwards';
+
+            // B. Préparer le Stinger
+            // Note : Si le chemin est relatif (ex: "uploads/intro.webm"), il faut peut-être ajouter "/"
+            // Si c'est une URL complète, ça marche direct.
+            stingerVideo.src = settings.stinger_path; 
+            stingerLayer.style.display = 'block';
+            
+            // C. Jouer le Stinger
+            stingerVideo.play()
+                .then(() => {
+                    // D. Quand le stinger est fini (ou à un point de cut, ici simple : à la fin)
+                    stingerVideo.onended = () => {
+                        stingerLayer.style.display = 'none'; // Cacher l'intro
+                        mainVideo.play(); // Lancer le clip
+                    };
+                })
+                .catch(e => {
+                    console.error("Erreur lecture Stinger:", e);
+                    playDirect(); // Fallback si l'intro plante
+                });
+            
+            // Gestion de la fin du clip principal
+            setupMainVideoEnd();
+        }
+
+        function playDirect() {
+            container.style.display = 'block';
+            container.style.animation = 'popIn 0.5s forwards';
+            stingerLayer.style.display = 'none';
+            
+            mainVideo.play().catch(e => console.error("Erreur lecture Clip:", e));
+            setupMainVideoEnd();
+        }
+
+        function setupMainVideoEnd() {
+            mainVideo.onended = () => {
+                container.style.animation = 'popOut 0.5s forwards';
+                setTimeout(() => {
+                    container.style.display = 'none';
+                    mainVideo.src = "";
+                }, 500);
+            };
+        }
+    </script>
+</body>
+</html>

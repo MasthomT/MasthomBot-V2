@@ -1,0 +1,315 @@
+/**
+ * TWITCH SHOUTOUT - SERVER.JS (VERSION GQL + LECTURE LOCALE + SÉQUENÇAGE)
+ */
+
+require('dotenv').config();
+const express = require('express');
+const axios = require('axios');
+const cors = require('cors');
+const tmi = require('tmi.js');
+const fs = require('fs');
+const path = require('path');
+
+const CONFIG = {
+    PORT: 3005,
+    TWITCH_CLIENT_ID: process.env.TWITCH_CLIENT_ID,
+    TWITCH_CLIENT_SECRET: process.env.TWITCH_CLIENT_SECRET,
+    BOT_USERNAME: process.env.TWITCH_BOT_USERNAME || "felixthebigblackcat",
+    BOT_TOKEN: process.env.TWITCH_OAUTH_TOKEN,
+    CHANNEL_NAME: process.env.TWITCH_USERNAME,
+    GQL_CLIENT_ID: 'kimne78kx3ncx6brgo4mv6wki5h1ko',
+    // On lit le fichier localement, plus sûr que l'API Python
+    SETTINGS_FILE: path.join(__dirname, 'shoutout_settings.json')
+};
+
+let appAccessToken = null;
+let tokenExpiresAt = 0;
+let clients = [];
+let shoutoutQueue = [];
+let isProcessing = false;
+let config = {};
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// ==================== GESTION CONFIG (LECTURE DISQUE) ====================
+function loadConfig() {
+    try {
+        if (fs.existsSync(CONFIG.SETTINGS_FILE)) {
+            const rawData = fs.readFileSync(CONFIG.SETTINGS_FILE, 'utf8');
+            if (rawData.trim()) {
+                config = JSON.parse(rawData);
+                console.log("[CONFIG] Chargée depuis le fichier JSON local.");
+            }
+        }
+    } catch (e) {
+        console.error("[CONFIG] Erreur lecture fichier:", e.message);
+    }
+}
+
+// Chargement initial et surveillance des changements
+loadConfig();
+fs.watch(CONFIG.SETTINGS_FILE, (eventType, filename) => {
+    if (filename) setTimeout(loadConfig, 500); // Debounce
+});
+
+// ==================== TWITCH API ====================
+async function getAppToken() {
+    const now = Date.now();
+    if (appAccessToken && now < tokenExpiresAt) return appAccessToken;
+    try {
+        const r = await axios.post('https://id.twitch.tv/oauth2/token', null, {
+            params: { client_id: CONFIG.TWITCH_CLIENT_ID, client_secret: CONFIG.TWITCH_CLIENT_SECRET, grant_type: 'client_credentials' }
+        });
+        appAccessToken = r.data.access_token;
+        tokenExpiresAt = now + (r.data.expires_in * 1000) - 60000;
+        return appAccessToken;
+    } catch (e) { console.error("[AUTH] Token error:", e.message); return null; }
+}
+
+async function getUserInfo(username) {
+    const token = await getAppToken(); if (!token) return null;
+    try {
+        const r = await axios.get("https://api.twitch.tv/helix/users?login=" + username, {
+            headers: { 'Client-ID': CONFIG.TWITCH_CLIENT_ID, 'Authorization': 'Bearer ' + token }
+        });
+        return r.data.data[0] || null;
+    } catch { return null; }
+}
+
+async function getBestClip(userId) {
+    const token = await getAppToken(); if (!token) return null;
+    try {
+        const r = await axios.get("https://api.twitch.tv/helix/clips?broadcaster_id=" + userId + "&first=50", {
+            headers: { 'Client-ID': CONFIG.TWITCH_CLIENT_ID, 'Authorization': 'Bearer ' + token }
+        });
+        let clips = r.data.data || [];
+        if (!clips.length) return null;
+
+        const now = Date.now();
+        clips = clips.filter(c => {
+            const age = (now - new Date(c.created_at)) / 86400000;
+            return age <= (config.filter_max_days || 365) &&
+                   c.duration >= (config.filter_min_duration || 5) &&
+                   c.duration <= (config.filter_max_duration || 60);
+        });
+        if (!clips.length) return null;
+
+        if (config.clip_selection_mode === "recent") clips.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+        else if (config.clip_selection_mode === "random") clips.sort(() => Math.random() - 0.5);
+        else clips.sort((a,b) => b.view_count - a.view_count);
+
+        return clips[0];
+    } catch { return null; }
+}
+
+async function getDirectMp4Url(slug) {
+    try {
+        const r = await axios.post('https://gql.twitch.tv/gql', {
+            operationName: "VideoAccessToken_Clip",
+            variables: { slug },
+            extensions: { persistedQuery: { version: 1, sha256Hash: "36b89d2507fce29e5ca551df756d27c1cfe079e2609642b4390aa4c35796eb11" }}
+        }, { headers: { 'Client-ID': CONFIG.GQL_CLIENT_ID } });
+
+        const q = r.data.data.clip.videoQualities.find(x => x.quality.includes('720')) ||
+                  r.data.data.clip.videoQualities.find(x => x.quality.includes('480')) ||
+                  r.data.data.clip.videoQualities[0];
+
+        return q.sourceURL + "?sig=" + r.data.data.clip.playbackAccessToken.signature +
+               "&token=" + encodeURIComponent(r.data.data.clip.playbackAccessToken.value);
+    } catch { return null; }
+}
+
+async function getGameName(id) {
+    if (!id) return "";
+    const token = await getAppToken();
+    try {
+        const r = await axios.get("https://api.twitch.tv/helix/games?id=" + id, {
+            headers: { 'Client-ID': CONFIG.TWITCH_CLIENT_ID, 'Authorization': 'Bearer ' + token }
+        });
+        return r.data.data[0]?.name || "";
+    } catch { return ""; }
+}
+
+// ==================== SSE ====================
+app.get('/events', (req, res) => {
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*'
+    });
+    const id = Date.now();
+    clients.push({id, res});
+    req.on('close', () => clients = clients.filter(c => c.id !== id));
+});
+
+function broadcast(data) {
+    clients.forEach(c => c.res.write("data: " + JSON.stringify(data) + "\n\n"));
+}
+
+// ==================== API ====================
+app.post('/api/shoutout', (req, res) => {
+    const target = (req.body.target || req.body.username || "").toLowerCase();
+    if (!target) return res.status(400).json({error:"no target"});
+    shoutoutQueue.push({target});
+    if (!isProcessing) processQueue();
+    res.json({status:"queued"});
+});
+
+// ==================== QUEUE ====================
+async function processQueue() {
+    if (isProcessing || !shoutoutQueue.length) return;
+    isProcessing = true;
+    
+    // On s'assure d'avoir la dernière config
+    loadConfig();
+
+    const {target} = shoutoutQueue.shift();
+    const user = await getUserInfo(target);
+    if (!user) { isProcessing = false; processQueue(); return; }
+
+    const clip = await getBestClip(user.id);
+    if (!clip) { isProcessing = false; processQueue(); return; }
+
+    const url = await getDirectMp4Url(clip.id || clip.slug);
+    if (!url) { isProcessing = false; processQueue(); return; }
+
+    const game = await getGameName(clip.game_id);
+    const duration = config.use_clip_duration ? Math.round(clip.duration) : (config.clip_duration_seconds || 60);
+
+    const meta = {
+        broadcaster: user.display_name,
+        avatar: user.profile_image_url,
+        title: clip.title,
+        game,
+        created_at: clip.created_at,
+        views: clip.view_count,
+        duration,
+
+        useStinger: !!config.stinger_enabled,
+        stingerUrl: config.stinger_path || "",
+        stingerDuration: config.stinger_duration_ms || 1000,
+
+        borderColor: config.style_border_color || "#2f0075",
+        borderColor2: config.style_border_color_2 || "#000000",
+        useGradient: !!config.style_use_gradient,
+        borderWidth: config.style_border_width || 5,
+        borderRadius: config.style_border_radius || 10,
+        enableGlow: !!config.style_enable_glow,
+
+        showAvatar: config.avatar_show !== false,
+        avatarShape: config.avatar_shape || "circle",
+        avatarBorderColor: config.avatar_border_color || config.style_border_color,
+
+        textColor: config.text_color || "#ffffff",
+        fontFamily: config.font_family || "Montserrat",
+        textShadow: !!config.text_show_shadow,
+
+        showTitle: config.meta_show_title !== false,
+        showGame: config.meta_show_game !== false,
+        showDate: config.meta_show_date !== false,
+        showViews: config.meta_show_views !== false,
+
+        entranceAnim: config.anim_entrance || "pop-in",
+        showProgressBar: config.anim_progress_bar !== false,
+
+        volume: (config.clip_volume || 100) / 100,
+        fadeAudio: !!config.audio_fade,
+    };
+
+    broadcast({ type: "play_clip", url, meta });
+
+    // Calcul du temps total : Durée Clip + Stinger + Marge
+    const extra = config.stinger_enabled ? (meta.stingerDuration + 1000) : 0;
+    await sleep(duration * 1000 + extra + 2000);
+
+    // On envoie un signal STOP
+    broadcast({ type: "force_stop" });
+
+    isProcessing = false;
+    processQueue();
+}
+
+// ==================== TMI BOT ====================
+if (CONFIG.BOT_TOKEN && CONFIG.BOT_USERNAME) {
+    const client = new tmi.Client({
+        connection: { reconnect: true, secure: true },
+        identity: { username: CONFIG.BOT_USERNAME, password: CONFIG.BOT_TOKEN.startsWith('oauth:') ? CONFIG.BOT_TOKEN : "oauth:" + CONFIG.BOT_TOKEN },
+        channels: [CONFIG.CHANNEL_NAME]
+    });
+
+    client.connect().catch(() => {});
+
+    client.on('message', async (channel, tags, message, self) => {
+        if (self) return;
+        if (!message.toLowerCase().startsWith('!so ') && !message.toLowerCase().startsWith('!shoutout ')) return;
+
+        const isMod = tags.mod || tags.badges?.broadcaster;
+        const isSub = tags.subscriber;
+        const isVip = !!tags.badges?.vip;
+
+        const p = config.permissions || {};
+        if (!isMod && p.mods && !(p.subs && isSub) && !(p.vips && isVip)) return;
+
+        const target = message.split(' ')[1]?.replace('@','').toLowerCase();
+        if (target) {
+            shoutoutQueue.push({target});
+            if (!isProcessing) processQueue();
+        }
+    });
+}
+
+// ==================== DÉMARRAGE ====================
+app.listen(CONFIG.PORT, '0.0.0.0', () => {
+    console.log("SHOUTOUT SERVER READY - Port " + CONFIG.PORT);
+});
+
+<script>
+    const video = document.getElementById('player');
+    const container = document.getElementById('container');
+    const bar = document.getElementById('progress-bar');
+    const evtSource = new EventSource('/events');
+
+    evtSource.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        if(data.type === 'play_clip'){
+            const m = data.meta;
+            
+            // On récupère la durée imposée par le Pi (ou 30 par défaut)
+            const duration = m.duration || 30;
+
+            document.getElementById('avatar').src = m.avatar || '';
+            document.getElementById('name').textContent = m.broadcaster || '';
+            document.getElementById('date').textContent = m.date || '';
+            
+            // On affiche le titre (qui peut être le custom_title du Pi)
+            document.getElementById('clipTitle').textContent = m.title ? '"' + m.title + '"' : '';
+            document.getElementById('game').textContent = m.game || '';
+            
+            bar.style.transition = 'none';
+            bar.style.width = '0%';
+            video.src = data.url; // Peut être le proxy_url du Pi
+            container.style.opacity = 1;
+            video.play();
+            
+            // La barre d'animation obéit à la durée imposée par le Pi
+            setTimeout(function() {
+                bar.style.transition = 'width ' + duration + 's linear';
+                bar.style.width = '100%';
+            }, 100);
+            
+            // Disparition de l'overlay selon la durée du Pi
+            setTimeout(function() { container.style.opacity = 0; }, (duration * 1000) + 500);
+        }
+        
+        // Sécurité si le Pi envoie un ordre d'arrêt brutal
+        if(data.type === 'force_stop') {
+            container.style.opacity = 0;
+            video.pause();
+        }
+    };
+</script>

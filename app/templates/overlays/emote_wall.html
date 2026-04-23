@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { margin: 0; overflow: hidden; background: transparent; }
+        .emote {
+            position: absolute;
+            bottom: -150px;
+            animation: rise linear forwards;
+            will-change: transform;
+        }
+        @keyframes rise {
+            from { transform: translateY(0) rotate(0deg); opacity: 1; }
+            to { transform: translateY(-120vh) rotate(360deg); opacity: 0.8; }
+        }
+    </style>
+</head>
+<body>
+    <div id="wall"></div>
+<script>
+    // Détecte automatiquement l'IP du Raspberry Pi (192.168.1.109)
+    const ip = window.location.hostname;
+    // Se connecte au serveur Node.js qui gère les événements en direct
+    const source = new EventSource(`http://${ip}:3005/events`);
+    
+    const wall = document.getElementById('wall');
+
+    source.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        
+        if (data.type === 'emote_rain') {
+            data.details.urls.forEach((url, index) => {
+                setTimeout(() => {
+                    const img = document.createElement('img');
+                    img.src = url;
+                    img.className = 'emote';
+                    img.style.left = (Math.random() * 90) + "vw";
+                    img.style.width = (Math.random() * 60 + 100) + "px";
+                    img.style.animationDuration = (Math.random() * 2 + 2) + "s";
+                    
+                    document.body.appendChild(img);
+                    setTimeout(() => img.remove(), 4000);
+                }, index * 50); 
+            });
+        }
+    };
+</script>
+</body>
+</html>

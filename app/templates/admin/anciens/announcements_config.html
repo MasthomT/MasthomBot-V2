@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <meta charset="UTF-8" />
+    <title>MasthomBot - Gestion des Annonces</title>
+    <style>
+        /* --- DESIGN MASHTOM IDENTIQUE CAPTURE --- */
+        
+
+        /* Navigation Latérale */
+        
+        
+        
+        
+        
+        
+        /* Contenu Principal */
+        main.content { flex-grow: 1; padding: 2rem; display: flex; flex-direction: column; height: 100vh; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+        h1 { color: #fff; font-size: 1.8rem; font-weight: bold; }
+        .current-time { font-size: 1.1rem; color: #7289da; font-weight: bold; }
+
+        /* Grille : Gauche (Formulaire) | Droite (Liste) */
+        .config-grid { display: grid; grid-template-columns: 1fr 420px; gap: 2rem; flex-grow: 1; overflow: hidden; }
+        
+        /* Zones de Scroll */
+        .creation-zone { overflow-y: auto; padding-right: 10px; }
+        .list-zone { background-color: #202225; border-radius: 8px; padding: 1.2rem; overflow-y: auto; border: 1px solid #2f3136; }
+
+        /* Cartes */
+        .card { background-color: #2c2f33; border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .mini-card { background-color: #2f3136; padding: 12px; border-radius: 6px; margin-bottom: 12px; border-left: 4px solid #7289da; transition: 0.2s; }
+        .mini-card:hover { background-color: #35393e; }
+        
+        /* Formulaires */
+        label { display: block; color: #7289da; font-size: 0.85rem; font-weight: bold; margin-bottom: 5px; margin-top: 12px; }
+        input, select, textarea { width: 100%; background-color: #23272a; border: 1px solid #202225; color: #dcddde; padding: 10px; border-radius: 4px; font-family: inherit; font-size: 0.95rem; }
+        textarea { resize: none; }
+        
+        /* Tags cliquables */
+        .tag-container { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 15px; background: #18191c; padding: 10px; border-radius: 6px; border: 1px solid #2f3136; }
+        .tag { background: #2f3136; border: 1px solid #4f545c; color: #7289da; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; transition: 0.2s; }
+        .tag:hover { border-color: #7289da; color: #fff; background: #3a3e44; }
+
+        /* Boutons */
+        .btn { padding: 10px 15px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; font-family: inherit; transition: 0.2s; }
+        .btn-add { background-color: #7289da; color: white; width: 100%; margin-top: 20px; font-size: 1.1rem; }
+        .btn-add:hover { background-color: #5b70be; }
+        
+        .btn-icon { background: none; border: none; cursor: pointer; font-size: 1.1rem; color: #b9bbbe; padding: 5px; }
+        .btn-icon:hover { color: #fff; }
+        .btn-edit:hover { color: #faa61a; }
+        .btn-delete:hover { color: #f04747; }
+        
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+
+        /* Scrollbar Design */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #23272a; }
+        ::-webkit-scrollbar-thumb { background: #18191c; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #7289da; }
+    </style>
+</head>
+<body>
+
+{% include 'sidebar.html' %}
+
+<main class="content">
+    <header>
+        <h1 id="form-title">Gestionnaire d'Annonces</h1>
+        <div class="current-time" id="clock">00:00</div>
+    </header>
+
+    <div class="config-grid">
+        <div class="creation-zone">
+            <div class="card">
+                <h2 style="color:#fff; margin-bottom:15px;" id="title-action">➕ Créer une annonce</h2>
+                
+                <input type="hidden" id="ann-id" value=""> 
+                
+                <label>Nom de l'annonce (Admin)</label>
+                <input type="text" id="ann-label" placeholder="Ex: Rappel Discord">
+                
+                <label>Message à envoyer (Tags supportés)</label>
+                <textarea id="ann-template" rows="5" placeholder="Écrivez votre message ici..."></textarea>
+                
+                <div class="row">
+                    <div>
+                        <label>Déclencheur</label>
+                        <select id="ann-trigger">
+                            <option value="interval">Intervalle (Minutes)</option>
+                            <option value="stream_start">Début de Stream</option>
+                            <option value="stream_end">Fin de Stream</option>
+                            <option value="once">Une seule fois</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Valeur (Min / Session)</label>
+                        <input type="number" id="ann-interval" value="30">
+                    </div>
+                </div>
+
+                <label>Groupe (Rotation)</label>
+                <input type="text" id="ann-group" placeholder="Laisser vide pour Solo">
+
+                <div class="tag-container">
+                    <b style="width:100%; font-size:0.7rem; margin-bottom:8px; color:#7289da; text-transform:uppercase; letter-spacing:1px;">Tags Disponibles :</b>
+                    <span class="tag" onclick="insertTag('{viewers}')">{viewers}</span>
+                    <span class="tag" onclick="insertTag('{difference}')">{difference}</span>
+                    <span class="tag" onclick="insertTag('{game}')">{game}</span>
+                    <span class="tag" onclick="insertTag('{top5}')">{top5}</span>
+                    <span class="tag" onclick="insertTag('{uptime}')">{uptime}</span>
+                    <span class="tag" onclick="insertTag('{total_viewers}')">{total_viewers}</span>
+                    <span class="tag" onclick="insertTag('{shoutout}')">{shoutout}</span>
+                </div>
+
+                <button class="btn btn-add" id="main-btn" onclick="save()">SAUVEGARDER ET RANGER 📥</button>
+                <button id="cancel-btn" style="display:none; width:100%; margin-top:10px; background:none; border:1px solid #4f545c; color:#b9bbbe; padding:8px; border-radius:4px; cursor:pointer;" onclick="resetForm()">Annuler la modification</button>
+            </div>
+        </div>
+
+        <div class="list-zone">
+            <h2 style="color:#fff; font-size:1rem; margin-bottom:15px; border-bottom:1px solid #2f3136; padding-bottom:10px; display:flex; align-items:center; gap:10px;">
+                📋 Annonces Enregistrées
+            </h2>
+            <div id="active-list">
+                </div>
+        </div>
+    </div>
+</main>
+
+<script>
+    function clock() { 
+        document.getElementById('clock').textContent = new Date().toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'}); 
+    }
+    setInterval(clock, 1000); 
+    clock();
+
+    let allAnnouncements = [];
+
+    // Charger la liste depuis l'API
+    function load() {
+        fetch('/api/announcements')
+        .then(r => r.json())
+        .then(data => {
+            allAnnouncements = data;
+            const cont = document.getElementById('active-list');
+            if(data.length === 0) { 
+                cont.innerHTML = '<p style="text-align:center; opacity:0.4; margin-top:40px; font-style:italic;">Aucune annonce enregistrée.</p>'; 
+                return; 
+            }
+            
+            cont.innerHTML = data.map(a => `
+                <div class="mini-card">
+                    <div style="display:flex; justify-content:space-between; align-items:start;">
+                        <b style="color:#fff; font-size:0.9rem;">${a.label}</b>
+                        <div style="display:flex; gap:5px;">
+                            <button class="btn-icon btn-edit" onclick="editAnn(${a.id})" title="Modifier">✏️</button>
+                            <button class="btn-icon btn-delete" onclick="delAnn(${a.id})" title="Supprimer">🗑️</button>
+                        </div>
+                    </div>
+                    <div style="font-size:0.75rem; color:#b9bbbe; margin:6px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        ${a.message_template}
+                    </div>
+                    <div style="font-size:0.7rem; color:#7289da; display:flex; gap:12px; font-weight:bold;">
+                        <span>⏱️ ${a.interval_minutes}m</span>
+                        <span>📁 ${a.group_name || 'Solo'}</span>
+                        <span style="text-transform:uppercase;">⚡ ${a.trigger_type}</span>
+                    </div>
+                </div>
+            `).join('');
+        })
+        .catch(err => console.error("Erreur chargement:", err));
+    }
+
+    // Sauvegarder
+    function save() {
+        const payload = {
+            id: document.getElementById('ann-id').value || null,
+            label: document.getElementById('ann-label').value || "Sans titre",
+            message_template: document.getElementById('ann-template').value,
+            trigger_type: document.getElementById('ann-trigger').value,
+            interval_minutes: parseInt(document.getElementById('ann-interval').value),
+            group_name: document.getElementById('ann-group').value,
+            is_enabled: 1
+        };
+
+        if(!payload.message_template) { 
+            alert("⚠️ Le message est vide !"); 
+            return; 
+        }
+
+        fetch('/api/announcements/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === "success") {
+                resetForm();
+                load();
+            }
+        })
+        .catch(err => alert("Erreur lors de la sauvegarde"));
+    }
+
+    // Editer une annonce existante
+    function editAnn(id) {
+        const ann = allAnnouncements.find(a => a.id === id);
+        if(!ann) return;
+
+        document.getElementById('ann-id').value = ann.id;
+        document.getElementById('ann-label').value = ann.label;
+        document.getElementById('ann-template').value = ann.message_template;
+        document.getElementById('ann-trigger').value = ann.trigger_type;
+        document.getElementById('ann-interval').value = ann.interval_minutes;
+        document.getElementById('ann-group').value = ann.group_name || "";
+
+        document.getElementById('title-action').textContent = "✏️ Modifier l'annonce";
+        document.getElementById('main-btn').textContent = "METTRE À JOUR ✅";
+        document.getElementById('cancel-btn').style.display = "block";
+        
+        document.querySelector('.creation-zone').scrollTop = 0;
+    }
+
+    // Reset formulaire
+    function resetForm() {
+        document.getElementById('ann-id').value = "";
+        document.getElementById('ann-label').value = "";
+        document.getElementById('ann-template').value = "";
+        document.getElementById('ann-interval').value = "30";
+        document.getElementById('ann-group').value = "";
+        document.getElementById('ann-trigger').value = "interval";
+        
+        document.getElementById('title-action').textContent = "➕ Créer une annonce";
+        document.getElementById('main-btn').textContent = "SAUVEGARDER ET RANGER 📥";
+        document.getElementById('cancel-btn').style.display = "none";
+    }
+
+    // Supprimer
+    function delAnn(id) {
+        if(confirm("🗑️ Supprimer cette annonce définitivement ?")) {
+            fetch('/api/announcements/delete/'+id, { method: 'DELETE' })
+            .then(() => load());
+        }
+    }
+
+    // Insérer tag à la position du curseur
+    function insertTag(tag) {
+        const area = document.getElementById('ann-template');
+        const start = area.selectionStart;
+        const end = area.selectionEnd;
+        const text = area.value;
+        area.value = text.substring(0, start) + tag + text.substring(end);
+        area.focus();
+        area.selectionStart = area.selectionEnd = start + tag.length;
+    }
+
+    // Premier chargement
+    window.onload = load;
+</script>
+</body>
+</html>

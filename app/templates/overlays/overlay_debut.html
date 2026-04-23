@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Stream Debut - Sobriété Professionnelle</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700&display=swap" rel="stylesheet"> 
+    
+</head>
+<body>
+    <div class="container">
+        
+        <div class="celestial-glow"></div>
+        <div class="celestial-glow"></div>
+        <div class="celestial-glow"></div>
+        <div class="celestial-glow"></div>
+
+        <div class="main-content-block">
+            <div class="header-content">
+                <h1>DÉBUT DU STREAM IMMINENT</h1>
+                <p>Installation en cours. Nous vous remercions de patienter.</p>
+            </div>
+
+            <div class="dots-container">
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+            </div>
+
+            <div id="countdown-box">
+                <div class="countdown-segment">
+                    <span id="min">00</span>
+                    <small>MINUTES</small>
+                </div>
+                <div class="countdown-segment">
+                    <span id="sec">00</span>
+                    <small>SECONDES</small>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    
+    <script>
+        // --- LOGIQUE DU COMPTE À REBOURS ---
+        const urlParams = new URLSearchParams(window.location.search);
+        let durationMinutes = parseInt(urlParams.get('duration')) || 5; 
+
+        const targetDuration = durationMinutes * 60 * 1000;
+        const startTime = Date.now();
+        const endTime = startTime + targetDuration;
+        
+        const minDisplay = document.getElementById('min');
+        const secDisplay = document.getElementById('sec');
+        const mainTextParagraph = document.querySelector('.header-content p');
+        const titleText = document.querySelector('.header-content h1');
+        const countdownBox = document.getElementById('countdown-box');
+        const dotsContainer = document.querySelector('.dots-container');
+
+        function updateCountdown() {
+            const now = Date.now();
+            let remainingTime = endTime - now;
+
+            if (remainingTime < 0) {
+                remainingTime = 0;
+            }
+
+            const totalSeconds = Math.floor(remainingTime / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+
+            minDisplay.innerText = String(minutes).padStart(2, '0');
+            secDisplay.innerText = String(seconds).padStart(2, '0');
+            
+            if (remainingTime <= 0) {
+                 titleText.innerText = "LIVE EN COURS !";
+                 mainTextParagraph.innerText = "C'est parti. Bon visionnage à tous.";
+                 countdownBox.style.opacity = 0;
+                 dotsContainer.style.opacity = 0;
+                 minDisplay.style.animation = '';
+                 secDisplay.style.animation = '';
+                 clearInterval(countdownInterval);
+            } else if (remainingTime < 60000 && remainingTime > 0) { 
+                if (minDisplay.style.animation !== 'flashRed 0.5s infinite alternate') {
+                    minDisplay.style.animation = 'flashRed 0.5s infinite alternate';
+                    secDisplay.style.animation = 'flashRed 0.5s infinite alternate';
+                }
+            } else {
+                if (minDisplay.style.animation !== '') {
+                    minDisplay.style.animation = '';
+                    secDisplay.style.animation = '';
+                }
+            }
+        }
+
+        const countdownInterval = setInterval(updateCountdown, 1000);
+        updateCountdown(); 
+    </script>
+</body>
+</html>

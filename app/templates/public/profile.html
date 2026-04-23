@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mon Profil - FEL-X</title>
+    <style>
+        :root { --bg: #18181b; --surface: #27272a; --border: #3f3f46; --text: #f4f4f5; --text-dim: #a1a1aa; --accent: #00f5c3; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; }
+        main { padding: 2rem; margin-left: 240px; min-height: 100vh; }
+        
+        .sidebar { position: fixed; top: 0; left: 0; width: 240px; height: 100vh; background: var(--surface); border-right: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; }
+        .sidebar .logo-link { display: flex; align-items: center; gap: 10px; text-decoration: none; color: white; font-size: 1.5rem; font-weight: bold; margin-bottom: 30px; }
+        .sidebar .nav-link { color: var(--text-dim); text-decoration: none; padding: 10px 0; font-weight: 600; transition: 0.2s; }
+        .sidebar .nav-link.active { color: var(--accent); }
+        .sidebar .nav-link:hover { color: white; }
+        .sidebar .logout { color: #f87171; margin-top: auto; padding-bottom: 20px; }
+        
+        .profile-header { display: flex; align-items: center; gap: 25px; margin-bottom: 2rem; background: var(--surface); padding: 1.5rem 2rem; border-radius: 12px; border: 1px solid var(--border); position: relative; }
+        .profile-header::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--accent); border-radius: 12px 0 0 12px; }
+        #username { color: white; margin: 0; font-size: 2rem; font-weight: 700; }
+        .avatar-large { width: 90px; height: 90px; border-radius: 50%; border: 3px solid var(--accent); object-fit: cover; }
+        
+        .stats-mini-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 2rem; }
+        .stat-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; text-align: center; }
+        .stat-title { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; margin-bottom: 8px; }
+        .stat-num { font-size: 1.5rem; font-weight: 700; color: white; }
+        
+        .xp-container { margin-bottom: 2rem; }
+        .xp-text { display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-dim); margin-bottom: 8px; }
+        .xp-bar-bg { width: 100%; height: 10px; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); overflow: hidden; }
+        .xp-fill { height: 100%; background: var(--accent); width: {{ progress }}%; transition: width 1s ease; }
+        
+        .id-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem; }
+        .id-title { color: var(--accent); font-weight: 700; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 10px; }
+        .id-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; }
+        .id-label { font-size: 0.7rem; text-transform: uppercase; color: var(--text-dim); }
+        .id-value { font-size: 0.95rem; color: white; border-bottom: 1px dashed var(--border); padding-bottom: 4px; }
+        
+        .history-list { list-style: none; padding: 0; margin: 0; }
+        .history-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-bottom: 1px solid var(--border); margin-bottom: 8px; border-radius: 8px; background: rgba(255,255,255,0.02); }
+        
+        @media (max-width: 800px) {
+            main { margin-left: 0 !important; padding: 1.5rem 1rem 100px 1rem !important; }
+            .sidebar { position: fixed; bottom: 0; top: auto; left: 0; width: 100%; height: 60px; flex-direction: row; justify-content: space-around; padding: 10px; border-right: none; border-top: 1px solid var(--border); z-index: 100; }
+            .sidebar .logo-link, .sidebar .logout { display: none; }
+            .profile-header { flex-direction: column; text-align: center; padding: 2rem 1rem; }
+            .stats-mini-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="sidebar">
+        <a href="/profile" class="logo-link">
+            <img src="/static/logo-felix.png" style="width:40px; border-radius:50%;" onerror="this.style.display='none'"> FEL-X
+        </a>
+        <a href="/profile" class="nav-link active">👤 Profil</a>
+        <a href="/felix" class="nav-link">🧠 Félix et moi</a>
+        <!-- On ajoute les classements ici plus tard -->
+        <a href="/logout" class="nav-link logout">Déconnexion</a>
+    </nav>
+
+    <main>
+        <div class="profile-header">
+            <img id="avatar" class="avatar-large" src="{{ avatar }}" alt="Avatar" onerror="this.src='https://static-cdn.jtvnw.net/user-default-pictures-uv/41780b5a-def8-11e9-94d9-784f43822e80-profile_image-70x70.png'">
+            <div style="flex-grow:1;">
+                <h1 id="username">{{ viewer.username }}</h1>
+                <div style="color:var(--text-dim); font-weight:bold;">Rang #{{ rank }}</div>
+            </div>
+        </div>
+
+        <div class="xp-container">
+            <div class="xp-text">
+                <span style="color:white; font-weight:bold;">NIVEAU {{ level }}</span>
+                <span>{{ "{:,}".format(viewer.points) }} / {{ "{:,}".format(next_xp) }} XP</span>
+            </div>
+            <div class="xp-bar-bg"><div class="xp-fill"></div></div>
+        </div>
+
+        <div class="stats-mini-grid">
+            <div class="stat-box"><div class="stat-title">Niveau</div><div class="stat-num">{{ level }}</div></div>
+            <div class="stat-box"><div class="stat-title">Watchtime</div><div class="stat-num">{{ watchtime_str }}</div></div>
+            <div class="stat-box"><div class="stat-title">XP Total</div><div class="stat-num">{{ "{:,}".format(viewer.points) }}</div></div>
+            <div class="stat-box"><div class="stat-title">Messages</div><div class="stat-num">{{ "{:,}".format(viewer.messages) }}</div></div>
+        </div>
+
+        <div class="id-card">
+            <div class="id-title">IDENTITÉ IA (FÉLIX)</div>
+            <div class="id-grid">
+                <div><span class="id-label">Surnom mémorisé</span><div class="id-value">{{ viewer.nickname_for_bot or 'Non défini' }}</div></div>
+                <div><span class="id-label">Vibe / Humeur</span><div class="id-value">{{ viewer.vibe or 'En cours d\'analyse...' }}</div></div>
+                <div><span class="id-label">Jeu de coeur</span><div class="id-value">{{ viewer.favorite_game or 'Aucun' }}</div></div>
+            </div>
+        </div>
+
+        <div class="id-card">
+            <div class="id-title">📜 Historique XP</div>
+            <ul class="history-list">
+                {% for log in history %}
+                <li class="history-item" style="border-left: 3px solid {{ log.color }};">
+                    <div>
+                        <div style="color: white; font-weight: 600;">
+                            <span style="margin-right: 5px;">{{ log.icon }}</span>
+                            {{ log.date }} : {{ log.label|capitalize }}
+                        </div>
+                        <small style="color: #64748b;">{{ log.time }}</small>
+                    </div>
+                    <div style="font-weight: 900; color: {{ log.color }}; font-family: monospace; font-size: 1.1rem;">
+                        +{{ "{:,}".format(log.amount) }}
+                    </div>
+                </li>
+                {% else %}
+                <li class="history-item" style="color:var(--text-dim); justify-content:center;">Aucune activité récente. Parle dans le chat !</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </main>
+</body>
+</html>

@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <meta charset="UTF-8" />
+    <title>MasthomBot - Viewers & Classement XP</title>
+    <style>
+        /* --- Styles de Base (Inchangés) --- */
+        
+		/* Navigation Latérale */
+		
+
+		
+
+		
+
+		
+
+		
+        main.content { flex-grow: 1; padding: 2rem 3rem; overflow-y: auto; }
+        h1 { font-weight: 700; font-size: 2.2rem; margin-bottom: 2rem; color: #fff; }
+        .flash { padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; font-weight: 600; color: #fff; border: 1px solid transparent; }
+        .flash.success { background-color: #28a745; border-color: #238b3a; }
+        .flash.error { background-color: #dc3545; border-color: #b02a37; }
+        .flash.warning { background-color: #ffc107; border-color: #d39e00; color: #1f2123; }
+
+        /* --- NOUVELLE GRILLE DE PAGE --- */
+        .page-grid-layout { 
+            display: grid; 
+            grid-template-columns: 350px 1fr; /* Colonne latérale fixe, puis contenu principal */
+            gap: 2rem; 
+            align-items: start; 
+        }
+
+        /* --- Styles des Cartes --- */
+        .card { background-color: #2c2f33; border-radius: 8px; border: 1px solid #40444b; margin-bottom: 1.5rem; }
+        .card-header { display: flex; align-items: center; gap: 0.8rem; padding: 1.2rem 1.5rem; border-bottom: 1px solid #40444b; }
+        .card-header h2 { font-size: 1.4rem; color: #fff; }
+        .card-body { padding: 1.5rem; }
+        .form-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        label { font-weight: 600; font-size: 1rem; color: #b9bbbe; }
+        input[type="text"], input[type="number"] { width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid #40444b; background-color: #23272a; color: #dcddde; font-size: 1rem; }
+        .btn-primary { background-color: #7289da; color: #fff; border: none; padding: 12px 20px; font-weight: 600; font-size: 1rem; border-radius: 6px; cursor: pointer; width: 100%; margin-top: 1rem; }
+        .card-footer { padding: 1.2rem 1.5rem; background-color: rgba(0,0,0,0.1); border-top: 1px solid #40444b; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; }
+        .footer-note { font-size: 0.85rem; color: #8e9297; margin-top: 0.8rem; }
+
+
+        /* --- Styles Spécifiques à la Configuration XP --- */
+        .config-xp-grid { 
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1.5rem;
+        }
+        .config-xp-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+        .config-xp-item label {
+            font-weight: 600; font-size: 0.9rem; color: #8e9297;
+            text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .xp-manual-grid {
+            display: flex; flex-direction: row; gap: 1rem; align-items: flex-end;
+        }
+        .xp-manual-grid .form-group { flex-grow: 1; }
+        .xp-manual-grid button { width: auto; margin-top: 0; margin-bottom: 0px; }
+
+
+        /* --- Styles du Tableau de Classement --- */
+        .card-body-table { padding: 0; }
+        .leaderboard-table { width: 100%; border-collapse: collapse; }
+        .leaderboard-table th, .leaderboard-table td { padding: 0.9rem 1.5rem; text-align: left; border-bottom: 1px solid #40444b; font-size: 0.95rem; }
+        .leaderboard-table thead th { background-color: #36393f; color: #b9bbbe; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; font-size: 0.85rem; }
+        .leaderboard-table tbody tr:nth-child(even) { background-color: rgba(0,0,0,0.1); }
+        .leaderboard-table tbody tr:last-child td { border-bottom: none; }
+        .leaderboard-table tbody tr:hover { background-color: #3a3e44; }
+        .leaderboard-table td.rank { font-weight: 700; color: #8e9297; width: 60px; text-align: center; font-size: 0.9rem; }
+        .leaderboard-table .username { font-weight: 600; color: #fff; }
+        .leaderboard-table .level-value { color: #b9bbbe; }
+        .leaderboard-table .xp-value { color: #5865f2; font-weight: 600; }
+        .no-data { padding: 2rem; text-align: center; color: #8e9297; font-style: italic; }
+        
+    </style>
+</head>
+<body>
+{% include 'sidebar.html' %}
+    <main class="content">
+        <h1>Viewers & Classement XP</h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}{% for category, message in messages %}<div class="flash {{ category }}">{{ message }}</div>{% endfor %}{% endif %}
+        {% endwith %}
+
+        <div class="page-grid-layout">
+            
+            <div class="left-column">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Trouver un profil</h2>
+                    </div>
+                    <form action="#" method="GET">
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label for="query">Nom d'utilisateur ou ID</label>
+                                <input type="text" id="query" name="query" required>
+                            </div>
+                        </div>
+                        <div class="card-footer" style="padding: 1rem 1.5rem;">
+                             <button type="submit" class="btn-primary" style="margin: 0; width: 100%;">Rechercher</button>
+                        </div>
+                    </form>
+                </div>
+                
+                {% if viewer_data %}
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>Profil de {{ viewer_data.get('username') }}</h2>
+                        </div>
+                        <div class="card-body">
+                            <p style="margin-bottom: 0.5rem;"><strong style="color:#fff;">ID Twitch:</strong> <span style="color: #b9bbbe;">{{ viewer_data.get('id') }}</span></p>
+                            <p style="margin-bottom: 0.5rem;"><strong style="color:#fff;">Niveau:</strong> <span style="color: #7289da; font-weight: 700;">{{ viewer_data.get('level') }}</span></p>
+                            <p style="margin-bottom: 1rem;"><strong style="color:#fff;">XP Total:</strong> <span style="color: #5865f2; font-weight: 700;">{{ "{:,}".format(viewer_data.get('xp')).replace(",", " ") }} XP</span></p>
+
+                            <p style="border-top: 1px solid #40444b; padding-top: 1rem;">
+                                <strong style="color:#fff;">Statut de Suivi:</strong> 
+                                {% if is_followed %}
+                                    <span style="color: #28a745; font-weight: 600;">✅ Suit depuis le {{ follow_date }}</span>
+                                {% else %}
+                                    <span style="color: #dc3545; font-weight: 600;">❌ Ne suit pas (ou erreur API)</span>
+                                {% endif %}
+                            </p>
+                            
+                            {% if xp_history_data %}
+                                <p style="margin-top: 1rem;">
+                                    <strong style="color:#fff;">Historique XP:</strong> ({{ xp_history_data | length }} entrées)
+                                </p>
+                            {% endif %}
+
+                        </div>
+                    </div>
+                {% endif %}
+            </div> 
+            
+            <div class="right-column">
+
+                <div class="card" style="margin-top: 0;">
+                    <div class="card-header">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" /><path d="M12 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" /><path d="M6.168 18.849a4 4 0 0 1 3.832 -4.849h4a4 4 0 0 1 3.834 4.855" /></svg>
+                        <h2>Configurer les Gains d'XP</h2>
+                    </div>
+                    <form method="GET" action="#">
+                        <input type="hidden" name="action" value="update_xp_values">
+                        <div class="card-body config-xp-grid">
+                            
+                            <div class="config-xp-item">
+                                <label for="xp_per_message">XP par Message</label>
+                                <input type="number" id="xp_per_message" name="xp_per_message" value="{{ current_xp_values.XP_PER_MESSAGE }}" required>
+                            </div>
+                            <div class="config-xp-item">
+                                <label for="xp_cooldown_seconds">C.D Messages (sec)</label>
+                                <input type="number" id="xp_cooldown_seconds" name="xp_cooldown_seconds" value="{{ current_xp_values.XP_COOLDOWN_SECONDS }}" required>
+                            </div>
+                            
+                            <div class="config-xp-item">
+                                <label for="xp_for_sub_t1">XP par Sub/Resub (T1)</label>
+                                <input type="number" id="xp_for_sub_t1" name="xp_for_sub_t1" value="{{ current_xp_values.XP_FOR_SUB_T1 }}" required>
+                            </div>
+                            <div class="config-xp-item">
+                                <label for="xp_for_sub_t2">XP par Sub/Resub (T2)</label>
+                                <input type="number" id="xp_for_sub_t2" name="xp_for_sub_t2" value="{{ current_xp_values.XP_FOR_SUB_T2 }}" required>
+                            </div>
+                            <div class="config-xp-item">
+                                <label for="xp_for_sub_t3">XP par Sub/Resub (T3)</label>
+                                <input type="number" id="xp_for_sub_t3" name="xp_for_sub_t3" value="{{ current_xp_values.XP_FOR_SUB_T3 }}" required>
+                            </div>
+
+                            <div class="config-xp-item">
+                                <label for="xp_for_sub_gift_t1">XP Don Sub (T1/Prime)</label>
+                                <input type="number" id="xp_for_sub_gift_t1" name="xp_for_sub_gift_t1" value="{{ current_xp_values.XP_FOR_SUB_GIFT_T1 }}" required>
+                            </div>
+                            <div class="config-xp-item">
+                                <label for="xp_for_sub_gift_t2">XP Don Sub (T2)</label>
+                                <input type="number" id="xp_for_sub_gift_t2" name="xp_for_sub_gift_t2" value="{{ current_xp_values.XP_FOR_SUB_GIFT_T2 }}" required>
+                            </div>
+                            <div class="config-xp-item">
+                                <label for="xp_for_sub_gift_t3">XP Don Sub (T3)</label>
+                                <input type="number" id="xp_for_sub_gift_t3" name="xp_for_sub_gift_t3" value="{{ current_xp_values.XP_FOR_SUB_GIFT_T3 }}" required>
+                            </div>
+                            <div class="config-xp-item">
+                                <label for="xp_per_raider">XP par Viewer (Raid)</label>
+                                <input type="number" id="xp_per_raider" name="xp_per_raider" value="{{ current_xp_values.XP_PER_RAIDER }}" required>
+                            </div>
+                            <div class="config-xp-item">
+                                <label for="xp_per_bit">XP par Bit (Cheer)</label>
+                                <input type="number" id="xp_per_bit" name="xp_per_bit" value="{{ current_xp_values.XP_PER_BIT }}" required>
+                            </div>
+                            <div class="config-xp-item">
+                                <label for="xp_for_presence">XP Présence (par 1 min)</label> 
+                                <input type="number" id="xp_for_presence" name="xp_for_presence" value="{{ current_xp_values.XP_FOR_PRESENCE }}" required>
+                            </div>
+
+                        </div>
+                        <div class="card-footer">
+                            <button type="button" onclick="saveXPMatrix()" class="btn-primary" style="width: fit-content; margin: 0;">
+			        Sauvegarder les Barèmes
+			    </button>
+                            <p class="footer-note">Note : Ces valeurs sont sauvegardées dans data/xp_config.json.</p>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" /><path d="M12 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" /><path d="M6.168 18.849a4 4 0 0 1 3.832 -4.849h4a4 4 0 0 1 3.834 4.855" /></svg>
+                        <h2>Modifier l'XP d'un Viewer</h2>
+                    </div>
+                     <form method="POST" action="#">
+                        <input type="hidden" name="action" value="manual_update"> 
+                        <div class="card-body xp-manual-grid">
+                            <div class="form-group" style="width: 100%;">
+                                <label for="username_manual">Nom d'utilisateur Twitch</label>
+                                <input type="text" id="username_manual" name="username" required placeholder="Pseudo exact">
+                            </div>
+                            <div class="form-group" style="width: 150px; flex-grow: 0;">
+                                <label for="points_to_add">XP à ajouter</label>
+                                <input type="number" id="points_to_add" name="points_to_add" required placeholder="Ex: 100">
+                            </div>
+                            <button type="submit" class="btn-primary" style="height: 42px;">Appliquer</button>
+                        </div>
+                    </form>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🏆 Top des Viewers</h2>
+                    </div>
+                    <div class="card-body-table">
+                        
+<table class="leaderboard-table">
+    <thead>
+        <tr>
+            <th class="rank">Rang</th>
+            <th>Utilisateur</th>
+            <th>Niveau</th>
+            <th>XP Total</th>
+            <th style="text-align: center;">Action</th> </tr>
+    </thead>
+    <tbody>
+        {% for user in leaderboard_data %}
+        <tr id="row-{{ user.username|lower }}">
+            <td class="rank">#{{ loop.index }}</td>
+            <td class="username">
+               <a href="#" style="color: #fff; text-decoration: none; border-bottom: 1px solid transparent;" onmouseover="this.style.borderColor='#7289da'" onmouseout="this.style.borderColor='transparent'">
+               {{ user.username }}
+               </a>
+            </td>
+            <td class="level-value">{{ user.level }}</td>
+            <td class="xp-value">{{ "{:,}".format(user.xp).replace(",", " ") }} XP</td>
+            <td style="text-align: center; display: flex; gap: 15px; justify-content: center;">
+                <button onclick="resetUser('{{ user.username }}')" 
+                        style="background:none; border:none; color:#faa61a; cursor:pointer; font-size:1.1rem;" 
+                        title="Remettre à zéro (XP = 0)">🗑️</button>
+
+                <button onclick="deleteUser('{{ user.username }}')" 
+                        style="background:none; border:none; color:#f04747; cursor:pointer; font-weight:bold; font-size:1.2rem;" 
+                        title="Supprimer définitivement">✕</button>
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="5">
+                <div class="no-data">Aucune donnée d'XP... pour le moment !</div>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+                    </div>
+                </div>
+
+            </div> 
+        </div> 
+    </main>
+</body>
+
+<script>
+function saveXPMatrix() {
+    const data = {
+        "XP_PER_MESSAGE": document.getElementById('xp_per_message').value,
+        "XP_COOLDOWN_SECONDS": document.getElementById('xp_cooldown_seconds').value,
+        "XP_FOR_SUB_T1": document.getElementById('xp_for_sub_t1').value,
+        "XP_FOR_SUB_T2": document.getElementById('xp_for_sub_t2').value,
+        "XP_FOR_SUB_T3": document.getElementById('xp_for_sub_t3').value,
+        "XP_FOR_SUB_GIFT_T1": document.getElementById('xp_for_sub_gift_t1').value,
+        "XP_FOR_SUB_GIFT_T2": document.getElementById('xp_for_sub_gift_t2').value,
+        "XP_FOR_SUB_GIFT_T3": document.getElementById('xp_for_sub_gift_t3').value,
+        "XP_PER_RAIDER": document.getElementById('xp_per_raider').value,
+        "XP_PER_BIT": document.getElementById('xp_per_bit').value,
+        "XP_FOR_PRESENCE": document.getElementById('xp_for_presence').value
+    };
+
+    fetch('/api/xp/save_config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(res => {
+        if (res.status === "success") {
+            alert("✅ Matrice enregistrée avec succès !");
+            window.location.reload();
+        } else {
+            alert("❌ Erreur : " + res.message);
+        }
+    })
+    .catch(err => alert("❌ Erreur de connexion au serveur."));
+}
+
+// FONCTION POUR REMETTRE À ZÉRO (POUBELLE)
+function resetUser(username) {
+    if (!confirm(`Voulez-vous vraiment remettre l'XP de ${username} à zéro ?`)) return;
+
+    fetch(`/api/viewer/reset/${username}`, { method: 'POST' })
+    .then(response => {
+        if (response.ok) {
+            alert(`L'XP de ${username} a été remise à zéro.`);
+            window.location.reload(); // Recharge la page pour voir les 0
+        } else {
+            alert("Erreur lors du reset (Vérifiez que la route POST existe dans main.py)");
+        }
+    })
+    .catch(err => alert("Erreur de connexion au serveur."));
+}
+
+// FONCTION POUR SUPPRIMER DÉFINITIVEMENT (CROIX)
+function deleteUser(username) {
+    if (!confirm(`⚠️ SUPPRESSION TOTALE : Supprimer définitivement ${username} ?`)) return;
+
+    fetch(`/api/viewer/delete/${username}`, { method: 'DELETE' })
+    .then(response => {
+        if (response.ok) {
+            const row = document.getElementById(`row-${username.toLowerCase()}`);
+            if (row) {
+                row.style.transition = "all 0.4s ease";
+                row.style.opacity = "0";
+                row.style.transform = "translateX(50px)";
+                setTimeout(() => row.remove(), 400);
+            }
+        } else {
+            alert("Erreur lors de la suppression (Vérifiez que la route DELETE existe dans main.py)");
+        }
+    })
+    .catch(err => alert("Erreur de connexion au serveur."));
+}
+</script>
+</html>

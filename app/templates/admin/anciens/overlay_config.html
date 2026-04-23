@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/common.css') }}">
+    <meta charset="UTF-8" />
+    <title>MasthomBot - Studio Générique</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+
+    <style>
+        /* ==================== STYLE GÉNÉRAL ==================== */
+    <style>
+        /* RESET & BASE */
+        
+
+        /* SIDEBAR */        
+        
+
+        
+        nav.sidebar span {
+            line-height: normal;
+        }
+
+        
+
+        
+
+        
+        
+        /* ==================== CONTENU ==================== */
+        main.content { flex-grow: 1; padding: 2rem; overflow-y: auto; }
+        
+        h1 { font-weight: 700; font-size: 2.2rem; margin-bottom: 2rem; color: #fff; }
+
+        .card-custom { 
+            background-color: #2c2f33; 
+            border: 1px solid #40444b; 
+            padding: 1.5rem; 
+            border-radius: 8px; 
+            margin-bottom: 1.5rem; 
+            color: #ffffff; 
+        }
+        
+        /* Formulaires */
+        .form-control { background-color: #36393f; color: #ffffff; border-color: #40444b; }
+        .form-control:focus { background-color: #40444b; color: #ffffff; border-color: #7289da; box-shadow: none; }
+        input[type="text"], input[type="number"] { color: #ffffff !important; }
+        label { color: #ffffff !important; font-weight: 600; margin-bottom: 0.5rem; display:block; }
+        
+        /* DRAG & DROP */
+        .draggable-item {
+            background-color: #32353b;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            border: 1px solid #40444b;
+            cursor: grab;
+            transition: transform 0.1s;
+            /* Bordure gauche colorée par défaut */
+            border-left: 4px solid #7289da; 
+        }
+        .draggable-item:active { cursor: grabbing; border-color: #7289da; }
+        .drag-handle { cursor: grab; color: #ffffff; font-size: 1.5rem; padding: 0 10px; opacity: 0.7; }
+        .drag-handle:hover { opacity: 1; }
+
+        .badge-key { font-size: 0.75rem; background-color: #202225; color: #b9bbbe; padding: 4px 8px; border-radius: 4px; min-width: 80px; text-align: center; font-weight: bold; border: 1px solid #40444b;}
+        
+        /* Boutons */
+        .btn-warning { background-color: #f0ad4e; border: none; color: #fff; font-weight: 600; }
+        .btn-warning:hover { background-color: #ec971f; color: #fff; }
+        .btn-danger { background-color: #d9534f; border: none; }
+        .btn-danger:hover { background-color: #c9302c; }
+        .btn-primary { background-color: #7289da; border: none; font-weight:600; }
+        .btn-primary:hover { background-color: #5b6eae; }
+        .btn-success { background-color: #43b581; border: none; font-weight: 600; }
+        .btn-success:hover { background-color: #3ca374; }
+        
+        /* ==================== COULEURS PAR CATÉGORIE ==================== */
+        /* Chatters: Cyan */
+        .border-chatters { border-left-color: #17a2b8 !important; }
+        .text-chatters { color: #17a2b8 !important; }
+        .bg-chatters { background-color: rgba(23, 162, 184, 0.1) !important; border-color: #17a2b8 !important; }
+        
+        /* Followers: Violet Twitch */
+        .border-followers { border-left-color: #9146FF !important; }
+        .text-followers { color: #9146FF !important; }
+        .bg-followers { background-color: rgba(145, 70, 255, 0.1) !important; border-color: #9146FF !important; }
+
+        /* Subs: Or */
+        .border-subs { border-left-color: #FFD700 !important; }
+        .text-subs { color: #FFD700 !important; }
+        .bg-subs { background-color: rgba(255, 215, 0, 0.1) !important; border-color: #FFD700 !important; }
+        
+        /* Bits: Rouge */
+        .border-bits { border-left-color: #dc3545 !important; }
+        .text-bits { color: #dc3545 !important; }
+        .bg-bits { background-color: rgba(220, 53, 69, 0.1) !important; border-color: #dc3545 !important; }
+        
+        /* Raiders: Orange */
+        .border-raiders { border-left-color: #fd7e14 !important; }
+        .text-raiders { color: #fd7e14 !important; }
+        
+        /* Gifters: Vert */
+        .border-gifters { border-left-color: #28a745 !important; }
+        .text-gifters { color: #28a745 !important; }
+
+        /* VIPs: Rose */
+        .border-vips { border-left-color: #e83e8c !important; }
+        .text-vips { color: #e83e8c !important; }
+
+        /* Moderators: Teal */
+        .border-moderators { border-left-color: #20c997 !important; }
+        .text-moderators { color: #20c997 !important; }
+
+        /* ==================== STATS & PREVIEW ==================== */
+        .total-badge {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #202225;
+            border: 1px solid #40444b;
+            border-radius: 6px;
+            padding: 10px;
+            transition: all 0.2s;
+        }
+        .total-badge span { font-size: 0.8rem; text-transform: uppercase; font-weight: 600; opacity: 0.8; }
+        .total-badge strong { font-size: 1.6rem; font-weight: 700; }
+
+        .preview-list { max-height: 250px; overflow-y: auto; background: #202225; padding: 10px; border-bottom-left-radius: 6px; border-bottom-right-radius: 6px; border: 1px solid #2f3136; border-top: none; }
+        .preview-item { border-bottom: 1px solid #2f3136; padding: 8px 0; font-size: 0.95rem; display: flex; justify-content: space-between; color: #dcddde; }
+        .preview-empty { color: #72767d; font-style: italic; text-align: center; padding: 10px; }
+        .badge-count { background: #40444b; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem; }
+
+        /* Accordéon stylisé */
+        .accordion-item { background-color: transparent !important; border: none !important; margin-bottom: 10px; }
+        .accordion-button { 
+            background-color: #32353b !important; 
+            color: #fff !important; 
+            border: 1px solid #40444b; 
+            border-left-width: 5px; /* Bordure colorée à gauche */
+            box-shadow: none !important;
+            font-weight: 600;
+        }
+        .accordion-button:not(.collapsed) { background-color: #292b30 !important; }
+        .accordion-button::after { filter: invert(1); }
+
+    </style>
+</head>
+
+<body>
+
+{% include 'sidebar.html' %}
+
+<main class="content">
+    <h1 class="text-white">🎬 Studio Générique</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category == 'error' and 'danger' or category }} alert-dismissible fade show">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="row">
+        <div class="col-md-5">
+            <div class="card-custom" style="border-left: 5px solid #7289da;">
+                <h3 class="text-white h5">🛠️ Contrôle & Config</h3>
+                <div class="d-flex gap-2 mb-3">
+                    <form method="POST" action="#" class="flex-grow-1">
+                        <input type="hidden" name="action" value="generate_test">
+                        <button type="submit" class="btn btn-warning w-100 fw-bold">🧪 Générer Test</button>
+                    </form>
+                    <form method="POST" action="#" class="flex-grow-1">
+                        <input type="hidden" name="action" value="clear_data">
+                        <button type="submit" class="btn btn-danger w-100">🗑️ Vider</button>
+                    </form>
+                </div>
+                
+                <form method="POST" id="configForm" action="#">
+                    <input type="hidden" name="action" value="save_config">
+                    <input type="hidden" name="section_order" id="section_order">
+
+                    <div class="mb-3">
+                        <label>Titre Principal</label>
+                        <input type="text" name="main_title" class="form-control" value="{{ config.main_title }}">
+                    </div>
+                    <div class="mb-3">
+                        <label>Sous-titre</label>
+                        <input type="text" name="subtitle" class="form-control" value="{{ config.subtitle }}">
+                    </div>
+                    <div class="mb-3">
+                        <label>Durée (sec)</label>
+                        <input type="number" name="duration_seconds" class="form-control" value="{{ config.duration }}">
+                    </div>
+
+                    <hr class="border-secondary my-4">
+                    
+                    <h5 class="text-white mb-3">Ordre & Activation des Sections</h5>
+                    <div id="sections-list">
+                    {% for key, section in config.sections.items() %}
+                    <div class="draggable-item border-{{ key }}" data-id="{{ key }}">
+                            <span class="drag-handle">☰</span>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="enable_{{ key }}" {% if section.enabled %}checked{% endif %}>
+                            </div>
+                            <div style="flex-grow: 1;">
+                                <input type="text" name="title_{{ key }}" class="form-control form-control-sm" value="{{ section.title }}">
+                            </div>
+                            <span class="badge-key text-{{ key }}">{{ key|upper }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <button type="submit" class="btn btn-success w-100 mt-4 py-2 fw-bold">💾 Sauvegarder</button>
+                </form>
+                
+                <div class="mt-4 pt-3 border-top border-secondary">
+                    <a href="#" target="_blank" class="btn btn-primary w-100" style="background-color: #7289da;">
+                        ▶️ OUVRIR L'OVERLAY
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-7">
+            <div class="card-custom h-100">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3 class="text-white h5">📋 Historique des Événements Live</h3>
+                    <span class="badge bg-primary">Rafraîchissement Live</span>
+                </div>
+
+                <div class="row mb-4 g-2">
+                    <div class="col-3"><div class="total-badge bg-chatters"><span>Chatters</span><strong class="text-chatters" id="total-chatters">0</strong></div></div>
+                    <div class="col-3"><div class="total-badge bg-followers"><span>Followers</span><strong class="text-followers" id="total-followers">0</strong></div></div>
+                    <div class="col-3"><div class="total-badge bg-subs"><span>Subs</span><strong class="text-subs" id="total-sub-points">0</strong></div></div>
+                    <div class="col-3"><div class="total-badge bg-bits"><span>Bits</span><strong class="text-bits" id="total-bits">0</strong></div></div>
+                </div>
+
+                <div class="accordion accordion-flush" id="eventAccordion">
+                    {% for key, section in config.sections.items() %}
+                    <div class="accordion-item bg-dark mb-2 rounded">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed text-white shadow-none border-{{ key }}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ key }}">
+                                <span class="text-{{ key }} me-2">●</span> {{ section.title }} 
+                                {% set count = 0 %}
+                                {% if session_data.get(key) is iterable %}
+                                    {% set count = session_data[key]|length %}
+                                {% endif %}
+                                <span class="ms-auto badge-count">{{ count }}</span>
+                            </button>
+                        </h2>
+                        <div id="collapse{{ key }}" class="accordion-collapse collapse" data-bs-parent="#eventAccordion">
+                            <div class="accordion-body preview-list p-2">
+                                {% set event_list = session_data.get(key, []) %}
+                                {% if event_list %}
+                                    {% for item in event_list|reverse|slice(10) %}
+                                        <div class="preview-item">
+                                            {% if key == 'bits' %}
+                                                <span>{{ item.name|default('Anon') }}</span><span class="text-bits fw-bold">{{ item.amount|default(0) }} bits</span>
+                                            {% elif key == 'raiders' %}
+                                                <span>{{ item.name|default('Anon') }}</span><span class="text-raiders fw-bold">{{ item.viewers|default(0) }} viewers</span>
+                                            {% elif key == 'subscribers' or key == 'subs' %}
+                                                <span>{{ item.user|default('Anon') }}</span><span class="text-subs fw-bold">Sub</span>
+                                            {% elif key == 'gifters' %}
+                                                <span>{{ item.name|default('Anon') }}</span><span class="text-gifters fw-bold">x{{ item.count }}</span>
+                                            {% else %}
+                                                <span>
+                                                    {% if item is mapping %}
+                                                        {{ item.user|default(item.name)|default('Unknown') }}
+                                                    {% else %}
+                                                        {{ item }}
+                                                    {% endif %}
+                                                </span>
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <div class="preview-empty">Aucune donnée enregistrée.</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const API_LIVE_EVENTS_URL = "#";
+    
+    document.addEventListener("DOMContentLoaded", function() {
+        var el = document.getElementById('sections-list');
+        var hiddenInput = document.getElementById('section_order');
+        var form = document.getElementById('configForm');
+
+        // --- CORRECTION CRITIQUE SORTABLE.JS ---
+        if (typeof Sortable !== 'undefined' && el) {
+            try {
+                Sortable.create(el, {
+                    handle: '.drag-handle', // Poignée de glissement
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    onEnd: function () { updateOrder(); }
+                });
+                console.log("Sortable.js initialisé avec succès.");
+            } catch(e) {
+                console.error("Erreur Sortable.js:", e);
+            }
+        }
+
+        function updateOrder() {
+            var order = [];
+            document.querySelectorAll('#sections-list .draggable-item').forEach(function(item) {
+                order.push(item.getAttribute('data-id'));
+            });
+            hiddenInput.value = order.join(',');
+            console.log("Ordre mis à jour dans le champ caché:", hiddenInput.value);
+        }
+
+        // 1. On s'assure que l'ordre est initialisé
+        updateOrder();
+        
+        // 2. On s'assure que l'ordre est mis à jour JUSTE avant l'envoi du formulaire
+        form.addEventListener('submit', function(e) { 
+            updateOrder(); // Met à jour l'ordre une dernière fois
+            // Note: Le formulaire continuera sa soumission après l'exécution de cette fonction.
+        });
+        
+        // --- Logique d'affichage en direct des stats (inchangée) ---
+        refreshLiveData();
+        setInterval(refreshLiveData, 5000); 
+    });
+
+        function updateOrder() {
+            var order = [];
+            document.querySelectorAll('#sections-list .draggable-item').forEach(function(item) {
+                order.push(item.getAttribute('data-id'));
+            });
+            hiddenInput.value = order.join(',');
+        }
+
+        form.addEventListener('submit', function() { updateOrder(); });
+        updateOrder();
+        
+        refreshLiveData();
+        setInterval(refreshLiveData, 5000); 
+    });
+
+    async function refreshLiveData() {
+        try {
+            const response = await fetch(API_LIVE_EVENTS_URL);
+            const data = await response.json();
+
+            if (document.getElementById('total-chatters')) document.getElementById('total-chatters').textContent = data.chatters ? data.chatters.length : 0;
+            if (document.getElementById('total-followers')) document.getElementById('total-followers').textContent = data.followers ? data.followers.length : 0;
+            if (document.getElementById('total-sub-points')) document.getElementById('total-sub-points').textContent = data.subs ? data.subs.length : 0;
+            if (document.getElementById('total-bits')) document.getElementById('total-bits').textContent = data.bits ? data.bits.length : 0;
+            if (document.getElementById('total-tips')) document.getElementById('total-tips').textContent = data.tips ? data.tips.length : 0;
+
+            const accordion = document.getElementById('eventAccordion');
+            if (accordion) {
+                Object.keys(data).forEach(key => {
+                    const eventArray = data[key];
+                    let targetKey = key;
+                    if (key === 'subscribers') targetKey = 'subs';
+
+                    const sectionButton = document.querySelector(`[data-bs-target="#collapse${targetKey}"]`);
+                    
+                    if (sectionButton && eventArray && Array.isArray(eventArray)) {
+                        const countSpan = sectionButton.querySelector('.badge-count');
+                        if (countSpan) countSpan.textContent = eventArray.length;
+                        
+                        const listBody = document.querySelector(`#collapse${targetKey} .preview-list`);
+                        if (listBody) {
+                            listBody.innerHTML = ''; 
+                            if (eventArray.length === 0) {
+                                listBody.innerHTML = '<div class="preview-empty">Aucune donnée enregistrée.</div>';
+                                return;
+                            }
+                            
+                            const recentEvents = eventArray.slice().reverse().slice(0, 10); 
+                            
+                            recentEvents.forEach(item => {
+                                let content = '';
+                                if (key === 'bits') {
+                                    content = `<span>${item.name || 'Anon'}</span><span class="text-bits fw-bold">${item.amount || 0} bits</span>`;
+                                } else if (key === 'raiders') {
+                                    content = `<span>${item.name || 'Anon'}</span><span class="text-raiders fw-bold">${item.viewers || 0} viewers</span>`;
+                                } else if ((key === 'subscribers' || key === 'subs') && item.tier) { 
+                                    content = `<span>${item.user || 'Anon'}</span><span class="text-subs fw-bold">Sub</span>`;
+                                } else if (key === 'gifters') {
+                                    content = `<span>${item.name || 'Anon'}</span><span class="text-gifters fw-bold">x${item.count}</span>`;
+                                } else {
+                                    let name = item;
+                                    if (typeof item === 'object') name = item.user || item.name || 'Unknown';
+                                    content = `<span>${name}</span>`;
+                                }
+                                listBody.innerHTML += `<div class="preview-item">${content}</div>`;
+                            });
+                        }
+                    }
+                });
+            }
+        } catch (error) { console.error("Erreur refresh:", error); }
+    }
+</script>
+</body>
+</html>

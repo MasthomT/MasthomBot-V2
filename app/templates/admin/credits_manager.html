@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Studio Générique - MasthomBot</title>
+    
+    <!-- On utilise Tailwind comme le reste du panel Admin -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Script pour le glisser-déposer -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #6366f1; outline: none; ring: 2px ring-indigo-500; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        
+        /* Style fantôme quand on déplace un bloc */
+        .ghost { opacity: 0.4; background-color: #0f172a !important; border: 2px dashed #64748b !important; }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen overflow-hidden">
+
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 md:p-10 overflow-y-auto custom-scrollbar h-screen">
+        
+        <header class="mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">Studio Générique</h1>
+                <p class="text-slate-400 mt-1">Configurez l'écran de fin de live et l'ordre des remerciements.</p>
+            </div>
+            
+            <div class="flex flex-wrap items-center gap-3">
+                <button onclick="generateTestData()" class="bg-amber-500/10 text-amber-400 hover:bg-amber-500 hover:text-white px-4 py-2 rounded-xl font-bold text-xs border border-amber-500/20 transition-all flex items-center gap-2">
+                    <i class="fas fa-flask"></i> TESTER
+                </button>
+                <button onclick="clearData()" class="bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white px-4 py-2 rounded-xl font-bold text-xs border border-rose-500/20 transition-all flex items-center gap-2">
+                    <i class="fas fa-trash"></i> VIDER LA LISTE
+                </button>
+                <a href="/overlay/credits" target="_blank" class="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-xl font-black text-xs shadow-lg shadow-indigo-500/20 transition-all flex items-center gap-2 active:scale-95">
+                    <i class="fas fa-play"></i> LANCER L'OVERLAY
+                </a>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+            
+            <!-- COLONNE GAUCHE : CONFIGURATION (5/12) -->
+            <div class="xl:col-span-5 space-y-6">
+                <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl h-fit">
+                    <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-6">
+                        <i class="fas fa-cog text-indigo-400 text-lg"></i> Réglages Visuels
+                    </h2>
+                    
+                    <div class="space-y-5">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-widest">Titre Principal</label>
+                            <input type="text" id="titleInput" class="w-full input-dark rounded-xl p-4 text-sm" placeholder="MERCI !">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-widest">Sous-titre (Fin de générique)</label>
+                            <input type="text" id="subtitleInput" class="w-full input-dark rounded-xl p-4 text-sm" placeholder="À BIENTÔT">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-widest">Durée du défilement (Secondes)</label>
+                            <input type="number" id="durationInput" class="w-full input-dark rounded-xl p-4 text-sm font-mono font-bold text-indigo-400" value="60">
+                        </div>
+                    </div>
+
+                    <div class="mt-8">
+                        <button onclick="saveConfig()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-3 active:scale-95">
+                            <i class="fas fa-save"></i> SAUVEGARDER RÉGLAGES
+                        </button>
+                        <div id="statusMessage" class="text-center mt-3 text-xs font-bold h-4"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- COLONNE DROITE : ORDRE DE PASSAGE (7/12) -->
+            <div class="xl:col-span-7 space-y-6">
+                <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl h-fit">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                            <i class="fas fa-sort-amount-down text-indigo-400 text-lg"></i> Ordre de Passage
+                        </h2>
+                        <span class="text-[10px] font-bold text-slate-500 bg-slate-900 px-3 py-1 rounded-full border border-slate-800 flex items-center gap-2">
+                            <i class="fas fa-arrows-alt-v"></i> Glisser-Déposer
+                        </span>
+                    </div>
+                    
+                    <div id="modules-container" class="space-y-3">
+                        <!-- Les blocs injectés par JS apparaîtront ici -->
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+<script>
+    // Configuration Tailwind des couleurs pour s'accorder avec le CSS du générique
+    const MODULES = {
+        'subscribers': { label: '🌟 Abonnés',           borderColor: 'border-amber-400', textColor: 'text-amber-400' },
+        'gifters':     { label: '🎁 Mécènes (Gifts)',   borderColor: 'border-emerald-400', textColor: 'text-emerald-400' },
+        'bits':        { label: '💎 Bits & Donations',  borderColor: 'border-rose-400', textColor: 'text-rose-400' },
+        'raiders':     { label: '🚀 Raids Reçus',       borderColor: 'border-orange-400', textColor: 'text-orange-400' },
+        'followers':   { label: '💙 Nouveaux Followers', borderColor: 'border-purple-400', textColor: 'text-purple-400' },
+        'moderators':  { label: '🛡️ Modérateurs',       borderColor: 'border-lime-400', textColor: 'text-lime-400' },
+        'vips':        { label: '⭐ VIPs (Guests)',      borderColor: 'border-pink-400', textColor: 'text-pink-400' },
+        'chatters':    { label: '💬 Chatters',          borderColor: 'border-cyan-400', textColor: 'text-cyan-400' },
+        'viewers':     { label: '👀 Viewers',           borderColor: 'border-slate-400', textColor: 'text-slate-400' }
+    };
+
+    const container = document.getElementById('modules-container');
+    const sortable = new Sortable(container, {
+        animation: 150,
+        ghostClass: 'ghost',
+        handle: '.item-header'
+    });
+
+    async function loadData() {
+        try {
+            const response = await fetch('/api/credits/data');
+            const result = await response.json();
+
+            if(result.config) {
+                const titleInp = document.getElementById('titleInput');
+                const subInp = document.getElementById('subtitleInput');
+                const durInp = document.getElementById('durationInput');
+
+                if (document.activeElement !== titleInp) titleInp.value = result.config.main_title || "";
+                if (document.activeElement !== subInp) subInp.value = result.config.subtitle || "";
+                if (document.activeElement !== durInp) durInp.value = result.config.duration || 60;
+            }
+
+            let order = (result.config && result.config.order) ? result.config.order : [];
+            
+            // Ajout des modules manquants s'il y en a
+            Object.keys(MODULES).forEach(key => {
+                if (!order.includes(key)) order.push(key);
+            });
+
+            container.innerHTML = '';
+            order.forEach(key => {
+                if (MODULES[key]) {
+                    const sectionData = (result.stats && result.stats[key]) ? result.stats[key] : [];
+                    renderModuleCard(key, MODULES[key], sectionData);
+                }
+            });
+        } catch (e) { console.error("Erreur chargement:", e); }
+    }
+
+    function renderModuleCard(key, config, items) {
+        const div = document.createElement('div');
+        div.className = `draggable-item bg-slate-900/50 rounded-2xl border border-slate-800 hover:border-indigo-500/30 transition-all cursor-grab active:cursor-grabbing border-l-4 ${config.borderColor}`;
+        div.setAttribute('data-key', key);
+
+        let previewHtml = '';
+        if (!items || items.length === 0) {
+            previewHtml = '<div class="text-slate-600 italic text-xs py-2 text-center">Aucune donnée capturée pour l\'instant.</div>';
+        } else {
+            items.forEach(item => {
+                const name = item.name || "Inconnu";
+                let label = item.label || "";
+                const cleanBadge = label.replace(/[🌟🚀💎🛡️🎁💬🕒]/g, '').trim();
+
+                previewHtml += `
+                    <div class="flex justify-between items-center py-1.5 border-b border-slate-800/50 last:border-0">
+                        <span class="text-sm font-bold text-slate-300">${name}</span>
+                        ${cleanBadge ? `<span class="bg-slate-800 text-white px-2 py-0.5 rounded text-[10px] font-bold border border-slate-700">${cleanBadge}</span>` : ''}
+                    </div>`;
+            });
+        }
+
+        div.innerHTML = `
+            <div class="item-header p-4 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <i class="fas fa-grip-lines text-slate-600"></i>
+                    <span class="font-black text-xs uppercase tracking-wider ${config.textColor}">${config.label}</span>
+                </div>
+                <span class="bg-slate-800 text-slate-300 text-xs font-black px-3 py-1 rounded-lg border border-slate-700">${items.length}</span>
+            </div>
+            <div class="preview-box mx-4 mb-4 p-3 bg-slate-950/50 rounded-xl border border-slate-800 max-h-[150px] overflow-y-auto custom-scrollbar">
+                ${previewHtml}
+            </div>
+        `;
+        container.appendChild(div);
+    }
+
+    async function saveConfig() {
+        const payload = {
+            main_title: document.getElementById('titleInput').value,
+            subtitle: document.getElementById('subtitleInput').value,
+            duration: parseInt(document.getElementById('durationInput').value),
+            order: Array.from(document.querySelectorAll('.draggable-item')).map(el => el.getAttribute('data-key'))
+        };
+
+        try {
+            const res = await fetch('/api/credits/config', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            if(res.ok) {
+                showStatus("✅ Configuration enregistrée !", "success");
+                loadData(); 
+            }
+        } catch(e) { showStatus("❌ Erreur de sauvegarde", "error"); }
+    }
+
+    async function generateTestData() {
+        if(!confirm("Injecter des données de test (Factices) ?")) return;
+        const res = await fetch('/api/credits/test', { method: 'POST' });
+        if(res.ok) { showStatus("🧪 Test généré !", "success"); loadData(); }
+    }
+
+    async function clearData() {
+        if(!confirm("⚠️ Attention : Vider le générique supprimera toutes les données de cette session. Continuer ?")) return;
+        const res = await fetch('/api/credits/reset', { method: 'POST' }); // Chemin corrigé selon ton api.py !
+        if(res.ok) { 
+            showStatus("✅ Base nettoyée !", "success"); 
+            setTimeout(() => location.reload(), 500); 
+        }
+    }
+
+    function showStatus(msg, type) {
+        const status = document.getElementById('statusMessage');
+        const colorClass = type === 'success' ? 'text-emerald-400' : 'text-rose-400';
+        status.innerHTML = `<span class="${colorClass}">${msg}</span>`;
+        setTimeout(() => status.innerHTML='', 3000);
+    }
+
+    document.addEventListener('DOMContentLoaded', loadData);
+    setInterval(loadData, 10000); // Actualisation toutes les 10s
+</script>
+
+</body>
+</html>
