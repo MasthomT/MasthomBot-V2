@@ -156,7 +156,7 @@ class MasthbotTwitch(commands.Bot):
         # 🎬 GÉNÉRIQUE DE FIN : LE TRI PARFAIT (MODO/VIP/CHATTER)
         # =========================================================
         # On vérifie les badges Twitch
-                badges = message.author.badges or {}
+        badges = message.author.badges or {}
         is_owner = username == self.channel_name
         is_mod = message.author.is_mod or ("moderator" in badges) or is_owner
         is_vip = message.author.is_vip or ("vip" in badges)

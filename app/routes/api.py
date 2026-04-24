@@ -1,5 +1,6 @@
 import sqlite3
 import logging
+import json
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -9,7 +10,7 @@ router = APIRouter(prefix="/api/v1", tags=["api"])
 DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
 
 # ==========================================================
-# 🛑 LISTE D'EXCLUSION GLOBALE (Bots, Streamer, Vestale)
+# 🛑 LISTE D'EXCLUSION GLOBALE
 # ==========================================================
 EXCLUSION_LIST = "('masthom_', 'felixthebigblackcat', 'vestale7', 'streamelements', 'wizebot', 'nightbot')"
 
@@ -19,153 +20,129 @@ def get_db():
     return conn
 
 # ==========================================================
-# 1. STATS GLOBALES (Pour stats.js sur Vercel)
+# 1. STATS GLOBALES (Pour stats.js)
 # ==========================================================
 @router.get("/global_stats")
 async def get_global_stats():
     conn = get_db()
     try:
-        # Totaux filtrés
         members = conn.execute(f"SELECT COUNT(*) FROM viewers WHERE LOWER(username) NOT IN {EXCLUSION_LIST}").fetchone()[0]
         total_xp = conn.execute(f"SELECT SUM(points) FROM viewers WHERE LOWER(username) NOT IN {EXCLUSION_LIST}").fetchone()[0] or 0
         max_lvl_xp = conn.execute(f"SELECT MAX(points) FROM viewers WHERE LOWER(username) NOT IN {EXCLUSION_LIST}").fetchone()[0] or 0
         
-        # Top 5 filtré
         top5_raw = conn.execute(f"SELECT username, points FROM viewers WHERE LOWER(username) NOT IN {EXCLUSION_LIST} ORDER BY points DESC LIMIT 5").fetchall()
         top5 = [dict(r) for r in top5_raw]
+
+        # --- NOUVEAU : CLASSEMENT OLYMPIQUE (Tri: First > Deuz > Troiz) ---
+        podium_raw = conn.execute(f"""
+            SELECT username, first_count, deuz_count, troiz_count 
+            FROM viewers 
+            WHERE LOWER(username) NOT IN {EXCLUSION_LIST} 
+            AND (first_count > 0 OR deuz_count > 0 OR troiz_count > 0)
+            ORDER BY first_count DESC, deuz_count DESC, troiz_count DESC 
+            LIMIT 15
+        """).fetchall()
+        podium_top = [dict(r) for r in podium_raw]
         
-        conn.close()
         return {
-            "total_members": members,
-            "total_xp": total_xp,
-            "max_xp": max_lvl_xp,
-            "top5": top5
+            "total_members": members, 
+            "total_xp": total_xp, 
+            "max_xp": max_lvl_xp, 
+            "top5": top5,
+            "podium_top": podium_top
         }
-    except Exception as e:
-        if conn: conn.close()
-        return JSONResponse(status_code=500, content={"error": str(e)})
+    finally:
+        conn.close()
 
 # ==========================================================
-# 2. LEADERBOARD (Pour leaderboard.js sur Vercel)
+# 2. LEADERBOARD
 # ==========================================================
 @router.get("/leaderboard")
 async def get_leaderboard():
     conn = get_db()
     try:
-        # On récupère TOUS les viewers SANS les exclus
         rows = conn.execute(f"SELECT username, points, watchtime FROM viewers WHERE LOWER(username) NOT IN {EXCLUSION_LIST} ORDER BY points DESC").fetchall()
-        conn.close()
-        
         result = []
         for r in rows:
             d = dict(r)
             xp = d.get('points', 0)
             d['level'] = max(1, int((xp / 100) ** (1 / 2.2))) if xp > 0 else 1
             result.append(d)
-            
         return result
-    except Exception as e:
-        if conn: conn.close()
-        return JSONResponse(status_code=500, content={"error": str(e)})
+    finally:
+        conn.close()
 
 # ==========================================================
-# 3. PROFIL INDIVIDUEL ET HISTORIQUE (Pour profile.html)
+# 3. PROFIL INDIVIDUEL
 # ==========================================================
 @router.get("/viewer/{twitch_id}")
 async def get_viewer_profile(twitch_id: str, username: str = None):
     conn = get_db()
     try:
         row = conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,)).fetchone()
-        
-        # ✅ LA VRAIE SOLUTION : On utilise le pseudo fourni par Twitch lors de la connexion web
         display_name = username if username else f"Visiteur_{twitch_id[:4]}"
 
         if not row:
-            # S'il n'a jamais parlé, on le crée DIRECTEMENT avec son VRAI nom
             conn.execute("INSERT INTO viewers (twitch_id, username, points, messages, watchtime) VALUES (?, ?, 0, 0, 0)", (twitch_id, display_name))
             conn.commit()
+            row = conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,)).fetchone()
         else:
-            # S'il s'appelait "Visiteur_" suite à ton test d'hier, on le corrige !
             if row['username'].startswith("Visiteur_") and username:
                 conn.execute("UPDATE viewers SET username = ? WHERE twitch_id = ?", (username, twitch_id))
                 conn.commit()
-
-        # On recharge la ligne pour avoir les données fraîches
-        row = conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,)).fetchone()
+                row = conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,)).fetchone()
+        
         viewer_data = dict(row)
+        actual_name = viewer_data.get('username', 'Inconnu')
 
-        # ✅ Mise à jour de la présence Web avec l'heure locale (PAS de spam dans le fil d'actu)
+        # ✅ FIX SQL DATE: Plus de variable python pour le datetime
         conn.execute("UPDATE viewers SET last_seen = datetime('now', 'localtime'), last_web_login = datetime('now', 'localtime') WHERE twitch_id = ?", (twitch_id,))
+        conn.execute(
+            "INSERT INTO stream_events (event_type, username, details, timestamp) VALUES (?, ?, ?, datetime('now', 'localtime'))",
+            ("web_login", actual_name, "🌐 Vient de se connecter sur son profil web")
+        )
         conn.commit()
 
         xp = viewer_data.get('points', 0)
         viewer_data['level'] = max(1, int((xp / 100) ** (1 / 2.2))) if xp > 0 else 1
-        
         rank = conn.execute(f"SELECT COUNT(*) FROM viewers WHERE points > ? AND LOWER(username) NOT IN {EXCLUSION_LIST}", (xp,)).fetchone()[0] + 1
         viewer_data['rank'] = rank
         
         history_list = []
-        
         settings_row = conn.execute("SELECT exp_per_message, exp_per_watchtime FROM settings WHERE id=1").fetchone()
-        exp_msg = settings_row['exp_per_message'] if settings_row and settings_row['exp_per_message'] is not None else 2
-        exp_wt = settings_row['exp_per_watchtime'] if settings_row and settings_row['exp_per_watchtime'] is not None else 5
+        exp_msg = settings_row['exp_per_message'] if settings_row else 2
+        exp_wt = settings_row['exp_per_watchtime'] if settings_row else 5
         
         today_stats = conn.execute("SELECT messages, watchtime FROM viewer_daily_stats WHERE twitch_id = ? AND day = date('now', 'localtime')", (twitch_id,)).fetchone()
         
         if today_stats:
-            msgs = today_stats['messages'] or 0
-            wt = today_stats['watchtime'] or 0
-            
-            if wt > 0:
-                wt_h = wt // 3600
-                wt_m = (wt % 3600) // 60
-                wt_str = f"{wt_h}h {wt_m}m" if wt_h > 0 else f"{wt_m} min"
-                wt_points = (wt // 60) * exp_wt
-                
+            if today_stats['watchtime'] > 0:
+                wt = today_stats['watchtime']
+                wt_str = f"{wt // 3600}h {(wt % 3600) // 60}m" if wt >= 3600 else f"{wt // 60} min"
                 history_list.append({
-                    "event_type": "PRÉSENCE (SESSION EN COURS)",
-                    "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    "date": "Aujourd'hui",
-                    "details": f"Temps passé sur le live : {wt_str}",
-                    "amount": wt_points,
-                    "icon": "⏱️",
-                    "color": "#10b981" 
+                    "event_type": "PRÉSENCE (LIVE)", "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    "date": "Aujourd'hui", "details": f"Session : {wt_str}", "amount": (wt // 60) * exp_wt,
+                    "icon": "⏱️", "color": "#10b981" 
                 })
-                
-            if msgs > 0:
-                msg_points = msgs * exp_msg
+            if today_stats['messages'] > 0:
                 history_list.append({
-                    "event_type": "ACTIVITÉ CHAT (SESSION EN COURS)",
-                    "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    "date": "Aujourd'hui",
-                    "details": f"{msgs} messages envoyés",
-                    "amount": msg_points,
-                    "icon": "💬",
-                    "color": "#0ea5e9"
+                    "event_type": "ACTIVITÉ CHAT", "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    "date": "Aujourd'hui", "details": f"{today_stats['messages']} messages envoyés", "amount": today_stats['messages'] * exp_msg,
+                    "icon": "💬", "color": "#0ea5e9"
                 })
 
         raw_history = conn.execute("SELECT * FROM viewer_exp_log WHERE twitch_id = ? ORDER BY timestamp DESC LIMIT 15", (twitch_id,)).fetchall()
         for r in raw_history:
             log = dict(r)
-            try:
-                dt = datetime.fromisoformat(log['timestamp'].replace(' ', 'T'))
-                d_str = dt.strftime('%d/%m/%Y')
-            except:
-                d_str = log['timestamp']
-                
             ev = log['event_type'].upper()
             icon, color = "✨", "#00f5c3"
-            if "BIT" in ev or "CHEER" in ev: icon, color = "💎", "#ffb300"
+            if any(x in ev for x in ["BIT", "CHEER"]): icon, color = "💎", "#ffb300"
             elif "RAID" in ev: icon, color = "⚔️", "#a855f7"
             elif "SUB" in ev: icon, color = "💜", "#9146ff"
 
             history_list.append({
-                "event_type": ev,
-                "amount": log['amount'],
-                "details": log['details'] or "Action standard",
-                "date": d_str,
-                "icon": icon,
-                "color": color
+                "event_type": ev, "amount": log['amount'], "details": log['details'] or "Action standard",
+                "date": log['timestamp'][:10].replace("-", "/"), "icon": icon, "color": color
             })
 
         viewer_data['history'] = history_list
@@ -174,15 +151,14 @@ async def get_viewer_profile(twitch_id: str, username: str = None):
         conn.close()
 
 # ==========================================================
-# 4. SAUVEGARDE DU FORMULAIRE IA (Pour felix.html)
+# 4. SAUVEGARDE FORMULAIRE IA
 # ==========================================================
 @router.post("/viewer/update_context")
 async def update_viewer_context(request: Request):
     try:
         data = await request.json()
         t_id = data.get("twitch_id")
-        if not t_id: 
-            raise HTTPException(status_code=400, detail="ID Twitch manquant")
+        if not t_id: raise HTTPException(status_code=400, detail="ID Twitch manquant")
         
         conn = get_db()
         conn.execute("""
@@ -201,23 +177,19 @@ async def update_viewer_context(request: Request):
             data.get("free_message"), int(data.get("roast_level") or 5), t_id
         ))
         conn.commit()
-        conn.close()
         return {"status": "success"}
-    except Exception as e:
-        logger.error(f"Erreur update_context: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+    finally:
+        conn.close()
 
 # ==========================================================
-# 5. SONDAGES (API pour le Widget Vercel)
+# 5. SONDAGES
 # ==========================================================
 @router.get("/poll/active")
 async def get_active_poll_api(twitch_id: str = None):
     conn = get_db()
     try:
         poll = conn.execute("SELECT * FROM polls WHERE is_active = 1 ORDER BY id DESC LIMIT 1").fetchone()
-        if not poll:
-            conn.close()
-            return {"active": False}
+        if not poll: return {"active": False}
 
         poll_dict = dict(poll)
         votes = conn.execute("SELECT option_index, COUNT(*) as count FROM poll_votes WHERE poll_id = ? GROUP BY option_index", (poll_dict['id'],)).fetchall()
@@ -233,35 +205,29 @@ async def get_active_poll_api(twitch_id: str = None):
             uv = conn.execute("SELECT option_index FROM poll_votes WHERE poll_id = ? AND twitch_id = ?", (poll_dict['id'], twitch_id)).fetchone()
             if uv: user_vote = str(uv['option_index'])
 
-        conn.close()
         return {
             "active": True, "id": poll_dict['id'], "question": poll_dict['question'],
             "options": {"1": poll_dict['option1'], "2": poll_dict['option2'], "3": poll_dict['option3'], "4": poll_dict['option4']},
             "results": results, "total_votes": total_votes, "user_vote": user_vote
         }
-    except Exception as e:
-        if conn: conn.close()
-        return JSONResponse(status_code=500, content={"error": str(e)})
+    finally:
+        conn.close()
 
 @router.post("/poll/vote")
 async def submit_vote_api(request: Request):
+    data = await request.json()
+    p_id, t_id, opt = data.get("poll_id"), data.get("twitch_id"), data.get("option_index")
+    if not all([p_id, t_id, opt]): return JSONResponse(status_code=400, content={"error": "Données manquantes"})
+    conn = get_db()
     try:
-        data = await request.json()
-        poll_id, t_id, opt_idx = data.get("poll_id"), data.get("twitch_id"), data.get("option_index")
-        
-        if not all([poll_id, t_id, opt_idx]):
-            return JSONResponse(status_code=400, content={"error": "Données manquantes"})
-            
-        conn = get_db()
-        conn.execute("INSERT INTO poll_votes (poll_id, twitch_id, option_index) VALUES (?, ?, ?) ON CONFLICT(poll_id, twitch_id) DO UPDATE SET option_index = excluded.option_index", (poll_id, t_id, opt_idx))
+        conn.execute("INSERT INTO poll_votes (poll_id, twitch_id, option_index) VALUES (?, ?, ?) ON CONFLICT(poll_id, twitch_id) DO UPDATE SET option_index = excluded.option_index", (p_id, t_id, opt))
         conn.commit()
-        conn.close()
         return {"status": "success"}
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+    finally:
+        conn.close()
 
 # ==========================================================
-# 6. FAQ & QUESTIONS (API pour le site web)
+# 6. FAQ
 # ==========================================================
 @router.post("/questions/ask")
 async def ask_question_api(request: Request):
@@ -280,8 +246,60 @@ async def ask_question_api(request: Request):
 async def get_faq_api():
     conn = get_db()
     try:
-        # ✅ FIX : On ne renvoie pas le pseudo original, tout le monde est 'Anonyme' en public
         rows = conn.execute("SELECT question_text, answer_text, answered_at FROM questions WHERE is_public = 1 AND answer_text IS NOT NULL ORDER BY answered_at DESC").fetchall()
         return [{"username": "Anonyme", "question_text": r["question_text"], "answer_text": r["answer_text"], "answered_at": r["answered_at"]} for r in rows]
     finally:
         conn.close()
+
+# ==========================================================
+# 7. STREAMERBOT (Récompenses First/Deuz/Troiz)
+# ==========================================================
+@router.post("/rewards/podium")
+async def claim_podium_reward(request: Request):
+    """
+    Endpoint appelé par StreamerBot avec le score EXACT stocké dans StreamerBot.
+    """
+    try:
+        data = await request.json()
+        t_id = data.get("twitch_id")
+        username = data.get("username")
+        reward_type = str(data.get("reward_type", "")).lower() # "first", "deuz", "troiz"
+        
+        # On récupère le chiffre dicté par StreamerBot !
+        count_val = data.get("count")
+
+        if not t_id or reward_type not in ["first", "deuz", "troiz"]:
+            return JSONResponse(status_code=400, content={"error": "Données invalides ou type de récompense non géré."})
+
+        conn = get_db()
+        try:
+            # Sécurité : Création du viewer s'il n'existe pas
+            conn.execute(
+                "INSERT INTO viewers (twitch_id, username, points, messages, watchtime) VALUES (?, ?, 0, 0, 0) "
+                "ON CONFLICT(twitch_id) DO UPDATE SET username = excluded.username", 
+                (t_id, username)
+            )
+            
+            col_name = f"{reward_type}_count"
+            
+            # Si StreamerBot nous envoie son chiffre, on l'applique !
+            if count_val is not None and str(count_val).strip().isdigit():
+                exact_count = int(str(count_val).strip())
+                conn.execute(f"UPDATE viewers SET {col_name} = ? WHERE twitch_id = ?", (exact_count, t_id))
+            else:
+                # Si jamais SB n'envoie pas le chiffre, on ajoute +1 manuellement pour sauver les meubles
+                conn.execute(f"UPDATE viewers SET {col_name} = {col_name} + 1 WHERE twitch_id = ?", (t_id,))
+            
+            # ✅ FIX SQL DATE : Plus de variable datetime python
+            conn.execute(
+                "INSERT INTO stream_events (event_type, username, details, timestamp) VALUES (?, ?, ?, datetime('now', 'localtime'))",
+                ("reward", username, f"🏆 A remporté le {reward_type.upper()} !")
+            )
+            
+            conn.commit()
+            return {"status": "success"}
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.error(f"❌ Erreur Podium Reward : {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
