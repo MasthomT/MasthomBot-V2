@@ -72,30 +72,44 @@ async def get_leaderboard():
 # 3. PROFIL INDIVIDUEL ET HISTORIQUE (Pour profile.html)
 # ==========================================================
 @router.get("/viewer/{twitch_id}")
-async def get_viewer_profile(twitch_id: str):
+async def get_viewer_profile(twitch_id: str, username: str = None):
     conn = get_db()
     try:
         row = conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,)).fetchone()
-        if not row:
-            conn.close()
-            raise HTTPException(status_code=404, detail="Viewer non trouvé")
         
+        # ✅ LA VRAIE SOLUTION : On utilise le pseudo fourni par Twitch lors de la connexion web
+        display_name = username if username else f"Visiteur_{twitch_id[:4]}"
+
+        if not row:
+            # S'il n'a jamais parlé, on le crée DIRECTEMENT avec son VRAI nom
+            conn.execute("INSERT INTO viewers (twitch_id, username, points, messages, watchtime) VALUES (?, ?, 0, 0, 0)", (twitch_id, display_name))
+            conn.commit()
+        else:
+            # S'il s'appelait "Visiteur_" suite à ton test d'hier, on le corrige !
+            if row['username'].startswith("Visiteur_") and username:
+                conn.execute("UPDATE viewers SET username = ? WHERE twitch_id = ?", (username, twitch_id))
+                conn.commit()
+
+        # On recharge la ligne pour avoir les données fraîches
+        row = conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,)).fetchone()
         viewer_data = dict(row)
+
+        # ✅ Mise à jour de la présence Web avec l'heure locale (PAS de spam dans le fil d'actu)
+        conn.execute("UPDATE viewers SET last_seen = datetime('now', 'localtime'), last_web_login = datetime('now', 'localtime') WHERE twitch_id = ?", (twitch_id,))
+        conn.commit()
+
         xp = viewer_data.get('points', 0)
         viewer_data['level'] = max(1, int((xp / 100) ** (1 / 2.2))) if xp > 0 else 1
         
-        # Rang dynamique : On exclut le boss et les bots du calcul pour ne pas fausser le rang du viewer !
         rank = conn.execute(f"SELECT COUNT(*) FROM viewers WHERE points > ? AND LOWER(username) NOT IN {EXCLUSION_LIST}", (xp,)).fetchone()[0] + 1
         viewer_data['rank'] = rank
         
         history_list = []
         
-        # --- RÉCUPÉRATION DU BARÈME D'EXP ---
         settings_row = conn.execute("SELECT exp_per_message, exp_per_watchtime FROM settings WHERE id=1").fetchone()
         exp_msg = settings_row['exp_per_message'] if settings_row and settings_row['exp_per_message'] is not None else 2
         exp_wt = settings_row['exp_per_watchtime'] if settings_row and settings_row['exp_per_watchtime'] is not None else 5
         
-        # --- ACTIVITÉ DE LA SESSION EN COURS ---
         today_stats = conn.execute("SELECT messages, watchtime FROM viewer_daily_stats WHERE twitch_id = ? AND day = date('now', 'localtime')", (twitch_id,)).fetchone()
         
         if today_stats:
@@ -115,7 +129,7 @@ async def get_viewer_profile(twitch_id: str):
                     "details": f"Temps passé sur le live : {wt_str}",
                     "amount": wt_points,
                     "icon": "⏱️",
-                    "color": "#10b981" # Vert Émeraude
+                    "color": "#10b981" 
                 })
                 
             if msgs > 0:
@@ -127,10 +141,9 @@ async def get_viewer_profile(twitch_id: str):
                     "details": f"{msgs} messages envoyés",
                     "amount": msg_points,
                     "icon": "💬",
-                    "color": "#0ea5e9" # Bleu Ciel
+                    "color": "#0ea5e9"
                 })
 
-        # --- HISTORIQUE CLASSIQUE (ÉVÉNEMENTS SPÉCIAUX) ---
         raw_history = conn.execute("SELECT * FROM viewer_exp_log WHERE twitch_id = ? ORDER BY timestamp DESC LIMIT 15", (twitch_id,)).fetchall()
         for r in raw_history:
             log = dict(r)
@@ -156,11 +169,9 @@ async def get_viewer_profile(twitch_id: str):
             })
 
         viewer_data['history'] = history_list
-        conn.close()
         return viewer_data
-    except Exception as e:
-        if conn: conn.close()
-        return JSONResponse(status_code=500, content={"error": str(e)})
+    finally:
+        conn.close()
 
 # ==========================================================
 # 4. SAUVEGARDE DU FORMULAIRE IA (Pour felix.html)
@@ -197,82 +208,80 @@ async def update_viewer_context(request: Request):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 # ==========================================================
-# 5. SONDAGES EN DIRECT (Pour widget_sondage.html)
+# 5. SONDAGES (API pour le Widget Vercel)
 # ==========================================================
 @router.get("/poll/active")
-async def get_active_poll(twitch_id: str = None):
-    """Envoie les données du sondage actuel au site web."""
+async def get_active_poll_api(twitch_id: str = None):
     conn = get_db()
     try:
         poll = conn.execute("SELECT * FROM polls WHERE is_active = 1 ORDER BY id DESC LIMIT 1").fetchone()
-        
         if not poll:
             conn.close()
             return {"active": False}
-            
+
         poll_dict = dict(poll)
-        
-        # On calcule les votes totaux et les pourcentages
         votes = conn.execute("SELECT option_index, COUNT(*) as count FROM poll_votes WHERE poll_id = ? GROUP BY option_index", (poll_dict['id'],)).fetchall()
         
-        results = {1: 0, 2: 0, 3: 0, 4: 0}
+        results = {"1": 0, "2": 0, "3": 0, "4": 0}
         total_votes = 0
         for v in votes:
-            results[v['option_index']] = v['count']
+            results[str(v['option_index'])] = v['count']
             total_votes += v['count']
-            
-        # Si le viewer est connecté, on regarde ce qu'il a déjà voté
+
         user_vote = None
         if twitch_id:
             uv = conn.execute("SELECT option_index FROM poll_votes WHERE poll_id = ? AND twitch_id = ?", (poll_dict['id'], twitch_id)).fetchone()
-            if uv:
-                user_vote = uv['option_index']
-                
+            if uv: user_vote = str(uv['option_index'])
+
         conn.close()
-        
         return {
-            "active": True,
-            "id": poll_dict['id'],
-            "question": poll_dict['question'],
-            "options": {
-                1: poll_dict['option1'],
-                2: poll_dict['option2'],
-                3: poll_dict['option3'],
-                4: poll_dict['option4']
-            },
-            "results": results,
-            "total_votes": total_votes,
-            "user_vote": user_vote
+            "active": True, "id": poll_dict['id'], "question": poll_dict['question'],
+            "options": {"1": poll_dict['option1'], "2": poll_dict['option2'], "3": poll_dict['option3'], "4": poll_dict['option4']},
+            "results": results, "total_votes": total_votes, "user_vote": user_vote
         }
-        
     except Exception as e:
         if conn: conn.close()
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @router.post("/poll/vote")
-async def submit_vote(request: Request):
-    """Reçoit le clic du viewer depuis le site web et l'enregistre."""
+async def submit_vote_api(request: Request):
     try:
         data = await request.json()
-        poll_id = data.get("poll_id")
-        twitch_id = data.get("twitch_id")
-        option_idx = data.get("option_index")
+        poll_id, t_id, opt_idx = data.get("poll_id"), data.get("twitch_id"), data.get("option_index")
         
-        if not all([poll_id, twitch_id, option_idx]):
+        if not all([poll_id, t_id, opt_idx]):
             return JSONResponse(status_code=400, content={"error": "Données manquantes"})
             
         conn = get_db()
-        # Insertion ou modification du vote (grâce au UNIQUE de la BDD)
-        conn.execute("""
-            INSERT INTO poll_votes (poll_id, twitch_id, option_index) 
-            VALUES (?, ?, ?)
-            ON CONFLICT(poll_id, twitch_id) DO UPDATE SET option_index = excluded.option_index
-        """, (poll_id, twitch_id, option_idx))
-        
+        conn.execute("INSERT INTO poll_votes (poll_id, twitch_id, option_index) VALUES (?, ?, ?) ON CONFLICT(poll_id, twitch_id) DO UPDATE SET option_index = excluded.option_index", (poll_id, t_id, opt_idx))
         conn.commit()
         conn.close()
         return {"status": "success"}
-        
     except Exception as e:
-        logger.error(f"Erreur vote API: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+# ==========================================================
+# 6. FAQ & QUESTIONS (API pour le site web)
+# ==========================================================
+@router.post("/questions/ask")
+async def ask_question_api(request: Request):
+    data = await request.json()
+    t_id, username, text = data.get("twitch_id"), data.get("username"), data.get("question")
+    if not text or len(text) < 5: return JSONResponse(status_code=400, content={"error": "Texte trop court"})
+    conn = get_db()
+    try:
+        conn.execute("INSERT INTO questions (twitch_id, username, question_text) VALUES (?, ?, ?)", (t_id, username, text))
+        conn.commit()
+        return {"status": "success"}
+    finally:
+        conn.close()
+
+@router.get("/questions/faq")
+async def get_faq_api():
+    conn = get_db()
+    try:
+        # ✅ FIX : On ne renvoie pas le pseudo original, tout le monde est 'Anonyme' en public
+        rows = conn.execute("SELECT question_text, answer_text, answered_at FROM questions WHERE is_public = 1 AND answer_text IS NOT NULL ORDER BY answered_at DESC").fetchall()
+        return [{"username": "Anonyme", "question_text": r["question_text"], "answer_text": r["answer_text"], "answered_at": r["answered_at"]} for r in rows]
+    finally:
+        conn.close()

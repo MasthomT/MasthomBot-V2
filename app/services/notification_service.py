@@ -1,7 +1,11 @@
 import os
-import aiohttp
 import logging
+import json
 import dotenv
+import aiohttp
+from datetime import datetime
+
+from app.core.config import settings
 
 logger = logging.getLogger("masthbot.notifications")
 
@@ -115,5 +119,54 @@ class NotificationService:
         except Exception as e:
             logger.error(f"❌ [FEL-X] Crash lors de la suppression sur Discord : {e}")
             return False
+
+    async def send_faq_public_answer(self, question_text, answer_text):
+        """Publie la réponse de Félix sur le salon Discord dédié."""
+        bot_token = self._get_fresh_bot_token()
+        channel_id = settings.FAQ_CHANNEL_ID
+
+        if not bot_token or not channel_id:
+            logger.error("❌ [FAQ DISCORD] Token ou Channel ID manquant.")
+            return
+
+        url = f"{self.base_url}/channels/{channel_id}/messages"
+        headers = {
+            "Authorization": f"Bot {bot_token}",
+            "Content-Type": "application/json"
+        }
+
+        # Construction de la carte "Bien décorée"
+        payload = {
+            "embeds": [
+                {
+                    "title": "🐾 Félix a répondu à une question !",
+                    "color": 62965, # Le vert/cyan signature de FEL-X
+                    "fields": [
+                        {
+                            "name": "❓ Question Anonyme",
+                            "value": f"*{question_text}*",
+                            "inline": False
+                        },
+                        {
+                            "name": "💡 La réponse de Félix",
+                            "value": answer_text,
+                            "inline": False
+                        }
+                    ],
+                    "footer": {
+                        "text": "FAQ FEL-X",
+                        "icon_url": "https://static-cdn.jtvnw.net/emoticons/v2/emotesv2_fb54848601664188a109a909403a3d5f/default/dark/3.0"
+                    },
+                    "timestamp": datetime.now().isoformat()
+                }
+            ]
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=payload) as resp:
+                if resp.status == 200:
+                    logger.info("✅ [FAQ DISCORD] Réponse publiée avec succès.")
+                else:
+                    logger.error(f"❌ [FAQ DISCORD] Erreur d'envoi : {resp.status}")
 
 notification_service = NotificationService()

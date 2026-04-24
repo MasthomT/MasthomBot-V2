@@ -19,6 +19,11 @@ templates = Jinja2Templates(directory="app/templates")
 # --- CHEMIN DE LA BASE DE DONNÉES ---
 DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
 
+# =================================================================
+# 🛑 LISTE D'EXCLUSION GLOBALE (Bots, Streamer, Vestale)
+# =================================================================
+EXCLUSION_LIST = "('masthom_', 'felixthebigblackcat', 'vestale7', 'streamelements', 'wizebot', 'nightbot')"
+
 def get_db():
     """
     Crée une connexion à la base de données SQLite.
@@ -114,35 +119,31 @@ async def admin_stats_page(request: Request):
     try:
         conn = get_db()
 
-        # =========================================================
-        # LISTE D'EXCLUSION GLOBALE (Bots, Streamer, Vestale)
-        # =========================================================
-        exclusion_list = "('masthom_', 'felixthebigblackcat', 'vestale7', 'streamelements', 'wizebot', 'nightbot')"
-
-        # 1. RÉCUPÉRATION DES STATISTIQUES GÉNÉRALES
-        res_v = conn.execute(f"SELECT COUNT(*) FROM viewers WHERE LOWER(username) NOT IN {exclusion_list}").fetchone()
+        # 1. RÉCUPÉRATION DES STATISTIQUES GÉNÉRALES (SANS L'EXCLUSION LIST)
+        res_v = conn.execute(f"SELECT COUNT(*) FROM viewers WHERE LOWER(username) NOT IN {EXCLUSION_LIST}").fetchone()
         total_viewers = res_v[0] if res_v else 0
 
-        res_m = conn.execute(f"SELECT SUM(messages) FROM viewers WHERE LOWER(username) NOT IN {exclusion_list}").fetchone()
+        res_m = conn.execute(f"SELECT SUM(messages) FROM viewers WHERE LOWER(username) NOT IN {EXCLUSION_LIST}").fetchone()
         total_messages = (res_m[0] or 0) if res_m else 0
 
-        res_w = conn.execute(f"SELECT SUM(watchtime) FROM viewers WHERE LOWER(username) NOT IN {exclusion_list}").fetchone()
+        res_w = conn.execute(f"SELECT SUM(watchtime) FROM viewers WHERE LOWER(username) NOT IN {EXCLUSION_LIST}").fetchone()
         total_seconds = (res_w[0] or 0) if res_w else 0
 
         # =========================================================
-        # 2. CLASSEMENTS (TOP 15) - LE FILTRE ANTI-TRICHE EST ICI !
+        # 2. CLASSEMENTS (TOP 15)
         # =========================================================
+        
         # --- Top Messages ---
         top_messages = conn.execute(f"""
             SELECT username, messages FROM viewers 
-            WHERE messages > 0 AND LOWER(username) NOT IN {exclusion_list}
+            WHERE messages > 0 AND LOWER(username) NOT IN {EXCLUSION_LIST}
             ORDER BY messages DESC LIMIT 15
         """).fetchall()
 
         # --- Top Watchtime ---
         raw_watchtime = conn.execute(f"""
             SELECT username, watchtime FROM viewers 
-            WHERE watchtime > 0 AND LOWER(username) NOT IN {exclusion_list}
+            WHERE watchtime > 0 AND LOWER(username) NOT IN {EXCLUSION_LIST}
             ORDER BY watchtime DESC LIMIT 15
         """).fetchall()
         
@@ -155,7 +156,7 @@ async def admin_stats_page(request: Request):
         # --- Top Points (+ Intégration du Niveau mathématique IA) ---
         raw_points = conn.execute(f"""
             SELECT username, points FROM viewers 
-            WHERE points > 0 AND LOWER(username) NOT IN {exclusion_list}
+            WHERE points > 0 AND LOWER(username) NOT IN {EXCLUSION_LIST}
             ORDER BY points DESC LIMIT 15
         """).fetchall()
         
@@ -210,9 +211,24 @@ async def admin_stats_page(request: Request):
                 "timestamp": format_date(row["timestamp"])
             })
 
+        # 5. DERNIERS CONNECTÉS (UNIQUEMENT SUR LE WEB FEL-X)
+        raw_last_seen = conn.execute(f"""
+            SELECT username, last_web_login FROM viewers 
+            WHERE LOWER(username) NOT IN {EXCLUSION_LIST}
+            AND last_web_login >= datetime('now', '-15 minutes')
+            ORDER BY last_web_login DESC LIMIT 20
+        """).fetchall()
+        
+        recent_logins = []
+        for row in raw_last_seen:
+            recent_logins.append({
+                "username": row["username"],
+                "timestamp": format_date(row["last_web_login"])
+            })
+
         conn.close()
 
-        # 5. ENVOI AU TEMPLATE HTML
+        # 6. ENVOI AU TEMPLATE HTML
         return templates.TemplateResponse(
             request,
             "admin/stats.html",
@@ -226,7 +242,8 @@ async def admin_stats_page(request: Request):
                 "top_watchtime": top_watchtime,
                 "top_points": top_points,
                 "recent_events": recent_events,
-                "recent_unfollows": recent_unfollows
+                "recent_unfollows": recent_unfollows,
+                "recent_logins": recent_logins
             }
         )
 

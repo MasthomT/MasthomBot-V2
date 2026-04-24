@@ -64,7 +64,8 @@ class Settings(BaseSettings):
     STREAMERS_CHANNEL_ID: str = get_clean_env("STREAMERS_CHANNEL_ID", "")
     CLIP_CHANNEL_ID: str = get_clean_env("CLIP_CHANNEL_ID", "")
     ANNONCE_CHANNEL_ID: str = get_clean_env("ANNONCE_CHANNEL_ID", "")
-    
+    FAQ_CHANNEL_ID: str = get_clean_env("FAQ_CHANNEL_ID", "")
+
     # --- SERVICES EXTERNES ---
     OPENAI_API_KEY: str = get_clean_env("OPENAI_API_KEY", "")
     

@@ -61,7 +61,6 @@
                 <div>
                     <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Watchtime Total</div>
                     <div class="text-3xl font-black text-white">
-                        <!-- PLUS DE CALCUL ICI : ON AFFICHE LE TEXTE DE PYTHON -->
                         {{ general_stats.watchtime_display }}
                     </div>
                 </div>
@@ -73,7 +72,8 @@
             <i class="fas fa-satellite-dish text-indigo-400 animate-pulse"></i> Activité en direct
         </h2>
 
-        <div class="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-12">
+        <!-- ✅ ON PASSE À 4 COLONNES (xl:grid-cols-4) POUR FAIRE LA PLACE AU WIDGET WEB -->
+        <div class="grid grid-cols-1 xl:grid-cols-4 gap-8 mb-12">
             
             <!-- FIL D'ACTUALITÉ -->
             <div class="config-card p-6 rounded-3xl shadow-xl flex flex-col h-[500px] xl:col-span-2 relative overflow-hidden">
@@ -94,6 +94,7 @@
                             {% elif 'follow' in event.event_type.lower() %}bg-pink-500 text-pink-950
                             {% elif 'raid' in event.event_type.lower() %}bg-purple-500 text-purple-950
                             {% elif 'cheer' in event.event_type.lower() %}bg-cyan-500 text-cyan-950
+                            {% elif 'web_login' in event.event_type.lower() %}bg-sky-500 text-sky-950
                             {% elif 'ban' in event.event_type.lower() or 'timeout' in event.event_type.lower() %}bg-rose-500 text-rose-950
                             {% else %}bg-slate-600 text-slate-200{% endif %}">
                             <i class="fas 
@@ -101,6 +102,7 @@
                                 {% elif 'follow' in event.event_type.lower() %}fa-heart
                                 {% elif 'raid' in event.event_type.lower() %}fa-meteor
                                 {% elif 'cheer' in event.event_type.lower() %}fa-gem
+                                {% elif 'web_login' in event.event_type.lower() %}fa-globe
                                 {% elif 'ban' in event.event_type.lower() %}fa-gavel
                                 {% elif 'timeout' in event.event_type.lower() %}fa-clock
                                 {% else %}fa-info{% endif %} text-sm"></i>
@@ -133,9 +135,9 @@
                 
                 <div class="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3">
                     {% for traitor in recent_unfollows %}
-                    <div class="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 flex justify-between items-center group transition-all">
+                    <div class="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 flex justify-between items-center group transition-all hover:border-rose-500/30">
                         <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-500">
+                            <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-rose-400">
                                 <i class="fas fa-user-secret"></i>
                             </div>
                             <div>
@@ -148,6 +150,37 @@
                     <div class="text-center flex flex-col items-center justify-center h-full opacity-50">
                         <i class="fas fa-shield-alt text-4xl text-emerald-500 mb-4"></i>
                         <p class="text-slate-500 italic text-sm">Zéro trahison !</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- DERNIERS CONNECTÉS (UNIQUEMENT WEB) -->
+            <div class="config-card p-6 rounded-3xl shadow-xl flex flex-col h-[500px]">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-10 h-10 bg-sky-500/10 rounded-xl flex items-center justify-center border border-sky-500/20">
+                        <i class="fas fa-globe text-sky-400 text-lg"></i>
+                    </div>
+                    <h2 class="text-lg font-black text-white">Sur FEL-X</h2>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3">
+                    {% for user in recent_logins %}
+                    <div class="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 flex justify-between items-center group transition-all hover:border-sky-500/30">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-sky-400">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <div>
+                                <span class="text-sm font-bold text-slate-200 block">{{ user.username }}</span>
+                                <span class="text-[10px] text-slate-500">{{ user.timestamp }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-center flex flex-col items-center justify-center h-full opacity-50">
+                        <i class="fas fa-ghost text-4xl text-sky-500 mb-4"></i>
+                        <p class="text-slate-500 italic text-sm">Personne en vue...</p>
                     </div>
                     {% endfor %}
                 </div>
@@ -202,7 +235,6 @@
                             <span class="text-sm font-bold text-slate-200">{{ viewer.username }}</span>
                         </div>
                         <span class="text-xs font-black text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg">
-                            <!-- UTILISATION DE LA VARIABLE PRÉPARÉE PAR PYTHON -->
                             {{ viewer.watchtime_readable }}
                         </span>
                     </div>
