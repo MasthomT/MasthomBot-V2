@@ -215,9 +215,11 @@ async def admin_stats_page(request: Request):
         raw_last_seen = conn.execute(f"""
             SELECT username, last_web_login FROM viewers 
             WHERE LOWER(username) NOT IN {EXCLUSION_LIST}
-            AND last_web_login >= datetime('now', '-15 minutes')
-            ORDER BY last_web_login DESC LIMIT 20
+            AND last_web_login >= datetime('now', 'localtime', '-10 days')
+            ORDER BY last_web_login DESC LIMIT 40
         """).fetchall()
+        
+        recent_logins = [{"username": r["username"], "timestamp": format_date(r["last_web_login"])} for r in raw_last_seen]
         
         recent_logins = []
         for row in raw_last_seen:
