@@ -20,7 +20,7 @@ def get_db():
     return conn
 
 # ==========================================================
-# 1. STATS GLOBALES (Pour stats.js)
+# 1. STATS GLOBALES
 # ==========================================================
 @router.get("/global_stats")
 async def get_global_stats():
@@ -33,7 +33,6 @@ async def get_global_stats():
         top5_raw = conn.execute(f"SELECT username, points FROM viewers WHERE LOWER(username) NOT IN {EXCLUSION_LIST} ORDER BY points DESC LIMIT 5").fetchall()
         top5 = [dict(r) for r in top5_raw]
 
-        # --- NOUVEAU : CLASSEMENT OLYMPIQUE (Tri: First > Deuz > Troiz) ---
         podium_raw = conn.execute(f"""
             SELECT username, first_count, deuz_count, troiz_count 
             FROM viewers 
@@ -73,7 +72,7 @@ async def get_leaderboard():
         conn.close()
 
 # ==========================================================
-# 3. PROFIL INDIVIDUEL
+# 3. PROFIL INDIVIDUEL (NETTOYÉ DU SPAM)
 # ==========================================================
 @router.get("/viewer/{twitch_id}")
 async def get_viewer_profile(twitch_id: str, username: str = None):
@@ -93,14 +92,9 @@ async def get_viewer_profile(twitch_id: str, username: str = None):
                 row = conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,)).fetchone()
         
         viewer_data = dict(row)
-        actual_name = viewer_data.get('username', 'Inconnu')
 
-        # ✅ FIX SQL DATE: Plus de variable python pour le datetime
+        # ✅ FIX: On met à jour l'heure de connexion, mais SANS SPAMMER LE FIL D'ACTUALITÉ
         conn.execute("UPDATE viewers SET last_seen = datetime('now', 'localtime'), last_web_login = datetime('now', 'localtime') WHERE twitch_id = ?", (twitch_id,))
-        conn.execute(
-            "INSERT INTO stream_events (event_type, username, details, timestamp) VALUES (?, ?, ?, datetime('now', 'localtime'))",
-            ("web_login", actual_name, "🌐 Vient de se connecter sur son profil web")
-        )
         conn.commit()
 
         xp = viewer_data.get('points', 0)
@@ -256,16 +250,11 @@ async def get_faq_api():
 # ==========================================================
 @router.post("/rewards/podium")
 async def claim_podium_reward(request: Request):
-    """
-    Endpoint appelé par StreamerBot avec le score EXACT stocké dans StreamerBot.
-    """
     try:
         data = await request.json()
         t_id = data.get("twitch_id")
         username = data.get("username")
-        reward_type = str(data.get("reward_type", "")).lower() # "first", "deuz", "troiz"
-        
-        # On récupère le chiffre dicté par StreamerBot !
+        reward_type = str(data.get("reward_type", "")).lower() 
         count_val = data.get("count")
 
         if not t_id or reward_type not in ["first", "deuz", "troiz"]:
@@ -273,29 +262,17 @@ async def claim_podium_reward(request: Request):
 
         conn = get_db()
         try:
-            # Sécurité : Création du viewer s'il n'existe pas
             conn.execute(
                 "INSERT INTO viewers (twitch_id, username, points, messages, watchtime) VALUES (?, ?, 0, 0, 0) "
                 "ON CONFLICT(twitch_id) DO UPDATE SET username = excluded.username", 
                 (t_id, username)
             )
-            
             col_name = f"{reward_type}_count"
-            
-            # Si StreamerBot nous envoie son chiffre, on l'applique !
             if count_val is not None and str(count_val).strip().isdigit():
                 exact_count = int(str(count_val).strip())
                 conn.execute(f"UPDATE viewers SET {col_name} = ? WHERE twitch_id = ?", (exact_count, t_id))
             else:
-                # Si jamais SB n'envoie pas le chiffre, on ajoute +1 manuellement pour sauver les meubles
                 conn.execute(f"UPDATE viewers SET {col_name} = {col_name} + 1 WHERE twitch_id = ?", (t_id,))
-            
-            # ✅ FIX SQL DATE : Plus de variable datetime python
-            conn.execute(
-                "INSERT INTO stream_events (event_type, username, details, timestamp) VALUES (?, ?, ?, datetime('now', 'localtime'))",
-                ("reward", username, f"🏆 A remporté le {reward_type.upper()} !")
-            )
-            
             conn.commit()
             return {"status": "success"}
         finally:

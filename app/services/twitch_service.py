@@ -505,7 +505,6 @@ class MasthbotTwitch(commands.Bot):
 
     @commands.command(name='sondage')
     async def cmd_sondage(self, ctx):
-        """Affiche les résultats du sondage avec des barres de progression texte."""
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         try:
@@ -513,30 +512,35 @@ class MasthbotTwitch(commands.Bot):
             if not poll:
                 return await ctx.send("🐾 Aucun sondage en cours. Check ton profil sur https://fel-x.vercel.app !")
 
-            # Comptage des votes
-            votes_raw = conn.execute("SELECT option_index, COUNT(*) as count FROM poll_votes WHERE poll_id=? GROUP BY option_index", (poll['id'],)).fetchall()
+            votes = conn.execute("SELECT option_index, COUNT(*) as count FROM poll_votes WHERE poll_id=? GROUP BY option_index", (poll['id'],)).fetchall()
             results = {1: 0, 2: 0, 3: 0, 4: 0}
             total = 0
-            for v in votes_raw:
+            for v in votes:
                 results[v['option_index']] = v['count']
                 total += v['count']
 
-            # Construction de la réponse visuelle
+            # --- 🟢 NOUVEAU : On force l'affichage de l'overlay sur OBS ---
+            async with aiohttp.ClientSession() as session:
+                payload = {"type": "show_poll"}
+                try:
+                    await session.post("http://127.0.0.1:3005/api/trigger", json=payload)
+                except Exception:
+                    pass
+            # -------------------------------------------------------------
+
             msg = f"📊 SONDAGE : {poll['question']} — "
-            options_display = []
+            options_text = []
             
             for i in range(1, 5):
                 opt_name = poll[f'option{i}']
                 if opt_name:
                     count = results[i]
                     pct = round((count / total) * 100) if total > 0 else 0
-                    # Mini barre de progression (5 blocs)
-                    filled = round((pct / 100) * 5)
-                    bar = "■" * filled + "□" * (5 - filled)
-                    options_display.append(f"{i}. {opt_name} [{bar}] {pct}%")
+                    # Message allégé ! Fini les petites barres de progression ASCII dans le chat
+                    options_text.append(f"{i}. {opt_name} ({pct}%)")
 
-            msg += " | ".join(options_display)
-            msg += f" — 🗳️ Vote avec !choix 1, 2, 3... ({total} votes)"
+            msg += " | ".join(options_text)
+            msg += f" — 🗳️ Vote avec !choix 1, 2... ({total} votes)"
             await ctx.send(msg)
 
         except Exception as e:
@@ -741,14 +745,13 @@ class MasthbotTwitch(commands.Bot):
             except sqlite3.OperationalError: pass
 
             announcements = conn.execute("SELECT * FROM announcements WHERE is_enabled = 1 AND trigger_type = 'interval'").fetchall()
-            
             channel = self.get_channel(self.channel_name)
+            
             if not channel or not announcements:
                 conn.close()
                 return
 
             now = datetime.now()
-            
             min_intervals = []
             for a in announcements:
                 try:
@@ -758,7 +761,6 @@ class MasthbotTwitch(commands.Bot):
             min_interval = min(min_intervals) if min_intervals else 10
             
             global_last_row = conn.execute("SELECT MAX(last_triggered) as max_date FROM announcements WHERE is_enabled = 1 AND trigger_type = 'interval'").fetchone()
-            
             if global_last_row and global_last_row["max_date"]:
                 try:
                     global_last = datetime.strptime(global_last_row["max_date"], '%Y-%m-%d %H:%M:%S')
@@ -791,8 +793,84 @@ class MasthbotTwitch(commands.Bot):
                 ann_id = ann_to_send["id"]
                 msg = ann_to_send["message_template"]
                 
+                # ======================================================
+                # 🏷️ GESTION DES TAGS DYNAMIQUES AVANCÉS
+                # ======================================================
                 if "{viewers}" in msg:
-                    msg = msg.replace("{viewers}", str(len(channel.chatters)))
+                    msg = msg.replace("{viewers}", str(len(channel.chatters)) if channel else "0")
+                
+                if any(t in msg for t in ["{game}", "{title}", "{uptime}"]):
+                    if streams:
+                        msg = msg.replace("{game}", streams[0].game_name)
+                        msg = msg.replace("{title}", streams[0].title)
+                        
+                        if "{uptime}" in msg:
+                            try:
+                                start_time = streams[0].started_at
+                                now_utc = datetime.utcnow()
+                                diff = now_utc - start_time.replace(tzinfo=None)
+                                hours, remainder = divmod(int(diff.total_seconds()), 3600)
+                                minutes, _ = divmod(remainder, 60)
+                                uptime_str = f"{hours}h {minutes}m" if hours > 0 else f"{minutes} minutes"
+                                msg = msg.replace("{uptime}", uptime_str)
+                            except:
+                                msg = msg.replace("{uptime}", "Inconnu")
+                    else:
+                        msg = msg.replace("{game}", "Just Chatting").replace("{title}", "Stream hors ligne").replace("{uptime}", "Hors ligne")
+                        
+                if any(t in msg for t in ["{top5_xp}", "{top5_msg}", "{levelups}", "{last_sub}", "{last_raid}"]):
+                    conn_stats = sqlite3.connect(DB_PATH, timeout=20.0)
+                    conn_stats.row_factory = sqlite3.Row
+                    exclusion_list = "('masthom_', 'felixthebigblackcat', 'streamelements', 'wizebot', 'nightbot')"
+                    
+                    if "{top5_xp}" in msg:
+                        top = conn_stats.execute(f"SELECT username FROM viewers WHERE LOWER(username) NOT IN {exclusion_list} ORDER BY points DESC LIMIT 5").fetchall()
+                        msg = msg.replace("{top5_xp}", ", ".join([f"@{r['username']}" for r in top]))
+                        
+                    if "{top5_msg}" in msg:
+                        top = conn_stats.execute(f"SELECT username FROM viewers WHERE LOWER(username) NOT IN {exclusion_list} ORDER BY messages DESC LIMIT 5").fetchall()
+                        msg = msg.replace("{top5_msg}", ", ".join([f"@{r['username']}" for r in top]))
+
+                    if "{last_sub}" in msg:
+                        ls = conn_stats.execute("SELECT username FROM stream_events WHERE event_type = 'sub' ORDER BY timestamp DESC LIMIT 1").fetchone()
+                        msg = msg.replace("{last_sub}", ls['username'] if ls else "Personne :(")
+
+                    if "{last_raid}" in msg:
+                        lr = conn_stats.execute("SELECT username FROM stream_events WHERE event_type = 'raid' ORDER BY timestamp DESC LIMIT 1").fetchone()
+                        msg = msg.replace("{last_raid}", lr['username'] if lr else "Aucun raid récent")
+                        
+                    if "{levelups}" in msg:
+                        viewers_db = conn_stats.execute("SELECT twitch_id, username, points FROM viewers WHERE points > 0").fetchall()
+                        leveled_up = []
+                        excl_py = ["masthom_", "felixthebigblackcat", "streamelements", "wizebot", "nightbot"]
+                        
+                        for v in viewers_db:
+                            tid = str(v['twitch_id'])
+                            uname = v['username']
+                            pts = v['points'] or 0
+                            if uname.lower() in excl_py: continue
+                            
+                            lvl = max(1, int((pts / 100) ** (1 / 2.2)))
+                            if tid not in self.known_levels:
+                                self.known_levels[tid] = lvl
+                            elif lvl > self.known_levels[tid]:
+                                leveled_up.append({"name": uname, "level": lvl})
+                                self.known_levels[tid] = lvl
+                                
+                        if leveled_up:
+                            leveled_up.sort(key=lambda x: x["level"], reverse=True)
+                            max_disp = 6
+                            chunk = [f"@{u['name']} (Lvl {u['level']})" for u in leveled_up[:max_disp]]
+                            lvl_str = ", ".join(chunk)
+                            if len(leveled_up) > max_disp:
+                                lvl_str += f"... et {len(leveled_up) - max_disp} autres !"
+                        else:
+                            lvl_str = "Personne n'a level up récemment ! Au boulot 💤"
+                            
+                        msg = msg.replace("{levelups}", lvl_str)
+                        
+                    conn_stats.close()
+                # ======================================================
                     
                 logger.info(f"📢 [ANNONCE] Envoi en rotation : '{ann_to_send['label']}'")
                 await channel.send(msg)
@@ -804,55 +882,5 @@ class MasthbotTwitch(commands.Bot):
         except Exception as e:
             if "closing transport" not in str(e):
                 logger.error(f"❌ [ROUTINE ERROR] Announcements Timer a crashé : {e}")
-
-    @routines.routine(minutes=60)
-    async def level_announcements_timer(self):
-        """Annonce toutes les heures les personnes qui ont Level Up."""
-        try:
-            conn = sqlite3.connect(DB_PATH, timeout=20.0)
-            conn.row_factory = sqlite3.Row
-            viewers = conn.execute("SELECT twitch_id, username, points FROM viewers WHERE points > 0").fetchall()
-            conn.close()
-
-            leveled_up = []
-            channel = self.get_channel(self.channel_name)
-            if not channel: 
-                return
-
-            for v in viewers:
-                tid = str(v['twitch_id'])
-                uname = v['username']
-                pts = v['points'] or 0
-                
-                # Calcul de la puissance 2.2 pour trouver le niveau actuel
-                lvl = max(1, int((pts / 100) ** (1 / 2.2)))
-
-                # Si c'est la première fois qu'on le voit (ex: démarrage du bot), 
-                # on l'enregistre en silence pour ne pas faire de fausse alerte.
-                if tid not in self.known_levels:
-                    self.known_levels[tid] = lvl
-                    
-                # S'il a pris un ou plusieurs niveaux depuis la dernière heure !
-                elif lvl > self.known_levels[tid]:
-                    leveled_up.append(f"@{uname} (Lvl {lvl})")
-                    self.known_levels[tid] = lvl
-
-            if leveled_up:
-                # On regroupe les pseudos. S'il y a énormément de monde, on coupe le message 
-                # pour ne pas dépasser la limite de 500 caractères de Twitch.
-                chunk = []
-                for usr in leveled_up:
-                    chunk.append(usr)
-                    if len(", ".join(chunk)) > 350:
-                        await channel.send(f"🌟 GG pour vos Level Up cette heure : {', '.join(chunk)} ! 🐾")
-                        chunk = []
-                        await asyncio.sleep(1.5) # Anti-spam Twitch
-                
-                if chunk:
-                    await channel.send(f"🌟 GG pour vos Level Up cette heure : {', '.join(chunk)} ! 🐾")
-                    
-        except Exception as e:
-            logger.error(f"❌ Erreur routine Level Up: {e}")
-
 
 twitch_bot = MasthbotTwitch()

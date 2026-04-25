@@ -28,3 +28,11 @@ async def get_credits_overlay(request: Request):
         request=request,
         name="overlays/credits.html"
     )
+
+@router.get("/overlay/poll", response_class=HTMLResponse)
+async def get_poll_overlay(request: Request):
+    """Affiche le widget automatique des sondages pour OBS"""
+    return templates.TemplateResponse(
+        request=request,
+        name="overlays/poll_overlay.html"
+    )

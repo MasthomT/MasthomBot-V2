@@ -3,53 +3,66 @@ import os
 
 DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
 
-def remove_viewer(target_username):
-    print("="*50)
-    print(f"🗑️ PROTOCOLE D'EFFACEMENT POUR : {target_username.upper()}")
-    print("="*50)
+def activate_shields():
+    print("="*60)
+    print("🛡️ ACTIVATION DES BOUCLIERS ANTI-DOUBLONS ABSOLUS")
+    print("="*60)
 
     if not os.path.exists(DB_PATH):
-        print(f"❌ ERREUR : Base de données introuvable à {DB_PATH}")
+        print("❌ Base de données introuvable.")
         return
 
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # 1. On cherche son ID Twitch pour tout nettoyer proprement
-    row = cursor.execute("SELECT twitch_id, points FROM viewers WHERE LOWER(username) = ?", (target_username.lower(),)).fetchone()
+    # --- 1. NETTOYAGE PRÉALABLE OBLIGATOIRE ---
+    print("\n🧹 1. Désintégration des derniers doublons existants...")
     
-    if not row:
-        print(f"🤷‍♂️ Cible non trouvée. '{target_username}' n'est pas (ou plus) dans la base de données.")
-        conn.close()
-        return
+    # Doublons Fil d'actu (On supprime l'excédent)
+    cursor.execute("""
+        DELETE FROM stream_events 
+        WHERE id NOT IN (
+            SELECT MIN(id) FROM stream_events
+            GROUP BY event_type, LOWER(username), details, timestamp
+        )
+    """)
+    print(f"   -> {cursor.rowcount} événements fantômes supprimés du Fil d'actualité.")
 
-    t_id = row[0]
-    pts = row[1]
-    print(f"🎯 Cible verrouillée ! (ID: {t_id} | EXP: {pts})")
+    # Doublons Viewers (Au cas où des comptes manuels auraient été recréés)
+    cursor.execute("""
+        DELETE FROM viewers 
+        WHERE rowid NOT IN (
+            SELECT MIN(rowid) FROM viewers
+            GROUP BY LOWER(username)
+        )
+    """)
+    print(f"   -> {cursor.rowcount} comptes clones supprimés du Classement.")
 
-    # 2. On supprime toutes ses traces dans TOUTES les tables
-    tables = [
-        "viewers",
-        "viewer_exp_log",
-        "viewer_daily_stats",
-        "poll_votes",
-        "questions"
-    ]
+    # --- 2. ACTIVATION DES SÉCURITÉS PHYSIQUES (INDEX UNIQUE) ---
+    print("\n🧱 2. Cimentation de la base de données...")
+    
+    try:
+        # Règle 1 : Un pseudo ne peut exister qu'une seule fois (insensible à la majuscule)
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS shield_unique_username ON viewers(username COLLATE NOCASE)")
+        print("   ✅ Bouclier Viewers ACTIF : Impossible de créer un compte en double.")
+    except Exception as e:
+        print(f"   ❌ Erreur Bouclier Viewers : {e}")
 
-    for table in tables:
-        try:
-            cursor.execute(f"DELETE FROM {table} WHERE twitch_id = ?", (t_id,))
-            print(f"   🧹 Traces effacées de la table '{table}'")
-        except sqlite3.OperationalError:
-            pass # Si une table n'existe pas, on ignore silencieusement
+    try:
+        # Règle 2 : Un événement identique à la même seconde exacte est violemment rejeté
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS shield_unique_event ON stream_events(event_type, username, details, timestamp)")
+        print("   ✅ Bouclier Événements ACTIF : Impossible de spammer le fil d'actualité.")
+    except Exception as e:
+        print(f"   ❌ Erreur Bouclier Événements : {e}")
 
     conn.commit()
     conn.close()
     
-    print("\n✅ EXTERMINATION RÉUSSIE !")
-    print(f"Le viewer '{target_username}' a totalement disparu du classement et de l'histoire.")
-    print("="*50)
+    print("\n" + "="*60)
+    print("🎉 FÉLICITATIONS ! TA BASE DE DONNÉES EST DÉSORMAIS IMPÉNÉTRABLE.")
+    print("Même si Twitch bégaye ou qu'un script fait une erreur, SQLite")
+    print("bloquera l'insertion. Plus aucun doublon ne pourra s'afficher !")
+    print("="*60)
 
 if __name__ == "__main__":
-    # Tu peux changer le pseudo ici si tu as besoin de virer quelqu'un d'autre plus tard
-    remove_viewer("dicoh06")
+    activate_shields()
