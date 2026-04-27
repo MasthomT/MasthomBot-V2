@@ -1,0 +1,16 @@
+Fichiers et dossiers à ignorer lors de la création de l'image Docker
+
+venv/
+pycache/
+*.pyc
+.git/
+.env
+
+🚨 TRÈS IMPORTANT : On empêche Docker d'écraser ta base de données actuelle
+
+*.dbx
+*.sqlite3
+
+Logs locaux
+
+logs/

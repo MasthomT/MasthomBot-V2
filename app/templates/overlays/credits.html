@@ -2,117 +2,214 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Générique de Fin - MasthomBot</title>
-    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;600;900&display=swap" rel="stylesheet">
+    <title>Générique de Fin - OBS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono:wght@800&display=swap" rel="stylesheet">
     <style>
+        /* CSS 100% INLINE POUR GARANTIR LE RENDU OBS */
         :root {
-            --color-chatters: #00e5ff;
-            --color-followers: #a970ff;
-            --color-subs: #ffd700;
-            --color-bits: #ff4500;
-            --color-raiders: #ff9100;
-            --color-vips: #ff69b4;
-            --color-mods: #00ff00;
-        }
-
-        body, html { 
-            margin: 0; padding: 0; width: 100%; height: 100%; 
-            overflow: hidden; background: transparent; 
-            font-family: 'Kanit', sans-serif; color: white; 
+            --bg: transparent; /* Transparent pour OBS */
         }
         
-        #scroll-container {
-            position: absolute; top: 100vh; left: 0; width: 100%;
-            display: flex; flex-direction: column; align-items: center;
+        body, html {
+            margin: 0; padding: 0;
+            width: 100vw; height: 100vh;
+            background: var(--bg);
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+        }
+        
+        #credits-container {
+            position: absolute;
+            top: 100vh; /* Départ hors écran en bas */
+            left: 0;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            color: white;
         }
 
-        .main-title { font-size: 6rem; font-weight: 900; text-transform: uppercase; text-shadow: 0 0 20px rgba(255,255,255,0.6); margin-bottom: 50px; text-align: center; }
-        .section-header { margin-top: 80px; margin-bottom: 30px; text-align: center; }
-        .section-title { font-size: 3.5rem; font-weight: 700; text-transform: uppercase; border-bottom: 6px solid currentColor; padding: 0 50px 10px; display: inline-block; letter-spacing: 5px; }
-        
-        .names-wrapper { width: 90%; display: flex; flex-wrap: wrap; justify-content: center; gap: 20px 60px; }
-        .name-card { font-size: 2.5rem; font-weight: 600; text-shadow: 2px 2px 10px rgba(0,0,0,0.8); white-space: nowrap; }
-        .badge-info { font-size: 0.6em; background: rgba(255, 255, 255, 0.15); padding: 2px 12px; border-radius: 15px; margin-left: 15px; vertical-align: middle; }
+        .main-title {
+            font-size: 5.5rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            margin-bottom: 5rem;
+            color: #fff;
+            text-shadow: 0 10px 40px rgba(99, 102, 241, 0.6);
+        }
 
-        .subtitle { font-size: 3rem; font-weight: 300; color: #ccc; letter-spacing: 12px; margin-top: 150px; text-align: center; text-transform: uppercase; }
+        .sub-title {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin-top: 6rem;
+            margin-bottom: 50vh; /* Laisse l'écran se vider proprement à la fin */
+            color: #94a3b8;
+            text-shadow: 0 5px 20px rgba(0,0,0,0.5);
+        }
 
-        /* Couleurs dynamiques */
-        .color-subscribers { color: var(--color-subs); }
-        .color-bits { color: var(--color-bits); }
-        .color-raiders { color: var(--color-raiders); }
-        .color-followers { color: var(--color-followers); }
-        .color-moderators { color: var(--color-mods); }
-        .color-vips { color: var(--color-vips); }
-        .color-chatters { color: var(--color-chatters); }
+        .section {
+            margin-bottom: 4.5rem;
+            width: 85%;
+            max-width: 1200px;
+        }
 
-        .labels {
-            subscribers: "NOS ABONNÉS",
-            raiders: "LES RAIDS DU JOUR",
-            bits: "LES DONATEURS",
-            followers: "BIENVENUE AUX NOUVEAUX",
-            moderators: "L'ÉQUIPE DE MODÉRATION",
-            vips: "NOS INVITÉS SPÉCIAUX",
-            chatters: "LE CHAT EN FEU"
+        .section-title {
+            font-size: 2.2rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid rgba(255,255,255,0.05);
+            text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+
+        .names-grid {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 1.5rem;
+        }
+
+        .name-item {
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(255,255,255,0.08);
+            padding: 14px 28px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+        }
+
+        .user-name {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .user-label {
+            background: rgba(255,255,255,0.08);
+            padding: 6px 12px;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 800;
+            color: #cbd5e1;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Style spécifique pour la masse des Viewers (Lurkers) */
+        .section.viewers .names-grid { gap: 1rem; }
+        .section.viewers .name-item {
+            padding: 8px 16px;
+            background: transparent;
+            border: none;
+            box-shadow: none;
+        }
+        .section.viewers .user-name {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #64748b;
         }
     </style>
 </head>
 <body>
-    <div id="scroll-container"></div>
+    <div id="credits-container">
+        <!-- Le contenu est généré par JS -->
+    </div>
 
-<script>
-    const LABELS = {
-        subscribers: 'NOS ABONNÉS',
-        gifters: 'LES GÉNÉREUX',
-        bits: 'LES DONATEURS',
-        raiders: 'LES RAIDS DU JOUR',
-        followers: 'BIENVENUE !',
-        moderators: 'NOS MODOS',
-        vips: 'LES VIP',
-        chatters: 'LES BAVARDS'
-    };
+    <script>
+        const MODULES = {
+            'subscribers': { label: '🌟 Abonnés', color: '#fbbf24' },
+            'gifters':     { label: '🎁 Mécènes (Gifts)', color: '#34d399' },
+            'bits':        { label: '💎 Bits & Donations', color: '#fb7185' },
+            'raiders':     { label: '🚀 Raids Reçus', color: '#fb923c' },
+            'followers':   { label: '💙 Nouveaux Followers', color: '#a78bfa' },
+            'vips':        { label: '⭐ VIPs (Guests)', color: '#f472b6' },
+            'moderators':  { label: '🛡️ Modérateurs', color: '#a3e635' },
+            'chatters':    { label: '💬 Chatters', color: '#22d3ee' },
+            'viewers':     { label: '👀 Viewers', color: '#94a3b8' }
+        };
 
-    async function init() {
-        try {
-            const resp = await fetch('/api/credits/data');
-            const data = await resp.json();
-            const container = document.getElementById('scroll-container');
-            
-            // 1. Titre
-            container.innerHTML = `<h1 class="main-title">${data.config.main_title}</h1>`;
+        async function loadCredits() {
+            try {
+                // On récupère les données fraîches depuis FastAPI
+                const res = await fetch('/api/credits/data');
+                const data = await res.json();
+                
+                const stats = data.stats;
+                const config = data.config;
+                
+                let html = `<h1 class="main-title">${config.main_title || 'MERCI À TOUS !'}</h1>`;
+                
+                // Ce Set sert UNIQUEMENT à éviter de répéter les gens dans la grande catégorie "Viewers (Lurkers)" à la fin
+                let allImportantUsers = new Set();
 
-            // 2. Sections
-            data.config.order.forEach(key => {
-                const items = data.stats[key] || [];
-                if (items.length > 0) {
-                    const sectionHtml = `
-                        <div class="section-header color-${key}">
-                            <div class="section-title">${LABELS[key] || key.toUpperCase()}</div>
-                        </div>
-                        <div class="names-wrapper">
-                            ${items.map(i => `
-                                <div class="name-card color-${key}">
-                                    ${i.name} ${i.label ? `<span class="badge-info">${i.label}</span>` : ''}
-                                </div>
-                            `).join('')}
-                        </div>
-                    `;
-                    container.insertAdjacentHTML('beforeend', sectionHtml);
+                // 1. AFFICHAGE DES CATÉGORIES IMPORTANTES (Avec doublons autorisés !)
+                for (let key of config.order) {
+                    if (key === 'viewers') continue; 
+                    if (!stats[key] || stats[key].length === 0) continue;
+                    
+                    html += `<div class="section ${key}">`;
+                    html += `<h2 class="section-title" style="color: ${MODULES[key] ? MODULES[key].color : '#fff'}">${MODULES[key] ? MODULES[key].label : key}</h2>`;
+                    html += `<div class="names-grid">`;
+                    
+                    stats[key].forEach(user => {
+                        // On le note pour ne pas l'afficher dans les Lurkers tout en bas
+                        allImportantUsers.add(user.name.toLowerCase());
+                        
+                        let labelHtml = user.label ? `<span class="user-label">${user.label}</span>` : '';
+                        html += `<div class="name-item"><span class="user-name">${user.name}</span>${labelHtml}</div>`;
+                    });
+                    
+                    html += `</div></div>`;
                 }
-            });
+                
+                // 2. AFFICHAGE DE LA CATÉGORIE "VIEWERS" (Ceux qui n'ont fait que regarder)
+                if (stats['viewers'] && stats['viewers'].length > 0) {
+                    // On filtre tous ceux qui sont DÉJÀ passés au-dessus (pour ne pas rabaisser un modo au rang de lurker)
+                    let lurkers = stats['viewers'].filter(v => !allImportantUsers.has(v.name.toLowerCase()));
+                    
+                    if (lurkers.length > 0) {
+                        html += `<div class="section viewers">`;
+                        html += `<h2 class="section-title" style="color: ${MODULES['viewers'].color}">👀 Viewers (Lurkers)</h2>`;
+                        html += `<div class="names-grid">`;
+                        lurkers.forEach(user => {
+                            let labelHtml = user.label ? `<span class="user-label" style="font-size:0.75rem; color:#64748b; background:transparent;">${user.label}</span>` : '';
+                            html += `<div class="name-item"><span class="user-name">${user.name}</span>${labelHtml}</div>`;
+                        });
+                        html += `</div></div>`;
+                    }
+                }
+                
+                html += `<h1 class="sub-title">${config.subtitle || 'À BIENTÔT SUR LE LIVE'}</h1>`;
+                
+                const container = document.getElementById('credits-container');
+                container.innerHTML = html;
+                
+                // 3. ANIMATION DE DÉFILEMENT 
+                // On calcule la hauteur dynamique pour s'arrêter juste au bon moment
+                const totalHeight = container.scrollHeight;
+                const duration = config.duration || 60;
+                
+                container.animate([
+                    { transform: `translateY(0px)` },
+                    { transform: `translateY(-${totalHeight + window.innerHeight}px)` }
+                ], {
+                    duration: duration * 1000,
+                    easing: 'linear',
+                    fill: 'forwards'
+                });
+                
+            } catch (e) {
+                console.error('Erreur lors du chargement du générique:', e);
+            }
+        }
 
-            // 3. Fin
-            container.insertAdjacentHTML('beforeend', `<h2 class="subtitle">${data.config.subtitle}</h2><div style="height:110vh"></div>`);
-
-            // 4. Animation
-            setTimeout(() => {
-                const distance = container.offsetHeight + window.innerHeight;
-                container.style.transition = `transform ${data.config.duration}s linear`;
-                container.style.transform = `translateY(-${distance}px)`;
-            }, 2000);
-
-        } catch (e) { console.error(e); }
-    }
-    window.onload = init;
-</script>
+        // On patiente 2 secondes que OBS soit bien réveillé avant de démarrer la vidéo
+        setTimeout(loadCredits, 2000);
+    </script>
 </body>
 </html>

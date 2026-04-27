@@ -101,11 +101,6 @@ class MasthbotTwitch(commands.Bot):
                 self.announcements_timer.start()
                 self._announcements_started = True
                 
-            if not hasattr(self, "_level_announcements_started"):
-                print("🌟 [ROUTINE] Lancement de l'annonce des Level Up (1h)...")
-                self.level_announcements_timer.start()
-                self._level_announcements_started = True
-                
         except Exception as e:
             print(f"❌ [READY ERROR] : {e}")
 
@@ -339,22 +334,18 @@ class MasthbotTwitch(commands.Bot):
             logger.error(f"❌ [HELIX ACTION ERROR] : {e}")
 
     async def _handle_chat_vote(self, message, choice_idx):
-        """Gère l'insertion sécurisée du vote depuis le chat."""
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         try:
-            # On récupère le sondage actif
             active_poll = conn.execute("SELECT id, option1, option2, option3, option4 FROM polls WHERE is_active=1 ORDER BY id DESC LIMIT 1").fetchone()
             
             if not active_poll:
                 return await message.channel.send(f"@{message.author.name}, il n'y a aucun sondage actif pour le moment ! 🐾")
 
-            # On vérifie si l'option choisie existe dans ce sondage
             opt_key = f"option{choice_idx}"
             if not active_poll[opt_key]:
                 return await message.channel.send(f"@{message.author.name}, ce choix n'est pas disponible !")
 
-            # Insertion ou Mise à jour automatique du vote (grâce au UNIQUE sur poll_id + twitch_id)
             conn.execute("""
                 INSERT INTO poll_votes (poll_id, twitch_id, option_index) 
                 VALUES (?, ?, ?)
@@ -362,7 +353,15 @@ class MasthbotTwitch(commands.Bot):
             """, (active_poll['id'], str(message.author.id), choice_idx))
             conn.commit()
             
-            # ✅ Confirmation écrite dans le chat
+            # --- 🟢 NOUVEAU : On force l'affichage de l'overlay sur OBS au moment du vote ---
+            async with aiohttp.ClientSession() as session:
+                payload = {"type": "show_poll"}
+                try:
+                    await session.post("http://127.0.0.1:3005/api/trigger", json=payload)
+                except Exception:
+                    pass
+            # ---------------------------------------------------------------------------------
+
             await message.channel.send(f"✅ Vote de @{message.author.name} pris en compte !")
             
         except Exception as e:
