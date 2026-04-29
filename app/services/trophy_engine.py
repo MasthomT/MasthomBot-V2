@@ -1,0 +1,124 @@
+import sqlite3
+import asyncio
+import logging
+import json
+import aiohttp
+from datetime import datetime
+
+from app.repositories import viewer_repo 
+from app.routes.overlays import trigger_overlay_event
+
+logger = logging.getLogger("masthbot.trophies")
+
+DB_PATH = "bot_database.db"
+
+async def auto_trophy_routine():
+    """Scanne les viewers toutes les 5 minutes pour décerner les trophées automatiques et l'EXP bonus."""
+    logger.info("🏆 [TROPHY ENGINE] Moteur d'attribution automatique démarré.")
+    await asyncio.sleep(15)
+
+    while True:
+        try:
+            conn = sqlite3.connect(DB_PATH, timeout=20.0)
+            conn.row_factory = sqlite3.Row
+            
+            # 1. On récupère les règles actives
+            rules = conn.execute("SELECT * FROM trophy_list WHERE condition_type != 'none' AND condition_value > 0").fetchall()
+            
+            winners = []
+            valid_cols_direct = [
+                'messages', 'points', 'watchtime', 'first_count', 'deuz_count', 'troiz_count', 
+                'gifts_count', 'roast_level', 'is_vip',
+                # --- NOUVELLES COLONNES EXHAUSTIVES ---
+                'bombs_won', 'bombs_lost', 'rewards_claimed' 
+            ]
+            
+            for rule in rules:
+                t_id = rule['id']
+                c_type = rule['condition_type']
+                c_val = rule['condition_value']
+                
+                target_col = c_type
+                target_val = c_val
+                custom_where = None
+                
+                if c_type == 'watchtime_h':
+                    target_col = 'watchtime'
+                    target_val = c_val * 3600
+                elif c_type == 'level':
+                    target_col = 'points'
+                    target_val = int(100 * (c_val ** 2.2))
+                elif c_type == 'is_vip':
+                    target_col = 'is_vip'
+                    target_val = 1
+                elif c_type == 'has_context':
+                    custom_where = "(nickname IS NOT NULL OR favorite_game IS NOT NULL OR vibe IS NOT NULL OR useless_talent IS NOT NULL)"
+                
+                if not custom_where and target_col not in valid_cols_direct: continue
+                
+                if custom_where:
+                    query = f"""
+                        SELECT twitch_id, username FROM viewers 
+                        WHERE {custom_where}
+                        AND twitch_id NOT IN (SELECT twitch_id FROM viewer_trophies WHERE trophy_id = ?)
+                    """
+                    eligible = conn.execute(query, (t_id,)).fetchall()
+                else:
+                    query = f"""
+                        SELECT twitch_id, username FROM viewers 
+                        WHERE {target_col} >= ? 
+                        AND twitch_id NOT IN (SELECT twitch_id FROM viewer_trophies WHERE trophy_id = ?)
+                    """
+                    eligible = conn.execute(query, (target_val, t_id)).fetchall()
+                
+                for v in eligible:
+                    conn.execute("INSERT INTO viewer_trophies (twitch_id, trophy_id) VALUES (?, ?)", (v['twitch_id'], t_id))
+                    winners.append({"twitch_id": v['twitch_id'], "username": v['username'], "rule": dict(rule)})
+
+            conn.commit()
+            conn.close()
+
+            # 3. DISTRIBUTION DES RÉCOMPENSES ET DÉCLENCHEMENT OBS
+            for w in winners:
+                r = w['rule']
+                bonus_xp = r.get('reward_exp', 0)
+                event_details = f"A débloqué le succès : {r['icon']} {r['label']} !"
+                
+                if bonus_xp > 0:
+                    event_details += f" 🎁 (+{bonus_xp} EXP)"
+                    await viewer_repo.add_experience(w['twitch_id'], w['username'], bonus_xp, "TROPHY", f"Succès : {r['label']}")
+                
+                # Log Dashboard
+                conn_log = sqlite3.connect(DB_PATH)
+                details_json = json.dumps({"reason": event_details, "source": "Félix (Haut Fait)"})
+                conn_log.execute(
+                    "INSERT INTO stream_events (event_type, username, details, timestamp) VALUES (?, ?, ?, datetime('now', 'localtime'))", 
+                    ("reward", w['username'], details_json)
+                )
+                conn_log.commit()
+                conn_log.close()
+                
+                # 🎬 DÉCLENCHEMENT DE L'ALERTE SUR OBS (Node.js)
+                try:
+                    timeout = aiohttp.ClientTimeout(total=3)
+                    async with aiohttp.ClientSession(timeout=timeout) as session:
+                        payload = {
+                            "type": "trophy_unlock",
+                            "details": {
+                                "username": w['username'],
+                                "trophy_name": r['label'],
+                                "icon": r['icon'],
+                                "tier": r.get('tier', 'Standard')
+                            }
+                        }
+                        await session.post("http://127.0.0.1:3005/api/trigger", json=payload)
+                except Exception as e:
+                    logger.error(f"❌ Erreur Overlay Trophée : {e}")
+                
+                logger.info(f"🎉 [HAUT FAIT] {w['username']} a gagné '{r['label']}' (Tier {r.get('tier', 'Standard')}) !")
+
+        except Exception as e:
+            logger.error(f"❌ [TROPHY ENGINE] Erreur de routine : {e}")
+
+        # Pause de 5 minutes
+        await asyncio.sleep(300)

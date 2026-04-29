@@ -1,8 +1,11 @@
+import asyncio
+import aiosqlite
 import os
 import sqlite3
 import random
 from dotenv import load_dotenv
 from twitchio.ext import commands
+from datetime import datetime, date
 
 from app.core.auth import refresh_twitch_token
 
@@ -75,6 +78,56 @@ class MasthomBot(commands.Bot):
         # --- LOG DE RÉCEPTION ---
         # Si tu ne vois pas cette ligne, le bot n'est pas sur le bon salon Twitch.
         print(f"📩 [MESSAGE] {message.author.name}: {message.content}")
+
+twitch_id = str(message.author.id)
+        username = message.author.name
+        content = message.content
+        today_date = date.today().isoformat()
+        now_time = datetime.now().isoformat()
+
+        # 1. Compteur d'emotes exclusives de la chaîne ("mastho2")
+        emotes_in_message = 0
+        mots = content.split()
+        for mot in mots:
+            if mot.startswith("mastho2"):
+                emotes_in_message += 1
+
+        try:
+            # 2. Mise à jour de la base de données (Asynchrone avec aiosqlite)
+            async with aiosqlite.connect(DB_PATH) as db:
+                
+                # --- A. TABLE 'viewers' (STATISTIQUES GLOBALES) ---
+                # On s'assure que le viewer existe (Insert or Ignore / Update)
+                await db.execute("""
+                    INSERT INTO viewers (twitch_id, username, messages, emotes_count, streak_days, last_active_date)
+                    VALUES (?, ?, 1, ?, 1, ?)
+                    ON CONFLICT(twitch_id) DO UPDATE SET
+                        username = excluded.username,
+                        messages = messages + 1,
+                        emotes_count = emotes_count + ?,
+                        -- Logique du Streak : Si la date de dernière activité était hier, on fait +1.
+                        -- Si c'était avant-hier ou plus, on retombe à 1. Si c'est aujourd'hui, ça ne bouge pas.
+                        streak_days = CASE
+                            WHEN last_active_date = date(?, '-1 day') THEN streak_days + 1
+                            WHEN last_active_date < date(?, '-1 day') THEN 1
+                            ELSE streak_days
+                        END,
+                        last_active_date = ?
+                """, (twitch_id, username, emotes_in_message, today_date, emotes_in_message, today_date, today_date, today_date))
+
+                # --- B. TABLE 'viewer_daily_stats' (STATISTIQUES DE SESSION) ---
+                # On crée la stat de la session du jour si elle n'existe pas, sinon on la met à jour.
+                await db.execute("""
+                    INSERT INTO viewer_daily_stats (twitch_id, day, messages)
+                    VALUES (?, ?, 1)
+                    ON CONFLICT(twitch_id, day) DO UPDATE SET
+                        messages = messages + 1
+                """, (twitch_id, today_date))
+
+                await db.commit()
+                
+        except Exception as e:
+            print(f"❌ [DB ERROR] Erreur lors de l'enregistrement des stats de {username}: {e}")
 
         # 1. Lecture de la base de données
         settings, personality = self.get_db_config()

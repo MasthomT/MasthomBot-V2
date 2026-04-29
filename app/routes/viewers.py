@@ -90,13 +90,26 @@ async def admin_viewer_history(request: Request, twitch_id: str):
 
     # Logs d'événements
     special_events = conn.execute("SELECT * FROM viewer_exp_log WHERE twitch_id = ? ORDER BY timestamp DESC LIMIT 50", (twitch_id,)).fetchall()
+    
+    # 🏆 NOUVEAU : RÉCUPÉRATION DES TROPHÉES DE CE VIEWER
+    # On fait une jointure (JOIN) entre ses possessions (viewer_trophies) et le catalogue (trophy_list)
+    trophies_raw = conn.execute("""
+        SELECT t.label, t.icon, t.tier, vt.earned_at
+        FROM viewer_trophies vt
+        JOIN trophy_list t ON vt.trophy_id = t.id
+        WHERE vt.twitch_id = ?
+        ORDER BY vt.earned_at DESC
+    """, (twitch_id,)).fetchall()
+    
     conn.close()
 
+    # On envoie toutes les données à la page HTML, y compris la nouvelle variable 'viewer_trophies'
     return templates.TemplateResponse(request=request, name="admin/viewer_history.html", context={
         "request": request,
         "viewer": viewer,
         "daily_stats": daily_stats,
-        "special_events": [dict(e) for e in special_events]
+        "special_events": [dict(e) for e in special_events],
+        "viewer_trophies": [dict(t) for t in trophies_raw] # 👈 La variable est envoyée ici
     })
 
 # =====================================================================

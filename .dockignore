@@ -1,0 +1,16 @@
+Fichiers et dossiers à ignorer lors de la création de l'image Docker
+
+venv/
+pycache/
+*.pyc
+.git/
+
+🚨 TRÈS IMPORTANT : On empêche Docker de copier/écraser tes fichiers de données
+
+Ils seront gérés en toute sécurité par les "volumes" du docker-compose.yml
+
+.env
+*.db
+*.sqlite3
+credits_session.json
+logs/

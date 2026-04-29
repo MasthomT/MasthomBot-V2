@@ -10,8 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 
 # --- IMPORT DES ROUTES ---
-from app.routes import admin, viewers, api, announcements, stats, public, overlays, polls
-# ✅ IMPORT DIRECT (Contourne le blocage de __init__.py)
+from app.routes import admin, viewers, api, announcements, stats, public, overlays, polls, rewards
 from app.routes.credits import router as credits_router 
 
 # --- IMPORT DES SERVICES ---
@@ -100,7 +99,8 @@ app.include_router(announcements.router)
 app.include_router(stats.router)
 app.include_router(overlays.router)
 app.include_router(polls.router)
-app.include_router(credits_router) # ✅ On branche le routeur direct du générique !
+app.include_router(credits_router)
+app.include_router(rewards.router)
 
 if __name__ == "__main__":
     import uvicorn

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Overlay Trophées</title>
+    <style>
+        /* Importation de polices plus fines et élégantes (600 pour normal, 800 pour gras) */
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;800&family=Inter:wght@600;800&display=swap');
+
+        /* Réinitialisation de la page pour OBS (fond transparent et pas de barre de défilement) */
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: transparent;
+        }
+
+        /* La boîte principale du trophée, cachée à gauche de l'écran par défaut */
+        #trophy-container {
+            position: absolute;
+            top: 40px;
+            left: -600px;
+            display: flex;
+            align-items: center;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border: 2px solid #334155;
+            border-radius: 100px;
+            padding: 10px 30px 10px 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 0 20px rgba(99, 102, 241, 0.1);
+            transition: left 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+            width: max-content;
+        }
+
+        /* La classe qui fait glisser la boîte dans l'écran */
+        #trophy-container.show {
+            left: 40px;
+        }
+
+        /* Le cercle qui contient l'icône du trophée */
+        .icon-box {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 50%;
+            width: 70px;
+            height: 70px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 36px;
+            margin-right: 20px;
+            border: 2px solid transparent;
+            transition: box-shadow 0.3s, border-color 0.3s;
+        }
+
+        /* La zone contenant tous les textes */
+        .text-box {
+            font-family: 'Inter', sans-serif;
+            color: white;
+            text-transform: uppercase;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        /* Le petit titre au-dessus */
+        .text-box .title {
+            font-size: 11px;
+            color: #94a3b8;
+            letter-spacing: 2px;
+            margin-bottom: 2px;
+            font-weight: 800;
+        }
+
+        /* Le pseudo du viewer */
+        .text-box .username {
+            font-size: 22px;
+            color: #f8fafc;
+            font-weight: 800;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            margin-bottom: 3px;
+        }
+
+        /* Conteneur pour aligner le badge de rareté et le nom du trophée */
+        .trophy-info {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Le design visuel du badge de Tier (Or, Diamant, etc.) */
+        .tier-badge {
+            font-size: 10px;
+            font-weight: 800;
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid currentColor;
+            background: rgba(0,0,0,0.3);
+        }
+
+        /* --- DICTIONNAIRE DES COULEURS DES TEXTES --- */
+        .color-standard { color: #94a3b8; }
+        .color-bronze   { color: #d97706; }
+        .color-argent   { color: #cbd5e1; }
+        .color-or       { color: #fbbf24; }
+        .color-platine  { color: #2dd4bf; }
+        .color-diamant  { color: #c084fc; }
+
+        /* --- DICTIONNAIRE DES HALOS LUMINEUX DE L'ICÔNE --- */
+        .glow-standard { box-shadow: 0 0 15px rgba(148,163,184, 0.3); border-color: rgba(148,163,184, 0.4); }
+        .glow-bronze   { box-shadow: 0 0 15px rgba(217,119,6, 0.4);   border-color: rgba(217,119,6, 0.5); }
+        .glow-argent   { box-shadow: 0 0 15px rgba(203,213,225, 0.4); border-color: rgba(203,213,225, 0.5); }
+        .glow-or       { box-shadow: 0 0 15px rgba(251,191,36, 0.5);  border-color: rgba(251,191,36, 0.6); }
+        .glow-platine  { box-shadow: 0 0 20px rgba(45,212,191, 0.6);  border-color: rgba(45,212,191, 0.7); }
+        .glow-diamant  { box-shadow: 0 0 25px rgba(192,132,252, 0.7); border-color: rgba(192,132,252, 0.8); }
+    </style>
+</head>
+<body>
+
+    <!-- Structure HTML de l'alerte -->
+    <div id="trophy-container">
+        <div class="icon-box glow-standard" id="t-icon">🏆</div>
+        
+        <div class="text-box">
+            <div class="title">NOUVEAU TROPHÉE DÉBLOQUÉ</div>
+            <div class="username" id="t-user">@Viewer</div>
+            
+            <div class="trophy-info">
+                <span id="t-tier" class="tier-badge color-standard">STANDARD</span>
+                <span id="t-name" class="color-standard">Nom du Trophée</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script de gestion des événements et de l'animation -->
+    <script>
+        // Connexion au flux d'événements du bot Python
+        const source = new EventSource('/overlay_events');
+
+        // Ciblage des éléments HTML à modifier
+        const container = document.getElementById('trophy-container');
+        const iconEl    = document.getElementById('t-icon');
+        const userEl    = document.getElementById('t-user');
+        const tierEl    = document.getElementById('t-tier');
+        const nameEl    = document.getElementById('t-name');
+
+        // File d'attente pour ne pas superposer les alertes
+        const queue = [];
+        let isAnimating = false;
+
+        // Réception d'un message depuis le serveur
+        source.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.type === 'trophy_unlock') {
+                queue.push(data.details);
+                processQueue();
+            }
+        };
+
+        // Fonction qui traite et affiche les alertes une par une
+        function processQueue() {
+            // Si une animation est déjà en cours ou qu'il n'y a rien à afficher, on s'arrête
+            if (isAnimating || queue.length === 0) return;
+            isAnimating = true;
+
+            // On prend le premier trophée de la liste d'attente
+            const trophy = queue.shift();
+
+            // Formatage de la rareté (Tier) pour qu'elle corresponde aux classes CSS
+            const tierName = trophy.tier || 'Standard';
+            const tierClass = tierName.toLowerCase();
+
+            // Mise à jour des textes
+            iconEl.innerText = trophy.icon || '🏆';
+            userEl.innerText = '@' + trophy.username;
+            tierEl.innerText = tierName;
+            nameEl.innerText = trophy.trophy_name;
+
+            // Mise à jour dynamique des couleurs
+            iconEl.className = 'icon-box glow-' + tierClass;
+            tierEl.className = 'tier-badge color-' + tierClass;
+            nameEl.className = 'color-' + tierClass;
+
+            // Animation : fait entrer l'alerte dans l'écran
+            container.classList.add('show');
+
+            // Animation : laisse l'alerte à l'écran 5 secondes, puis la retire
+            setTimeout(() => {
+                container.classList.remove('show');
+
+                // Animation : attend 1 seconde que l'alerte soit bien sortie avant de traiter la suivante
+                setTimeout(() => {
+                    isAnimating = false;
+                    processQueue();
+                }, 1000);
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

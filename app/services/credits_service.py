@@ -1,6 +1,9 @@
 import logging
 import json
 import os
+import sqlite3
+
+from datetime import date
 
 logger = logging.getLogger("masthbot.credits")
 SESSION_FILE = "/home/masthom/BOT_V2/credits_session.json"
@@ -43,6 +46,38 @@ class CreditsService:
         n = name.lower()
         self.session_watchtime[n] = self.session_watchtime.get(n, 0) + minutes
         self._save_session()
+
+        DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
+        
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            today_date = date.today().isoformat()
+            
+            # On récupère le twitch_id du viewer pour être précis
+            cursor = conn.cursor()
+            cursor.execute("SELECT twitch_id FROM viewers WHERE LOWER(username) = ?", (n,))
+            result = cursor.fetchone()
+            
+            if result:
+                twitch_id = result[0]
+                # On met à jour (ou on crée) la stat du jour en secondes (minutes * 60)
+                # On utilise +60 car ton système ajoute 1 minute à la fois
+                conn.execute("""
+                    INSERT INTO viewer_daily_stats (twitch_id, day, watchtime)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(twitch_id, day) DO UPDATE SET
+                        watchtime = watchtime + ?
+                """, (twitch_id, today_date, minutes * 60, minutes * 60))
+                
+                # On en profite pour mettre aussi à jour le Watchtime GLOBAL
+                conn.execute("""
+                    UPDATE viewers SET watchtime = watchtime + ? WHERE twitch_id = ?
+                """, (minutes * 60, twitch_id))
+                
+                conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.error(f"Erreur sync SQLite Watchtime pour {name}: {e}")
 
     def log_event(self, category, name, label=""):
         if category not in self.categories and category != "viewers": return

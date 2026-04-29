@@ -93,15 +93,42 @@ async def get_viewer_profile(twitch_id: str, username: str = None):
         
         viewer_data = dict(row)
 
-        # ✅ FIX: On met à jour l'heure de connexion, mais SANS SPAMMER LE FIL D'ACTUALITÉ
         conn.execute("UPDATE viewers SET last_seen = datetime('now', 'localtime'), last_web_login = datetime('now', 'localtime') WHERE twitch_id = ?", (twitch_id,))
         conn.commit()
 
+        # Calcul Niveau et Rang
         xp = viewer_data.get('points', 0)
         viewer_data['level'] = max(1, int((xp / 100) ** (1 / 2.2))) if xp > 0 else 1
         rank = conn.execute(f"SELECT COUNT(*) FROM viewers WHERE points > ? AND LOWER(username) NOT IN {EXCLUSION_LIST}", (xp,)).fetchone()[0] + 1
         viewer_data['rank'] = rank
         
+        # 🏆 NOUVEAU : RÉCUPÉRATION DES TROPHÉES ET DES COMPTEURS
+        trophies_raw = conn.execute("""
+            SELECT t.label, t.icon, t.description, t.tier, vt.earned_at
+            FROM viewer_trophies vt
+            JOIN trophy_list t ON vt.trophy_id = t.id
+            WHERE vt.twitch_id = ?
+            ORDER BY vt.earned_at DESC
+        """, (twitch_id,)).fetchall()
+
+        trophies_list = []
+        tier_counts = {"Standard": 0, "Bronze": 0, "Argent": 0, "Or": 0, "Platine": 0, "Diamant": 0}
+
+        for tr in trophies_raw:
+            t_dict = dict(tr)
+            trophies_list.append(t_dict)
+            
+            # On compte combien de trophées de chaque Tier le viewer possède pour les afficher en haut
+            tier_name = t_dict.get('tier', 'Standard')
+            if tier_name in tier_counts:
+                tier_counts[tier_name] += 1
+            else:
+                tier_counts[tier_name] = 1
+
+        viewer_data['trophies'] = trophies_list
+        viewer_data['tier_counts'] = tier_counts
+
+        # Historique d'activité standard
         history_list = []
         settings_row = conn.execute("SELECT exp_per_message, exp_per_watchtime FROM settings WHERE id=1").fetchone()
         exp_msg = settings_row['exp_per_message'] if settings_row else 2

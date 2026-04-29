@@ -1,0 +1,21 @@
+services:
+  felix_bot:
+    build: .
+    container_name: felix_v2_core
+    restart: unless-stopped
+    
+    # 🔌 Mapping des ports : FastAPI (8000) ET Node.js (3005)
+    ports:
+      - "8000:8000"
+      - "3005:3005"
+    
+    # 💾 LES VOLUMES : Tes données sauvegardées en sécurité sur le Pi
+    volumes:
+      - ./bot_database.db:/app/bot_database.db
+      - ./credits_session.json:/app/credits_session.json
+      - ./.env:/app/.env
+      - ./logs:/app/logs
+      - ./plugins:/app/plugins
+      
+    environment:
+      - TZ=Europe/Paris

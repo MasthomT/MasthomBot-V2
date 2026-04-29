@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panthéon des Trophées - MasthomBot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; transition: all 0.3s; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #6366f1; outline: none; ring: 2px ring-indigo-500/20; }
+        .trophy-item:hover { border-color: #6366f1; background: rgba(99, 102, 241, 0.05); }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        
+        /* Couleurs des Tiers */
+        .tier-standard { color: #94a3b8; border-color: #475569; background: rgba(148,163,184,0.1); }
+        .tier-bronze { color: #d97706; border-color: #b45309; background: rgba(217,119,6,0.1); }
+        .tier-argent { color: #cbd5e1; border-color: #94a3b8; background: rgba(203,213,225,0.1); }
+        .tier-or { color: #fbbf24; border-color: #d97706; background: rgba(251,191,36,0.1); box-shadow: 0 0 10px rgba(251,191,36,0.2); }
+        .tier-platine { color: #2dd4bf; border-color: #0d9488; background: rgba(45,212,191,0.1); box-shadow: 0 0 15px rgba(45,212,191,0.3); }
+        .tier-diamant { color: #c084fc; border-color: #9333ea; background: rgba(192,132,252,0.1); box-shadow: 0 0 20px rgba(192,132,252,0.4); }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen">
+    
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 md:p-10 flex flex-col h-screen overflow-y-auto custom-scrollbar">
+        <header class="mb-10 flex flex-col md:flex-row justify-between items-end gap-4 border-b border-slate-700/50 pb-6">
+            <!-- PARTIE GAUCHE : Titres -->
+            <div>
+                <h1 class="text-3xl font-black text-white italic tracking-tight">Panthéon des <span class="text-indigo-400">Trophées</span></h1>
+                <p class="text-slate-400 text-sm font-bold uppercase tracking-widest mt-1">Créez des succès automatiques avec paliers d'EXP</p>
+            </div>
+
+            <!-- PARTIE DROITE : Notifications et Bouton -->
+            <div class="flex items-center gap-4">
+                
+                <!-- Notifications (Toasts) existantes -->
+                {% if request.query_params.get('success') %}
+                <div id="toast" class="bg-emerald-500/10 text-emerald-400 px-6 py-2 rounded-xl font-bold border border-emerald-500/20 animate-pulse flex items-center gap-2">
+                    <i class="fas fa-check-circle"></i> Action effectuée !
+                </div>
+                <script>setTimeout(()=>document.getElementById('toast').style.display='none', 3000)</script>
+                {% endif %}
+
+                {% if request.query_params.get('error') == 'viewer_not_found' %}
+                <div id="toast-err" class="bg-rose-500/10 text-rose-400 px-6 py-2 rounded-xl font-bold border border-rose-500/20 flex items-center gap-2">
+                    <i class="fas fa-exclamation-triangle"></i> Viewer introuvable...
+                </div>
+                <script>setTimeout(()=>document.getElementById('toast-err').style.display='none', 3000)</script>
+                {% endif %}
+
+                <!-- Nouveau Bouton de Synchronisation Automatique -->
+                <form action="/admin/trophy/sync_auto" method="POST" class="m-0">
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 px-5 rounded-xl shadow-lg hover:shadow-indigo-500/25 transition-all duration-300 flex items-center gap-2 text-sm group">
+                        <i class="fas fa-sync-alt group-hover:rotate-180 transition-transform duration-500"></i>
+                        Synchroniser
+                    </button>
+                </form>
+
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+            
+            <!-- GAUCHE : ATTRIBUTION ET HISTORIQUE (5/12) -->
+            <div class="xl:col-span-5 space-y-8">
+                <!-- ATTRIBUER MANUELLEMENT -->
+                <section class="config-card p-8 rounded-3xl shadow-2xl border-l-4 border-indigo-500">
+                    <h2 class="text-xs font-black text-indigo-400 uppercase tracking-widest mb-6">Offrir une distinction manuelle</h2>
+                    <form action="/admin/trophy/award" method="POST" class="space-y-5">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Destinataire (Pseudo Twitch exact)</label>
+                            <input type="text" name="username" placeholder="ex: MonkeyMaxou" required class="w-full input-dark rounded-xl p-3 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Choisir la récompense</label>
+                            <select name="trophy_id" class="w-full input-dark rounded-xl p-3 text-sm cursor-pointer">
+                                {% for t in trophies %}
+                                <option value="{{ t.id }}">{{ t.icon }} {{ t.label }} {% if t.tier != 'Standard' %}({{ t.tier }}){% endif %}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-4 rounded-2xl shadow-lg transition-all active:scale-95">
+                            VALIDER LA RÉCOMPENSE ✨
+                        </button>
+                    </form>
+                </section>
+
+                <!-- DERNIERS GAGNANTS -->
+                <section class="config-card p-8 rounded-3xl shadow-2xl">
+                        <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2">
+                            <i class="fas fa-history text-indigo-400"></i> Récemment décernés (50 derniers)
+                        </h2>
+                        <div class="space-y-3">
+                            {% for win in recent_wins %}
+                            <div class="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 flex items-center justify-between group">
+                                <div class="flex items-center gap-4">
+                                    <span class="text-2xl">{{ win.icon }}</span>
+                                    <div>
+                                        <div class="flex items-center gap-3">
+                                            <span class="text-sm font-black text-white block">{{ win.username }}</span>
+                                            <span class="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">
+                                                {{ win.earned_at[:16].replace('-', '/') }}
+                                            </span>
+                                        </div>
+                                        <div class="flex items-center gap-2 mt-1">
+                                            <span class="text-[9px] text-indigo-400 font-bold uppercase tracking-widest">{{ win.label }}</span>
+                                            {% if win.tier and win.tier != 'Standard' %}
+                                            <span class="text-[8px] px-1 rounded uppercase font-bold border tier-{{ win.tier|lower }}">{{ win.tier }}</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                <form action="/admin/trophy/revoke/{{ win.award_id }}" method="POST">
+                                    <button type="submit" class="text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all p-2" title="Révoquer le trophée">
+                                        <i class="fas fa-undo-alt text-xs"></i>
+                                    </button>
+                                </form>
+                            </div>
+                            {% else %}
+                            <div class="text-center py-8 opacity-20 italic text-sm">Aucun trophée distribué récemment.</div>
+                            {% endfor %}
+                        </div>
+                    </section>
+            </div>
+
+            <!-- DROITE : CATALOGUE ET CRÉATION (7/12) -->
+            <div class="xl:col-span-7 space-y-8">
+                
+                <!-- CRÉER / MODIFIER NOUVEAU AVEC RÈGLES AUTO -->
+                <section class="config-card p-8 rounded-3xl shadow-2xl border-l-4 border-emerald-500">
+                    <h2 class="text-xs font-black text-emerald-400 uppercase tracking-widest mb-6 flex items-center justify-between">
+                        <span id="form_title">Créer un nouveau Badge</span>
+                        <i class="fas fa-medal text-xl"></i>
+                    </h2>
+                    <form id="trophyForm" action="/admin/trophy/create" method="POST" class="space-y-5">
+                        <input type="hidden" name="id" id="form_trophy_id">
+                        
+                        <!-- Ligne 1 : Base -->
+                        <div class="grid grid-cols-12 gap-4">
+                            <div class="col-span-2">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Icône</label>
+                                <input type="text" name="icon" id="form_icon" value="🏆" class="w-full input-dark rounded-xl p-3 text-center text-xl">
+                            </div>
+                            <div class="col-span-6">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Nom du Succès</label>
+                                <input type="text" name="label" id="form_label" placeholder="ex: Maître du Chat" required class="w-full input-dark rounded-xl p-3 text-sm">
+                            </div>
+                            <div class="col-span-4">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Tier / Rareté</label>
+                                <select name="tier" id="form_tier" class="w-full input-dark rounded-xl p-3 text-sm font-bold cursor-pointer">
+                                    <option value="Standard" class="text-slate-400">Standard</option>
+                                    <option value="Bronze" class="text-orange-400">Bronze</option>
+                                    <option value="Argent" class="text-slate-300">Argent</option>
+                                    <option value="Or" class="text-yellow-400">Or</option>
+                                    <option value="Platine" class="text-cyan-300">Platine</option>
+                                    <option value="Diamant" class="text-purple-400">Diamant</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <!-- Ligne 2 : Détails -->
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Catégorie</label>
+                                <select name="category" id="form_category" class="w-full input-dark rounded-xl p-3 text-sm cursor-pointer">
+                                    <option value="general">Général</option>
+                                    <option value="podium">Podium / Rapidité</option>
+                                    <option value="loyalty">Fidélité & EXP</option>
+                                    <option value="special">Cadeaux & Événements</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Description (Optionnel)</label>
+                                <input type="text" name="description" id="form_description" placeholder="Ex: Atteindre le niveau 10..." class="w-full input-dark rounded-xl p-3 text-sm">
+                            </div>
+                        </div>
+
+                        <!-- 🤖 SECTION INTELLIGENCE AUTOMATIQUE ET RÉCOMPENSE -->
+                        <div class="bg-emerald-500/5 border border-emerald-500/20 p-5 rounded-2xl">
+                            <h3 class="text-[10px] font-black text-emerald-400 uppercase mb-4 flex items-center justify-between">
+                                <span><i class="fas fa-robot mr-2"></i> Déblocage Automatique & Récompense</span>
+                            </h3>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <!-- Condition avec TOUTES les options organisées -->
+                                <div>
+                                    <label class="block text-[9px] font-bold text-slate-400 uppercase mb-2">Condition cible</label>
+                                    <select name="condition_type" id="form_condition_type" class="w-full input-dark rounded-xl p-2 text-[11px] cursor-pointer border-emerald-500/30 text-emerald-300 font-bold">
+                                        <option value="none">🕹️ MANUEL UNIQUEMENT</option>
+    
+                                        <optgroup label="🌟 Fidélité & Temps">
+                                            <option value="level">Atteindre le Niveau X</option>
+                                            <option value="points">Atteindre X Points d'EXP (Global)</option>
+                                            <option value="points_session">Gagner X Points d'EXP (Session)</option>
+                                            <option value="watchtime_h">Watchtime > X Heures (Global)</option>
+                                            <option value="watchtime_session_m">Watchtime > X Minutes (Session)</option>
+                                            <option value="streak_days">Présence : X Streams consécutifs</option>
+                                        </optgroup>
+                                        
+                                        <optgroup label="💬 Activité Chat">
+                                            <option value="messages">Envoyer X Messages (Global)</option>
+                                            <option value="messages_session">Envoyer X Messages (Session)</option>
+                                            <option value="emotes_global">Utiliser X Emotes (Global)</option>
+                                            <option value="commands_global">Taper X Commandes (Global)</option>
+                                        </optgroup>
+                                        
+                                        <optgroup label="👑 Statut & Soutien">
+                                            <option value="is_vip">Obtenir le statut VIP (Valeur: 1)</option>
+                                            <option value="sub_months">Cumuler X mois d'abonnement</option>
+                                            <option value="gifts_count">Offrir X Subgifts (Global)</option>
+                                            <option value="gifts_session">Offrir X Subgifts (Session)</option>
+                                            <option value="bits_global">Donner X Bits (Global)</option>
+                                        </optgroup>
+    
+                                        <optgroup label="🏎️ Jeux & Rapidité">
+                                            <option value="first_count">Décrocher X fois le !first</option>
+                                            <option value="deuz_count">Décrocher X fois le !deuz</option>
+                                            <option value="troiz_count">Décrocher X fois le !troiz</option>
+                                            <option value="gamble_won">Gagner X Points aux paris</option>
+                                        </optgroup>
+                                        
+                                        <optgroup label="🤖 IA & Site Web">
+                                            <option value="has_context">Remplir sa fiche IA (Valeur: 1)</option>
+                                            <option value="roast_level">Régler son Niveau de Roast à X</option>
+                                            <option value="ai_prompts">Parler à l'IA X fois</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                                <!-- Valeur cible -->
+                                <div>
+                                    <label class="block text-[9px] font-bold text-slate-400 uppercase mb-2">Valeur à atteindre</label>
+                                    <input type="number" name="condition_value" id="form_condition_value" value="0" class="w-full input-dark rounded-xl p-2 text-sm text-center font-mono font-bold text-white">
+                                </div>
+                                <!-- Récompense EXP -->
+                                <div class="bg-amber-500/10 rounded-xl p-2 border border-amber-500/30 text-center">
+                                    <label class="block text-[9px] font-black text-amber-400 uppercase mb-1"><i class="fas fa-gift"></i> EXP Bonus</label>
+                                    <input type="number" name="reward_exp" id="form_reward_exp" value="0" class="w-full bg-transparent border-b border-amber-500/50 text-center text-lg font-black text-amber-400 outline-none" placeholder="+1000">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-3">
+                            <button type="submit" id="form_submit_btn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-2xl shadow-lg transition-all active:scale-95">
+                                AJOUTER AU CATALOGUE ➕
+                            </button>
+                            <button type="button" id="cancel_edit_btn" onclick="cancelEdit()" style="display: none;" class="bg-slate-700 hover:bg-slate-600 text-white font-black px-6 py-4 rounded-2xl shadow-lg transition-all active:scale-95" title="Annuler la modification">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </form>
+                </section>
+
+                <!-- BLOC : LISTE DU CATALOGUE -->
+                <section class="config-card p-8 rounded-3xl shadow-2xl h-fit">
+                    <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2">
+                        <i class="fas fa-layer-group text-indigo-400"></i> Catalogue des Distinctions
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {% for t in trophies %}
+                        <div class="trophy-item p-4 rounded-2xl border border-slate-800 bg-slate-900/30 flex items-center justify-between transition-all group relative">
+                            <div class="flex items-center gap-4">
+                                <span class="text-2xl">{{ t.icon }}</span>
+                                <div>
+                                    <span class="text-sm font-black text-white block mb-1">
+                                        {{ t.label }}
+                                        {% if t.tier and t.tier != 'Standard' %}
+                                        <span class="ml-1 text-[8px] px-1.5 py-0.5 rounded uppercase font-black border tier-{{ t.tier|lower }}">{{ t.tier }}</span>
+                                        {% endif %}
+                                    </span>
+                                    
+                                    <div class="flex items-center flex-wrap gap-1 mt-1">
+                                        {% if t.condition_type and t.condition_type != 'none' %}
+                                        <span class="text-[8px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-bold uppercase border border-emerald-500/30">
+                                            Auto: {{ t.condition_type }} ({{ t.condition_value }})
+                                        </span>
+                                        {% endif %}
+                                        
+                                        {% if t.reward_exp and t.reward_exp > 0 %}
+                                        <span class="text-[8px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-black uppercase border border-amber-500/30">
+                                            🎁 +{{ t.reward_exp }} XP
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <!-- NOUVEAU BOUTON DE TEST -->
+                                <form action="/admin/trophy/test_obs" method="POST" class="inline" title="Tester l'animation sur OBS">
+                                    <input type="hidden" name="label" value="{{ t.label }}">
+                                    <input type="hidden" name="icon" value="{{ t.icon }}">
+                                    <input type="hidden" name="tier" value="{{ t.tier }}">
+                                    <button type="submit" class="text-emerald-500 hover:text-emerald-400 transition-colors p-2">
+                                        <i class="fas fa-play text-xs"></i>
+                                    </button>
+                                </form>
+                                <button type="button" class="text-slate-500 hover:text-indigo-400 transition-colors p-2" title="Modifier"
+                                        data-id="{{ t.id }}"
+                                        data-icon="{{ t.icon }}"
+                                        data-label="{{ t.label }}"
+                                        data-desc="{{ t.description or '' }}"
+                                        data-cat="{{ t.category }}"
+                                        data-tier="{{ t.tier }}"
+                                        data-ctype="{{ t.condition_type }}"
+                                        data-cval="{{ t.condition_value }}"
+                                        data-reward="{{ t.reward_exp }}"
+                                        onclick="editTrophy(this)">
+                                    <i class="fas fa-pen text-xs"></i>
+                                </button>
+                                <form action="/admin/trophy/delete/{{ t.id }}" method="POST" onsubmit="return confirm('🚨 Attention : Supprimer ce trophée le retirera à TOUS les viewers. Confirmer ?');">
+                                    <button type="submit" class="text-slate-700 hover:text-rose-500 transition-colors p-2" title="Supprimer">
+                                        <i class="fas fa-trash-alt text-xs"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="col-span-full text-center py-10 opacity-20 italic">Le catalogue est vide. Créez votre première médaille !</div>
+                        {% endfor %}
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function editTrophy(btn) {
+            const ds = btn.dataset;
+            document.getElementById('trophyForm').action = "/admin/trophy/update";
+            document.getElementById('form_trophy_id').value = ds.id;
+            document.getElementById('form_icon').value = ds.icon;
+            document.getElementById('form_label').value = ds.label;
+            document.getElementById('form_category').value = ds.cat;
+            document.getElementById('form_description').value = ds.desc !== "None" ? ds.desc : "";
+            document.getElementById('form_tier').value = ds.tier;
+            document.getElementById('form_condition_type').value = ds.ctype || 'none';
+            document.getElementById('form_condition_value').value = ds.cval || 0;
+            document.getElementById('form_reward_exp').value = ds.reward || 0;
+
+            document.getElementById('form_title').innerHTML = 'Modifier le Badge';
+            const submitBtn = document.getElementById('form_submit_btn');
+            submitBtn.innerHTML = 'METTRE À JOUR ✏️';
+            submitBtn.classList.remove('bg-emerald-600', 'hover:bg-emerald-500');
+            submitBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-500');
+            
+            document.getElementById('cancel_edit_btn').style.display = 'block';
+            document.getElementById('trophyForm').scrollIntoView({behavior: 'smooth', block: 'center'});
+        }
+
+        function cancelEdit() {
+            document.getElementById('trophyForm').action = "/admin/trophy/create";
+            document.getElementById('form_trophy_id').value = "";
+            document.getElementById('trophyForm').reset();
+            
+            document.getElementById('form_title').innerHTML = 'Créer un nouveau Badge';
+            const submitBtn = document.getElementById('form_submit_btn');
+            submitBtn.innerHTML = 'AJOUTER AU CATALOGUE ➕';
+            submitBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-500');
+            submitBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-500');
+            
+            document.getElementById('cancel_edit_btn').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
