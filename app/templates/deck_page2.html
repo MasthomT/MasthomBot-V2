@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Félix Deck - OBS</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@800&display=swap');
+        
+        :root {
+            /* LES VRAIES VARIABLES DE TON THEME FEL-X */
+            --bg: #0b0f1a;
+            --surface: rgba(30, 41, 59, 0.4);
+            --surface-bright: rgba(51, 65, 85, 0.5);
+            --border: rgba(255, 255, 255, 0.06);
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+            
+            /* Couleurs Néon */
+            --accent: #00f5c3;       /* Cyan/Menthe */
+            --accent-glow: rgba(0, 245, 195, 0.2);
+            --danger: #f43f5e;       /* Rose/Rouge */
+            --danger-glow: rgba(244, 63, 94, 0.2);
+            --warning: #fbbf24;      /* Jaune/Orange */
+            --warning-glow: rgba(251, 191, 36, 0.2);
+            --success: #10b981;      /* Vert */
+            --success-glow: rgba(16, 185, 129, 0.2);
+            --indigo: #8b5cf6;       /* Violet */
+            --indigo-glow: rgba(139, 92, 246, 0.2);
+        }
+        
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: var(--bg); 
+            color: var(--text-main);
+            margin: 0; padding: 0; height: 100vh;
+            display: flex; flex-direction: column; overflow: hidden;
+            overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent;
+        }
+
+        /* --- HEADER --- */
+        header {
+            padding: 15px 20px; display: flex; justify-content: space-between; align-items: center;
+            background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border); flex-shrink: 0; box-shadow: 0 4px 20px rgba(0,0,0,0.5); z-index: 10;
+        }
+        .logo-area { display: flex; align-items: center; gap: 10px; }
+        .logo-icon {
+            width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--accent);
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 0 10px var(--accent-glow); background: rgba(0, 245, 195, 0.1);
+        }
+        .logo-icon i { color: var(--accent); font-size: 14px; }
+        .logo-text { font-size: 1rem; font-weight: 900; letter-spacing: -0.5px; }
+        .logo-text span { color: var(--accent); font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; margin-left: 4px; }
+        
+        .status-badge {
+            display: flex; align-items: center; gap: 6px;
+            background: rgba(0, 245, 195, 0.1); border: 1px solid rgba(0, 245, 195, 0.2);
+            padding: 4px 10px; border-radius: 20px; font-size: 0.65rem; font-weight: 900; letter-spacing: 1px; color: var(--accent); text-transform: uppercase;
+        }
+        .status-dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; box-shadow: 0 0 8px var(--accent); animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.8); } }
+
+        /* --- GRILLE & BOUTONS --- */
+        .grid-container {
+            display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(3, 1fr);
+            gap: 12px; padding: 15px; flex-grow: 1; overflow: hidden;
+        }
+        
+        .deck-btn {
+            background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative; overflow: hidden; box-shadow: 0 8px 20px -10px rgba(0,0,0,0.5);
+        }
+        
+        .deck-btn:active { transform: scale(0.92); background: var(--surface-bright); }
+        .deck-btn i { font-size: 1.6rem; margin-bottom: 8px; color: var(--text-dim); transition: 0.3s; }
+        .deck-btn span { font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-main); text-align: center; line-height: 1.2; padding: 0 4px; }
+
+        /* Couleurs de base (Bordure bas) */
+        .btn-accent { border-bottom: 3px solid var(--accent); }
+        .btn-accent i { color: var(--accent); }
+        .btn-indigo { border-bottom: 3px solid var(--indigo); }
+        .btn-indigo i { color: var(--indigo); }
+        .btn-warn { border-bottom: 3px solid var(--warning); }
+        .btn-warn i { color: var(--warning); }
+        .btn-danger { border-bottom: 3px solid var(--danger); }
+        .btn-danger i { color: var(--danger); }
+        .btn-success { border-bottom: 3px solid var(--success); }
+        .btn-success i { color: var(--success); }
+        .btn-neutral { border-bottom: 3px solid var(--text-dim); }
+
+        /* --- ÉTATS ACTIFS (Allumés) --- */
+        .active-accent {
+            background: linear-gradient(180deg, rgba(0, 245, 195, 0.15) 0%, rgba(0, 245, 195, 0.05) 100%) !important;
+            border-color: var(--accent) !important;
+            box-shadow: 0 0 20px var(--accent-glow), inset 0 0 15px var(--accent-glow) !important;
+        }
+        .active-accent i { color: var(--accent) !important; text-shadow: 0 0 10px var(--accent) !important; }
+
+        .active-indigo {
+            background: linear-gradient(180deg, rgba(139, 92, 246, 0.15) 0%, rgba(139, 92, 246, 0.05) 100%) !important;
+            border-color: var(--indigo) !important;
+            box-shadow: 0 0 20px var(--indigo-glow), inset 0 0 15px var(--indigo-glow) !important;
+        }
+        .active-indigo i { color: var(--indigo) !important; text-shadow: 0 0 10px var(--indigo) !important; }
+
+        .active-warn {
+            background: linear-gradient(180deg, rgba(251, 191, 36, 0.15) 0%, rgba(251, 191, 36, 0.05) 100%) !important;
+            border-color: var(--warning) !important;
+            box-shadow: 0 0 20px var(--warning-glow), inset 0 0 15px var(--warning-glow) !important;
+        }
+        .active-warn i { color: var(--warning) !important; text-shadow: 0 0 10px var(--warning) !important; }
+
+        .active-danger {
+            background: linear-gradient(180deg, rgba(244, 63, 94, 0.15) 0%, rgba(244, 63, 94, 0.05) 100%) !important;
+            border-color: var(--danger) !important;
+            box-shadow: 0 0 20px var(--danger-glow), inset 0 0 15px var(--danger-glow) !important;
+        }
+        .active-danger i { color: var(--danger) !important; text-shadow: 0 0 10px var(--danger) !important; }
+
+        .active-success {
+            background: linear-gradient(180deg, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.05) 100%) !important;
+            border-color: var(--success) !important;
+            box-shadow: 0 0 20px var(--success-glow), inset 0 0 15px var(--success-glow) !important;
+        }
+        .active-success i { color: var(--success) !important; text-shadow: 0 0 10px var(--success) !important; }
+
+        /* --- NAVIGATION BAS --- */
+        nav {
+            display: flex; justify-content: space-around; align-items: center;
+            background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px); border-top: 1px solid var(--border);
+            padding: 10px 0 20px 0; flex-shrink: 0; box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
+        }
+        .nav-item {
+            display: flex; flex-direction: column; align-items: center; gap: 5px;
+            color: var(--text-dim); text-decoration: none; width: 33%; transition: all 0.3s;
+        }
+        .nav-item i { font-size: 1.4rem; transition: 0.3s; }
+        .nav-item span { font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+        
+        .nav-item.active { color: var(--accent); transform: translateY(-4px); }
+        .nav-item.active i { filter: drop-shadow(0 0 8px var(--accent)); }
+        .nav-item.active::before {
+            content: ''; position: absolute; top: -10px; width: 40px; height: 3px;
+            background: var(--accent); border-radius: 0 0 4px 4px; box-shadow: 0 2px 10px var(--accent);
+        }
+
+        /* --- TOAST --- */
+        #toast {
+            visibility: hidden; transform: translateY(100%); opacity: 0;
+            position: fixed; bottom: 90px; left: 50%; margin-left: -125px; width: 250px;
+            background: rgba(15, 23, 42, 0.95); border: 1px solid var(--border);
+            color: #fff; text-align: center; border-radius: 30px; padding: 12px 20px;
+            font-size: 0.85rem; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8); backdrop-filter: blur(10px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 100;
+        }
+        #toast.show { visibility: visible; transform: translateY(0); opacity: 1; }
+        #toast.success { border-color: rgba(16, 185, 129, 0.5); }
+        #toast.success i { color: var(--success); }
+        #toast.error { border-color: rgba(244, 63, 94, 0.5); }
+        #toast.error i { color: var(--danger); }
+        #toast.info { border-color: rgba(0, 245, 195, 0.5); }
+        #toast.info i { color: var(--accent); }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-area">
+            <div class="logo-icon"><i class="fas fa-desktop"></i></div>
+            <div class="logo-text">FÉLIX<span>DECK</span></div>
+        </div>
+        <div class="status-badge">
+            <div class="status-dot"></div> ONLINE
+        </div>
+    </header>
+
+    <div class="grid-container">
+        <!-- Ligne 1 : Les scènes principales -->
+        <div class="deck-btn btn-accent" id="btn-BEGGIN" onclick="sendAction('obs_change_scene', 'BEGGIN')">
+            <i class="fa-solid fa-rocket"></i><span>Beggin</span>
+        </div>
+        <div class="deck-btn btn-accent" id="btn-INTRO" onclick="sendAction('obs_change_scene', 'INTRO')">
+            <i class="fa-solid fa-clapperboard"></i><span>Intro</span>
+        </div>
+        
+        <div class="deck-btn btn-indigo" id="btn-CHATTING" onclick="triggerHybridMode('OBS_KEY_NUM5')">
+            <i class="fa-solid fa-mug-hot"></i><span>Chatting</span>
+        </div>
+        <div class="deck-btn btn-indigo" id="btn-GAMING" onclick="triggerHybridMode('OBS_KEY_NUM4')">
+            <i class="fa-solid fa-gamepad"></i><span>Gaming</span>
+        </div>
+
+        <!-- Ligne 2 : Les autres scènes et le micro -->
+        <div class="deck-btn btn-warn" id="btn-ON-BREAK" onclick="sendAction('obs_change_scene', 'ON BREAK')">
+            <i class="fa-solid fa-pause"></i><span>Pause</span>
+        </div>
+        <div class="deck-btn btn-danger" id="btn-END" onclick="sendAction('obs_change_scene', 'END')">
+            <i class="fa-solid fa-flag-checkered"></i><span>Fin Stream</span>
+        </div>
+        <div class="deck-btn btn-success" id="mic-btn" onclick="sendAction('obs_toggle_mute', 'Micro')">
+            <i class="fa-solid fa-microphone"></i><span>Mic On</span>
+        </div>
+        <div class="deck-btn btn-accent" id="cam-btn" onclick="sendAction('obs_toggle_source', 'WEBCAM')">
+            <i class="fa-solid fa-eye"></i><span>Webcam</span>
+        </div>
+        
+        <!-- Ligne 3 : Options -->
+        <div class="deck-btn btn-neutral" onclick="sendAction('obs_hotkey', 'OBS_KEY_F9')">
+            <i class="fa-solid fa-rotate"></i><span>Refresh F9</span>
+        </div>
+        <div class="deck-btn" style="opacity: 0.1; border: 2px dashed var(--text-dim); background: transparent; cursor: default;"></div>
+        <div class="deck-btn" style="opacity: 0.1; border: 2px dashed var(--text-dim); background: transparent; cursor: default;"></div>
+        <div class="deck-btn" style="opacity: 0.1; border: 2px dashed var(--text-dim); background: transparent; cursor: default;"></div>
+    </div>
+
+    <nav>
+        <a href="/deck" class="nav-item">
+            <i class="fa-solid fa-comments"></i><span>T'chat</span>
+        </a>
+        <a href="/deck/2" class="nav-item active">
+            <i class="fa-solid fa-desktop"></i><span>OBS</span>
+        </a>
+        <a href="/deck/3" class="nav-item">
+            <i class="fa-solid fa-music"></i><span>Sons/Img</span>
+        </a>
+    </nav>
+
+    <div id="toast"><i id="toast-icon" class="fas fa-info-circle"></i> <span id="toast-msg">Message</span></div>
+
+    <script>
+        const RASPBERRY_PI_URL = '';
+
+        function showToast(msg, type = 'info') {
+            const x = document.getElementById("toast");
+            const msgEl = document.getElementById("toast-msg");
+            const iconEl = document.getElementById("toast-icon");
+            
+            msgEl.textContent = msg;
+            x.className = "show " + type;
+            
+            if(type === 'success') iconEl.className = 'fas fa-check-circle';
+            else if(type === 'error') iconEl.className = 'fas fa-exclamation-triangle';
+            else iconEl.className = 'fas fa-info-circle';
+
+            setTimeout(() => { x.className = x.className.replace("show", ""); }, 2500);
+        }
+
+        async function updateDeckFeedback() {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2000);
+                const response = await fetch(RASPBERRY_PI_URL + '/api/deck/status', { signal: controller.signal });
+                clearTimeout(timeoutId);
+
+                if (!response.ok) return; 
+                const status = await response.json();
+
+                // 1. MICROPHONE (Rouge = Mute, Vert = On)
+                const micBtn = document.getElementById('mic-btn');
+                if (micBtn) {
+                    if (status.obs.mic_muted) {
+                        micBtn.className = "deck-btn active-danger";
+                        micBtn.innerHTML = '<i class="fa-solid fa-microphone-slash"></i><span>Mute Mic</span>';
+                    } else {
+                        micBtn.className = "deck-btn active-success";
+                        micBtn.innerHTML = '<i class="fa-solid fa-microphone"></i><span>Mic On</span>';
+                    }
+                }
+
+                // 2. WEBCAM (Cyan = Visible, Rouge = Cachée)
+                const camBtn = document.getElementById('cam-btn');
+                if (camBtn) {
+                    if (status.obs.cam_visible) {
+                        camBtn.className = "deck-btn active-accent";
+                        camBtn.innerHTML = '<i class="fa-solid fa-eye"></i><span>Cam On</span>';
+                    } else {
+                        camBtn.className = "deck-btn active-danger";
+                        camBtn.innerHTML = '<i class="fa-solid fa-eye-slash"></i><span>Cam Off</span>';
+                    }
+                }
+
+                // 3. SCÈNES OBS
+                const current = status.obs.scene; 
+                const scenes = { 
+                    'BEGGIN': { id: 'btn-BEGGIN', base: 'btn-accent', active: 'active-accent' }, 
+                    'INTRO': { id: 'btn-INTRO', base: 'btn-accent', active: 'active-accent' }, 
+                    'ON BREAK': { id: 'btn-ON-BREAK', base: 'btn-warn', active: 'active-warn' }, 
+                    'END': { id: 'btn-END', base: 'btn-danger', active: 'active-danger' } 
+                };
+
+                for (const [name, config] of Object.entries(scenes)) {
+                    const btn = document.getElementById(config.id);
+                    if (btn) {
+                        if (current === name) {
+                            btn.className = `deck-btn ${config.active}`;
+                        } else {
+                            btn.className = `deck-btn ${config.base}`;
+                        }
+                    }
+                }
+
+                // 4. SCÈNE HYBRIDE (Chatting / Gaming -> Violet)
+                const chatBtn = document.getElementById('btn-CHATTING');
+                const gameBtn = document.getElementById('btn-GAMING');
+                if (current === "CHATTING/GAMING") {
+                    if(chatBtn) chatBtn.className = "deck-btn active-indigo";
+                    if(gameBtn) gameBtn.className = "deck-btn active-indigo";
+                } else {
+                    if(chatBtn) chatBtn.className = "deck-btn btn-indigo";
+                    if(gameBtn) gameBtn.className = "deck-btn btn-indigo";
+                }
+            } catch (e) {}
+        }
+        
+        setInterval(updateDeckFeedback, 1000);
+
+        function sendAction(action, param = null) {
+            if (navigator.vibrate) navigator.vibrate(50);
+            fetch(RASPBERRY_PI_URL + '/api/deck/action', {
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: action, param: param })
+            })
+            .then(res => { if (!res.ok) throw new Error(); })
+            .catch(error => { showToast("Erreur Connexion", "error"); });
+        }
+
+        function triggerHybridMode(hotkey) {
+            // 1. On force le passage sur la scène hybride
+            sendAction('obs_change_scene', 'CHATTING/GAMING');
+            
+            // 2. On attend 300 millisecondes (pour la transition OBS) puis on envoie le raccourci
+            setTimeout(() => {
+                sendAction('obs_hotkey', hotkey);
+            }, 300);
+        }
+
+        // SWIPE DÉTECTION
+        let touchstartX = 0;
+        document.addEventListener('touchstart', e => { touchstartX = e.changedTouches[0].screenX; });
+        document.addEventListener('touchend', e => {
+            let touchendX = e.changedTouches[0].screenX;
+            if (touchendX < touchstartX - 70) window.location.href = "/deck/3"; // Swipe gauche = Page 3
+            if (touchendX > touchstartX + 70) window.location.href = "/deck";   // Swipe droite = Page 1
+        });
+    </script>
+</body>
+</html>

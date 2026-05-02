@@ -41,4 +41,32 @@ class OBSService:
             logger.debug(f"👀 OBS Vision non disponible : {e}")
             return None
 
+    def get_deck_status(self):
+        """Récupère l'état d'OBS pour allumer les lumières du Stream Deck"""
+        try:
+            # 1. Scène Actuelle
+            scene_resp = self.client.get_current_program_scene()
+            scene_name = scene_resp.current_program_scene_name
+            
+            # 2. Statut du Micro
+            mute_resp = self.client.get_input_mute("Micro")
+            is_muted = mute_resp.input_muted
+            
+            # 3. Statut Webcam
+            cam_visible = True
+            items_resp = self.client.get_scene_item_list(scene_name)
+            for item in items_resp.scene_items:
+                if item['sourceName'] == "WEBCAM":
+                    cam_visible = item['sceneItemEnabled']
+                    break
+                    
+            return {
+                "scene": scene_name,
+                "mic_muted": is_muted,
+                "cam_visible": cam_visible
+            }
+        except Exception:
+            return {"scene": "main", "mic_muted": False, "cam_visible": True}
+
+
 obs_service = OBSService()

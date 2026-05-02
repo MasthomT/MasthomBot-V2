@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Félix Deck - T'chat</title>
+    
+    <!-- 📱 Configuration de l'Application Mobile (PWA) -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0b0f1a">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@800&display=swap');
+        
+        :root {
+            /* Variables de thème Fel-X */
+            --bg: #0b0f1a;
+            --surface: rgba(30, 41, 59, 0.4);
+            --surface-bright: rgba(51, 65, 85, 0.5);
+            --border: rgba(255, 255, 255, 0.06);
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+            --accent: #00f5c3;
+            --accent-glow: rgba(0, 245, 195, 0.2);
+            --danger: #f43f5e;
+            --danger-glow: rgba(244, 63, 94, 0.2);
+            --warning: #fbbf24;
+            --warning-glow: rgba(251, 191, 36, 0.2);
+            --success: #10b981;
+        }
+        
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: var(--bg); 
+            color: var(--text-main);
+            margin: 0; padding: 0; height: 100vh;
+            display: flex; flex-direction: column; overflow: hidden;
+            overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent;
+        }
+
+        /* --- HEADER --- */
+        header {
+            padding: 15px 20px; display: flex; justify-content: space-between; align-items: center;
+            background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border);
+            flex-shrink: 0; box-shadow: 0 4px 20px rgba(0,0,0,0.5); z-index: 10;
+        }
+        .logo-area { display: flex; align-items: center; gap: 10px; }
+        .logo-icon {
+            width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--accent);
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 0 10px var(--accent-glow); background: rgba(0, 245, 195, 0.1);
+        }
+        .logo-icon i { color: var(--accent); font-size: 14px; }
+        .logo-text { font-size: 1rem; font-weight: 900; letter-spacing: -0.5px; }
+        .logo-text span { color: var(--accent); font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; margin-left: 4px; }
+        
+        .status-badge {
+            display: flex; align-items: center; gap: 6px;
+            background: rgba(0, 245, 195, 0.1); border: 1px solid rgba(0, 245, 195, 0.2);
+            padding: 4px 10px; border-radius: 20px;
+            font-size: 0.65rem; font-weight: 900; letter-spacing: 1px; color: var(--accent); text-transform: uppercase;
+        }
+        .status-dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; box-shadow: 0 0 8px var(--accent); animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.8); } }
+
+        /* --- GRILLE & BOUTONS --- */
+        .grid-container {
+            display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(3, 1fr);
+            gap: 12px; padding: 15px; flex-grow: 1; overflow: hidden;
+        }
+        
+        .deck-btn {
+            background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative; overflow: hidden; box-shadow: 0 8px 20px -10px rgba(0,0,0,0.5);
+        }
+        
+        .deck-btn:active { transform: scale(0.92); background: var(--surface-bright); }
+        .deck-btn i { font-size: 1.6rem; margin-bottom: 8px; color: var(--text-dim); transition: 0.3s; }
+        .deck-btn span { font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-main); text-align: center; line-height: 1.2; padding: 0 4px; }
+
+        .btn-danger { border-bottom: 3px solid var(--danger); }
+        .btn-danger i { color: var(--danger); }
+        .btn-accent { border-bottom: 3px solid var(--accent); }
+        .btn-accent i { color: var(--accent); text-shadow: 0 0 8px var(--accent-glow); }
+        .btn-warn { border-bottom: 3px solid var(--warning); }
+        .btn-warn i { color: var(--warning); }
+        .btn-success { border-bottom: 3px solid var(--success); }
+        .btn-success i { color: var(--success); }
+
+        .btn-so {
+            background: linear-gradient(135deg, rgba(0, 245, 195, 0.15) 0%, rgba(0, 245, 195, 0.05) 100%);
+            border: 1px solid rgba(0, 245, 195, 0.4); border-bottom: 3px solid var(--accent);
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+        .btn-so i { color: var(--accent); text-shadow: 0 0 10px var(--accent); }
+
+        .active-accent {
+            background: linear-gradient(180deg, rgba(0, 245, 195, 0.15) 0%, rgba(0, 245, 195, 0.05) 100%) !important;
+            border-color: var(--accent) !important; box-shadow: 0 0 20px var(--accent-glow), inset 0 0 15px var(--accent-glow) !important;
+        }
+        .active-accent i { color: var(--accent) !important; text-shadow: 0 0 10px var(--accent) !important; }
+
+        /* --- NAVIGATION BAS --- */
+        nav {
+            display: flex; justify-content: space-around; align-items: center;
+            background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px); border-top: 1px solid var(--border);
+            padding: 10px 0 20px 0; flex-shrink: 0; box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
+        }
+        .nav-item {
+            display: flex; flex-direction: column; align-items: center; gap: 5px;
+            color: var(--text-dim); text-decoration: none; width: 33%; transition: all 0.3s;
+        }
+        .nav-item i { font-size: 1.4rem; transition: 0.3s; }
+        .nav-item span { font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+        
+        .nav-item.active { color: var(--accent); transform: translateY(-4px); }
+        .nav-item.active i { filter: drop-shadow(0 0 8px var(--accent)); }
+        .nav-item.active::before {
+            content: ''; position: absolute; top: -10px; width: 40px; height: 3px;
+            background: var(--accent); border-radius: 0 0 4px 4px; box-shadow: 0 2px 10px var(--accent);
+        }
+
+        /* --- TOAST --- */
+        #toast {
+            visibility: hidden; transform: translateY(100%); opacity: 0;
+            position: fixed; bottom: 90px; left: 50%; margin-left: -125px; width: 250px;
+            background: rgba(15, 23, 42, 0.95); border: 1px solid var(--border);
+            color: #fff; text-align: center; border-radius: 30px; padding: 12px 20px;
+            font-size: 0.85rem; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 100;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        #toast.show { visibility: visible; transform: translateY(0); opacity: 1; }
+        #toast.success { border-color: rgba(16, 185, 129, 0.5); }
+        #toast.success i { color: var(--success); }
+        #toast.error { border-color: rgba(244, 63, 94, 0.5); }
+        #toast.error i { color: var(--danger); }
+        #toast.info { border-color: rgba(0, 245, 195, 0.5); }
+        #toast.info i { color: var(--accent); }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-area">
+            <div class="logo-icon"><i class="fas fa-terminal"></i></div>
+            <div class="logo-text">FÉLIX<span>DECK</span></div>
+        </div>
+        <div class="status-badge">
+            <div class="status-dot"></div> ONLINE
+        </div>
+    </header>
+
+    <div class="grid-container">
+        <!-- Ligne 1 : Parfaitement équilibrée avec tes 4 actions -->
+        <div class="deck-btn btn-danger" onclick="sendAction('clear')">
+            <i class="fa-solid fa-broom"></i><span>Clear</span>
+        </div>
+        <div class="deck-btn btn-accent" onclick="sendAction('ad', '60')">
+            <i class="fa-solid fa-rectangle-ad"></i><span>Pub 1m</span>
+        </div>
+        <div class="deck-btn btn-accent" onclick="sendAction('ad', '180')">
+            <i class="fa-solid fa-rectangle-ad"></i><span>Pub 3m</span>
+        </div>
+        <div class="deck-btn btn-accent" onclick="sendAction('marker')">
+            <i class="fa-solid fa-bookmark"></i><span>Marker</span>
+        </div>
+        
+        <!-- Ligne 2 -->
+        <div class="deck-btn" id="btn-emote" onclick="sendAction('chat_mode', 'emote')">
+            <i class="fa-solid fa-face-smile"></i><span>Emote Only</span>
+        </div>
+        <div class="deck-btn" id="btn-follow" onclick="sendAction('chat_mode', 'follower')">
+            <i class="fa-solid fa-users"></i><span>Follow Only</span>
+        </div>
+        <div class="deck-btn" id="btn-slow" onclick="sendAction('chat_mode', 'slow')">
+            <i class="fa-solid fa-hourglass-half"></i><span>Slow Mode</span>
+        </div>
+        <div class="deck-btn btn-success" onclick="sendAction('chat_mode', 'normal')">
+            <i class="fa-solid fa-unlock"></i><span>Chat Normal</span>
+        </div>
+        
+        <!-- Ligne 3 -->
+        <div class="deck-btn btn-so" onclick="askShoutout()">
+            <i class="fa-solid fa-bullhorn"></i><span>S.O. Manuel</span>
+        </div>
+        <div class="deck-btn btn-accent" onclick="triggerReplay()">
+            <i class="fa-brands fa-twitch"></i><span>Replay</span>
+        </div>
+        <div class="deck-btn" style="border-bottom: 2px solid var(--text-dim);" onclick="window.location.href='/admin/stats'">
+            <i class="fa-solid fa-chart-line"></i><span>Stats</span>
+        </div>
+        <!-- Emplacement vide pour l'esthétique -->
+        <div class="deck-btn" style="opacity: 0.1; border: 2px dashed var(--text-dim); background: transparent; cursor: default;"></div>
+    </div>
+
+    <nav>
+        <a href="/deck" class="nav-item active">
+            <i class="fa-solid fa-comments"></i><span>T'chat</span>
+        </a>
+        <a href="/deck/2" class="nav-item">
+            <i class="fa-solid fa-desktop"></i><span>OBS</span>
+        </a>
+        <a href="/deck/3" class="nav-item">
+            <i class="fa-solid fa-music"></i><span>Sons/Img</span>
+        </a>
+    </nav>
+
+    <div id="toast"><i id="toast-icon" class="fas fa-info-circle"></i> <span id="toast-msg">Message</span></div>
+
+    <script>
+        const RASPBERRY_PI_URL = '';
+
+        async function syncTwitchStatus() {
+            try {
+                const response = await fetch(RASPBERRY_PI_URL + '/api/deck/status');
+                if (!response.ok) return;
+                const status = await response.json();
+
+                // Gestion de l'affichage des modes de chat (Bordures allumées)
+                const modes = [
+                    { id: 'btn-emote', active: status.twitch.emote_only },
+                    { id: 'btn-follow', active: status.twitch.follower_only },
+                    { id: 'btn-slow', active: status.twitch.slow_mode }
+                ];
+
+                modes.forEach(m => {
+                    const btn = document.getElementById(m.id);
+                    if(btn) {
+                        if (m.active) {
+                            btn.classList.add('active-accent');
+                        } else {
+                            btn.classList.remove('active-accent');
+                        }
+                    }
+                });
+            } catch (e) { console.warn("Sync Deck Error"); }
+        }
+        setInterval(syncTwitchStatus, 2000);
+
+        function showToast(msg, type = 'info') {
+            const x = document.getElementById("toast");
+            const msgEl = document.getElementById("toast-msg");
+            const iconEl = document.getElementById("toast-icon");
+            
+            msgEl.textContent = msg;
+            x.className = "show " + type;
+            
+            if(type === 'success') iconEl.className = 'fas fa-check-circle';
+            else if(type === 'error') iconEl.className = 'fas fa-exclamation-triangle';
+            else iconEl.className = 'fas fa-info-circle';
+
+            setTimeout(() => { x.className = x.className.replace("show", ""); }, 2500);
+        }
+
+        function sendAction(action, param = null) {
+            if (navigator.vibrate) navigator.vibrate(50);
+            fetch(RASPBERRY_PI_URL + '/api/deck/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: action, param: param })
+            }).catch(error => { showToast("Erreur Connexion", "error"); });
+        }
+
+        function askShoutout() {
+            let name = prompt("Pseudo de la chaîne ?");
+            if (name) {
+                showToast(`Envoi S.O. à ${name}`, "info");
+                sendAction('shoutout', name);
+            }
+        }
+
+        function triggerReplay() {
+            if (navigator.vibrate) navigator.vibrate(50);
+            showToast("Recherche en cours...", "info");
+            fetch(RASPBERRY_PI_URL + '/api/instant-replay', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if(data.status === 'success') showToast("Replay lancé !", "success");
+                else showToast("Replay introuvable", "error");
+            });
+        }
+
+        // SWIPE DÉTECTION (Pour naviguer entre les pages)
+        let touchstartX = 0;
+        document.addEventListener('touchstart', e => { touchstartX = e.changedTouches[0].screenX; });
+        document.addEventListener('touchend', e => {
+            let touchendX = e.changedTouches[0].screenX;
+            if (touchendX < touchstartX - 70) window.location.href = "/deck/2";
+            if (touchendX > touchstartX + 70) window.location.href = "/deck/3";
+        });
+
+        // 🛡️ API WAKE LOCK : EMPÊCHER LA MISE EN VEILLE DE L'ÉCRAN
+        let wakeLock = null;
+
+        async function requestWakeLock() {
+            try {
+                // On vérifie si le navigateur de la tablette supporte cette fonctionnalité
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log("✅ Wake Lock activé : L'écran restera allumé !");
+                    
+                    // Sécurité : l'OS coupe souvent le Wake Lock si on réduit l'application.
+                    // Ce petit bout de code s'assure de le réactiver quand on revient sur Félix.
+                    document.addEventListener('visibilitychange', async () => {
+                        if (wakeLock !== null && document.visibilityState === 'visible') {
+                            wakeLock = await navigator.wakeLock.request('screen');
+                            console.log("✅ Wake Lock réactivé après retour sur l'app.");
+                        }
+                    });
+                } else {
+                    console.warn("⚠️ L'API Wake Lock n'est pas supportée par ce navigateur.");
+                }
+            } catch (err) {
+                console.error(`❌ Erreur Wake Lock: ${err.name}, ${err.message}`);
+            }
+        }
+
+        // On lance la fonction anti-veille dès que la page a fini de charger
+        window.addEventListener('load', requestWakeLock);
+    </script>
+</body>
+</html>

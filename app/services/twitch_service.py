@@ -6,7 +6,7 @@ import aiohttp
 import json
 import logging
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from twitchio.ext import commands, routines
 
 from app.core.config import settings
@@ -30,6 +30,7 @@ class MasthbotTwitch(commands.Bot):
         self.channel_name = settings.TWITCH_CHANNEL.replace("#", "").lower()
         self.notified_lives = set()
         self.known_levels = {}
+        self.role_checked_users = set() # AJOUT : Mémoire pour éviter de spammer la base de données
 
         super().__init__(
             token=clean_bot_token,
@@ -100,6 +101,11 @@ class MasthbotTwitch(commands.Bot):
                 print("📢 [ROUTINE] Lancement de la file d'attente des annonces...")
                 self.announcements_timer.start()
                 self._announcements_started = True
+
+            if not hasattr(self, "_sync_roles_started"):
+                print("🤖 [ROUTINE] Lancement de l'Aspirateur Twitch (Modos/VIPs)...")
+                self.sync_roles_timer.start()
+                self._sync_roles_started = True
                 
         except Exception as e:
             print(f"❌ [READY ERROR] : {e}")
@@ -132,10 +138,9 @@ class MasthbotTwitch(commands.Bot):
         await viewer_repo.ensure_viewer(str(message.author.id), message.author.name)
         username = message.author.name.lower()
         display_name = message.author.display_name or message.author.name
-        content = message.content.strip() # ✅ On définit 'content' AVANT de l'utiliser
+        content = message.content.strip()
         config = self.get_db_config()
 
-        # --- 2. SONDAGE CHAT (!choix 1, 2, 3, 4) ---
         if content.lower().startswith("!choix "):
             try:
                 parts = content.split(" ")
@@ -143,23 +148,37 @@ class MasthbotTwitch(commands.Bot):
                     choice_idx = int(parts[1])
                     if 1 <= choice_idx <= 4:
                         await self._handle_chat_vote(message, choice_idx)
-                        return # On s'arrête ici pour ne pas déclencher l'IA
+                        return
             except (ValueError, IndexError):
                 pass
 
-        # =========================================================
-        # 🎬 GÉNÉRIQUE DE FIN : LE TRI PARFAIT (MODO/VIP/CHATTER)
-        # =========================================================
-        # On vérifie les badges Twitch
         badges = message.author.badges or {}
         is_owner = username == self.channel_name
         is_mod = message.author.is_mod or ("moderator" in badges) or is_owner
         is_vip = message.author.is_vip or ("vip" in badges)
-
-        # ✅ VÉRIFICATION DU LIVE
+        
+        # ⚠️ LE FIX EST ICI : Twitch appelle ce badge 'artist-badge' dans son API, pas 'artist' !
+        is_artist = ("artist-badge" in badges) or ("artist" in badges)
         is_live = bool(config.get('personal_last_live_id', ""))
 
-        # On n'inscrit dans le générique QUE si on est en live !
+        # 🤖 ENREGISTREMENT 100% AUTOMATIQUE DES BADGES TWITCH DANS TA BDD
+        # FIX : On n'ouvre la base QUE si le viewer a un badge ET qu'on ne l'a pas encore enregistré
+        if (is_vip or is_mod or is_artist) and str(message.author.id) not in self.role_checked_users:
+            conn = sqlite3.connect(DB_PATH, timeout=20.0)
+            try:
+                if is_vip:
+                    conn.execute("UPDATE viewers SET is_vip = 1 WHERE twitch_id = ?", (str(message.author.id),))
+                if is_mod:
+                    conn.execute("UPDATE viewers SET is_mod = 1 WHERE twitch_id = ?", (str(message.author.id),))
+                if is_artist:
+                    conn.execute("UPDATE viewers SET is_artist = 1 WHERE twitch_id = ?", (str(message.author.id),))
+                conn.commit()
+                self.role_checked_users.add(str(message.author.id)) # AJOUT : Le bot s'en souvient et ne bloquera plus la BDD
+            except Exception as e:
+                logger.error(f"Erreur d'enregistrement auto des badges: {e}")
+            finally:
+                conn.close()
+
         if is_live:
             credits_service.add_watchtime(display_name, 0)
             if is_mod:
@@ -168,8 +187,6 @@ class MasthbotTwitch(commands.Bot):
                 credits_service.log_event("vips", display_name)
             else:
                 credits_service.log_event("chatters", display_name)
-
-        # =========================================================
 
         if not is_mod:
             violation = await moderation_service.process_message(
@@ -251,7 +268,6 @@ class MasthbotTwitch(commands.Bot):
                     points = viewer_dict.get('points', 0)
                     viewer_level = max(1, int((points / 100) ** (1 / 2.2))) if points > 0 else 1
 
-                    # 📸 CAPTURE OBS EN DIRECT (On la lance en tâche de fond pour ne pas bloquer le bot)
                     screenshot_base64 = await asyncio.to_thread(obs_service.take_screenshot)
 
                     reply = await ai_service.get_felix_response(
@@ -353,14 +369,12 @@ class MasthbotTwitch(commands.Bot):
             """, (active_poll['id'], str(message.author.id), choice_idx))
             conn.commit()
             
-            # --- 🟢 NOUVEAU : On force l'affichage de l'overlay sur OBS au moment du vote ---
             async with aiohttp.ClientSession() as session:
                 payload = {"type": "show_poll"}
                 try:
                     await session.post("http://127.0.0.1:3005/api/trigger", json=payload)
                 except Exception:
                     pass
-            # ---------------------------------------------------------------------------------
 
             await message.channel.send(f"✅ Vote de @{message.author.name} pris en compte !")
             
@@ -371,55 +385,90 @@ class MasthbotTwitch(commands.Bot):
 
     @commands.command(name='so')
     async def shoutout_command(self, ctx, *, content: str = None):
-        is_authorized = ctx.author.is_mod or ctx.author.is_broadcaster or ctx.author.name.lower() == "felixthebigblackcat"
-        if not is_authorized:
+        if not (ctx.author.is_mod or ctx.author.is_broadcaster or ctx.author.name.lower() == "felixthebigblackcat"):
             return
         if not content:
-            return await ctx.send("Miaou ! Pseudo ou lien requis : !so masthom_")
+            return await ctx.send("Miaou ! Pseudo ou lien requis : !so pseudo")
 
-        content = content.replace("!so", "").strip()
-        link_match = re.search(r"https?://\S*twitch\.tv\S+", content)
-        
+        # Nettoyage de l'input (enlève !so et garde le premier mot/lien)
+        input_val = content.replace("!so", "").strip().split()[0].split("?")[0]
         target_name = None
         slug_for_node = None
 
-        if link_match:
-            url = link_match.group(0)
-            slug_for_node = url
-            if "twitch.tv/" in url:
-                parts = url.split("twitch.tv/")[-1].split("/")
-                if parts[0] == "clip" or parts[0] == "":
-                    target_name = "ce streameur"
-                else:
-                    target_name = parts[0].split("?")[0]
-            await ctx.send(f"On regarde un clip de @{target_name} ! 🎬")
-        else:
-            target_name = content.split(" ")[0].replace("@", "").strip()
-            headers = {"Client-ID": self._http.client_id, "Authorization": f"Bearer {self.master_token}"}
-            async with aiohttp.ClientSession() as session:
-                try:
-                    async with session.get(f"https://api.twitch.tv/helix/users?login={target_name}", headers=headers) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            if data.get("data"):
-                                streamer = data["data"][0]
-                                s_id, s_display = streamer["id"], streamer["display_name"]
-                                async with session.get(f"https://api.twitch.tv/helix/channels?broadcaster_id={s_id}", headers=headers) as c_resp:
-                                    last_game = "un jeu inconnu"
-                                    if c_resp.status == 200:
-                                        c_data = await c_resp.json()
-                                        last_game = c_data["data"][0].get("game_name", "Just Chatting")
-                                await ctx.send(f"Rendez visite à @{s_display} qui jouait la dernière fois à {last_game} ! https://twitch.tv/{target_name} 💜")
-                            else:
-                                await ctx.send(f"Foncez voir @{target_name} ! https://twitch.tv/{target_name}")
-                except:
-                    await ctx.send(f"Allez donner de la force à @{target_name} ! https://twitch.tv/{target_name}")
+        client_id = os.getenv("TWITCH_CLIENT_ID", getattr(self._http, 'client_id', ''))
+        headers = {"Client-ID": client_id, "Authorization": f"Bearer {self.master_token}"}
 
+        # 1. DÉCODAGE DU LIEN OU DU PSEUDO
+        if "twitch.tv" in input_val:
+            if "clips.twitch.tv" in input_val:
+                # Format: clips.twitch.tv/SlugDuClip
+                slug_for_node = input_val.split("clips.twitch.tv/")[-1].strip("/")
+                async with aiohttp.ClientSession() as session:
+                    try:
+                        async with session.get(f"https://api.twitch.tv/helix/clips?id={slug_for_node}", headers=headers) as resp:
+                            if resp.status == 200:
+                                data = await resp.json()
+                                if data.get("data"):
+                                    target_name = data["data"][0]["broadcaster_name"]
+                    except: pass
+
+            elif "/clip/" in input_val:
+                # Format: twitch.tv/pseudo/clip/SlugDuClip
+                parts = input_val.split("twitch.tv/")[-1].strip("/").split("/")
+                target_name = parts[0]
+                slug_for_node = parts[2] if len(parts) >= 3 else None
+
+            elif "/videos/" in input_val:
+                # Format: twitch.tv/videos/123456789
+                video_id = input_val.split("/videos/")[-1].strip("/")
+                async with aiohttp.ClientSession() as session:
+                    try:
+                        async with session.get(f"https://api.twitch.tv/helix/videos?id={video_id}", headers=headers) as resp:
+                            if resp.status == 200:
+                                data = await resp.json()
+                                if data.get("data"):
+                                    target_name = data["data"][0]["user_name"]
+                    except: pass
+            else:
+                # Format: twitch.tv/pseudo
+                target_name = input_val.split("twitch.tv/")[-1].strip("/")
+        else:
+            # Format direct: pseudo
+            target_name = input_val.replace("@", "")
+
+        # Vérification si on a trouvé un nom
+        if not target_name:
+            return await ctx.send("❌ Impossible de récupérer le pseudo depuis ce lien ! Vérifie ton URL.")
+
+        # 2. ENVOI DES MESSAGES ET DÉCLENCHEMENT DE L'OVERLAY
+        target_name_clean = target_name.lower()
         async with aiohttp.ClientSession() as session:
+            # Message Twitch
             try:
-                await session.post("http://127.0.0.1:3005/api/shoutout", json={"target": target_name, "slug": slug_for_node})
+                async with session.get(f"https://api.twitch.tv/helix/users?login={target_name_clean}", headers=headers) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        if data.get("data"):
+                            s_id = data["data"][0]["id"]
+                            s_display = data["data"][0]["display_name"]
+                            async with session.get(f"https://api.twitch.tv/helix/channels?broadcaster_id={s_id}", headers=headers) as c_resp:
+                                last_game = "un jeu inconnu"
+                                if c_resp.status == 200:
+                                    c_data = await c_resp.json()
+                                    if c_data.get("data") and c_data["data"][0].get("game_name"):
+                                        last_game = c_data["data"][0]["game_name"]
+                                
+                                await ctx.send(f"🎬 Allez donner de la force à @{s_display} qui jouait récemment à {last_game} ! https://twitch.tv/{target_name_clean} 💜")
+                        else:
+                            await ctx.send(f"Foncez voir @{target_name} ! https://twitch.tv/{target_name_clean}")
             except:
                 pass
+
+            # Envoi du signal à l'overlay Node.js (OBS)
+            try:
+                await session.post("http://127.0.0.1:3005/api/shoutout", json={"target": target_name_clean, "slug": slug_for_node})
+            except Exception as e:
+                logger.error(f"Erreur Envoi SO Node : {e}")
 
     @commands.command(name='replay')
     async def cmd_replay(self, ctx, *, content: str = None):
@@ -518,14 +567,12 @@ class MasthbotTwitch(commands.Bot):
                 results[v['option_index']] = v['count']
                 total += v['count']
 
-            # --- 🟢 NOUVEAU : On force l'affichage de l'overlay sur OBS ---
             async with aiohttp.ClientSession() as session:
                 payload = {"type": "show_poll"}
                 try:
                     await session.post("http://127.0.0.1:3005/api/trigger", json=payload)
                 except Exception:
                     pass
-            # -------------------------------------------------------------
 
             msg = f"📊 SONDAGE : {poll['question']} — "
             options_text = []
@@ -535,7 +582,6 @@ class MasthbotTwitch(commands.Bot):
                 if opt_name:
                     count = results[i]
                     pct = round((count / total) * 100) if total > 0 else 0
-                    # Message allégé ! Fini les petites barres de progression ASCII dans le chat
                     options_text.append(f"{i}. {opt_name} ({pct}%)")
 
             msg += " | ".join(options_text)
@@ -658,12 +704,83 @@ class MasthbotTwitch(commands.Bot):
             except Exception as e:
                 logger.error(f"Erreur Envoi Chrono OBS : {e}")
 
-    # =====================================================================
-    # ⏱️ MOTEUR DE WATCHTIME : RÉPARATION DU TEMPS POUR LE GÉNÉRIQUE
-    # =====================================================================
+    @commands.command(name='addvip')
+    async def cmd_addvip(self, ctx, target: str = None, duration_days: int = 0):
+        if not ctx.author.is_mod and not ctx.author.is_broadcaster:
+            return
+            
+        if not target:
+            return await ctx.send("❌ Usage: !addvip <pseudo> <jours> (Ex: !addvip Masthom_ 7) Mettre 0 pour Permanent.")
+            
+        target_clean = target.lower().replace("@", "")
+        
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        viewer = conn.execute("SELECT twitch_id FROM viewers WHERE LOWER(username) = ?", (target_clean,)).fetchone()
+        
+        if not viewer:
+            conn.close()
+            return await ctx.send(f"❌ Le viewer @{target} n'existe pas dans la base de données. Il doit parler au moins une fois.")
+            
+        expiry = None
+        if duration_days > 0:
+            expiry = (datetime.now() + timedelta(days=duration_days)).isoformat()
+            
+        conn.execute("UPDATE viewers SET is_vip = 1, vip_expiry = ? WHERE LOWER(username) = ?", (expiry, target_clean))
+        conn.commit()
+        conn.close()
+        
+        try:
+            headers = {"Client-ID": self._http.client_id, "Authorization": f"Bearer {self.master_token}"}
+            url = f"https://api.twitch.tv/helix/channels/vips?broadcaster_id={self.broadcaster_id}&user_id={viewer['twitch_id']}"
+            async with aiohttp.ClientSession() as session:
+                await session.post(url, headers=headers)
+        except Exception as e:
+            logger.error(f"Erreur API Twitch !addvip : {e}")
+        
+        if duration_days > 0:
+            await ctx.send(f"💎 L'élite s'agrandit ! @{target} est désormais VIP pour {duration_days} jours !")
+        else:
+            await ctx.send(f"⭐ Consécration ! @{target} est désormais VIP à vie !")
+
+    @commands.command(name='vip')
+    async def cmd_vip(self, ctx):
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        user = conn.execute("SELECT is_vip, vip_expiry FROM viewers WHERE twitch_id = ?", (str(ctx.author.id),)).fetchone()
+        conn.close()
+
+        if not user or not user['is_vip']:
+            return await ctx.send(f"@{ctx.author.name}, tu n'es pas VIP ! 😿")
+        
+        if not user['vip_expiry']:
+            return await ctx.send(f"⭐ @{ctx.author.name}, ton grade VIP est Permanent ! Merci pour ton soutien éternel 💜")
+        
+        try:
+            expiry = datetime.fromisoformat(user['vip_expiry'])
+            now = datetime.now()
+            
+            if expiry < now:
+                return await ctx.send(f"🥀 @{ctx.author.name}, ton grade VIP a expiré le {expiry.strftime('%d/%m/%Y')}.")
+            
+            diff = expiry - now
+            days = diff.days
+            hours, remainder = divmod(diff.seconds, 3600)
+            minutes, _ = divmod(remainder, 60)
+            
+            time_str = ""
+            if days > 0: time_str += f"{days} jours et "
+            if hours > 0: time_str += f"{hours}h"
+            if minutes > 0 and days == 0: time_str += f"{minutes}m"
+            
+            if not time_str: time_str = "quelques secondes"
+            
+            await ctx.send(f"💎 @{ctx.author.name}, il te reste {time_str} de VIP ! (Expire le {expiry.strftime('%d/%m/%Y à %H:%M')})")
+        except:
+            await ctx.send(f"@{ctx.author.name}, ton grade VIP est bien actif ! 💎")
+
     @routines.routine(seconds=60)
     async def watchtime_timer(self):
-        """Scanne tous les spectateurs présents toutes les minutes."""
         if not self.broadcaster_id: return
 
         config = self.get_db_config()
@@ -692,12 +809,15 @@ class MasthbotTwitch(commands.Bot):
                             if u_name.lower() in [self.nick.lower(), 'nightbot', 'streamelements', 'wizebot']:
                                 continue
 
-                            # --- ⏱️ AJOUT DU TEMPS AU GÉNÉRIQUE (Crucial pour qu'ils s'affichent) ---
-                            credits_service.add_watchtime(c['user_name'], 1)
-                            
-                            await viewer_repo.ensure_viewer(t_id, u_name)
-                            await viewer_repo.update_viewer_stats(username=u_name.lower(), watchtime_add=60, points_add=exp_to_give)
-                            count += 1
+                            # FIX: Isolation des crashs liés aux changements de pseudos (UNIQUE constraint)
+                            try:
+                                credits_service.add_watchtime(c['user_name'], 1)
+                                await viewer_repo.ensure_viewer(t_id, u_name)
+                                await viewer_repo.update_viewer_stats(username=u_name.lower(), watchtime_add=60, points_add=exp_to_give)
+                                count += 1
+                            except Exception as e:
+                                logger.warning(f"⚠️ Impossible d'ajouter le watchtime à {u_name} : {e}")
+                                continue
                         
                         if count > 0:
                             logger.info(f"💎 Watchtime distribué à {count} personnes (Lurkers inclus).")
@@ -706,7 +826,6 @@ class MasthbotTwitch(commands.Bot):
                     elif resp.status in [401, 403]:
                         logger.error(f"❌ BLOCAGE TWITCH ({resp.status}) : Ton token n'a pas la permission 'moderator:read:chatters'.")
 
-            # --- SYSTÈME DE SECOURS (Si Twitch bloque l'API, on récompense au moins ceux qui parlent) ---
             if not api_success:
                 channel = self.get_channel(self.channel_name)
                 if channel and hasattr(channel, 'chatters'):
@@ -715,17 +834,152 @@ class MasthbotTwitch(commands.Bot):
                         u_name = chatter.name.lower()
                         if u_name in [self.nick.lower(), 'nightbot', 'streamelements', 'wizebot']: continue
                         
-                        # --- ⏱️ AJOUT DU TEMPS AU GÉNÉRIQUE (Secours) ---
-                        credits_service.add_watchtime(chatter.name, 1)
-
-                        success = await viewer_repo.update_viewer_stats(username=u_name, watchtime_add=60, points_add=exp_to_give)
-                        if success: count_fb += 1
+                        try:
+                            credits_service.add_watchtime(chatter.name, 1)
+                            success = await viewer_repo.update_viewer_stats(username=u_name, watchtime_add=60, points_add=exp_to_give)
+                            if success: count_fb += 1
+                        except Exception as e:
+                            logger.warning(f"⚠️ Impossible d'ajouter le watchtime (secours) à {u_name} : {e}")
+                            continue
                             
                     if count_fb > 0:
                         logger.info(f"⚠️ Watchtime (Secours) distribué à {count_fb} personnes actives dans le chat.")
 
         except Exception as e:
             logger.error(f"❌ Erreur globale routine Watchtime : {e}")
+
+    @routines.routine(hours=1)
+    async def vip_expiration_timer(self):
+        try:
+            if not getattr(self, 'broadcaster_id', None):
+                users = await self.fetch_users(names=[self.channel_name])
+                if users:
+                    self.broadcaster_id = users[0].id
+                else:
+                    return
+
+            conn = sqlite3.connect(DB_PATH, timeout=20.0)
+            conn.row_factory = sqlite3.Row
+            
+            vips_to_check = conn.execute("""
+                SELECT twitch_id, username, vip_expiry FROM viewers 
+                WHERE is_vip = 1 AND vip_expiry IS NOT NULL
+            """).fetchall()
+            
+            now = datetime.now()
+            expired_vips = []
+            
+            for v in vips_to_check:
+                try:
+                    expiry_str = v['vip_expiry'].replace("T", " ")
+                    if len(expiry_str) == 16:
+                        expiry_str += ":00"
+                    
+                    expiry_dt = datetime.strptime(expiry_str[:19], '%Y-%m-%d %H:%M:%S')
+                    
+                    if expiry_dt <= now:
+                        expired_vips.append(v)
+                except Exception as e:
+                    logger.error(f"❌ Erreur lecture date pour {v['username']} : {e}")
+
+            for v in expired_vips:
+                t_id = str(v['twitch_id'])
+                u_name = v['username']
+                
+                conn.execute("UPDATE viewers SET is_vip = 0, vip_expiry = NULL WHERE twitch_id = ?", (t_id,))
+                conn.commit()
+                logger.info(f"💾 [BASE DE DONNÉES] Le grade de {u_name} est supprimé !")
+
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get("https://id.twitch.tv/oauth2/validate", headers={"Authorization": f"OAuth {self.master_token}"}) as r:
+                            data = await r.json()
+                            client_id = data.get('client_id', getattr(self._http, 'client_id', ''))
+
+                        headers = {"Client-ID": client_id, "Authorization": f"Bearer {self.master_token}"}
+                        url = f"https://api.twitch.tv/helix/channels/vips?broadcaster_id={self.broadcaster_id}&user_id={t_id}"
+                        
+                        resp = await session.delete(url, headers=headers)
+                        
+                        if resp.status in [200, 204]:
+                            logger.info(f"✅ [TWITCH API] Le badge de {u_name} a été retiré sur le chat !")
+                        else:
+                            logger.warning(f"⚠️ [TWITCH API] Twitch a refusé (Code: {resp.status}).")
+                except Exception as api_err:
+                    logger.error(f"❌ Erreur réseau avec Twitch : {api_err}")
+
+            conn.close()
+        except Exception as e:
+            logger.error(f"❌ Erreur FATALE routine VIP : {e}")
+
+    # =====================================================================
+    # 🤖 ASPIRATEUR AUTOMATIQUE DES MODOS ET VIPs DEPUIS TWITCH
+    # =====================================================================
+    @routines.routine(hours=1)
+    async def sync_roles_timer(self):
+        """Aspirateur Automatique de Rôles Twitch (Tourne toutes les heures en fond)"""
+        if not self.broadcaster_id: return
+        
+        logger.info("🔄 [AUTO-SYNC] Le Raspberry Pi aspire les Modos et VIPs depuis Twitch...")
+        try:
+            client_id = os.getenv("TWITCH_CLIENT_ID", getattr(self._http, 'client_id', ''))
+            headers = {"Client-ID": client_id, "Authorization": f"Bearer {self.master_token}"}
+            
+            async with aiohttp.ClientSession() as session:
+                # 1. Aspirer les Modérateurs
+                mods = []
+                cursor = ""
+                while True:
+                    url = f"https://api.twitch.tv/helix/moderation/moderators?broadcaster_id={self.broadcaster_id}&first=100"
+                    if cursor: url += f"&after={cursor}"
+                    async with session.get(url, headers=headers) as r:
+                        if r.status != 200: break
+                        data = await r.json()
+                        mods.extend(data.get("data", []))
+                        cursor = data.get("pagination", {}).get("cursor")
+                        if not cursor: break
+                        
+                # 2. Aspirer les VIPs
+                vips = []
+                cursor = ""
+                while True:
+                    url = f"https://api.twitch.tv/helix/channels/vips?broadcaster_id={self.broadcaster_id}&first=100"
+                    if cursor: url += f"&after={cursor}"
+                    async with session.get(url, headers=headers) as r:
+                        if r.status != 200: break
+                        data = await r.json()
+                        vips.extend(data.get("data", []))
+                        cursor = data.get("pagination", {}).get("cursor")
+                        if not cursor: break
+                        
+            # 3. Sauvegarde 100% Automatique en Base de Données (SEULEMENT À LA FIN POUR NE PAS BLOQUER)
+            def _save_sync():
+                conn = sqlite3.connect(DB_PATH, timeout=20.0)
+                try: conn.execute("ALTER TABLE viewers ADD COLUMN is_mod INTEGER DEFAULT 0")
+                except: pass
+                try: conn.execute("ALTER TABLE viewers ADD COLUMN is_artist INTEGER DEFAULT 0")
+                except: pass
+                
+                count_mods, count_vips = 0, 0
+                for m in mods:
+                    conn.execute("INSERT OR IGNORE INTO viewers (twitch_id, username) VALUES (?, ?)", (m['user_id'], m['user_login']))
+                    conn.execute("UPDATE viewers SET is_mod = 1 WHERE twitch_id = ?", (m['user_id'],))
+                    count_mods += 1
+                    
+                for v in vips:
+                    conn.execute("INSERT OR IGNORE INTO viewers (twitch_id, username) VALUES (?, ?)", (v['user_id'], v['user_login']))
+                    conn.execute("UPDATE viewers SET is_vip = 1 WHERE twitch_id = ?", (v['user_id'],))
+                    count_vips += 1
+
+                conn.commit()
+                conn.close()
+                return count_mods, count_vips
+
+            # Exécuter l'écriture SQL de manière asynchrone
+            count_mods, count_vips = await asyncio.to_thread(_save_sync)
+            logger.info(f"✅ [AUTO-SYNC] Terminé ! {count_mods} Modérateurs et {count_vips} VIPs mis à jour dans la base.")
+        except Exception as e:
+            logger.error(f"❌ [AUTO-SYNC] Erreur : {e}")
 
     @routines.routine(seconds=60)
     async def announcements_timer(self):
@@ -792,9 +1046,6 @@ class MasthbotTwitch(commands.Bot):
                 ann_id = ann_to_send["id"]
                 msg = ann_to_send["message_template"]
                 
-                # ======================================================
-                # 🏷️ GESTION DES TAGS DYNAMIQUES AVANCÉS
-                # ======================================================
                 if "{viewers}" in msg:
                     msg = msg.replace("{viewers}", str(len(channel.chatters)) if channel else "0")
                 
@@ -869,7 +1120,6 @@ class MasthbotTwitch(commands.Bot):
                         msg = msg.replace("{levelups}", lvl_str)
                         
                     conn_stats.close()
-                # ======================================================
                     
                 logger.info(f"📢 [ANNONCE] Envoi en rotation : '{ann_to_send['label']}'")
                 await channel.send(msg)

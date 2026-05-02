@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Overlay Deck - MasthomBot</title>
+    <style>
+        /* Fond 100% transparent pour OBS */
+        body { 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden; 
+            background-color: transparent; 
+        }
+        /* Style universel pour centrer les Images, GIFs ET Vidéos */
+        .deck-media {
+            position: fixed; 
+            top: 50%; 
+            left: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 80%; 
+            max-height: 80%; 
+            z-index: 9999;
+            filter: drop-shadow(0 0 20px rgba(0,0,0,0.5));
+        }
+    </style>
+</head>
+<body>
+    <script>
+        let ws;
+        const activeEffects = {};
+        let audioCtx;
+
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/overlay`;
+            
+            ws = new WebSocket(wsUrl);
+            ws.onopen = () => console.log("✅ Connecté à l'Overlay du Deck !");
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === "play_sound") {
+                    const details = data.details;
+                    // On s'assure d'avoir l'URL absolue complète (ex: http://127.0.0.1:8000/static/uploads/...)
+                    const absoluteUrl = window.location.origin + details.filename;
+                    
+		    // 🎵 1. LECTURE AUDIO SEULE
+                    if (details.type === "sound") {
+                        const audio = new Audio(absoluteUrl);
+                        audio.loop = details.loop || false;
+                        
+                        // 🛡️ SÉCURITÉ 1 : On s'assure que le volume est un VRAI nombre
+                        let volPct = parseFloat(details.volume);
+                        // isNaN vérifie si ce n'est pas un nombre, isFinite vérifie l'infini
+                        if (isNaN(volPct) || !isFinite(volPct)) {
+                            volPct = 100; // Valeur de secours si le bouton est ancien ou corrompu
+                        }
+                        
+                        // 🎛️ Utilisation de l'amplificateur Web Audio API
+                        try {
+                            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                            
+                            const source = audioCtx.createMediaElementSource(audio);
+                            const gainNode = audioCtx.createGain();
+                            
+                            gainNode.gain.value = volPct / 100;
+                            
+                            source.connect(gainNode);
+                            gainNode.connect(audioCtx.destination);
+                            
+                        } catch(e) {
+                            console.warn("L'amplification a échoué, utilisation du volume classique.", e);
+                            audio.volume = Math.min(volPct / 100, 1.0); 
+                        }
+
+                        // 🛡️ SÉCURITÉ 2 : On gère l'interruption rapide (AbortError)
+                        const playPromise = audio.play();
+                        if (playPromise !== undefined) {
+                            playPromise.catch(error => {
+                                // On ignore l'erreur si elle est due à un appui trop rapide
+                                if (error.name !== 'AbortError') {
+                                    console.error("Erreur Audio OBS:", error);
+                                }
+                            });
+                        }
+                        
+                        if (details.id) activeEffects[details.id] = audio;
+                    }
+                    
+                    // 🎬 2. LECTURE VIDÉO, GIF ET IMAGE
+                    else if (details.type === "image") {
+                        // On analyse l'extension pour savoir si c'est une vidéo
+                        const ext = details.filename.split('.').pop().toLowerCase();
+                        const isVideo = ['mp4', 'webm', 'mov'].includes(ext);
+
+                        let mediaElement;
+
+                        if (isVideo) {
+                            // Création du lecteur Vidéo optimisé
+                            mediaElement = document.createElement('video');
+                            mediaElement.src = absoluteUrl;
+                            mediaElement.autoplay = true;
+                            mediaElement.playsInline = true; // Aide à contourner certains blocages
+                            mediaElement.loop = details.loop || false;
+                            mediaElement.volume = 0.8;
+
+                            // ÉTAPE CLÉ : On ajoute la vidéo à l'écran AVANT de forcer la lecture
+                            mediaElement.className = 'deck-media';
+                            document.body.appendChild(mediaElement);
+
+                            // On force la lecture manuellement et on écoute les erreurs éventuelles
+                            const playPromise = mediaElement.play();
+                            if (playPromise !== undefined) {
+                                playPromise.catch(error => {
+                                    console.error("🛑 OBS a bloqué la lecture de la vidéo :", error);
+                                    // Astuce : Si OBS bloque systématiquement à cause du son, 
+                                    // tu peux forcer le mode muet en décommentant la ligne ci-dessous :
+                                    // mediaElement.muted = true; mediaElement.play();
+                                });
+                            }
+
+                            // Si c'est un clic simple (pas de boucle), on supprime la vidéo à la fin
+                            if (!details.loop) {
+                                mediaElement.onended = () => mediaElement.remove();
+                            }
+                        } else {
+                            // Création du lecteur Image / GIF
+                            mediaElement = document.createElement('img');
+                            mediaElement.src = absoluteUrl;
+                            mediaElement.className = 'deck-media';
+                            document.body.appendChild(mediaElement);
+
+                            // Pour les GIFs/Images sans boucle, on les retire après 5 secondes
+                            if (!details.loop) {
+                                setTimeout(() => mediaElement.remove(), 5000);
+                            }
+                        }
+
+                        // Sauvegarde pour pouvoir l'arrêter en mode "Hold"
+                        if (details.loop && details.id) {
+                            activeEffects[details.id] = mediaElement;
+                        }
+                    }
+                }
+                
+                // 🛑 3. ARRÊT DES EFFETS (Mode Maintenu)
+                else if (data.type === "stop_sound") {
+                    const effectId = data.details.effect_id;
+                    if (activeEffects[effectId]) {
+                        const element = activeEffects[effectId];
+                        
+                        // Si c'est un Audio ou une Vidéo, on met pause
+                        if (element.tagName === "AUDIO" || element.tagName === "VIDEO") {
+                            element.pause();
+                            element.currentTime = 0;
+                        }
+                        // On retire l'élément de l'écran dans tous les cas
+                        element.remove(); 
+                        delete activeEffects[effectId];
+                    }
+                }
+            };
+
+            ws.onclose = () => {
+                console.log("❌ Déconnecté. Reconnexion dans 2s...");
+                setTimeout(connectWebSocket, 2000);
+            };
+        }
+
+        connectWebSocket();
+    </script>
+</body>
+</html>

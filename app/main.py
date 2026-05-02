@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 
 # --- IMPORT DES ROUTES ---
-from app.routes import admin, viewers, api, announcements, stats, public, overlays, polls, rewards
+from app.routes import admin, viewers, api, announcements, stats, public, overlays, polls, rewards, admin_vips, api_deck
 from app.routes.credits import router as credits_router 
 
 # --- IMPORT DES SERVICES ---
@@ -26,6 +26,8 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
 )
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+logging.getLogger("websockets.server").setLevel(logging.WARNING)
 
 node_process = None
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -88,7 +90,7 @@ app.add_middleware(
 
 static_path = os.path.join(BASE_DIR, "app", "static")
 if os.path.exists(static_path):
-    app.mount("/static", StaticFiles(directory=static_path), name="static")
+    app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Branchement des Routes
 app.include_router(public.router)
@@ -101,6 +103,8 @@ app.include_router(overlays.router)
 app.include_router(polls.router)
 app.include_router(credits_router)
 app.include_router(rewards.router)
+app.include_router(admin_vips.router)
+app.include_router(api_deck.router)
 
 if __name__ == "__main__":
     import uvicorn

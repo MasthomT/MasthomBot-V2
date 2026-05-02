@@ -5,11 +5,13 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app.routes.overlays import trigger_overlay_event
+from app.services.twitch_service import twitch_bot
+from app.core.config import settings
 
 logger = logging.getLogger("masthbot.rewards")
 router = APIRouter(prefix="/admin", tags=["rewards"])
 templates = Jinja2Templates(directory="app/templates")
-DB_PATH = "bot_database.db"
+DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -22,11 +24,7 @@ def get_db():
 async def trophy_manager_page(request: Request):
     conn = get_db()
     try:
-        # On récupère tous les trophées pour le catalogue
         trophies = conn.execute("SELECT * FROM trophy_list ORDER BY label").fetchall()
-        
-        # 🛡️ REQUÊTE SIMPLIFIÉE : On récupère les 15 derniers trophées décernés
-        # On utilise des LEFT JOIN pour éviter qu'un viewer disparaisse s'il y a un micro-bug de data
         recent_wins = conn.execute("""
             SELECT 
                 v.username, 
@@ -53,81 +51,79 @@ async def trophy_manager_page(request: Request):
 
 # --- BOUTON DE TEST OBS ---
 @router.post("/trophy/test_obs")
-async def test_specific_trophy_obs(
-    label: str = Form(...), 
-    icon: str = Form(...), 
-    tier: str = Form("Standard")
-):
+async def test_specific_trophy_obs(label: str = Form(...), icon: str = Form(...), tier: str = Form("Standard")):
     try:
-        payload = {
-            "type": "trophy_unlock",
-            "details": {
-                "username": "Testeur_Fou",
-                "trophy_name": label,
-                "icon": icon,
-                "tier": tier
-            }
-        }
+        payload = {"type": "trophy_unlock", "details": {"username": "Testeur_Fou", "trophy_name": label, "icon": icon, "tier": tier}}
         await trigger_overlay_event(payload)
+        
+        # Test Chat Twitch Optionnel
+        tier_emojis = {'Standard': '🎖️', 'Bronze': '🥉', 'Argent': '🥈', 'Or': '🥇', 'Platine': '💠', 'Diamant': '💎'}
+        emoji = tier_emojis.get(tier, '🎖️')
+        channel_name = settings.TWITCH_CHANNEL.replace("#", "").lower()
+        channel = twitch_bot.get_channel(channel_name)
+        if channel:
+            await channel.send(f"✨ [TEST] DING ! @Testeur_Fou vient de recevoir le Haut Fait {emoji} {label} {icon} ! GG ! 🎉")
+            
         return RedirectResponse(url="/admin/trophy_manager?success=1", status_code=303)
     except Exception as e:
         logger.error(f"❌ Erreur Test OBS : {e}")
         return RedirectResponse(url="/admin/trophy_manager?error=1", status_code=303)
 
-# --- ACTIONS ADMINISTRATEUR ---
+# --- ACTIONS ADMINISTRATEUR MANUELLES ---
 @router.post("/trophy/award")
 async def award_trophy_manual(request: Request, username: str = Form(...), trophy_id: int = Form(...)):
     conn = get_db()
     try:
-        # 1. Nettoyage du pseudo
         clean_username = username.lower().strip().replace("@", "").replace(" ", "")
-        
-        # 2. Trouver le viewer
         viewer = conn.execute("SELECT twitch_id, username FROM viewers WHERE LOWER(username) = ?", (clean_username,)).fetchone()
         if not viewer:
             return RedirectResponse(url="/admin/trophy_manager?error=viewer_not_found", status_code=303)
 
-        # 3. Vérifier si le trophée existe déjà pour ce viewer
-        exists = conn.execute("SELECT 1 FROM viewer_trophies WHERE twitch_id = ? AND trophy_id = ?", 
-                             (viewer['twitch_id'], trophy_id)).fetchone()
+        exists = conn.execute("SELECT 1 FROM viewer_trophies WHERE twitch_id = ? AND trophy_id = ?", (viewer['twitch_id'], trophy_id)).fetchone()
         
         if exists:
-            # ICI : Au lieu de bloquer, on va quand même essayer de déclencher l'alerte OBS 
-            # pour que tu vois que ça communique, même si on n'écrit pas en base.
-            logger.info(f"Le viewer {clean_username} a déjà le trophée {trophy_id}. Envoi alerte test.")
-            # On récupère les infos du trophée pour l'alerte
+            # S'il l'a déjà, on re-déclenche juste l'overlay et le message pour le show
             t_info = conn.execute("SELECT label, icon, tier FROM trophy_list WHERE id = ?", (trophy_id,)).fetchone()
             if t_info:
                 await trigger_overlay_event({
                     "type": "trophy_unlock",
-                    "details": {
-                        "username": viewer['username'],
-                        "trophy_name": t_info['label'],
-                        "icon": t_info['icon'],
-                        "tier": t_info['tier']
-                    }
+                    "details": {"username": viewer['username'], "trophy_name": t_info['label'], "icon": t_info['icon'], "tier": t_info['tier']}
                 })
             return RedirectResponse(url="/admin/trophy_manager?error=already", status_code=303)
 
-        # 4. Insertion réelle avec COMMIT forcé
-        conn.execute("""
-            INSERT INTO viewer_trophies (twitch_id, trophy_id, earned_at) 
-            VALUES (?, ?, datetime('now', 'localtime'))
-        """, (viewer['twitch_id'], trophy_id))
-        conn.commit() # 🌟 TRÈS IMPORTANT
+        conn.execute("INSERT INTO viewer_trophies (twitch_id, trophy_id, earned_at) VALUES (?, ?, datetime('now', 'localtime'))", (viewer['twitch_id'], trophy_id))
+        conn.commit() 
         
-        # 5. Récupérer les infos pour l'alerte OBS
-        trophy = conn.execute("SELECT label, icon, tier FROM trophy_list WHERE id = ?", (trophy_id,)).fetchone()
+        trophy = conn.execute("SELECT label, icon, tier, reward_exp FROM trophy_list WHERE id = ?", (trophy_id,)).fetchone()
         
+        # 1. Overlay OBS
         await trigger_overlay_event({
             "type": "trophy_unlock",
-            "details": {
-                "username": viewer['username'],
-                "trophy_name": trophy['label'],
-                "icon": trophy['icon'],
-                "tier": trophy['tier']
-            }
+            "details": {"username": viewer['username'], "trophy_name": trophy['label'], "icon": trophy['icon'], "tier": trophy['tier']}
         })
+
+        # 2. Message Twitch
+        try:
+            tier = trophy['tier'] if trophy['tier'] else 'Standard'
+            tier_emojis = {
+                'Standard': '🎖️',
+                'Bronze': '🥉',
+                'Argent': '🥈',
+                'Or': '🥇',
+                'Platine': '💠',
+                'Diamant': '💎'
+            }
+            emoji = tier_emojis.get(tier, '🎖️')
+            
+            channel_name = settings.TWITCH_CHANNEL.replace("#", "").lower()
+            channel = twitch_bot.get_channel(channel_name)
+            if channel:
+                msg = f"✨ DING ! @{viewer['username']} vient de recevoir le Haut Fait {emoji} {trophy['label']} {trophy['icon']} ! GG ! 🎉"
+                if trophy['reward_exp'] and trophy['reward_exp'] > 0:
+                    msg += f" (+{trophy['reward_exp']} EXP)"
+                await channel.send(msg)
+        except Exception as e:
+            logger.error(f"❌ Erreur annonce chat trophée (Manuel) : {e}")
 
         return RedirectResponse(url="/admin/trophy_manager?success=awarded", status_code=303)
     except Exception as e:
@@ -157,17 +153,19 @@ async def delete_trophy_type(id: int):
     finally:
         conn.close()
 
+# --- CRÉATION / MISE À JOUR ---
 @router.post("/trophy/create")
 async def create_trophy(request: Request):
     conn = get_db()
     try:
         form_data = await request.form()
         conn.execute("""
-            INSERT INTO trophy_list (label, icon, category, condition_type, condition_value, reward_exp, tier)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO trophy_list (label, icon, description, category, condition_type, condition_value, reward_exp, tier)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             form_data.get('label'),
             form_data.get('icon', '🏆'),
+            form_data.get('description', ''),
             'general',
             form_data.get('condition_type', 'none'),
             int(form_data.get('condition_value', 0)),
@@ -186,11 +184,12 @@ async def update_trophy(request: Request):
         form_data = await request.form()
         conn.execute("""
             UPDATE trophy_list 
-            SET label=?, icon=?, condition_type=?, condition_value=?, reward_exp=?, tier=?
+            SET label=?, icon=?, description=?, condition_type=?, condition_value=?, reward_exp=?, tier=?
             WHERE id=?
         """, (
             form_data.get('label'),
             form_data.get('icon', '🏆'),
+            form_data.get('description', ''),
             form_data.get('condition_type', 'none'),
             int(form_data.get('condition_value', 0)),
             int(form_data.get('reward_exp', 0)),
@@ -202,13 +201,12 @@ async def update_trophy(request: Request):
     finally:
         conn.close()
 
+# --- SYNCHRONISATION MANUELLE ---
 @router.post("/trophy/sync_auto")
 async def sync_auto_trophies():
     conn = get_db()
     try:
-        # 1. Récupération de tous les trophées ayant une condition automatique définie
-        auto_trophies = conn.execute("SELECT * FROM trophy_list WHERE condition_type != 'none'").fetchall()
-
+        auto_trophies = conn.execute("SELECT * FROM trophy_list WHERE condition_type != 'none' AND condition_value > 0").fetchall()
         new_awards_count = 0
 
         for trophy in auto_trophies:
@@ -216,16 +214,12 @@ async def sync_auto_trophies():
             c_type = trophy['condition_type'].lower().strip()
             c_val = trophy['condition_value']
 
-            # --- Préparation de la requête SQL flexible ---
             base_query = "SELECT v.twitch_id FROM viewers v"
             joins = " LEFT JOIN viewer_trophies vt ON v.twitch_id = vt.twitch_id AND vt.trophy_id = ?"
             where_clause = ""
             params = [t_id]
             target_value = c_val
 
-            # --- LOGIQUE DES COMPTEURS ---
-
-            # Catégorie : Fidélité & Temps
             if c_type == 'level':
                 target_value = int(100 * (c_val ** 2.2)) 
                 where_clause = "v.points >= ?"
@@ -243,42 +237,49 @@ async def sync_auto_trophies():
                 where_clause = "ds.watchtime >= ?"
             elif c_type == 'streak_days':
                 where_clause = "v.streak_days >= ? AND v.streak_days > 0"
-
-            # Catégorie : Activité Chat
             elif c_type == 'messages':
                 where_clause = "v.messages >= ?"
             elif c_type == 'messages_session':
                 joins += " JOIN viewer_daily_stats ds ON v.twitch_id = ds.twitch_id AND ds.day = date('now', 'localtime')"
                 where_clause = "ds.messages >= ?"
             elif c_type == 'emotes_global':
-                where_clause = "v.emotes_count >= ?"
-
-            # Catégorie : Statut & Soutien (CORRECTIF SUB_MONTHS)
+                where_clause = "v.emotes_global >= ?"
+            elif c_type == 'commands_global':
+                where_clause = "v.commands_global >= ?"
             elif c_type == 'is_vip':
                 where_clause = "v.is_vip = 1"
                 target_value = None
             elif c_type == 'gifts_count':
                 where_clause = "v.gifts_count >= ?"
+            elif c_type == 'gifts_session':
+                joins += " JOIN viewer_daily_stats ds ON v.twitch_id = ds.twitch_id AND ds.day = date('now', 'localtime')"
+                where_clause = "ds.gifts_count >= ?"
             elif c_type == 'sub_months':
-                # On utilise la nouvelle colonne sub_months que nous avons créée
                 where_clause = "v.sub_months >= ? AND v.sub_months IS NOT NULL AND v.sub_months > 0"
-
-            # Catégorie : Jeux & Rapidité
+            elif c_type == 'bits_count':
+                where_clause = "v.bits_count >= ?"
+            elif c_type == 'rewards_claimed':
+                where_clause = "v.rewards_claimed >= ?"
             elif c_type == 'first_count':
                 where_clause = "v.first_count >= ?"
             elif c_type == 'deuz_count':
                 where_clause = "v.deuz_count >= ?"
             elif c_type == 'troiz_count':
                 where_clause = "v.troiz_count >= ?"
-
-            # Catégorie : IA & Site Web
+            elif c_type == 'bombs_won':
+                where_clause = "v.bombs_won >= ?"
+            elif c_type == 'bombs_lost':
+                where_clause = "v.bombs_lost >= ?"
+            elif c_type == 'words_guessed':
+                where_clause = "v.words_guessed >= ?"
             elif c_type == 'has_context':
                 where_clause = "v.nickname IS NOT NULL AND v.nickname != ''"
                 target_value = None
             elif c_type == 'roast_level':
                 where_clause = "v.roast_level >= ? AND v.roast_level IS NOT NULL"
+            elif c_type == 'ai_prompts':
+                where_clause = "v.ai_prompts >= ?"
 
-            # 3. EXÉCUTION DE LA SYNCHRONISATION
             if where_clause:
                 if target_value is not None:
                     params.append(target_value)
@@ -289,10 +290,7 @@ async def sync_auto_trophies():
                     eligible_viewers = conn.execute(final_query, tuple(params)).fetchall()
 
                     for v in eligible_viewers:
-                        conn.execute("""
-                            INSERT INTO viewer_trophies (twitch_id, trophy_id, earned_at)
-                            VALUES (?, ?, datetime('now', 'localtime'))
-                        """, (v['twitch_id'], t_id))
+                        conn.execute("INSERT INTO viewer_trophies (twitch_id, trophy_id, earned_at) VALUES (?, ?, datetime('now', 'localtime'))", (v['twitch_id'], t_id))
                         new_awards_count += 1
 
                 except Exception as loop_error:

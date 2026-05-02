@@ -209,28 +209,56 @@
             try {
                 const res = await fetch('/api/v1/poll/active');
                 const data = await res.json();
+                
                 if(data.active) {
                     for(let i=1; i<=4; i++) {
-                        if(data.options[i]) {
+                        if(data.options && data.options[i]) {
                             const v = data.results[i] || 0;
                             const p = data.total_votes > 0 ? Math.round((v/data.total_votes)*100) : 0;
+                            
                             const bar = document.getElementById('bar-'+i);
                             const txt = document.getElementById('txt-'+i);
                             const vList = document.getElementById('voters-'+i);
-                            
+
+                            // Mise à jour de la barre et du pourcentage
                             if(bar) bar.style.width = p + '%';
                             if(txt) txt.textContent = p + '% (' + v + ' votes)';
-                            
-                            // Mise à jour en direct des votants
-                            if(vList && data.voters && data.voters[i]) {
-                                vList.innerHTML = data.voters[i].map(name => 
-                                    `<span class="text-[9px] font-black bg-slate-800 text-slate-500 px-2 py-0.5 rounded-md border border-slate-700/50 uppercase tracking-tighter">${name}</span>`
-                                ).join('');
+
+                            // 🛡️ Mise à jour en direct des votants (Version sécurisée)
+                            if(vList && data.voters) {
+                                // On gère le cas où la clé est un entier (1) ou une chaîne ("1")
+                                let rawVoters = data.voters[i] || data.voters[i.toString()];
+                                let votersArray = [];
+
+                                if (rawVoters) {
+                                    // Si c'est déjà un tableau, on le garde
+                                    if (Array.isArray(rawVoters)) {
+                                        votersArray = rawVoters;
+                                    } 
+                                    // Si c'est du texte séparé par des virgules, on le transforme en tableau
+                                    else if (typeof rawVoters === 'string' && rawVoters.trim() !== '') {
+                                        votersArray = rawVoters.split(',');
+                                    }
+                                }
+
+                                // Affichage dynamique sécurisé
+                                if (votersArray.length > 0) {
+                                    vList.innerHTML = votersArray.map(name =>
+                                        `<span class="text-[9px] font-black bg-slate-800 text-slate-500 px-2 py-0.5 rounded-md border border-slate-700/50 uppercase tracking-tighter">${name.trim()}</span>`
+                                    ).join('');
+                                } else {
+                                    vList.innerHTML = ''; // On vide proprement si personne n'a voté
+                                }
                             }
                         }
                     }
-                } else { location.reload(); }
-            } catch(e) {}
+                } else { 
+                    // Si le sondage est terminé côté serveur, on rafraîchit la page
+                    location.reload(); 
+                }
+            } catch(e) {
+                console.error("Erreur lors de l'actualisation du sondage :", e);
+            }
         }, 3000);
         {% endif %}
     </script>

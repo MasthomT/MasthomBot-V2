@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestion VIP & Staff - MasthomBot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; transition: all 0.3s; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #a855f7; outline: none; ring: 2px ring-purple-500/20; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .animate-fade-in-down { animation: fadeInDown 0.5s ease-out; }
+        @keyframes fadeInDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen">
+    
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 md:p-10 flex flex-col h-screen overflow-y-auto custom-scrollbar">
+        
+        <!-- En-tête -->
+        <header class="mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-700/50 pb-6">
+            <div>
+                <h1 class="text-3xl font-black text-white italic tracking-tight">VIP <span class="text-purple-400">&</span> <span class="text-blue-400">Staff</span></h1>
+                <p class="text-slate-400 text-sm font-bold uppercase tracking-widest mt-1">L'élite de ta communauté synchronisée avec Twitch</p>
+            </div>
+
+            <div class="flex items-center gap-4 flex-wrap">
+                <!-- Notifications -->
+                {% if request.query_params.get('success') == 'synced' %}
+                <div class="alert-box bg-indigo-500/10 text-indigo-400 px-6 py-2.5 rounded-xl font-bold border border-indigo-500/20 flex items-center gap-2 animate-pulse">
+                    <i class="fas fa-check-circle"></i> Données Aspirées depuis Twitch !
+                </div>
+                {% elif request.query_params.get('success') == 'added' %}
+                <div class="alert-box bg-emerald-500/10 text-emerald-400 px-6 py-2.5 rounded-xl font-bold border border-emerald-500/20 flex items-center gap-2 animate-fade-in-down">
+                    <i class="fas fa-check-circle"></i> VIP Temporaire ajouté !
+                </div>
+                {% elif request.query_params.get('success') == 'revoked' %}
+                <div class="alert-box bg-emerald-500/10 text-emerald-400 px-6 py-2.5 rounded-xl font-bold border border-emerald-500/20 flex items-center gap-2 animate-fade-in-down">
+                    <i class="fas fa-trash"></i> VIP Temporaire retiré !
+                </div>
+                {% endif %}
+
+                <!-- LE BOUTON MAGIQUE D'ASPIRATION -->
+                <form action="/admin/vips/sync" method="POST" class="m-0">
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 px-5 rounded-xl shadow-lg hover:shadow-indigo-500/25 transition-all duration-300 flex items-center gap-2 text-sm group active:scale-95">
+                        <i class="fas fa-sync-alt group-hover:rotate-180 transition-transform duration-500"></i>
+                        Aspirer Modos & VIPs de Twitch
+                    </button>
+                </form>
+            </div>
+        </header>
+
+        <!-- Contenu Principal -->
+        <div class="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+            
+            <!-- COLONNE GAUCHE (4/12) : Formulaire VIP temporaire -->
+            <div class="xl:col-span-4 space-y-8">
+                
+                <section class="config-card p-8 rounded-3xl shadow-2xl border-l-4 border-purple-500">
+                    <h2 class="text-xs font-black text-purple-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                        <i class="fas fa-clock text-xl"></i> Attribuer un VIP Temporaire
+                    </h2>
+                    <p class="text-xs text-slate-400 mb-6 font-bold leading-relaxed">Les Modos et VIP permanents sont gérés directement sur Twitch. Utilise ce formulaire uniquement pour donner des récompenses à durée limitée.</p>
+                    
+                    <form action="/admin/vips/add" method="POST" class="space-y-6">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Pseudo Twitch</label>
+                            <input type="text" name="username" placeholder="ex: MonkeyMaxou" required class="w-full input-dark rounded-xl p-4 text-sm font-bold">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Durée du Grade</label>
+                            <select name="duration_days" id="durationSelect" onchange="toggleExactDate()" class="w-full input-dark rounded-xl p-4 text-sm font-bold cursor-pointer text-purple-300 border-purple-500/30">
+                                <option value="1">⏱️ 24 Heures (Express)</option>
+                                <option value="7">📅 7 Jours (Semaine)</option>
+                                <option value="30">🌙 30 Jours (Mois)</option>
+                                <option value="-1">🎯 Date Exacte (Calendrier)...</option>
+                            </select>
+                        </div>
+
+                        <div id="exactDateGroup" style="display: none;">
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Date d'expiration <span class="text-rose-500">*</span></label>
+                            <input type="datetime-local" id="dateInput" name="exact_date" class="w-full input-dark rounded-xl p-4 text-sm font-bold text-purple-300">
+                        </div>
+
+                        <button type="submit" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-purple-500/20 transition-all active:scale-95 mt-4 flex justify-center items-center gap-2">
+                            DONNER LA RÉCOMPENSE <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </form>
+                </section>
+
+                <!-- EXPLICATION ARTISTES -->
+                <section class="config-card p-8 rounded-3xl shadow-2xl border-l-4 border-blue-500">
+                    <h2 class="text-xs font-black text-blue-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <i class="fas fa-paint-brush text-xl"></i> Et pour les Artistes ?
+                    </h2>
+                    <p class="text-sm text-slate-300 font-medium leading-relaxed">
+                        L'API de Twitch ne permet pas d'aspirer la liste des Artistes (contrairement aux VIPs et Modos). <br><br>
+                        👉 <strong>Félix s'en charge en direct :</strong> Dès qu'un artiste écrit un message dans le chat du live, Félix détecte son badge automatiquement et l'ajoute à la base de données. Il apparaîtra alors de lui-même dans la liste !
+                    </p>
+                </section>
+
+            </div>
+
+            <!-- COLONNE DROITE (8/12) : Les Listes Automatiques -->
+            <div class="xl:col-span-8 space-y-8">
+                
+                <!-- LISTE : MODÉRATEURS -->
+                <section class="config-card p-8 rounded-3xl shadow-2xl">
+                    <h2 class="text-xs font-black text-emerald-500 uppercase tracking-widest mb-6 flex items-center gap-2">
+                        <i class="fas fa-shield-alt text-emerald-400"></i> Les Modérateurs
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {% for m in mods|sort(attribute='username', case_sensitive=False) %}
+                        <div class="p-4 rounded-2xl border border-slate-800 bg-slate-900/50 flex items-center justify-between group transition-all hover:border-emerald-500/50 hover:bg-slate-800/50">
+                            <div class="flex items-center gap-4">
+                                <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-black text-lg">
+                                    {{ m.username[0]|upper }}
+                                </div>
+                                <span class="text-sm font-black text-white block">{{ m.username }}</span>
+                            </div>
+                            <!-- Pas de bouton supprimer : on gère les vrais modos sur Twitch ! -->
+                        </div>
+                        {% else %}
+                        <div class="col-span-full text-center py-6 opacity-30 italic text-sm font-bold bg-slate-900/30 rounded-2xl border border-dashed border-slate-700">Aucun modérateur aspiré.</div>
+                        {% endfor %}
+                    </div>
+                </section>
+
+                <!-- LISTE : ARTISTES -->
+                <section class="config-card p-8 rounded-3xl shadow-2xl">
+                    <h2 class="text-xs font-black text-blue-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                        <i class="fas fa-paint-brush text-blue-400"></i> Les Artistes
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {% for a in artists|sort(attribute='username', case_sensitive=False) %}
+                        <div class="p-4 rounded-2xl border border-slate-800 bg-slate-900/50 flex items-center justify-between group transition-all hover:border-blue-500/50 hover:bg-slate-800/50">
+                            <div class="flex items-center gap-4">
+                                <div class="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 font-black text-lg">
+                                    {{ a.username[0]|upper }}
+                                </div>
+                                <span class="text-sm font-black text-white block">{{ a.username }}</span>
+                            </div>
+                            <!-- Pas de bouton supprimer : on gère les artistes sur Twitch ! -->
+                        </div>
+                        {% else %}
+                        <div class="col-span-full text-center py-6 opacity-30 italic text-sm font-bold bg-slate-900/30 rounded-2xl border border-dashed border-slate-700">Aucun artiste détecté.</div>
+                        {% endfor %}
+                    </div>
+                </section>
+
+                <!-- LISTE : VIP -->
+                <section class="config-card p-8 rounded-3xl shadow-2xl">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                            <i class="fas fa-gem text-purple-400"></i> Les VIPs (Aspirés de Twitch + Temporaires)
+                        </h2>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {% for v in vips|sort(attribute='username', case_sensitive=False) %}
+                        <div class="p-4 rounded-2xl border border-slate-800 bg-slate-900/50 flex items-center justify-between group transition-all hover:border-purple-500/50 hover:bg-slate-800/50">
+                            <div class="flex items-center gap-4">
+                                <div class="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 font-black text-lg">
+                                    {{ v.username[0]|upper }}
+                                </div>
+                                
+                                <div>
+                                    <span class="text-sm font-black text-white block mb-1">{{ v.username }}</span>
+                                    {% if v.vip_expiry %}
+                                    <span class="text-[9px] bg-slate-800 text-slate-400 px-2 py-1 rounded font-bold uppercase border border-slate-700 tracking-wider">
+                                        <i class="fas fa-hourglass-half mr-1 text-slate-500"></i> {{ v.vip_expiry[:10] }}
+                                    </span>
+                                    {% else %}
+                                    <span class="text-[9px] bg-amber-500/10 text-amber-400 px-2 py-1 rounded font-black uppercase border border-amber-500/20 tracking-wider">
+                                        <i class="fas fa-infinity mr-1"></i> Permanent
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <!-- On ne peut retirer MANUELLEMENT que les VIP temporaires (les permanents se gèrent sur Twitch) -->
+                            {% if v.vip_expiry %}
+                            <form action="/admin/vips/revoke/{{ v.twitch_id }}" method="POST" onsubmit="return confirm('Retirer le VIP temporaire de {{ v.username }} ?');">
+                                <button type="submit" class="text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all p-3" title="Révoquer">
+                                    <i class="fas fa-user-minus text-sm"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <div class="col-span-full text-center py-16 opacity-20 italic text-sm font-bold bg-slate-900/30 rounded-2xl border border-dashed border-slate-700">
+                            Aucun VIP enregistré.
+                        </div>
+                        {% endfor %}
+                    </div>
+                </section>
+
+            </div>
+            
+        </div>
+    </main>
+
+    <script>
+        function toggleExactDate() {
+            const select = document.getElementById('durationSelect');
+            const dateGroup = document.getElementById('exactDateGroup');
+            const dateInput = document.getElementById('dateInput');
+            
+            if (select.value === '-1') {
+                dateGroup.style.display = 'block';
+                dateInput.required = true;
+            } else {
+                dateGroup.style.display = 'none';
+                dateInput.required = false;
+                dateInput.value = '';
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const alerts = document.querySelectorAll('.alert-box');
+            if(alerts.length > 0) {
+                setTimeout(() => {
+                    alerts.forEach(alert => {
+                        alert.style.transition = "opacity 0.5s ease";
+                        alert.style.opacity = "0";
+                        setTimeout(() => alert.remove(), 500);
+                    });
+                }, 4000);
+            }
+        });
+    </script>
+</body>
+</html>

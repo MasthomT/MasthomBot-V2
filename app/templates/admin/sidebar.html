@@ -1,6 +1,6 @@
 <aside class="w-72 bg-[#1e293b] border-r border-slate-800 min-h-screen flex flex-col shadow-2xl sticky top-0 h-screen hidden md:flex">
 	<!-- Logo / Brand -->
-	<div class="p-8 flex items-center gap-3">
+	<div class="p-6 flex items-center gap-3">
 		<div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
 			<i class="fas fa-cat text-white text-xl"></i>
 		</div>
@@ -12,41 +12,44 @@
 	</div>
 
 	<!-- Navigation -->
-	<nav class="flex-1 px-4 space-y-8 mt-4 overflow-y-auto custom-scrollbar">
+	<nav class="flex-1 px-4 space-y-6 mt-3 overflow-y-auto custom-scrollbar">
 
 		<!-- Catégorie : Général -->
 		<div>
-			<h3 class="px-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4">Général</h3>
+			<h3 class="px-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3">Général</h3>
 			<div class="space-y-1">
-				<a href="/admin/index" class="flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if request.url.path == '/admin/' or 'index' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+				<a href="/admin/index" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if request.url.path == '/admin/' or 'index' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fas fa-chart-line w-5"></i>
 					Vue d'ensemble
 				</a>
-				<a href="/admin/stats" class="flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'stats' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+				<a href="/admin/stats" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'stats' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fas fa-chart-pie w-5"></i>
 					Statistiques
+				</a>
+				<a href="/admin/data_logs" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'data_logs' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+					<i class="fas fa-database w-5"></i>
+					Data & Logs
 				</a>
 			</div>
 		</div>
 
 		<!-- Catégorie : Intelligence -->
 		<div>
-			<h3 class="px-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4">Intelligence</h3>
+			<h3 class="px-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3">Intelligence</h3>
 			<div class="space-y-1">
-				<a href="/admin/felix_ai" class="flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'felix_ai' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+				<a href="/admin/felix_ai" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'felix_ai' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fas fa-brain w-5"></i>
 					Cerveau de Félix
 				</a>
-				<a href="/admin/notifications" class="flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'notifications' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+				<a href="/admin/notifications" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'notifications' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fas fa-bell w-5"></i>
 					Notifications
 				</a>
-				<a href="/admin/moderation" class="flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'moderation' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+				<a href="/admin/moderation" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'moderation' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fas fa-shield-alt w-5"></i>
 					Modération
 				</a>
-				<!-- ✅ LE FIX EST ICI : Lien vers polls_faq -->
-				<a href="/admin/polls_faq" class="flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'poll' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+				<a href="/admin/polls_faq" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'poll' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fas fa-poll w-5"></i>
 					Sondages & FAQ
 				</a>
@@ -55,27 +58,31 @@
 
 		<!-- Catégorie : Communauté -->
 		<div>
-			<h3 class="px-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4">Communauté</h3>
+			<h3 class="px-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3">Communauté</h3>
 			<div class="space-y-1">
-				<a href="/admin/viewer_manager.html" class="flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'viewer' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+				<a href="/admin/viewer_manager.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'viewer' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fas fa-users w-5"></i>
 					Gestion Viewers
 				</a>
-				<a href="/admin/shoutout" class="flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'shoutout' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+				<a href="/admin/vips" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'vip' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+					<i class="fas fa-gem w-5"></i>
+					Gestion VIP
+				</a>
+				<a href="/admin/trophy_manager.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'trophy' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+					<i class="fas fa-medal w-5"></i>
+					Panthéon Trophées
+				</a>
+				<a href="/admin/shoutout" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'shoutout' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fas fa-broadcast-tower w-5"></i>
 					Régie & Shoutout
 				</a>
-				<a href="/admin/credits_manager" class="flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'credit' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+				<a href="/admin/credits_manager" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'credit' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fas fa-film w-5"></i>
 					Générique (Crédits)
 				</a>
-				<a href="/admin/announcements" class="flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'announcement' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+				<a href="/admin/announcements" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'announcement' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fas fa-bullhorn w-5"></i>
 					Annonces Auto
-				</a>
-				<a href="/admin/data_logs" class="flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'data_logs' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
-					<i class="fas fa-database w-5"></i>
-					Data & Logs
 				</a>
 			</div>
 		</div>
@@ -83,8 +90,8 @@
 	</nav>
 
 	<!-- Footer Sidebar -->
-	<div class="p-6 border-t border-slate-800 bg-slate-900/30">
-		<div class="flex items-center gap-3 mb-6">
+	<div class="p-4 border-t border-slate-800 bg-slate-900/30 mt-2">
+		<div class="flex items-center gap-3 mb-4">
 			<div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center overflow-hidden border border-slate-600">
 				<i class="fas fa-user text-slate-400 text-xs"></i>
 			</div>
@@ -93,7 +100,7 @@
 				<p class="text-[10px] text-slate-500 uppercase font-black tracking-widest">Admin</p>
 			</div>
 		</div>
-		<a href="/" class="flex items-center justify-center gap-2 w-full py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors">
+		<a href="/" class="flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors">
 			<i class="fas fa-external-link-alt"></i>
 			Retour au site
 		</a>

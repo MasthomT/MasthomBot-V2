@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Félix Deck - Sons/Img</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@800&display=swap');
+        
+        :root {
+            --bg: #0b0f1a;
+            --surface: rgba(30, 41, 59, 0.4);
+            --surface-bright: rgba(51, 65, 85, 0.5);
+            --border: rgba(255, 255, 255, 0.06);
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+            --accent: #00f5c3;
+            --accent-glow: rgba(0, 245, 195, 0.2);
+            --warning: #fbbf24;
+            --warning-glow: rgba(251, 191, 36, 0.2);
+            --indigo: #8b5cf6;
+            --indigo-glow: rgba(139, 92, 246, 0.2);
+        }
+        
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: var(--text-main); margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; }
+        header { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); flex-shrink: 0; box-shadow: 0 4px 20px rgba(0,0,0,0.5); z-index: 10; }
+        .logo-area { display: flex; align-items: center; gap: 10px; }
+        .logo-icon { width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--accent); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px var(--accent-glow); background: rgba(0, 245, 195, 0.1); }
+        .logo-icon i { color: var(--accent); font-size: 14px; }
+        .logo-text { font-size: 1rem; font-weight: 900; letter-spacing: -0.5px; }
+        .logo-text span { color: var(--accent); font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; margin-left: 4px; }
+        
+        .header-right { display: flex; align-items: center; gap: 15px; }
+        .edit-switch { display: flex; align-items: center; gap: 8px; font-size: 0.65rem; font-weight: 900; text-transform: uppercase; color: var(--text-dim); letter-spacing: 1px; }
+        .switch-input { display: none; }
+        .switch-label { width: 36px; height: 18px; background: rgba(255,255,255,0.1); border-radius: 20px; position: relative; cursor: pointer; transition: 0.3s; border: 1px solid var(--border); }
+        .switch-label::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: var(--text-dim); border-radius: 50%; transition: 0.3s; }
+        .switch-input:checked + .switch-label { background: rgba(0, 245, 195, 0.2); border-color: var(--accent); }
+        .switch-input:checked + .switch-label::after { transform: translateX(18px); background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+
+        .grid-container { display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(3, 1fr); gap: 12px; padding: 15px; flex-grow: 1; overflow: hidden; }
+        .deck-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); position: relative; overflow: hidden; box-shadow: 0 8px 20px -10px rgba(0,0,0,0.5); touch-action: manipulation; user-select: none; }
+        .deck-btn:active { transform: scale(0.92); background: var(--surface-bright); }
+        .deck-btn i { font-size: 1.6rem; margin-bottom: 8px; transition: 0.3s; }
+        .deck-btn div { font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-main); text-align: center; line-height: 1.2; padding: 0 4px; word-break: break-word; }
+        .deck-btn small { font-size: 0.5rem; color: var(--text-dim); font-weight: 600; margin-top: 2px; }
+
+        .deck-btn.empty { opacity: 0.3; border: 2px dashed var(--text-dim); background: transparent; cursor: default; }
+        .deck-btn.empty i { color: var(--text-dim); }
+        .deck-btn.btn-sound { border-bottom: 3px solid var(--warning); }
+        .deck-btn.btn-sound i { color: var(--warning); text-shadow: 0 0 8px var(--warning-glow); }
+        .deck-btn.btn-image { border-bottom: 3px solid var(--indigo); }
+        .deck-btn.btn-image i { color: var(--indigo); text-shadow: 0 0 8px var(--indigo-glow); }
+
+        body.editing .deck-btn { animation: pulse-edit 2s infinite; cursor: pointer !important; opacity: 1 !important; border-style: solid !important; }
+        @keyframes pulse-edit { 0%, 100% { border-color: var(--border); } 50% { border-color: var(--accent); box-shadow: 0 0 15px var(--accent-glow); } }
+        body.editing .deck-btn::after { content: '\f304'; font-family: "Font Awesome 6 Free"; font-weight: 900; position: absolute; top: 8px; right: 8px; font-size: 0.6rem; color: #000; background: var(--accent); border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 8px var(--accent); }
+
+        nav { display: flex; justify-content: space-around; align-items: center; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px); border-top: 1px solid var(--border); padding: 10px 0 20px 0; flex-shrink: 0; box-shadow: 0 -10px 30px rgba(0,0,0,0.5); }
+        .nav-item { display: flex; flex-direction: column; align-items: center; gap: 5px; color: var(--text-dim); text-decoration: none; width: 33%; transition: all 0.3s; }
+        .nav-item i { font-size: 1.4rem; transition: 0.3s; }
+        .nav-item span { font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+        .nav-item.active { color: var(--accent); transform: translateY(-4px); }
+        .nav-item.active i { filter: drop-shadow(0 0 8px var(--accent)); }
+        .nav-item.active::before { content: ''; position: absolute; top: -10px; width: 40px; height: 3px; background: var(--accent); border-radius: 0 0 4px 4px; box-shadow: 0 2px 10px var(--accent); }
+
+        #toast { visibility: hidden; transform: translateY(100%); opacity: 0; position: fixed; bottom: 90px; left: 50%; margin-left: -125px; width: 250px; background: rgba(15, 23, 42, 0.95); border: 1px solid var(--border); color: #fff; text-align: center; border-radius: 30px; padding: 12px 20px; font-size: 0.85rem; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); backdrop-filter: blur(10px); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 100; }
+        #toast.show { visibility: visible; transform: translateY(0); opacity: 1; }
+
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); z-index: 200; justify-content: center; align-items: center; }
+        .modal-content { background: rgba(15, 23, 42, 0.95); padding: 25px; border-radius: 20px; width: 85%; max-width: 350px; border: 1px solid var(--border); box-shadow: 0 20px 50px rgba(0,0,0,0.8); display: flex; flex-direction: column; gap: 15px; }
+        .modal-content h3 { margin: 0; color: var(--accent); font-weight: 900; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        .modal-group { display: flex; flex-direction: column; gap: 5px; }
+        .modal-group label { font-size: 0.65rem; font-weight: 800; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+        .modal input[type="text"], .modal select, .modal input[type="file"] { width: 100%; padding: 10px 15px; background: rgba(0,0,0,0.5); border: 1px solid var(--border); color: white; border-radius: 10px; font-family: 'Inter', sans-serif; font-size: 0.85rem; outline: none; transition: 0.3s; }
+        .modal input[type="text"]:focus, .modal select:focus { border-color: var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
+        .modal input[type="file"] { padding: 8px 10px; font-size: 0.75rem; color: var(--text-dim); }
+        .modal-btns { display: flex; justify-content: space-between; gap: 10px; margin-top: 5px; }
+        .modal-btn { flex: 1; padding: 10px; border: none; border-radius: 10px; font-weight: 800; font-size: 0.8rem; text-transform: uppercase; cursor: pointer; transition: 0.2s; }
+        .cancel-btn { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
+        .save-btn { background: var(--accent); color: #000; box-shadow: 0 0 15px var(--accent-glow); }
+    </style>
+</head>
+<body onload="loadButtons()">
+
+    <header>
+        <div class="logo-area">
+            <div class="logo-icon"><i class="fas fa-music"></i></div>
+            <div class="logo-text">FÉLIX<span>DECK</span></div>
+        </div>
+        <div class="header-right">
+            <div class="edit-switch">
+                <span>Éditer</span>
+                <input type="checkbox" id="editMode" class="switch-input" onchange="toggleEditMode()">
+                <label for="editMode" class="switch-label"></label>
+            </div>
+        </div>
+    </header>
+
+    <div class="grid-container" id="button-grid"></div>
+
+    <nav>
+        <a href="/deck" class="nav-item">
+            <i class="fa-solid fa-comments"></i><span>T'chat</span>
+        </a>
+        <a href="/deck/2" class="nav-item">
+            <i class="fa-solid fa-desktop"></i><span>OBS</span>
+        </a>
+        <a href="/deck/3" class="nav-item active">
+            <i class="fa-solid fa-music"></i><span>Sons/Img</span>
+        </a>
+    </nav>
+
+    <div id="toast"><i id="toast-icon" class="fas fa-info-circle"></i> <span id="toast-msg">Message</span></div>
+
+    <!-- MODAL D'ÉDITION AMÉLIORÉE -->
+    <div id="editModal" class="modal">
+        <form class="modal-content" action="/api/deck/edit_button" method="POST" enctype="multipart/form-data"> 
+            <h3>Configurer Bouton</h3>
+            <input type="hidden" name="id" id="modalId">
+            
+            <div class="modal-group">
+                <label>Nom du bouton</label>
+                <input type="text" name="label" id="modalLabel" required autocomplete="off">
+            </div>
+            
+            <div class="modal-group">
+                <label>Type d'action</label>
+                <select name="type" id="modalType">
+                    <option value="sound">Son (MP3/WAV)</option>
+                    <option value="image">Visuel (Image / GIF / Vidéo)</option>
+                    <option value="none">Vide / Effacer</option>
+                </select>
+            </div>
+            
+            <div class="modal-group" id="modeGroup">
+                <label>Mode de Lecture</label>
+                <select name="mode" id="modalMode">
+                    <option value="click">Clic simple (Joue 1 fois)</option>
+                    <option value="hold">Maintenir appuyé (Hold)</option>
+                </select>
+            </div>
+
+            <div class="modal-group" id="volumeGroup" style="display: none;">
+                <label>Volume : <span id="volValue" style="color: var(--accent);">100%</span></label>
+                <input type="range" name="volume" id="modalVolume" min="0" max="200" value="100" oninput="document.getElementById('volValue').innerText = this.value + '%'">
+                <small style="font-size: 0.55rem; color: var(--text-dim);">Au-delà de 100%, le son est amplifié artificiellement.</small>
+            </div>
+
+            <div class="modal-group">
+                <label>Remplacer le média (Laisser vide pour garder l'actuel)</label>
+                <input type="file" name="file" accept="audio/*,image/*,video/*">
+                <!-- 👁️ AFFICHAGE VISUEL DU FICHIER ENREGISTRÉ -->
+                <div id="current-file-info" style="font-size: 0.65rem; color: var(--accent); margin-top: 5px; font-weight: 700; word-break: break-all; opacity: 0.8;"></div>
+            </div>
+            
+            <div class="modal-btns">
+                <button type="button" class="modal-btn cancel-btn" onclick="closeModal()">Annuler</button>
+                <button type="submit" class="modal-btn save-btn">Sauvegarder</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        const RASPBERRY_PI_URL = '';
+        let currentHoldEffectId = null; 
+        let isEditMode = false;
+
+        function showToast(msg, type = 'info') {
+            const x = document.getElementById("toast");
+            document.getElementById("toast-msg").textContent = msg;
+            x.className = "show " + type;
+            const iconEl = document.getElementById("toast-icon");
+            if(type === 'success') iconEl.className = 'fas fa-check-circle';
+            else if(type === 'error') iconEl.className = 'fas fa-exclamation-triangle';
+            else iconEl.className = 'fas fa-info-circle';
+            setTimeout(() => { x.className = x.className.replace("show", ""); }, 2500);
+        }
+
+        function loadButtons() {
+            fetch(RASPBERRY_PI_URL + '/api/deck/buttons')
+                .then(r => r.json())
+                .then(buttons => renderButtons(buttons))
+                .catch(e => console.error("Erreur Load:", e));
+        }
+
+        function escapeStr(str) { return str ? str.replace(/'/g, "\\'").replace(/"/g, '&quot;') : ''; }
+
+        function renderButtons(buttons) {
+            const grid = document.getElementById('button-grid');
+            grid.innerHTML = ''; 
+            buttons.forEach(btn => {
+                const btn_mode = btn.mode || 'click';
+                const safeFile = escapeStr(btn.file); // Exemple: /static/uploads/son_marrant.mp3
+                const safeLabel = escapeStr(btn.label);
+                const safeType = escapeStr(btn.type);
+
+                let icon = '<i class="fa-solid fa-plus"></i>';
+                let className = 'deck-btn';
+                let actionAttributes = '';
+
+                if (btn.type === 'sound') {
+                    className += ' btn-sound';
+                    icon = '<i class="fa-solid fa-music"></i>';
+                } else if (btn.type === 'image') {
+                    className += ' btn-image';
+                    icon = '<i class="fa-solid fa-image"></i>';
+                } else {
+                    className += ' empty';
+                }
+                
+                if (btn_mode === 'hold' && btn.type === 'sound') {
+                    actionAttributes += ` ontouchstart="if(!isEditMode) startHoldEffect('${safeFile}')" onmousedown="if(!isEditMode) startHoldEffect('${safeFile}')"`;
+                    actionAttributes += ` ontouchend="if(!isEditMode) stopHoldEffect()" ontouchcancel="if(!isEditMode) stopHoldEffect()" onmouseup="if(!isEditMode) stopHoldEffect()"`;
+                    actionAttributes += ` onclick="handleClick(${btn.id}, '${safeType}', '${safeFile}', '${safeLabel}', '${btn_mode}', event);"`;
+                } else {
+                    actionAttributes += ` onclick="handleClick(${btn.id}, '${safeType}', '${safeFile}', '${safeLabel}', '${btn_mode}', event);"`;
+                }
+                
+                grid.innerHTML += `<div class="${className}" id="btn-${btn.id}" ${actionAttributes}>
+                    ${icon}
+                    <div>${btn.label}</div>
+                    ${btn_mode === 'hold' && btn.type === 'sound' ? '<small>(Hold)</small>' : ''}
+                </div>`;
+            });
+        }
+
+        function toggleEditMode() {
+            isEditMode = document.getElementById('editMode').checked;
+            document.body.classList.toggle('editing', isEditMode);
+        }
+        
+        function closeModal() { document.getElementById('editModal').style.display = 'none'; }
+        
+        function updateModalFields() {
+            const selectedType = document.getElementById('modalType').value;
+            const isSound = (selectedType === 'sound');
+            document.getElementById('modeGroup').style.display = isSound ? 'flex' : 'none';
+            document.getElementById('volumeGroup').style.display = isSound ? 'flex' : 'none'; // Affiche le slider
+        }
+
+        // --- Extrait de la fonction renderButtons() à modifier ---
+        // (Juste au moment de créer le actionAttributes)
+                const btnVolume = btn.volume !== undefined ? btn.volume : 100;
+
+                if (btn_mode === 'hold' && btn.type === 'sound') {
+                    actionAttributes += ` ontouchstart="if(!isEditMode) startHoldEffect('${safeFile}', ${btnVolume})" onmousedown="if(!isEditMode) startHoldEffect('${safeFile}', ${btnVolume})"`;
+                    actionAttributes += ` ontouchend="if(!isEditMode) stopHoldEffect()" ontouchcancel="if(!isEditMode) stopHoldEffect()" onmouseup="if(!isEditMode) stopHoldEffect()"`;
+                    actionAttributes += ` onclick="handleClick(${btn.id}, '${safeType}', '${safeFile}', '${safeLabel}', '${btn_mode}', ${btnVolume}, event);"`;
+                } else {
+                    actionAttributes += ` onclick="handleClick(${btn.id}, '${safeType}', '${safeFile}', '${safeLabel}', '${btn_mode}', ${btnVolume}, event);"`;
+                }
+        // ---------------------------------------------------------
+
+        function startHoldEffect(filePath, volume) {
+            if (currentHoldEffectId || isEditMode) return; 
+            currentHoldEffectId = 'hold_' + Date.now();
+            fetch(RASPBERRY_PI_URL + '/api/trigger-effect', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'sound', filename: filePath, loop: true, id: currentHoldEffectId, volume: volume })
+            }).then(() => { if (navigator.vibrate) navigator.vibrate(50); });
+        }
+
+        function stopHoldEffect() {
+            if (isEditMode || currentHoldEffectId === null) return; 
+            const idToStop = currentHoldEffectId;
+            currentHoldEffectId = null; 
+            fetch(RASPBERRY_PI_URL + '/api/stop-effect', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ effect_id: idToStop })
+            });
+        }
+
+        function handleClick(id, type, filename, label, mode, volume, event) {
+            if (isEditMode) {
+                if (event) { event.stopPropagation(); event.preventDefault(); }
+                document.getElementById('modalId').value = id;
+                document.getElementById('modalLabel').value = label;
+                document.getElementById('modalType').value = type;
+                document.getElementById('modalMode').value = mode || 'click'; 
+                
+                // Pré-remplir le curseur de volume
+                document.getElementById('modalVolume').value = volume;
+                document.getElementById('volValue').innerText = volume + '%';
+                
+                const infoEl = document.getElementById('current-file-info');
+                if (filename && filename !== 'null' && filename !== '') {
+                    infoEl.innerHTML = `<i class="fa-solid fa-paperclip"></i> Fichier actuel : <strong>${filename.split('/').pop()}</strong>`;
+                } else {
+                    infoEl.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> Aucun son/image enregistré`;
+                }
+
+                updateModalFields(); 
+                document.getElementById('editModal').style.display = 'flex';
+                return;
+            }
+            if (mode === 'click' && type !== 'none' && filename) {
+                if (navigator.vibrate) navigator.vibrate(50);
+                fetch(RASPBERRY_PI_URL + '/api/trigger-effect', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: type, filename: filename, loop: false, volume: volume }) 
+                }).catch(e => showToast("Erreur Son", "error"));
+            }
+        }
+        
+        let touchstartX = 0;
+        document.addEventListener('touchstart', e => { touchstartX = e.changedTouches[0].screenX; });
+        document.addEventListener('touchend', e => {
+            let touchendX = e.changedTouches[0].screenX;
+            if (touchendX > touchstartX + 70) window.location.href = "/deck/2";
+        });
+    </script>
+</body>
+</html>

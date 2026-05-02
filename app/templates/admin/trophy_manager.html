@@ -215,7 +215,8 @@
                                             <option value="sub_months">Cumuler X mois d'abonnement</option>
                                             <option value="gifts_count">Offrir X Subgifts (Global)</option>
                                             <option value="gifts_session">Offrir X Subgifts (Session)</option>
-                                            <option value="bits_global">Donner X Bits (Global)</option>
+                                            <option value="bits_count">Donner X Bits (Global)</option>
+                                            <option value="rewards_claimed">Utiliser X Récompenses de chaîne</option>
                                         </optgroup>
     
                                         <optgroup label="🏎️ Jeux & Rapidité">
@@ -223,6 +224,9 @@
                                             <option value="deuz_count">Décrocher X fois le !deuz</option>
                                             <option value="troiz_count">Décrocher X fois le !troiz</option>
                                             <option value="gamble_won">Gagner X Points aux paris</option>
+                                            <option value="bombs_won">Bombes désamorcées (Victoires)</option>
+                                            <option value="bombs_lost">Bombes explosées (Défaites)</option>
+                                            <option value="words_guessed">Mots Secrets trouvés</option>
                                         </optgroup>
                                         
                                         <optgroup label="🤖 IA & Site Web">
@@ -273,6 +277,10 @@
                                         <span class="ml-1 text-[8px] px-1.5 py-0.5 rounded uppercase font-black border tier-{{ t.tier|lower }}">{{ t.tier }}</span>
                                         {% endif %}
                                     </span>
+                                    
+                                    {% if t.description and t.description != 'None' and t.description != '' %}
+                                    <p class="text-[10px] text-slate-400 italic mb-1.5">{{ t.description }}</p>
+                                    {% endif %}
                                     
                                     <div class="flex items-center flex-wrap gap-1 mt-1">
                                         {% if t.condition_type and t.condition_type != 'none' %}

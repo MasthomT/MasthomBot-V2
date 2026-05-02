@@ -6,15 +6,17 @@ import aiohttp
 from datetime import datetime
 
 from app.repositories import viewer_repo 
-from app.routes.overlays import trigger_overlay_event
+# Import du bot Twitch et de la configuration pour envoyer des messages
+from app.services.twitch_service import twitch_bot
+from app.core.config import settings
 
 logger = logging.getLogger("masthbot.trophies")
-
-DB_PATH = "bot_database.db"
+DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
 
 async def auto_trophy_routine():
-    """Scanne les viewers toutes les 5 minutes pour décerner les trophées automatiques et l'EXP bonus."""
-    logger.info("🏆 [TROPHY ENGINE] Moteur d'attribution automatique démarré.")
+    """Scanne les viewers pour décerner les trophées selon TOUTES les stats exhaustives du panel."""
+    logger.info("🏆 [TROPHY ENGINE] Démarrage du moteur de succès universel.")
+    
     await asyncio.sleep(15)
 
     while True:
@@ -22,15 +24,21 @@ async def auto_trophy_routine():
             conn = sqlite3.connect(DB_PATH, timeout=20.0)
             conn.row_factory = sqlite3.Row
             
-            # 1. On récupère les règles actives
-            rules = conn.execute("SELECT * FROM trophy_list WHERE condition_type != 'none' AND condition_value > 0").fetchall()
+            rules = conn.execute("""
+                SELECT * FROM trophy_list 
+                WHERE condition_type != 'none' 
+                AND condition_value > 0
+            """).fetchall()
             
             winners = []
+            
+            # 🛡️ LISTE BLANCHE
             valid_cols_direct = [
-                'messages', 'points', 'watchtime', 'first_count', 'deuz_count', 'troiz_count', 
-                'gifts_count', 'roast_level', 'is_vip',
-                # --- NOUVELLES COLONNES EXHAUSTIVES ---
-                'bombs_won', 'bombs_lost', 'rewards_claimed' 
+                'messages', 'messages_session', 'emotes_global', 'commands_global',
+                'points', 'points_session', 'watchtime', 'watchtime_session', 'streak_days',
+                'gifts_count', 'gifts_session', 'bits_count', 'sub_months', 'rewards_claimed', 'is_vip',
+                'first_count', 'deuz_count', 'troiz_count', 'bombs_won', 'bombs_lost', 'words_guessed',
+                'roast_level', 'ai_prompts'
             ]
             
             for rule in rules:
@@ -45,16 +53,20 @@ async def auto_trophy_routine():
                 if c_type == 'watchtime_h':
                     target_col = 'watchtime'
                     target_val = c_val * 3600
+                elif c_type == 'watchtime_session_m':
+                    target_col = 'watchtime_session'
+                    target_val = c_val * 60
                 elif c_type == 'level':
                     target_col = 'points'
                     target_val = int(100 * (c_val ** 2.2))
+                elif c_type == 'has_context':
+                    custom_where = "(nickname IS NOT NULL OR favorite_game IS NOT NULL OR vibe IS NOT NULL OR useless_talent IS NOT NULL)"
                 elif c_type == 'is_vip':
                     target_col = 'is_vip'
                     target_val = 1
-                elif c_type == 'has_context':
-                    custom_where = "(nickname IS NOT NULL OR favorite_game IS NOT NULL OR vibe IS NOT NULL OR useless_talent IS NOT NULL)"
                 
-                if not custom_where and target_col not in valid_cols_direct: continue
+                if not custom_where and target_col not in valid_cols_direct: 
+                    continue
                 
                 if custom_where:
                     query = f"""
@@ -78,7 +90,6 @@ async def auto_trophy_routine():
             conn.commit()
             conn.close()
 
-            # 3. DISTRIBUTION DES RÉCOMPENSES ET DÉCLENCHEMENT OBS
             for w in winners:
                 r = w['rule']
                 bonus_xp = r.get('reward_exp', 0)
@@ -88,9 +99,8 @@ async def auto_trophy_routine():
                     event_details += f" 🎁 (+{bonus_xp} EXP)"
                     await viewer_repo.add_experience(w['twitch_id'], w['username'], bonus_xp, "TROPHY", f"Succès : {r['label']}")
                 
-                # Log Dashboard
                 conn_log = sqlite3.connect(DB_PATH)
-                details_json = json.dumps({"reason": event_details, "source": "Félix (Haut Fait)"})
+                details_json = json.dumps({"reason": event_details, "source": "Félix (Haut Fait)"}, ensure_ascii=False)
                 conn_log.execute(
                     "INSERT INTO stream_events (event_type, username, details, timestamp) VALUES (?, ?, ?, datetime('now', 'localtime'))", 
                     ("reward", w['username'], details_json)
@@ -98,7 +108,7 @@ async def auto_trophy_routine():
                 conn_log.commit()
                 conn_log.close()
                 
-                # 🎬 DÉCLENCHEMENT DE L'ALERTE SUR OBS (Node.js)
+                # 1. ENVOI DE L'ANIMATION OBS
                 try:
                     timeout = aiohttp.ClientTimeout(total=3)
                     async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -115,10 +125,36 @@ async def auto_trophy_routine():
                 except Exception as e:
                     logger.error(f"❌ Erreur Overlay Trophée : {e}")
                 
-                logger.info(f"🎉 [HAUT FAIT] {w['username']} a gagné '{r['label']}' (Tier {r.get('tier', 'Standard')}) !")
+                # 2. ENVOI DU MESSAGE DANS LE CHAT TWITCH 💬
+                try:
+                    tier = r.get('tier', 'Standard')
+                    tier_emojis = {
+                        'Standard': '🎖️',
+                        'Bronze': '🥉',
+                        'Argent': '🥈',
+                        'Or': '🥇',
+                        'Platine': '💠',
+                        'Diamant': '💎'
+                    }
+                    emoji = tier_emojis.get(tier, '🎖️')
+                    
+                    channel_name = settings.TWITCH_CHANNEL.replace("#", "").lower()
+                    channel = twitch_bot.get_channel(channel_name)
+                    
+                    if channel:
+                        msg = f"✨ DING ! @{w['username']} vient de débloquer le Haut Fait {emoji} {r['label']} {r['icon']} ! GG ! 🎉"
+                        if bonus_xp > 0:
+                            msg += f" (+{bonus_xp} EXP)"
+                        await channel.send(msg)
+                except Exception as e:
+                    logger.error(f"❌ Erreur annonce chat Trophée : {e}")
+                
+                logger.info(f"🎉 [HAUT FAIT] {w['username']} a gagné '{r['label']}' !")
 
         except Exception as e:
-            logger.error(f"❌ [TROPHY ENGINE] Erreur de routine : {e}")
+            logger.error(f"❌ [TROPHY ENGINE] Erreur dans la boucle principale : {e}")
 
-        # Pause de 5 minutes
         await asyncio.sleep(300)
+
+async def start_trophy_engine():
+    await auto_trophy_routine()

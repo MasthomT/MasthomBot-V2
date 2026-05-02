@@ -11,7 +11,7 @@ import dotenv
 from app.repositories import viewer_repo
 from app.services.credits_service import credits_service
 
-# Configuration du logger pour le débogage
+# Configuration du logger pour le service
 logger = logging.getLogger("masthbot.eventsub")
 DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
 
@@ -19,7 +19,7 @@ DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
 processed_message_ids = collections.deque(maxlen=200)
 
 # =====================================================================
-# 🛠️ UTILITAIRES DE JOURNALISATION ET CONFIGURATION
+# 🛠️ UTILITAIRES DE JOURNALISATION ET MISE À JOUR
 # =====================================================================
 
 def log_stream_event(event_type, username, details):
@@ -28,7 +28,7 @@ def log_stream_event(event_type, username, details):
         conn = sqlite3.connect(DB_PATH)
         clean_username = str(username or "Inconnu").strip()
 
-        # Formatage intelligent en français pour le Dashboard Vercel/Admin
+        # Formatage intelligent en français pour le Dashboard
         formatted_details = details
         if isinstance(details, dict):
             if event_type == "sub":
@@ -44,6 +44,8 @@ def log_stream_event(event_type, username, details):
                 formatted_details = f"Don de {details.get('bits', 0)} Bits (+{details.get('xp_gained', 0)} EXP)"
             elif event_type == "follow":
                 formatted_details = details.get("msg", "Bienvenue !")
+            elif event_type == "reward":
+                formatted_details = f"Récompense récupérée : {details.get('reward_name', 'Inconnue')}"
             elif event_type == "sanction":
                 formatted_details = details.get("reason", "Sanction appliquée")
             else:
@@ -61,9 +63,9 @@ def log_stream_event(event_type, username, details):
 
 def update_viewer_stat(user_id, username, stat_column, value, increment=True):
     """
-    Met à jour spécifiquement les statistiques de trophées d'un viewer (Mois de sub, Bits, Cadeaux).
-    - increment=True : Additionne la valeur (ex: pour les bits et subgifts)
-    - increment=False : Écrase la valeur (ex: pour les mois de sub cumulés envoyés par Twitch)
+    Met à jour les statistiques de trophées d'un viewer.
+    - increment=True : Additionne la valeur (Bits, Cadeaux, Points de chaîne)
+    - increment=False : Écrase la valeur (Mois de sub cumulés)
     """
     if not user_id or not username:
         return
@@ -93,12 +95,12 @@ def update_viewer_stat(user_id, username, stat_column, value, increment=True):
             
         conn.commit()
         conn.close()
-        logger.info(f"🏆 [TROPHÉE MAJ] {username} -> {stat_column} mis à jour avec {value}.")
+        logger.info(f"🏆 [STAT MAJ] {username} -> {stat_column} mis à jour (+{value} si inc).")
     except Exception as e:
-        logger.error(f"❌ [DB TROPHY ERROR] Impossible de mettre à jour {stat_column} pour {username}: {e}")
+        logger.error(f"❌ [DB STAT ERROR] Impossible de mettre à jour {stat_column} pour {username}: {e}")
 
 def get_current_xp_settings():
-    """Récupère les paliers d'EXP configurés. Sécurité : remplace le vide par les valeurs par défaut."""
+    """Récupère les réglages d'EXP depuis la table settings."""
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
@@ -117,11 +119,11 @@ def get_current_xp_settings():
     }
 
 # =====================================================================
-# 📡 GESTION DES ABONNEMENTS WEBSOCKET
+# 📡 GESTION DES ABONNEMENTS TWITCH
 # =====================================================================
 
 async def subscribe_to_event(session, client_id, token, ws_session_id, sub_type, version, condition):
-    """Envoie une requête à Twitch pour s'abonner à un événement précis."""
+    """Envoie une requête EventSub pour s'abonner à un événement précis."""
     url = "https://api.twitch.tv/helix/eventsub/subscriptions"
     headers = {
         "Client-ID": client_id,
@@ -139,40 +141,40 @@ async def subscribe_to_event(session, client_id, token, ws_session_id, sub_type,
     }
     async with session.post(url, headers=headers, json=payload) as resp:
         if resp.status == 202:
-            logger.info(f"✅ Abonnement validé : {sub_type} (v{version})")
+            logger.info(f"✅ Abonnement actif : {sub_type}")
         else:
             err = await resp.text()
             logger.error(f"❌ Échec abonnement {sub_type} : {err}")
 
 # =====================================================================
-# 🌀 BOUCLE PRINCIPALE EVENTSUB
+# 🌀 BOUCLE PRINCIPALE WEBSOCKET
 # =====================================================================
 
 async def eventsub_routine():
-    """Gère la connexion permanente et le traitement des messages Twitch."""
+    """Gère la connexion continue et traite les messages Twitch en direct."""
     env = dotenv.dotenv_values("/home/masthom/BOT_V2/.env")
     client_id = env.get("TWITCH_CLIENT_ID", "").strip()
     token = env.get("TWITCH_OAUTH_TOKEN", "").replace("oauth:", "").strip()
-    channel_name = env.get("TWITCH_CHANNEL", "masthom_").replace("#", "").strip()
+    channel_name = env.get("TWITCH_CHANNEL", "").replace("#", "").strip()
     bot_name = env.get("TWITCH_BOT_USERNAME", "Felix").lower()
 
     if not client_id or not token:
-        logger.error("❌ Identifiants Twitch manquants dans le .env. EventSub ne peut pas démarrer.")
+        logger.error("❌ Identifiants Twitch manquants dans le .env.")
         return
 
     async with aiohttp.ClientSession() as session:
-        # 1. Récupération du Broadcaster ID
+        # 1. Récupération de l'ID du Streamer
         headers = {"Client-ID": client_id, "Authorization": f"Bearer {token}"}
         async with session.get(f"https://api.twitch.tv/helix/users?login={channel_name}", headers=headers) as resp:
             data = await resp.json()
-            if not data.get("data") or len(data["data"]) == 0:
-                logger.error(f"❌ Impossible de trouver l'ID Twitch pour {channel_name}")
+            if not data.get("data"):
+                logger.error(f"❌ Impossible de trouver l'ID de la chaîne {channel_name}")
                 return
             broadcaster_id = data["data"][0]["id"]
 
-        # 2. Ouverture du tunnel WebSocket avec Twitch
+        # 2. Ouverture du tunnel avec Twitch
         async with session.ws_connect("wss://eventsub.wss.twitch.tv/ws") as ws:
-            logger.info("📡 [WebSocket] Tunnel ouvert avec Twitch. Écoute des événements...")
+            logger.info("📡 [WebSocket] Connexion établie. Écoute du direct lancée...")
 
             async for msg in ws:
                 if msg.type == aiohttp.WSMsgType.TEXT:
@@ -180,14 +182,12 @@ async def eventsub_routine():
                     msg_type = data.get("metadata", {}).get("message_type")
                     msg_id = data.get("metadata", {}).get("message_id")
 
-                    # 🛡️ LE BOUCLIER ANTI-DOUBLONS ENTRE EN ACTION
+                    # 🛡️ Anti-doublons
                     if msg_id:
-                        if msg_id in processed_message_ids:
-                            logger.info(f"🛡️ [ANTI-DOUBLON] L'événement {msg_id} a été ignoré car déjà traité.")
-                            continue 
+                        if msg_id in processed_message_ids: continue
                         processed_message_ids.append(msg_id)
 
-                    # --- A. INITIALISATION DE LA SESSION ---
+                    # --- A. INITIALISATION ---
                     if msg_type == "session_welcome":
                         ws_id = data["payload"]["session"]["id"]
                         logger.info(f"🆔 Session EventSub validée : {ws_id}")
@@ -196,6 +196,7 @@ async def eventsub_routine():
                         c_raid = {"to_broadcaster_user_id": broadcaster_id}
                         c_mod = {"broadcaster_user_id": broadcaster_id, "moderator_user_id": broadcaster_id}
 
+                        # Liste exhaustive des abonnements
                         await subscribe_to_event(session, client_id, token, ws_id, "channel.subscribe", "1", c_broad)
                         await subscribe_to_event(session, client_id, token, ws_id, "channel.subscription.message", "1", c_broad)
                         await subscribe_to_event(session, client_id, token, ws_id, "channel.subscription.gift", "1", c_broad)
@@ -203,20 +204,22 @@ async def eventsub_routine():
                         await subscribe_to_event(session, client_id, token, ws_id, "channel.cheer", "1", c_broad)
                         await subscribe_to_event(session, client_id, token, ws_id, "channel.follow", "2", c_mod)
                         await subscribe_to_event(session, client_id, token, ws_id, "channel.ban", "1", c_broad)
+                        # Nouveau : Points de chaîne
+                        await subscribe_to_event(session, client_id, token, ws_id, "channel.channel_points_custom_reward_redemption.add", "1", c_broad)
 
-                    # --- B. RÉCEPTION D'UNE NOTIFICATION ---
+                    # --- B. RÉCEPTION DE NOTIFICATION ---
                     elif msg_type == "notification":
                         sub_type = data["metadata"]["subscription_type"]
                         event = data["payload"]["event"]
                         conf = get_current_xp_settings()
 
-                        # 1. GESTION DES SUBS ET RÉABONNEMENTS
+                        # 1. SUBS ET RÉABONNEMENTS
                         if sub_type in ["channel.subscribe", "channel.subscription.message"]:
                             user_name = event.get("user_name", "Inconnu")
                             user_id = event.get("user_id")
                             tier = event.get("tier", "1000")[0] 
                             
-                            # 🏆 AJOUT : Traque les mois cumulés (Twitch envoie le total direct)
+                            # Mise à jour des mois (écrase la valeur précédente)
                             cumulative_months = event.get("cumulative_months", 1)
                             update_viewer_stat(user_id, user_name, "sub_months", cumulative_months, increment=False)
                             
@@ -229,7 +232,7 @@ async def eventsub_routine():
                                 log_stream_event("sub", user_name, {"tier": tier, "is_gift": True})
                                 credits_service.log_event("subscribers", user_name, f"Cadeau Reçu")
 
-                        # 2. GESTION DES SUBGIFTS
+                        # 2. SUBGIFTS (CADEAUX)
                         elif sub_type == "channel.subscription.gift":
                             if not event.get("is_anonymous"):
                                 user_name = event.get("user_name", "Anonyme")
@@ -239,14 +242,14 @@ async def eventsub_routine():
                                 val_per_sub = int(conf.get(f"exp_subgift_t{tier}") or 500)
                                 total_xp = val_per_sub * count
 
-                                # 🏆 AJOUT : Additionne les cadeaux offerts au total historique
+                                # Incrément du compteur de cadeaux
                                 update_viewer_stat(user_id, user_name, "gifts_count", count, increment=True)
 
                                 credits_service.log_event("gifters", user_name, f"{count} Subs offerts")
                                 await viewer_repo.add_experience(user_id, user_name, total_xp, "SUBGIFT", f"Offre {count} Subs Tier {tier}")
                                 log_stream_event("subgift", user_name, {"count": count, "tier": tier, "xp": total_xp})
 
-                        # 3. GESTION DES RAIDS
+                        # 3. RAIDS
                         elif sub_type == "channel.raid":
                             raider_name = event.get("from_broadcaster_user_name", "Inconnu")
                             raider_id = event.get("from_broadcaster_user_id")
@@ -259,30 +262,39 @@ async def eventsub_routine():
                             log_stream_event("raid", raider_name, {"viewers": v_count, "xp": total_xp})
                             credits_service.log_event("raiders", raider_name, f"{v_count} Viewers")
 
-                        # 4. GESTION DES BITS (CHEERS)
+                        # 4. BITS (CHEERS)
                         elif sub_type == "channel.cheer":
                             is_anon = event.get("is_anonymous", False)
                             user_name = "Anonyme" if is_anon else event.get("user_name", "Anonyme")
                             user_id = event.get("user_id")
                             bits = int(event.get("bits", 0))
-
                             total_xp = bits * 5
 
                             if not is_anon and user_id:
-                                # 🏆 AJOUT : Additionne les bits donnés au total historique
+                                # Incrément du compteur de Bits
                                 update_viewer_stat(user_id, user_name, "bits_count", bits, increment=True)
                                 await viewer_repo.add_experience(user_id, user_name, total_xp, "CHEER", f"Don de {bits} bits")
 
                             log_stream_event("cheer", user_name, {"bits": bits, "xp_gained": total_xp})
                             credits_service.log_event("bits", user_name, f"{bits} Bits")
 
-                        # 5. GESTION DES FOLLOWS
+                        # 5. POINTS DE CHAÎNE (RÉCOMPENSES)
+                        elif sub_type == "channel.channel_points_custom_reward_redemption.add":
+                            user_name = event.get("user_name", "Inconnu")
+                            user_id = event.get("user_id")
+                            reward_title = event.get("reward", {}).get("title", "Inconnue")
+                            
+                            # Incrément du compteur de récompenses pour les trophées
+                            update_viewer_stat(user_id, user_name, "rewards_claimed", 1, increment=True)
+                            log_stream_event("reward", user_name, {"reward_name": reward_title})
+
+                        # 6. FOLLOWS
                         elif sub_type == "channel.follow":
                             user_name = event.get("user_name", "Inconnu")
                             log_stream_event("follow", user_name, {"msg": "Bienvenue !"})
                             credits_service.log_event("followers", user_name)
 
-                        # 6. GESTION DES SANCTIONS
+                        # 7. SANCTIONS (BAN/TIMEOUT)
                         elif sub_type == "channel.ban":
                             user_name = event.get("user_name", "Inconnu")
                             mod = event.get("moderator_user_name", "Modo")
@@ -291,21 +303,20 @@ async def eventsub_routine():
                                 reason = event.get("reason") or "Aucune raison"
                                 log_stream_event("sanction", user_name, {"reason": f"{action} par {mod} : {reason}"})
 
-                    # --- C. GESTION DE LA RECONNEXION ---
+                    # --- C. RECONNEXION ---
                     elif msg_type == "session_reconnect":
                         new_url = data["payload"]["session"]["reconnect_url"]
-                        logger.info(f"🔄 Twitch demande une reconnexion : {new_url}")
+                        logger.info(f"🔄 Reconnexion requise : {new_url}")
                         break
 
                 elif msg.type in [aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR]:
-                    logger.warning("⚠️ WebSocket fermé ou erreur réseau. Relance de la routine...")
                     break
 
 async def start_eventsub():
-    """Lance la routine et assure la survie du service avec reconnexion auto."""
+    """Lance le service avec une sécurité de redémarrage automatique."""
     while True:
         try:
             await eventsub_routine()
         except Exception as e:
-            logger.error(f"🔥 [CRASH EVENTSUB] : {e}. Tentative de redémarrage dans 15 secondes...")
+            logger.error(f"🔥 [CRASH] : {e}. Redémarrage dans 15s...")
             await asyncio.sleep(15)
