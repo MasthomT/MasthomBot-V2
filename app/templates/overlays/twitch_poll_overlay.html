@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        :root { --twitch: #9146FF; --predict: #00e5ff; --bg: rgba(15, 15, 25, 0.98); }
+        body { margin: 0; overflow: hidden; background: transparent; font-family: sans-serif; }
+
+        /* 🟦 RECTANGLE LARGE ET OPTIMISÉ */
+        #poll-card {
+            position: absolute; bottom: 30px; left: 30px;
+            width: 800px; height: 160px; 
+            background: var(--bg); border-left: 10px solid var(--twitch);
+            border-radius: 15px; 
+            padding: 15px 25px; 
+            box-sizing: border-box;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.8);
+            transform: translateX(-120%); transition: transform 0.6s ease-out;
+            display: flex;
+            flex-direction: column;
+        }
+        #poll-card.active { transform: translateX(0); }
+        
+        /* Style dynamique pour les prédictions */
+        #poll-card.is-prediction { border-left-color: var(--predict); }
+        #poll-card.is-prediction .title { color: var(--predict); }
+        #poll-card.is-prediction .bar { background: var(--predict); }
+        #poll-card.is-prediction .timer { color: var(--predict); border-color: rgba(0, 229, 255, 0.3); }
+
+        /* NOUVEAU : Conteneur pour aligner le titre et le chrono */
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .title { 
+            color: var(--twitch); 
+            font-weight: 900; 
+            font-size: 1.3rem; 
+            text-transform: uppercase; 
+            margin: 0; /* Suppression de la marge car gérée par le header-container */
+        }
+
+        /* NOUVEAU : Design du chrono */
+        .timer {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(145, 70, 255, 0.3);
+            padding: 4px 12px;
+            border-radius: 8px;
+            font-weight: 900;
+            font-size: 1.1rem;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .grid { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 12px; 
+            flex: 1;
+        }
+        
+        .opt { 
+            background: rgba(255,255,255,0.05); 
+            padding: 8px 15px; 
+            border-radius: 8px; 
+            color: white; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            font-weight: 700; 
+            font-size: 1.15rem; 
+            position: relative; 
+            overflow: hidden; 
+        }
+        
+        .bar { 
+            position: absolute; top: 0; left: 0; height: 100%; 
+            background: var(--twitch); opacity: 0.2; 
+            transition: width 0.5s ease; 
+        }
+    </style>
+</head>
+<body>
+    <div id="poll-card">
+        <div class="header-container">
+            <div id="p-title" class="title">Sondage Twitch</div>
+            <div id="p-timer" class="timer">⏳ --:--</div>
+        </div>
+        <div id="p-grid" class="grid"></div>
+    </div>
+
+    <script>
+    const card = document.getElementById('poll-card');
+    const grid = document.getElementById('p-grid');
+    const timerEl = document.getElementById('p-timer');
+    
+    let finalResultTimer; 
+    let countdownInterval; // Variable pour stocker la boucle du chronomètre
+
+    const eventSource = new EventSource('/overlay_events');
+
+    eventSource.onmessage = (e) => {
+        try {
+            const data = JSON.parse(e.data);
+            
+            if (data.type === 'twitch_event_end') {
+                if (data.payload) render(data.payload); 
+                
+                // On arrête le chrono et on affiche "Terminé"
+                clearInterval(countdownInterval);
+                timerEl.innerHTML = "✅ Terminé";
+                
+                clearTimeout(finalResultTimer);
+                finalResultTimer = setTimeout(() => {
+                    card.classList.remove('active');
+                }, 45000); 
+                return;
+            }
+
+            if (data.type.includes('twitch_event_update') || data.type === 'show_twitch_poll') {
+                clearTimeout(finalResultTimer); 
+                if (data.payload) {
+                    render(data.payload);
+                    card.classList.add('active'); 
+                }
+            }
+        } catch (err) {
+            console.error("Erreur de traitement :", err);
+        }
+    };
+
+    // NOUVEAU : Fonction qui calcule le temps restant
+    function startCountdown(endsAtString) {
+        clearInterval(countdownInterval); // Nettoie l'ancien chrono
+        if (!endsAtString) return;
+
+        const endsAtTime = new Date(endsAtString).getTime();
+
+        countdownInterval = setInterval(() => {
+            const now = new Date().getTime();
+            const distance = endsAtTime - now;
+
+            if (distance < 0) {
+                clearInterval(countdownInterval);
+                timerEl.innerHTML = "⏳ Fin imminente...";
+                return;
+            }
+
+            // Calculs mathématiques pour convertir les millisecondes en minutes/secondes
+            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+            // Formatage pour toujours avoir 2 chiffres (ex: "05" au lieu de "5")
+            const formattedMin = minutes < 10 ? "0" + minutes : minutes;
+            const formattedSec = seconds < 10 ? "0" + seconds : seconds;
+
+            timerEl.innerHTML = `⏳ ${formattedMin}:${formattedSec}`;
+        }, 1000); // S'exécute toutes les 1000 millisecondes (1 seconde)
+    }
+
+    function render(poll) {
+        if (!poll) return;
+
+        if (poll.is_prediction) {
+            card.classList.add('is-prediction');
+        } else {
+            card.classList.remove('is-prediction');
+        }
+
+        document.getElementById('p-title').textContent = poll.title;
+        
+        // Lance ou met à jour le chrono si l'événement n'est pas encore terminé
+        if (!poll.title.includes("(Terminé)")) {
+            startCountdown(poll.ends_at);
+        }
+        
+        let html = '';
+        poll.choices.forEach((c) => {
+            const pct = poll.total_votes > 0 ? Math.round((c.votes / poll.total_votes) * 100) : 0;
+
+            html += `
+                <div class="opt">
+                    <div class="bar" style="width: ${pct}%"></div>
+                    <span style="z-index:2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 10px;">
+                        ${c.title}
+                    </span>
+                    <span style="z-index:2; white-space: nowrap; color: #ddd; font-size: 1rem;">
+                        <strong style="color: white; font-size: 1.15rem;">${c.votes}</strong> votes (${pct}%)
+                    </span>
+                </div>`;
+        });
+        
+        grid.innerHTML = html;
+    }
+    </script>
+</body>
+</html>

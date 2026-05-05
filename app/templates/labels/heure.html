@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Horloge OBS Animée</title>
+    <!-- Import de la police Montserrat -->
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@200&display=swap" rel="stylesheet">
+    <!-- Import de FontAwesome pour l'icône -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: transparent;
+            color: white; /* Texte et logo en blanc */
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 200;
+            font-size: 40px; /* Taille globale de l'overlay */
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9);
+        }
+
+        /* La boîte qui aligne le logo et l'heure */
+        .container {
+            display: flex;
+            align-items: center;
+            gap: 15px; /* L'écartement entre l'horloge et les chiffres */
+            padding-left: 20px;
+        }
+
+        /* 🎬 ANIMATION : Le battement du logo */
+        .logo {
+            animation: pulse 1.5s ease-in-out infinite; 
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }       /* Taille de base */
+            50% { transform: scale(1.2); }    /* Grossissement fluide */
+            100% { transform: scale(1); }     /* Retour à la normale */
+        }
+
+        /* Embellissement du texte brut */
+        #horloge {
+            letter-spacing: 2px; /* Aère légèrement les chiffres */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Boîte 1 : Le logo horloge animé -->
+        <div class="logo">
+            <i class="fa-regular fa-clock"></i>
+        </div>
+        
+        <!-- Boîte 2 : Le texte de l'heure mis à jour par JavaScript -->
+        <div id="horloge">--:--</div>
+    </div>
+
+    <script>
+        // Fonction asynchrone pour lire l'heure sur le serveur Python
+        async function mettreAJourHeure() {
+            try {
+                const reponse = await fetch('/api/heure');
+                const data = await reponse.json();
+                
+                // On met à jour uniquement le texte, le logo reste intact
+                document.getElementById('horloge').innerText = data.texte;
+            } catch (erreur) {
+                console.error("Erreur de lecture de l'heure :", erreur);
+            }
+        }
+
+        // Exécution immédiate au chargement de la source OBS
+        mettreAJourHeure();
+        // Répétition toutes les 10 secondes (10000 millisecondes)
+        setInterval(mettreAJourHeure, 10000); 
+    </script>
+</body>
+</html>

@@ -111,3 +111,15 @@ async def get_trophies_overlay(request: Request):
 async def get_deck_overlay(request: Request):
     """Route pour l'overlay dédié aux sons et images du Deck"""
     return templates.TemplateResponse(request=request, name="overlay_deck.html")
+
+@router.get("/overlay/twitch_poll", response_class=HTMLResponse)
+async def get_twitch_poll_overlay(request: Request):
+    """
+    Route corrigée pour pointer vers le fichier EXACT.
+    Assure-toi que le fichier s'appelle bien twitch_poll_overlay.html 
+    dans le dossier app/templates/overlays/
+    """
+    return templates.TemplateResponse(
+        request=request, 
+        name="overlays/twitch_poll_overlay.html" # Vérifie bien ce nom !
+    )

@@ -119,13 +119,27 @@
     };
 
     const container = document.getElementById('modules-container');
+    let isDragging = false;
+    
     const sortable = new Sortable(container, {
         animation: 150,
         ghostClass: 'ghost',
-        handle: '.item-header'
+        handle: '.item-header',
+        // 🚨 AJOUT : On détecte quand tu attrapes un bloc
+        onStart: function (evt) {
+            isDragging = true;
+        },
+        // 🚨 AJOUT : On détecte quand tu lâches le bloc et on sauvegarde
+        onEnd: function (evt) {
+            isDragging = false;
+            saveConfig(); 
+        }
     });
 
     async function loadData() {
+        // 🚨 AJOUT : Si on bouge un bloc, on stoppe le chargement automatique !
+        if (isDragging) return; 
+
         try {
             const response = await fetch('/api/credits/data');
             const result = await response.json();
@@ -141,7 +155,7 @@
             }
 
             let order = (result.config && result.config.order) ? result.config.order : [];
-            
+
             // Ajout des modules manquants s'il y en a
             Object.keys(MODULES).forEach(key => {
                 if (!order.includes(key)) order.push(key);
@@ -210,7 +224,7 @@
             });
             if(res.ok) {
                 showStatus("✅ Configuration enregistrée !", "success");
-                loadData(); 
+                loadData();
             }
         } catch(e) { showStatus("❌ Erreur de sauvegarde", "error"); }
     }
@@ -223,10 +237,10 @@
 
     async function clearData() {
         if(!confirm("⚠️ Attention : Vider le générique supprimera toutes les données de cette session. Continuer ?")) return;
-        const res = await fetch('/api/credits/reset', { method: 'POST' }); // Chemin corrigé selon ton api.py !
-        if(res.ok) { 
-            showStatus("✅ Base nettoyée !", "success"); 
-            setTimeout(() => location.reload(), 500); 
+        const res = await fetch('/api/credits/reset', { method: 'POST' }); 
+        if(res.ok) {
+            showStatus("✅ Base nettoyée !", "success");
+            setTimeout(() => location.reload(), 500);
         }
     }
 
@@ -240,6 +254,5 @@
     document.addEventListener('DOMContentLoaded', loadData);
     setInterval(loadData, 10000); // Actualisation toutes les 10s
 </script>
-
 </body>
 </html>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@200&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            margin: 0; background: transparent; color: white;
+            font-family: 'Montserrat', sans-serif; font-weight: 200; font-size: 40px;
+            display: flex; align-items: center; overflow: hidden;
+            text-shadow: 0px 0px 8px rgba(255, 255, 255, 0.5), 2px 2px 4px rgba(0, 0, 0, 0.8);
+        }
+        .container { display: flex; align-items: center; gap: 15px; padding-left: 20px; }
+        .logo { color: white; } /* Pas de battement pour les followers, plus sobre */
+        #chiffre { letter-spacing: 2px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo"><i class="fa-solid fa-users"></i></div>
+        <div id="chiffre">--</div>
+    </div>
+
+    <script>
+        async function mettreAJour() {
+            try {
+                const reponse = await fetch('/api/followers');
+                const data = await reponse.json();
+                document.getElementById('chiffre').innerText = data.texte;
+            } catch (e) { console.error("Erreur :", e); }
+        }
+        mettreAJour();
+        setInterval(mettreAJour, 10000); // Actualisation web toutes les 10s
+    </script>
+</body>
+</html>

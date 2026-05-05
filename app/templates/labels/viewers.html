@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <!-- Importation de Montserrat en poids 100 (Ultra Fin) -->
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@100&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            margin: 0; background: transparent; color: white;
+            font-family: 'Montserrat', sans-serif; font-weight: 100; font-size: 40px;
+            display: flex; align-items: center; overflow: hidden;
+            text-shadow: 0px 0px 8px rgba(255, 255, 255, 0.5), 2px 2px 4px rgba(0, 0, 0, 0.8);
+        }
+        .container { display: flex; align-items: center; gap: 15px; padding-left: 20px; }
+        
+        /* Logo blanc avec effet de battement */
+        .logo { 
+            color: white; 
+            display: inline-block; 
+            animation: pulse 2s infinite; 
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        #chiffre { letter-spacing: 2px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Icône Œil pour les viewers -->
+        <div class="logo"><i class="fa-solid fa-eye"></i></div>
+        <div id="chiffre">--</div>
+    </div>
+
+    <script>
+        async function mettreAJour() {
+            try {
+                // Interrogation de l'API pour les viewers
+                const reponse = await fetch('/api/label/viewers');
+                const data = await reponse.json();
+                let valeur = data.texte;
+                
+                // Si la valeur est 0 ou invalide, on cache le chiffre
+                if (valeur === "0" || valeur === "undefined" || valeur === "--" || !valeur) {
+                    document.getElementById('chiffre').innerText = "";
+                } else {
+                    document.getElementById('chiffre').innerText = valeur;
+                }
+            } catch (e) { console.error("Erreur :", e); }
+        }
+        mettreAJour();
+        setInterval(mettreAJour, 5000); // Actualisation plus rapide (5s) pour les viewers
+    </script>
+</body>
+</html>

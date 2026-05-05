@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Label OBS Dynamique</title>
+    <!-- Import de ta police Montserrat ExtraLight (poids 200) -->
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@200&display=swap" rel="stylesheet">
+    <!-- Import de la bibliothèque d'icônes gratuites FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* Configuration de base pour OBS (Fond transparent) */
+        body {
+            margin: 0;
+            padding: 0;
+            background: transparent;
+            color: white;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 200; /* ExtraLight */
+            font-size: 36px; /* Taille du texte, modifiable ici */
+            height: 100vh;
+            display: flex;
+            align-items: center; /* Centre verticalement */
+            overflow: hidden;
+            /* Ombre portée pour bien détacher le texte du fond du stream */
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9);
+        }
+
+        .container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            /* Retour à la simplicité : aucun cadre, aucun fond */
+            padding-left: 20px;
+        }
+
+        #text-container, .cursor {
+            /* 1. Un espacement élégant entre les lettres */
+            letter-spacing: 2px; 
+            
+            /* 2. Une légère lueur blanche (Glow) pour le détacher du jeu */
+            text-shadow: 
+                0px 0px 8px rgba(255, 255, 255, 0.5),
+                2px 2px 4px rgba(0, 0, 0, 0.8); /* On garde une fine ombre noire pour la lisibilité */
+        }
+
+        /* 🎬 ANIMATION 1 : L'icône qui flotte en continu */
+        .logo {
+            color: white;
+            /* L'animation dure 1.5 seconde et boucle à l'infini */
+            animation: pulse 1.5s ease-in-out infinite; 
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }       /* Taille normale */
+            50% { transform: scale(1.2); }    /* Grossit de 20% */
+            100% { transform: scale(1); }     /* Retour à la normale */
+        }
+
+        /* Le curseur clignotant à la fin du texte */
+        .cursor {
+            font-weight: bold;
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink {
+            50% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- L'icône est dynamique grâce au Python -->
+        <div class="logo">
+            <i class="fa-solid {{ icone }}"></i>
+        </div>
+        <div id="text-container"></div>
+        <span class="cursor" id="cursor">|</span>
+    </div>
+
+    <script>
+        // On récupère le type de label (ex: 'follow') depuis Flask
+        const typeLabel = "{{ type_label }}";
+        let texteActuel = ""; // La mémoire du texte affiché
+        let isTyping = false; // Empêche deux animations de se superposer
+
+        const conteneurTexte = document.getElementById("text-container");
+        const curseur = document.getElementById("cursor");
+
+        // 🎬 ANIMATION 2 : La machine à écrire
+        function typeWriter(texte, index = 0) {
+            if (index === 0) {
+                isTyping = true;
+                conteneurTexte.innerHTML = ""; // On vide l'ancien texte
+                
+                // 1. On s'assure d'afficher le curseur quand on COMMENCE à écrire
+                curseur.style.display = "inline"; 
+            }
+
+            if (index < texte.length) {
+                conteneurTexte.innerHTML += texte.charAt(index);
+                // Vitesse : 70 millisecondes entre chaque lettre
+                setTimeout(() => typeWriter(texte, index + 1), 70);
+            } else {
+                isTyping = false; // L'animation est finie
+                
+                // 2. 👈 NOUVEAUTÉ : On cache le curseur quand on a FINI d'écrire
+                curseur.style.display = "none"; 
+            }
+        }
+
+        // 📡 LE CERVEAU : Vérifier l'API toutes les 3 secondes
+        async function verifierNouveauTexte() {
+            if (isTyping) return; // Si on écrit déjà, on ne dérange pas l'animation
+
+            try {
+                // On va interroger notre mini-route Python
+                const reponse = await fetch(`/api/label/${typeLabel}`);
+                const data = await reponse.json();
+                
+                // Si le fichier texte a changé (un nouvel événement !)
+                if (data.texte !== texteActuel) {
+                    texteActuel = data.texte;
+                    typeWriter(texteActuel); // On lance l'animation
+                }
+            } catch (erreur) {
+                console.error("Erreur de récupération :", erreur);
+            }
+        }
+
+        // Lancer la vérification immédiatement, puis toutes les 3000ms (3s)
+        verifierNouveauTexte();
+        setInterval(verifierNouveauTexte, 3000);
+    </script>
+</body>
+</html>

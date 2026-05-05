@@ -16,6 +16,8 @@ from app.services.notification_service import notification_service
 from app.services.moderation_service import moderation_service
 from app.services.credits_service import credits_service
 from app.services.obs_service import obs_service
+from app.routes.overlays import trigger_overlay_event
+from app.core.database import init_db
 
 logger = logging.getLogger("masthbot.twitch")
 DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
@@ -39,12 +41,12 @@ class MasthbotTwitch(commands.Bot):
         )
 
     def get_db_config(self):
+        conn = None # On prépare la variable
         try:
             conn = sqlite3.connect(DB_PATH, timeout=20.0)
             conn.row_factory = sqlite3.Row
             p_row = conn.execute("SELECT * FROM personality LIMIT 1").fetchone()
             s_row = conn.execute("SELECT * FROM settings LIMIT 1").fetchone()
-            conn.close()
 
             p = dict(p_row) if p_row else {}
             s = dict(s_row) if s_row else {}
@@ -68,9 +70,15 @@ class MasthbotTwitch(commands.Bot):
                 'exp_per_watchtime': s.get('exp_per_watchtime', 5),
                 'personal_last_live_id': s.get('personal_last_live_id', "")
             }
+
         except Exception as e:
             logger.error(f"❌ [DB ERROR] : {e}")
             return {}
+        finally:
+            # 🛡️ LE SECRET EST ICI : Le bloc "finally" est TOUJOURS exécuté, 
+            # même s'il y a eu un bug (Exception) ou un "return" avant !
+            if conn:
+                conn.close()
 
     def log_event(self, event_type, username, details_dict):
         try:
@@ -86,12 +94,20 @@ class MasthbotTwitch(commands.Bot):
 
     async def event_ready(self):
         print(f"✅ [TWITCH] Connecté en tant que : {self.nick}")
+        
+        # 1. 🔥 INITIALISATION SÉCURISÉE DE LA BASE DE DONNÉES
+        try:
+            await init_db()
+        except Exception as e:
+            print(f"❌ [DB INIT ERROR] Erreur critique lors de l'initialisation : {e}")
+
+        # 2. DÉMARRAGE HABITUEL DU BOT ET DES ROUTINES
         try:
             users = await self.fetch_users(names=[self.channel_name])
             if users:
                 self.broadcaster_id = users[0].id
                 print(f"🆔 [HELIX] ID Broadcaster : {self.broadcaster_id}")
-            
+
             if not hasattr(self, "_watchtime_started"):
                 print("⏱️ [ROUTINE] Lancement du compteur de présence...")
                 self.watchtime_timer.start()
@@ -106,7 +122,17 @@ class MasthbotTwitch(commands.Bot):
                 print("🤖 [ROUTINE] Lancement de l'Aspirateur Twitch (Modos/VIPs)...")
                 self.sync_roles_timer.start()
                 self._sync_roles_started = True
-                
+
+            if not hasattr(self, "_sync_subs_started"):
+                print("⭐ [ROUTINE] Lancement du compteur d'abonnés...")
+                self.sync_subs_timer.start()
+                self._sync_subs_started = True
+
+            if not hasattr(self, "_sync_viewers_started"):
+                print("👁️ [ROUTINE] Lancement du compteur de viewers...")
+                self.sync_viewers_timer.start()
+                self._sync_viewers_started = True
+
         except Exception as e:
             print(f"❌ [READY ERROR] : {e}")
 
@@ -134,20 +160,41 @@ class MasthbotTwitch(commands.Bot):
     async def event_message(self, message):
         if message.echo or not message.author:
             return
-        
+
+        # === BLOC CONSERVÉ SELON TES INSTRUCTIONS ===
+        content = message.content
+        content_clean = content.strip()  # On nettoie d'abord
+        content_lower = content_clean.lower() # On transforme ensuite
+
         await viewer_repo.ensure_viewer(str(message.author.id), message.author.name)
         username = message.author.name.lower()
         display_name = message.author.display_name or message.author.name
-        content = message.content.strip()
         config = self.get_db_config()
+        # ============================================
 
-        if content.lower().startswith("!choix "):
+        # --- GESTION DU SYSTÈME FEL-X (VERCEL) ---
+        # Commande OBLIGATOIRE : !choix
+        if content_lower.startswith("!choix "):
             try:
-                parts = content.split(" ")
+                parts = content_clean.split(" ")
                 if len(parts) > 1:
                     choice_idx = int(parts[1])
                     if 1 <= choice_idx <= 4:
                         await self._handle_chat_vote(message, choice_idx)
+                        return
+            except (ValueError, IndexError):
+                pass
+
+        # --- GESTION DU SYSTÈME TWITCH ---
+        # Commande OBLIGATOIRE : !poll
+        elif content_lower.startswith("!poll "):
+            try:
+                parts = content_clean.split(" ")
+                if len(parts) > 1:
+                    choice_idx = int(parts[1])
+                    if 1 <= choice_idx <= 4:
+                        # On appelle la fonction dédiée pour Twitch
+                        await self._handle_twitch_poll_vote(message, choice_idx)
                         return
             except (ValueError, IndexError):
                 pass
@@ -353,35 +400,53 @@ class MasthbotTwitch(commands.Bot):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         try:
+            # On récupère le sondage actif
             active_poll = conn.execute("SELECT id, option1, option2, option3, option4 FROM polls WHERE is_active=1 ORDER BY id DESC LIMIT 1").fetchone()
-            
-            if not active_poll:
-                return await message.channel.send(f"@{message.author.name}, il n'y a aucun sondage actif pour le moment ! 🐾")
 
+            if not active_poll:
+                return # Aucun sondage Fel-X actif, on ignore silencieusement
+
+            # 🛡️ PROTECTION : On ne vote par chat QUE pour les sondages Fel-X
+            # Si tu as une colonne 'type' dans ta table polls, on l'utilise.
+            # Sinon, on considère que si le bot a trouvé un sondage actif ici, c'est un Fel-X.
+            
             opt_key = f"option{choice_idx}"
             if not active_poll[opt_key]:
-                return await message.channel.send(f"@{message.author.name}, ce choix n'est pas disponible !")
+                return # Choix invalide pour ce sondage
 
+            # Enregistrement du vote pour Vercel/Local
             conn.execute("""
-                INSERT INTO poll_votes (poll_id, twitch_id, option_index) 
+                INSERT INTO poll_votes (poll_id, twitch_id, option_index)
                 VALUES (?, ?, ?)
                 ON CONFLICT(poll_id, twitch_id) DO UPDATE SET option_index = excluded.option_index
             """, (active_poll['id'], str(message.author.id), choice_idx))
             conn.commit()
-            
-            async with aiohttp.ClientSession() as session:
-                payload = {"type": "show_poll"}
-                try:
-                    await session.post("http://127.0.0.1:3005/api/trigger", json=payload)
-                except Exception:
-                    pass
 
-            await message.channel.send(f"✅ Vote de @{message.author.name} pris en compte !")
-            
+            # Mise à jour visuelle immédiate
+            await trigger_overlay_event({"type": "show_poll"})
+
         except Exception as e:
             logger.error(f"Erreur vote chat: {e}")
         finally:
             conn.close()
+
+    async def event_poll_begin(self, data):
+        """Se déclenche automatiquement quand un sondage commence sur Twitch."""
+        try:
+            from app.routes.overlays import trigger_overlay_event
+            # On envoie le signal spécifique au bandeau Twitch
+            await trigger_overlay_event({"type": "show_twitch_poll"})
+        except Exception as e:
+            logger.error(f"Erreur lors du signal de sondage Twitch : {e}")
+
+    async def event_prediction_begin(self, data):
+        """Se déclenche automatiquement quand une prédiction commence sur Twitch."""
+        try:
+            from app.routes.overlays import trigger_overlay_event
+            # On envoie un signal spécifique pour les prédictions
+            await trigger_overlay_event({"type": "show_twitch_prediction"})
+        except Exception as e:
+            logger.error(f"Erreur lors du signal de prédiction Twitch : {e}")
 
     @commands.command(name='so')
     async def shoutout_command(self, ctx, *, content: str = None):
@@ -556,10 +621,13 @@ class MasthbotTwitch(commands.Bot):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         try:
+            # 1. On récupère le sondage Fel-X actif
             poll = conn.execute("SELECT * FROM polls WHERE is_active=1 ORDER BY id DESC LIMIT 1").fetchone()
+            
             if not poll:
-                return await ctx.send("🐾 Aucun sondage en cours. Check ton profil sur https://fel-x.vercel.app !")
+                return await ctx.send("🐾 Aucun sondage en cours. Crée-en un sur ton interface admin !")
 
+            # 2. Calcul des votes actuels pour le chat
             votes = conn.execute("SELECT option_index, COUNT(*) as count FROM poll_votes WHERE poll_id=? GROUP BY option_index", (poll['id'],)).fetchall()
             results = {1: 0, 2: 0, 3: 0, 4: 0}
             total = 0
@@ -567,16 +635,14 @@ class MasthbotTwitch(commands.Bot):
                 results[v['option_index']] = v['count']
                 total += v['count']
 
-            async with aiohttp.ClientSession() as session:
-                payload = {"type": "show_poll"}
-                try:
-                    await session.post("http://127.0.0.1:3005/api/trigger", json=payload)
-                except Exception:
-                    pass
+            # 3. ✅ LA CORRECTION : On envoie le signal "show_poll" au port 8000
+            # On n'utilise plus aiohttp vers le port 3005 ici !
+            await trigger_overlay_event({"type": "show_poll"})
 
+            # 4. Préparation du message pour le chat Twitch
             msg = f"📊 SONDAGE : {poll['question']} — "
             options_text = []
-            
+
             for i in range(1, 5):
                 opt_name = poll[f'option{i}']
                 if opt_name:
@@ -585,13 +651,48 @@ class MasthbotTwitch(commands.Bot):
                     options_text.append(f"{i}. {opt_name} ({pct}%)")
 
             msg += " | ".join(options_text)
-            msg += f" — 🗳️ Vote avec !choix 1, 2... ({total} votes)"
+            msg += f" — 🗳️ Vote avec 1, 2, 3... ({total} votes)"
+            
             await ctx.send(msg)
 
         except Exception as e:
-            logger.error(f"Erreur cmd_sondage: {e}")
+            logger.error(f"❌ Erreur cmd_sondage : {e}")
         finally:
             conn.close()
+
+    @commands.command(name='testpoll')
+    async def cmd_testpoll(self, ctx):
+        """Commande de débogage pour forcer l'affichage de l'overlay Twitch"""
+        if not ctx.author.is_mod and not ctx.author.is_broadcaster:
+            return
+
+        try:
+            # 1. On importe notre mémoire
+            import app.services.twitch_poll_state as poll_state
+            
+            # 2. On injecte un faux sondage dans la mémoire
+            poll_state.chat_votes = {1: 0, 2: 0, 3: 0, 4: 0}
+            poll_state.current_twitch_poll = {
+                "title": "Ceci est un test de Félix !",
+                "total_votes": 10,
+                "is_prediction": False,
+                "choices": [
+                    {"title": "Choix A", "votes": 5},
+                    {"title": "Choix B", "votes": 5}
+                ]
+            }
+
+            # 3. On envoie le signal à l'overlay
+            from app.routes.overlays import trigger_overlay_event
+            await trigger_overlay_event({
+                "type": "show_twitch_poll",
+                "payload": poll_state.current_twitch_poll
+            })
+            
+            await ctx.send("🛠️ Faux sondage de test envoyé à l'overlay !")
+            
+        except Exception as e:
+            print(f"❌ Erreur testpoll : {e}")
 
     @commands.command(name='level')
     async def cmd_level(self, ctx):
@@ -920,7 +1021,7 @@ class MasthbotTwitch(commands.Bot):
         """Aspirateur Automatique de Rôles Twitch (Tourne toutes les heures en fond)"""
         if not self.broadcaster_id: return
         
-        logger.info("🔄 [AUTO-SYNC] Le Raspberry Pi aspire les Modos et VIPs depuis Twitch...")
+        #logger.info("🔄 [AUTO-SYNC] Le Raspberry Pi aspire les Modos et VIPs depuis Twitch...")
         try:
             client_id = os.getenv("TWITCH_CLIENT_ID", getattr(self._http, 'client_id', ''))
             headers = {"Client-ID": client_id, "Authorization": f"Bearer {self.master_token}"}
@@ -977,9 +1078,73 @@ class MasthbotTwitch(commands.Bot):
 
             # Exécuter l'écriture SQL de manière asynchrone
             count_mods, count_vips = await asyncio.to_thread(_save_sync)
-            logger.info(f"✅ [AUTO-SYNC] Terminé ! {count_mods} Modérateurs et {count_vips} VIPs mis à jour dans la base.")
+            #logger.info(f"✅ [AUTO-SYNC] Terminé ! {count_mods} Modérateurs et {count_vips} VIPs mis à jour dans la base.")
         except Exception as e:
             logger.error(f"❌ [AUTO-SYNC] Erreur : {e}")
+
+    @routines.routine(minutes=5)
+    async def sync_subs_timer(self):
+        """Récupère le nombre total de subs et l'écrit dans le fichier pour OBS."""
+        if not self.broadcaster_id: return
+        
+        try:
+            # 1. Préparation de la requête API Twitch
+            client_id = os.getenv("TWITCH_CLIENT_ID", getattr(self._http, 'client_id', ''))
+            headers = {
+                "Client-ID": client_id, 
+                "Authorization": f"Bearer {self.master_token}"
+            }
+            url = f"https://api.twitch.tv/helix/subscriptions?broadcaster_id={self.broadcaster_id}"
+            
+            # 2. On interroge Twitch[cite: 3]
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers) as r:
+                    if r.status == 200:
+                        data = await r.json()
+                        # L'API Twitch renvoie un champ 'total' très pratique !
+                        total_subs = data.get("total", 0)
+                        
+                        # 3. On importe ton service et on écrit le fichier
+                        from app.services.label_service import write_label
+                        write_label("nombre_subs.txt", str(total_subs))
+                        
+                        #logger.info(f"⭐ [AUTO-SYNC] Compteur de subs mis à jour : {total_subs}")
+                    else:
+                        logger.warning(f"⚠️ [TWITCH API] Impossible de lire les subs (As-tu l'autorisation 'channel:read:subscriptions' ?) Code: {r.status}")
+                        
+        except Exception as e:
+            logger.error(f"❌ [AUTO-SYNC] Erreur de lecture des abonnés : {e}")
+
+    @routines.routine(minutes=2)
+    async def sync_viewers_timer(self):
+        """Récupère le nombre de viewers en direct et l'écrit pour OBS."""
+        if not self.broadcaster_id: return
+        
+        try:
+            client_id = os.getenv("TWITCH_CLIENT_ID", getattr(self._http, 'client_id', ''))
+            headers = {
+                "Client-ID": client_id, 
+                "Authorization": f"Bearer {self.master_token}"
+            }
+            # L'API pour récupérer les infos du stream en cours
+            url = f"https://api.twitch.tv/helix/streams?user_id={self.broadcaster_id}"
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers) as r:
+                    if r.status == 200:
+                        data = await r.json()
+                        streams = data.get("data", [])
+                        
+                        # Si la liste est vide, c'est que le stream est hors ligne (donc 0 viewer)
+                        viewers_count = streams[0].get("viewer_count", 0) if streams else 0
+                        
+                        # On écrit le résultat dans le fichier
+                        from app.services.label_service import write_label
+                        write_label("viewers.txt", str(viewers_count))
+                        
+                        #logger.info(f"👁️ [AUTO-SYNC] Viewers mis à jour : {viewers_count}")
+        except Exception as e:
+            logger.error(f"❌ [AUTO-SYNC] Erreur de lecture des viewers : {e}")
 
     @routines.routine(seconds=60)
     async def announcements_timer(self):

@@ -10,15 +10,18 @@ from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 
 # --- IMPORT DES ROUTES ---
-from app.routes import admin, viewers, api, announcements, stats, public, overlays, polls, rewards, admin_vips, api_deck
+from app.routes import admin, viewers, api, announcements, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes
 from app.routes.credits import router as credits_router 
 
 # --- IMPORT DES SERVICES ---
 from app.services.twitch_service import twitch_bot
-from app.repositories import viewer_repo
 from app.services.live_monitor import check_twitch_lives_routine
 from app.services.eventsub_service import eventsub_routine
 from app.services.unfollow_monitor import unfollow_monitor_routine
+from app.services.stats_service import update_time_loop, update_twitch_stats_loop
+
+# --- IMPORT DES REPERTOIRES ---
+from app.repositories import viewer_repo
 
 # --- CONFIGURATION DU LOGGING ---
 logger = logging.getLogger("masthbot.fastapi")
@@ -47,6 +50,8 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(check_twitch_lives_routine())
     asyncio.create_task(eventsub_routine())
     asyncio.create_task(unfollow_monitor_routine())
+    asyncio.create_task(update_time_loop())
+    asyncio.create_task(update_twitch_stats_loop())
 
     # 3. Lancement de l'overlay Node.js
     server_js_path = os.path.join(BASE_DIR, "server.js")
@@ -105,6 +110,7 @@ app.include_router(credits_router)
 app.include_router(rewards.router)
 app.include_router(admin_vips.router)
 app.include_router(api_deck.router)
+app.include_router(labels_routes.router)
 
 if __name__ == "__main__":
     import uvicorn
