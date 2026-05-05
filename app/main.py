@@ -9,6 +9,9 @@ from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 
+# --- IMPORT CORE ---
+from app.core.database import db_writer_worker, DB_PATH
+
 # --- IMPORT DES ROUTES ---
 from app.routes import admin, viewers, api, announcements, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes
 from app.routes.credits import router as credits_router 
@@ -52,6 +55,7 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(unfollow_monitor_routine())
     asyncio.create_task(update_time_loop())
     asyncio.create_task(update_twitch_stats_loop())
+    asyncio.create_task(db_writer_worker(DB_PATH))
 
     # 3. Lancement de l'overlay Node.js
     server_js_path = os.path.join(BASE_DIR, "server.js")
