@@ -6,8 +6,57 @@ from contextlib import asynccontextmanager
 
 logger = logging.getLogger("masthbot.database")
 
+from typing import Optional
 # LE CHEMIN ABSOLU ET UNIQUE POUR TOUT LE BOT
 DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
+
+write_queue: Optional[asyncio.Queue] = None
+
+def get_write_queue() -> asyncio.Queue:
+    """Crée la file d'attente au bon moment (quand l'Event Loop est active)."""
+    global write_queue
+    if write_queue is None:
+        write_queue = asyncio.Queue()
+    return write_queue
+
+async def db_writer_worker(db_path: str):
+    """
+    Le 'Facteur' unique : Il tourne en arrière-plan et traite la file d'attente.
+    """
+    logger.info("🛠️ [SINGLE WRITER] Démarrage de la file d'attente d'écriture.")
+    queue = get_write_queue()
+    
+    async with aiosqlite.connect(db_path) as db:
+        while True:
+            # Sécurité : on initialise 'sql' à None pour éviter l'UnboundLocalError
+            sql = None 
+            try:
+                # Il attend patiemment qu'une requête arrive dans la file
+                sql, params = await queue.get()
+                
+                # Sécurité pour pouvoir éteindre le bot proprement
+                if sql is None:
+                    queue.task_done()
+                    break
+
+                # Il exécute la requête et sauvegarde
+                await db.execute(sql, params)
+                await db.commit()
+                
+                # Il signale que le travail est terminé
+                queue.task_done()
+                
+            except Exception as e:
+                # On gère l'affichage même si 'sql' est resté à None
+                sql_str = sql if sql else "Aucune requête lue"
+                logger.error(f"❌ [SINGLE WRITER ERROR] Échec de la requête : {e} | SQL: {sql_str}")
+
+async def queue_write(sql: str, params: tuple = ()):
+    """
+    Fonction à utiliser dans tes services pour envoyer une requête dans la file d'attente.
+    """
+    queue = get_write_queue()
+    await queue.put((sql, params))
 
 @asynccontextmanager
 async def get_db_connection(max_retries=5, base_delay=0.1):
