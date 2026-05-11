@@ -19,29 +19,14 @@ def _inject_level(viewer_dict):
 
 async def init_tables() -> None:
     """S'assure que les tables d'historique existent au démarrage."""
-<<<<<<< HEAD
-    async with get_db_connection() as db:
-        
-        # --- 🚀 LES 3 LIGNES MAGIQUES ANTI "DATABASE IS LOCKED" ---
-        await db.execute("PRAGMA journal_mode=WAL;")
-        await db.execute("PRAGMA synchronous=NORMAL;")
-        await db.execute("PRAGMA busy_timeout=20000;") # Force SQLite à patienter 20s au lieu de planter
-
-        # Table principale (Totaux)
-        await db.execute('''
-            CREATE TABLE IF NOT EXISTS viewers (
-                twitch_id TEXT PRIMARY KEY,
-                username TEXT NOT NULL,
-                nickname TEXT,
-                messages INTEGER DEFAULT 0,
-                watchtime INTEGER DEFAULT 0,
-                points INTEGER DEFAULT 0,
-                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-=======
     try:
         async with get_db_connection() as db:
+            
+            # --- 🚀 LES 3 LIGNES MAGIQUES ANTI "DATABASE IS LOCKED" ---
+            await db.execute("PRAGMA journal_mode=WAL;")
+            await db.execute("PRAGMA synchronous=NORMAL;")
+            await db.execute("PRAGMA busy_timeout=20000;") # Force SQLite à patienter 20s au lieu de planter
+
             # Table principale (Totaux)
             await db.execute('''
                 CREATE TABLE IF NOT EXISTS viewers (
@@ -54,7 +39,6 @@ async def init_tables() -> None:
                     last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
->>>>>>> 429a12a9b292f5405ce2f4e4d56ddd0d1ad54d4e
 
             # Table Journalière (Agrégation automatique)
             await db.execute('''
@@ -86,37 +70,19 @@ async def init_tables() -> None:
 
 async def ensure_viewer(twitch_id: str, username: str) -> None:
     """Enregistre le viewer s'il n'existe pas encore (pour débloquer l'EXP)."""
-<<<<<<< HEAD
-    async with get_db_connection() as db:
-        
-        # 1. On tente d'insérer le nouveau viewer. 
-        # S'il y a le moindre conflit (ID ou pseudo), "OR IGNORE" annule silencieusement l'erreur.
-        await db.execute("""
-            INSERT OR IGNORE INTO viewers (twitch_id, username, points, messages, watchtime)
-            VALUES (?, ?, 0, 0, 0)
-        """, (twitch_id, username))
-        
-        # 2. On s'assure que le pseudo est bien à jour par rapport à l'ID Twitch
-        # (Pratique si un viewer a changé de pseudo sur Twitch !)
-        await db.execute("""
-            UPDATE viewers 
-            SET username = ?, last_seen = CURRENT_TIMESTAMP 
-            WHERE twitch_id = ?
-        """, (username, twitch_id))
-        
-        await db.commit()
-=======
     try:
         async with get_db_connection() as db:
+            # Code robuste combinant les deux versions (Insertion ou Mise à jour intelligente)
             await db.execute("""
                 INSERT INTO viewers (twitch_id, username, points, messages, watchtime) 
                 VALUES (?, ?, 0, 0, 0)
-                ON CONFLICT(twitch_id) DO UPDATE SET username = excluded.username
+                ON CONFLICT(twitch_id) DO UPDATE SET 
+                    username = excluded.username,
+                    last_seen = CURRENT_TIMESTAMP
             """, (twitch_id, username))
             await db.commit()
     except Exception as e:
         logger.error(f"❌ [DB ERROR] Erreur ensure_viewer : {e}")
->>>>>>> 429a12a9b292f5405ce2f4e4d56ddd0d1ad54d4e
 
 async def get_viewer(twitch_id: str) -> Optional[ViewerResponse]:
     """Récupère un viewer et le convertit au format Pydantic."""
