@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            margin: 0; padding: 0; overflow: hidden; background: transparent;
+            display: flex; align-items: center; justify-content: center; height: 100vh;
+        }
+        
+        /* LE NOUVEAU BOUTON RECTANGULAIRE */
+        #button-container {
+            width: 260px; /* Largeur du rectangle */
+            height: 180px; /* Hauteur du rectangle */
+            background: rgba(15, 23, 42, 0.6); /* Fond sombre légèrement opaque */
+            border-radius: 25px; /* Coins bien arrondis */
+            display: flex; 
+            align-items: center; 
+            justify-content: center; /* Centre la patte parfaitement */
+            border: 2px solid rgba(255, 255, 255, 0.08); /* Petite bordure élégante */
+            backdrop-filter: blur(8px); /* Effet verre flouté en arrière-plan */
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            transition: all 0.4s ease;
+        }
+
+        /* La boîte de la patte (légèrement rétrécie pour rentrer dans le rectangle) */
+        #svg-wrapper {
+            width: 110px;
+            height: 110px;
+            transition: color 0.4s ease, filter 0.4s ease;
+        }
+
+        /* On force le SVG à remplir sa boîte */
+        #svg-wrapper svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* L'arme secrète : on écrase le noir de ton SVG pour appliquer nos couleurs ! */
+        #svg-wrapper svg path, 
+        #svg-wrapper svg g {
+            fill: currentColor !important;
+        }
+
+        /* ÉTAT ABSENT : Rouge pur */
+        .absent {
+            color: #f43f5e;
+            filter: drop-shadow(0 0 15px rgba(244, 63, 94, 0.8));
+        }
+
+        /* ÉTAT PRÉSENT : Vert pur */
+        .present {
+            color: #10b981;
+            filter: drop-shadow(0 0 15px rgba(16, 185, 129, 0.8));
+        }
+    </style>
+</head>
+<body>
+
+    <div id="button-container">
+        <div id="svg-wrapper" class="absent">
+            <svg xmlns="http://www.w3.org/2000/svg" version="1.0" width="1280.000000pt" height="1280.000000pt" viewBox="0 0 1280.000000 1280.000000" preserveAspectRatio="xMidYMid meet">
+            <metadata>
+            Created by potrace 1.15, written by Peter Selinger 2001-2017
+            </metadata>
+            <g transform="translate(0.000000,1280.000000) scale(0.100000,-0.100000)" fill="#000000" stroke="none">
+            <path d="M4615 12476 c-167 -39 -293 -112 -436 -255 -116 -115 -199 -232 -279 -391 -477 -954 -316 -2528 353 -3430 91 -123 249 -285 357 -366 354 -267 752 -281 1071 -38 327 250 551 732 636 1369 21 164 25 672 5 840 -82 702 -291 1283 -618 1722 -82 109 -243 273 -344 350 -94 71 -272 163 -365 188 -83 23 -302 29 -380 11z"/>
+            <path d="M8546 12274 c-311 -61 -636 -299 -905 -661 -346 -465 -580 -1080 -668 -1758 -28 -216 -25 -698 5 -894 70 -447 219 -789 442 -1011 191 -192 431 -281 675 -252 581 72 1154 706 1460 1616 254 755 281 1550 73 2156 -203 591 -615 897 -1082 804z"/>
+            <path d="M2095 9010 c-409 -65 -717 -395 -856 -919 -79 -301 -90 -716 -28 -1081 143 -850 635 -1631 1217 -1933 298 -154 595 -181 850 -75 376 156 623 560 704 1153 16 119 16 472 -1 610 -130 1102 -809 2069 -1564 2230 -89 19 -247 26 -322 15z"/>
+            <path d="M10570 8200 c-360 -77 -713 -330 -1006 -722 -318 -426 -532 -982 -594 -1542 -16 -146 -13 -460 5 -601 122 -948 766 -1403 1495 -1059 391 185 745 566 998 1073 480 960 449 2085 -73 2606 -220 220 -523 310 -825 245z"/>
+            <path d="M6225 6421 c-662 -118 -1497 -813 -2237 -1861 -579 -821 -987 -1705 -1109 -2405 -29 -168 -32 -468 -6 -583 41 -179 110 -297 244 -422 224 -207 493 -329 830 -376 175 -24 529 -15 754 19 301 47 555 108 1124 272 550 158 704 191 856 181 193 -13 338 -60 754 -243 298 -131 464 -193 606 -228 530 -128 976 39 1435 537 137 148 179 220 222 377 24 90 26 110 26 321 0 191 -3 245 -23 355 -118 667 -469 1473 -976 2240 -603 912 -1311 1569 -1902 1764 -215 71 -398 87 -598 52z"/>
+            </g>
+            </svg>
+        </div>
+    </div>
+
+    <script>
+        const wrapper = document.getElementById('svg-wrapper');
+        let currentStatus = null;
+        
+        async function checkFelix() {
+            try {
+                // Interrogation du statut avec l'anti-cache pour forcer OBS à lire la nouvelle info !
+                const response = await fetch('/api/deck/status?t=' + new Date().getTime());
+                if (!response.ok) return;
+                
+                const data = await response.json();
+                
+                // Mise à jour de la couleur uniquement
+                if (data.felix_present !== currentStatus) {
+                    currentStatus = data.felix_present;
+                    if (currentStatus === true) {
+                        wrapper.classList.remove('absent');
+                        wrapper.classList.add('present');
+                    } else {
+                        wrapper.classList.remove('present');
+                        wrapper.classList.add('absent');
+                    }
+                }
+            } catch (e) {
+                console.error("Erreur de polling Félix:", e);
+            }
+        }
+
+        // Vérification toutes les secondes
+        setInterval(checkFelix, 1000);
+        checkFelix();
+    </script>
+</body>
+</html>

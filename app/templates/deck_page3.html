@@ -114,7 +114,6 @@
 
     <div id="toast"><i id="toast-icon" class="fas fa-info-circle"></i> <span id="toast-msg">Message</span></div>
 
-    <!-- MODAL D'ÉDITION AMÉLIORÉE -->
     <div id="editModal" class="modal">
         <form class="modal-content" action="/api/deck/edit_button" method="POST" enctype="multipart/form-data"> 
             <h3>Configurer Bouton</h3>
@@ -127,7 +126,7 @@
             
             <div class="modal-group">
                 <label>Type d'action</label>
-                <select name="type" id="modalType">
+                <select name="type" id="modalType" onchange="updateModalFields()">
                     <option value="sound">Son (MP3/WAV)</option>
                     <option value="image">Visuel (Image / GIF / Vidéo)</option>
                     <option value="none">Vide / Effacer</option>
@@ -151,7 +150,6 @@
             <div class="modal-group">
                 <label>Remplacer le média (Laisser vide pour garder l'actuel)</label>
                 <input type="file" name="file" accept="audio/*,image/*,video/*">
-                <!-- 👁️ AFFICHAGE VISUEL DU FICHIER ENREGISTRÉ -->
                 <div id="current-file-info" style="font-size: 0.65rem; color: var(--accent); margin-top: 5px; font-weight: 700; word-break: break-all; opacity: 0.8;"></div>
             </div>
             
@@ -192,9 +190,10 @@
             grid.innerHTML = ''; 
             buttons.forEach(btn => {
                 const btn_mode = btn.mode || 'click';
-                const safeFile = escapeStr(btn.file); // Exemple: /static/uploads/son_marrant.mp3
+                const safeFile = escapeStr(btn.file); 
                 const safeLabel = escapeStr(btn.label);
                 const safeType = escapeStr(btn.type);
+                const btnVolume = btn.volume !== undefined ? btn.volume : 100;
 
                 let icon = '<i class="fa-solid fa-plus"></i>';
                 let className = 'deck-btn';
@@ -211,11 +210,11 @@
                 }
                 
                 if (btn_mode === 'hold' && btn.type === 'sound') {
-                    actionAttributes += ` ontouchstart="if(!isEditMode) startHoldEffect('${safeFile}')" onmousedown="if(!isEditMode) startHoldEffect('${safeFile}')"`;
+                    actionAttributes += ` ontouchstart="if(!isEditMode) startHoldEffect('${safeFile}', ${btnVolume})" onmousedown="if(!isEditMode) startHoldEffect('${safeFile}', ${btnVolume})"`;
                     actionAttributes += ` ontouchend="if(!isEditMode) stopHoldEffect()" ontouchcancel="if(!isEditMode) stopHoldEffect()" onmouseup="if(!isEditMode) stopHoldEffect()"`;
-                    actionAttributes += ` onclick="handleClick(${btn.id}, '${safeType}', '${safeFile}', '${safeLabel}', '${btn_mode}', event);"`;
+                    actionAttributes += ` onclick="handleClick(${btn.id}, '${safeType}', '${safeFile}', '${safeLabel}', '${btn_mode}', ${btnVolume}, event);"`;
                 } else {
-                    actionAttributes += ` onclick="handleClick(${btn.id}, '${safeType}', '${safeFile}', '${safeLabel}', '${btn_mode}', event);"`;
+                    actionAttributes += ` onclick="handleClick(${btn.id}, '${safeType}', '${safeFile}', '${safeLabel}', '${btn_mode}', ${btnVolume}, event);"`;
                 }
                 
                 grid.innerHTML += `<div class="${className}" id="btn-${btn.id}" ${actionAttributes}>
@@ -237,21 +236,8 @@
             const selectedType = document.getElementById('modalType').value;
             const isSound = (selectedType === 'sound');
             document.getElementById('modeGroup').style.display = isSound ? 'flex' : 'none';
-            document.getElementById('volumeGroup').style.display = isSound ? 'flex' : 'none'; // Affiche le slider
+            document.getElementById('volumeGroup').style.display = isSound ? 'flex' : 'none';
         }
-
-        // --- Extrait de la fonction renderButtons() à modifier ---
-        // (Juste au moment de créer le actionAttributes)
-                const btnVolume = btn.volume !== undefined ? btn.volume : 100;
-
-                if (btn_mode === 'hold' && btn.type === 'sound') {
-                    actionAttributes += ` ontouchstart="if(!isEditMode) startHoldEffect('${safeFile}', ${btnVolume})" onmousedown="if(!isEditMode) startHoldEffect('${safeFile}', ${btnVolume})"`;
-                    actionAttributes += ` ontouchend="if(!isEditMode) stopHoldEffect()" ontouchcancel="if(!isEditMode) stopHoldEffect()" onmouseup="if(!isEditMode) stopHoldEffect()"`;
-                    actionAttributes += ` onclick="handleClick(${btn.id}, '${safeType}', '${safeFile}', '${safeLabel}', '${btn_mode}', ${btnVolume}, event);"`;
-                } else {
-                    actionAttributes += ` onclick="handleClick(${btn.id}, '${safeType}', '${safeFile}', '${safeLabel}', '${btn_mode}', ${btnVolume}, event);"`;
-                }
-        // ---------------------------------------------------------
 
         function startHoldEffect(filePath, volume) {
             if (currentHoldEffectId || isEditMode) return; 
@@ -280,7 +266,6 @@
                 document.getElementById('modalType').value = type;
                 document.getElementById('modalMode').value = mode || 'click'; 
                 
-                // Pré-remplir le curseur de volume
                 document.getElementById('modalVolume').value = volume;
                 document.getElementById('volValue').innerText = volume + '%';
                 
@@ -304,11 +289,24 @@
             }
         }
         
+        // SWIPE DÉTECTION (PAGE 3)
         let touchstartX = 0;
         document.addEventListener('touchstart', e => { touchstartX = e.changedTouches[0].screenX; });
         document.addEventListener('touchend', e => {
             let touchendX = e.changedTouches[0].screenX;
-            if (touchendX > touchstartX + 70) window.location.href = "/deck/2";
+            
+            // Sécurité : On empêche le swipe si le menu de configuration d'un bouton est ouvert
+            const modal = document.getElementById('editModal');
+            if (modal && modal.style.display === 'flex') return;
+            
+            // Swipe Gauche -> Boucle vers la page 1 (T'chat)
+            if (touchendX < touchstartX - 70) {
+                window.location.href = "/deck";
+            }
+            // Swipe Droite -> Retour à la page 2 (OBS)
+            if (touchendX > touchstartX + 70) {
+                window.location.href = "/deck/2";
+            }
         });
     </script>
 </body>

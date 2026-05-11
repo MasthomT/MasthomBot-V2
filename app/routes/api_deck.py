@@ -4,6 +4,7 @@ import os
 import shutil
 import asyncio
 import aiohttp
+import httpx # Ajouté pour la requête Twitch
 import obsws_python as obs
 from fastapi import APIRouter, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
@@ -15,7 +16,7 @@ from app.services.twitch_service import twitch_bot
 from app.services.obs_service import obs_service
 from app.routes.overlays import trigger_overlay_event 
 
-logging.getLogger("obsws_python").setLevel(logging.WARNING)
+logging.getLogger("obsws_python").setLevel(logging.CRITICAL)
 
 logger = logging.getLogger("masthbot.deck")
 router = APIRouter(tags=["deck"])
@@ -59,32 +60,153 @@ async def serve_upload(file_name: str):
 # ========================================================
 # ⚙️ GESTION DES ACTIONS OBS & TWITCH
 # ========================================================
+
+# --- FONCTION TWITCH POUR FÉLIX ---
+async def toggle_felix_twitch():
+    global felix_est_la
+    felix_est_la = not felix_est_la 
+    
+    b_id = getattr(twitch_bot, 'broadcaster_id', None)
+    token = getattr(twitch_bot, 'master_token', None)
+    client_id = os.getenv("TWITCH_CLIENT_ID", getattr(twitch_bot._http, 'client_id', ''))
+
+    if not b_id or not token:
+        logger.error("❌ Impossible de modifier Féli'Cam : Identifiants Twitch manquants.")
+        return False
+
+    headers = {
+        "Client-ID": client_id,
+        "Authorization": f"Bearer {token}"
+    }
+    
+    payload = {
+        "is_enabled": felix_est_la
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.patch(
+                f"https://api.twitch.tv/helix/channel_points/custom_rewards?broadcaster_id={b_id}&id={FELICAM_REWARD_ID}",
+                headers=headers,
+                json=payload
+            )
+            
+            if resp.status_code == 200:
+                etat = "ACTIVÉE" if felix_est_la else "DÉSACTIVÉE"
+                logger.info(f"🐱 Féli'Cam {etat} avec succès sur Twitch.")
+                return True
+            else:
+                logger.error(f"❌ Erreur Twitch ({resp.status_code}) lors de la modification de Féli'Cam: {resp.text}")
+                # En cas d'erreur de Twitch (ex: mauvais ID, pas les droits), on annule le changement local
+                felix_est_la = not felix_est_la 
+                return False
+                
+    except Exception as e:
+        logger.error(f"❌ Erreur de connexion Twitch pour Félix : {e}")
+        felix_est_la = not felix_est_la 
+        return False
+
+
 @router.get("/api/deck/status")
 async def deck_status():
     def fetch_obs_status():
         try:
-            cl = obs.ReqClient(host=obs_service.host, port=obs_service.port, password=obs_service.password)
+            cl = obs.ReqClient(host=obs_service.host, port=obs_service.port, password=obs_service.password, timeout=1)
             scene_name = cl.get_current_program_scene().current_program_scene_name
             is_muted = cl.get_input_mute("Micro").input_muted
-            
+
             cam_visible = True
             for item in cl.get_scene_item_list(scene_name).scene_items:
                 if item['sourceName'] == "WEBCAM":
                     cam_visible = item['sceneItemEnabled']
                     break
-                    
-            return {"scene": scene_name, "mic_muted": is_muted, "cam_visible": cam_visible}
+
+            # 🎥 STATUT FÉLICAM OBS
+            felicam_visible = False
+            try:
+                for item in cl.get_scene_item_list("SI - ALERTES").scene_items:
+                    if item['sourceName'] == "FELI'CAM":
+                        felicam_visible = item['sceneItemEnabled']
+                        break
+            except Exception:
+                pass
+
+            return {"scene": scene_name, "mic_muted": is_muted, "cam_visible": cam_visible, "felicam_visible": felicam_visible}
         except Exception:
-            return {"scene": "main", "mic_muted": False, "cam_visible": True}
+            return {"scene": "main", "mic_muted": False, "cam_visible": True, "felicam_visible": False}
 
     obs_status = await asyncio.to_thread(fetch_obs_status)
     twitch_status = {"brb_active": False, "emote_only": False, "follower_only": False, "slow_mode": False}
-    return {"twitch": twitch_status, "obs": obs_status}
+
+    # 🐱 STATUT PRÉSENCE FÉLIX (Fichier texte)
+    felix_present = False
+    state_file = "/home/masthom/BOT_V2/felix_state.txt"
+    if os.path.exists(state_file):
+        try:
+            with open(state_file, "r") as f:
+                felix_present = (f.read().strip() == "1")
+        except Exception:
+            pass
+
+    return {
+        "twitch": twitch_status,
+        "obs": obs_status,
+        "felix_present": felix_present # LES DEUX SONT ENVOYÉS AU DECK !
+    }
 
 @router.post("/api/deck/action")
 async def deck_action(data: DeckAction):
     logger.info(f"📱 [DECK] Clic reçu : {data.action} ({data.param})")
-    
+
+    # --- 1. ACTION PRÉSENCE FÉLIX (Pour l'Overlay Patte) ---
+    if data.action == "toggle_felix":
+        state_file = "/home/masthom/BOT_V2/felix_state.txt"
+        actuel = False
+        if os.path.exists(state_file):
+            try:
+                with open(state_file, "r") as f:
+                    actuel = (f.read().strip() == "1")
+            except Exception:
+                pass
+        
+        nouvel_etat = not actuel
+        with open(state_file, "w") as f:
+            f.write("1" if nouvel_etat else "0")
+        return {"status": "success"}
+
+    # --- 2. ACTION FÉLICAM OBS (Pour afficher la caméra) ---
+    if data.action == "toggle_felicam_obs":
+        def execute_felicam():
+            cl = obs.ReqClient(host=obs_service.host, port=obs_service.port, password=obs_service.password)
+            scene = "SI - ALERTES"
+            source = "FELI'CAM"
+            
+            items = cl.get_scene_item_list(scene).scene_items
+            item_id = None
+            is_visible = False
+            for item in items:
+                if item['sourceName'] == source:
+                    item_id = item['sceneItemId']
+                    is_visible = item['sceneItemEnabled']
+                    break
+            
+            if item_id is not None:
+                if not is_visible:
+                    try: cl.set_source_filter_enabled(scene, "FELICAM_IN", True)
+                    except: pass
+                    cl.set_scene_item_enabled(scene, item_id, True)
+                else:
+                    cl.set_scene_item_enabled(scene, item_id, False)
+                    try: cl.set_source_filter_enabled(scene, "FELICAM_OUT", True)
+                    except: pass
+
+        try:
+            await asyncio.to_thread(execute_felicam)
+        except Exception as e:
+            logger.error(f"❌ Erreur Toggle FeliCam : {e}")
+        return {"status": "success"}
+
+    # --- RESTE DES ACTIONS OBS CLASSIQUES ---
     if data.action.startswith("obs_") or data.action.startswith("mode_"):
         def execute_obs():
             cl = obs.ReqClient(host=obs_service.host, port=obs_service.port, password=obs_service.password)
@@ -100,13 +222,13 @@ async def deck_action(data: DeckAction):
                     if item['sourceName'] == (data.param or "WEBCAM"):
                         cl.set_scene_item_enabled(scene_name, item['sceneItemId'], not item['sceneItemEnabled'])
                         break
-
         try:
             await asyncio.to_thread(execute_obs)
         except Exception as e:
-            logger.error(f"❌ Erreur Contrôle OBS Python : {e}")
+            pass
         return {"status": "success"}
 
+    # --- ACTIONS TWITCH ---
     b_id = getattr(twitch_bot, 'broadcaster_id', None)
     token = getattr(twitch_bot, 'master_token', None)
     client_id = os.getenv("TWITCH_CLIENT_ID", getattr(twitch_bot._http, 'client_id', ''))
@@ -115,24 +237,8 @@ async def deck_action(data: DeckAction):
         headers = {"Client-ID": client_id, "Authorization": f"Bearer {token}"}
         async with aiohttp.ClientSession() as session:
             try:
-                if data.action == "clear":
-                    await session.delete(f"https://api.twitch.tv/helix/moderation/chat?broadcaster_id={b_id}&moderator_id={b_id}", headers=headers)
-                elif data.action == "chat_mode":
-                    url = f"https://api.twitch.tv/helix/chat/settings?broadcaster_id={b_id}&moderator_id={b_id}"
-                    if data.param == "emote": await session.patch(url, headers=headers, json={"emote_mode": True})
-                    elif data.param == "follower": await session.patch(url, headers=headers, json={"follower_mode": True})
-                    elif data.param == "slow": await session.patch(url, headers=headers, json={"slow_mode": True})
-                    elif data.param == "normal": await session.patch(url, headers=headers, json={"emote_mode": False, "follower_mode": False, "slow_mode": False})
-                elif data.action == "ad":
-                    await session.post("https://api.twitch.tv/helix/channels/commercial", headers=headers, json={"broadcaster_id": str(b_id), "length": int(data.param or 180)})
-                elif data.action == "marker":
-                    await session.post("https://api.twitch.tv/helix/streams/markers", headers=headers, json={"user_id": str(b_id)})
-            except Exception as e:
-                logger.error(f"❌ Erreur API Twitch (Deck) : {e}")
-        return {"status": "success"}
-
-    if data.action == "shoutout" and data.param:
-        shoutout_service.trigger_shoutout(target=data.param)
+                if data.action == "clear": await session.delete(f"https://api.twitch.tv/helix/moderation/chat?broadcaster_id={b_id}&moderator_id={b_id}", headers=headers)
+            except Exception: pass
         return {"status": "success"}
 
     return {"status": "success"}

@@ -2,6 +2,7 @@ import asyncio
 import subprocess
 import contextlib
 import os
+import httpx
 import logging
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
@@ -35,6 +36,8 @@ logging.getLogger("websockets.server").setLevel(logging.WARNING)
 node_process = None
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+felix_est_la = False
+FELICAM_REWARD_ID = "822e3f13-5fc4-43b5-913e-a39169650297"
 # --- GESTION DU CYCLE DE VIE (LIFESPAN) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -111,6 +114,30 @@ app.include_router(rewards.router)
 app.include_router(admin_vips.router)
 app.include_router(api_deck.router)
 app.include_router(labels_routes.router)
+
+@app.get("/api/felix/toggle")
+async def toggle_felix():
+    state_file = "/home/masthom/BOT_V2/felix_state.txt"
+
+    # 1. Lecture de l'état
+    actuel = False
+    if os.path.exists(state_file):
+        try:
+            with open(state_file, "r") as f:
+                actuel = (f.read().strip() == "1")
+        except Exception:
+            actuel = False
+
+    # 2. Inversion et Sauvegarde de l'état (Ce qui met à jour OBS et le Deck !)
+    nouvel_etat = not actuel
+    with open(state_file, "w") as f:
+        f.write("1" if nouvel_etat else "0")
+
+    # 3. ON NE TOUCHE PAS A TWITCH (Supprimé !)
+    print(f"🐱 Présence de Félix modifiée en interne : {'PRÉSENT' if nouvel_etat else 'ABSENT'}")
+
+    # On renvoie le succès au téléphone pour qu'il affiche la couleur Vert/Rouge
+    return {"status": "success", "is_enabled": nouvel_etat}
 
 if __name__ == "__main__":
     import uvicorn

@@ -214,7 +214,12 @@
         <div class="deck-btn btn-neutral" onclick="sendAction('obs_hotkey', 'OBS_KEY_F9')">
             <i class="fa-solid fa-rotate"></i><span>Refresh F9</span>
         </div>
-        <div class="deck-btn" style="opacity: 0.1; border: 2px dashed var(--text-dim); background: transparent; cursor: default;"></div>
+        <div class="deck-btn btn-danger" id="felicam-btn" onclick="sendAction('toggle_felicam_obs')">
+            <i class="fa-solid fa-cat"></i><span>FéliCam Off</span>
+        </div>
+        <div class="deck-btn btn-danger" id="btn-felix" onclick="sendAction('toggle_felix')">
+           <i class="fa-solid fa-cat"></i><span>Félix: Absent</span>
+        </div>
         <div class="deck-btn" style="opacity: 0.1; border: 2px dashed var(--text-dim); background: transparent; cursor: default;"></div>
         <div class="deck-btn" style="opacity: 0.1; border: 2px dashed var(--text-dim); background: transparent; cursor: default;"></div>
     </div>
@@ -255,13 +260,13 @@
             try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 2000);
-                const response = await fetch(RASPBERRY_PI_URL + '/api/deck/status', { signal: controller.signal });
+                const response = await fetch('http://192.168.1.109:8000/api/deck/status?t=' + new Date().getTime());
                 clearTimeout(timeoutId);
 
                 if (!response.ok) return; 
                 const status = await response.json();
 
-                // 1. MICROPHONE (Rouge = Mute, Vert = On)
+                // 1. MICROPHONE
                 const micBtn = document.getElementById('mic-btn');
                 if (micBtn) {
                     if (status.obs.mic_muted) {
@@ -273,7 +278,7 @@
                     }
                 }
 
-                // 2. WEBCAM (Cyan = Visible, Rouge = Cachée)
+                // 2. WEBCAM
                 const camBtn = document.getElementById('cam-btn');
                 if (camBtn) {
                     if (status.obs.cam_visible) {
@@ -305,7 +310,7 @@
                     }
                 }
 
-                // 4. SCÈNE HYBRIDE (Chatting / Gaming -> Violet)
+                // 4. SCÈNE HYBRIDE
                 const chatBtn = document.getElementById('btn-CHATTING');
                 const gameBtn = document.getElementById('btn-GAMING');
                 if (current === "CHATTING/GAMING") {
@@ -315,13 +320,48 @@
                     if(chatBtn) chatBtn.className = "deck-btn btn-indigo";
                     if(gameBtn) gameBtn.className = "deck-btn btn-indigo";
                 }
+
+                // 5. BOUTON FÉLICAM (Lecture directe depuis OBS)
+                const felicamBtn = document.getElementById('felicam-btn');
+                if (felicamBtn && status.obs && status.obs.hasOwnProperty('felicam_visible')) {
+                    if (status.obs.felicam_visible) {
+                        // QUAND LA SOURCE EST ALLUMÉE DANS OBS
+                        felicamBtn.className = "deck-btn active-success";
+                        felicamBtn.innerHTML = '<i class="fa-solid fa-cat"></i><span>FéliCam On</span>';
+                    } else {
+                        // QUAND LA SOURCE EST CACHÉE DANS OBS
+                        felicamBtn.className = "deck-btn btn-danger";
+                        felicamBtn.innerHTML = '<i class="fa-solid fa-cat"></i><span>FéliCam Off</span>';
+                    }
+                }
+
             } catch (e) {}
         }
-        
+
         setInterval(updateDeckFeedback, 1000);
 
         function sendAction(action, param = null) {
             if (navigator.vibrate) navigator.vibrate(50);
+
+            // 🐱 INTERCEPTION MAGIQUE POUR FÉLIX
+            if (action === 'toggle_felix') {
+                fetch(RASPBERRY_PI_URL + '/api/felix/toggle?t=' + new Date().getTime())
+                .then(res => res.json())
+                .then(data => {
+                    const felixBtn = document.getElementById('btn-felix');
+                    if (data.is_enabled) {
+                        felixBtn.className = "deck-btn active-success";
+                        felixBtn.innerHTML = '<i class="fa-solid fa-cat"></i><span>Félix: Présent</span>';
+                    } else {
+                        felixBtn.className = "deck-btn btn-danger";
+                        felixBtn.innerHTML = '<i class="fa-solid fa-cat"></i><span>Félix: Absent</span>';
+                    }
+                })
+                .catch(error => { showToast("Erreur Félix", "error"); });
+                return; 
+            }
+
+            // --- LA SUITE INDISPENSABLE QUI AVAIT ÉTÉ EFFACÉE ---
             fetch(RASPBERRY_PI_URL + '/api/deck/action', {
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json' },
@@ -332,10 +372,7 @@
         }
 
         function triggerHybridMode(hotkey) {
-            // 1. On force le passage sur la scène hybride
             sendAction('obs_change_scene', 'CHATTING/GAMING');
-            
-            // 2. On attend 300 millisecondes (pour la transition OBS) puis on envoie le raccourci
             setTimeout(() => {
                 sendAction('obs_hotkey', hotkey);
             }, 300);
@@ -346,8 +383,15 @@
         document.addEventListener('touchstart', e => { touchstartX = e.changedTouches[0].screenX; });
         document.addEventListener('touchend', e => {
             let touchendX = e.changedTouches[0].screenX;
-            if (touchendX < touchstartX - 70) window.location.href = "/deck/3"; // Swipe gauche = Page 3
-            if (touchendX > touchstartX + 70) window.location.href = "/deck";   // Swipe droite = Page 1
+            
+            // Swipe Gauche (Glisser vers la gauche) -> Page 3 (Sons/Img)
+            if (touchendX < touchstartX - 70) {
+                window.location.href = "/deck/3";
+            }
+            // Swipe Droite (Glisser vers la droite) -> Retour à la page 1 (T'chat)
+            if (touchendX > touchstartX + 70) {
+                window.location.href = "/deck";
+            }
         });
     </script>
 </body>

@@ -43,41 +43,30 @@ class CreditsService:
         except: pass
 
     def add_watchtime(self, name, minutes=1):
-        n = name.lower()
-        self.session_watchtime[n] = self.session_watchtime.get(n, 0) + minutes
-        self._save_session()
-
-        DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
+        """
+        Stocke le viewer et additionne son temps de visionnage (en mémoire JSON) pour le générique.
+        L'écriture dans SQLite est désormais gérée par batch_update_watchtime dans viewer_repo.py !
+        """
+        self._load_session()
         
-        try:
-            conn = sqlite3.connect(DB_PATH)
-            today_date = date.today().isoformat()
-            
-            # On récupère le twitch_id du viewer pour être précis
-            cursor = conn.cursor()
-            cursor.execute("SELECT twitch_id FROM viewers WHERE LOWER(username) = ?", (n,))
-            result = cursor.fetchone()
-            
-            if result:
-                twitch_id = result[0]
-                # On met à jour (ou on crée) la stat du jour en secondes (minutes * 60)
-                # On utilise +60 car ton système ajoute 1 minute à la fois
-                conn.execute("""
-                    INSERT INTO viewer_daily_stats (twitch_id, day, watchtime)
-                    VALUES (?, ?, ?)
-                    ON CONFLICT(twitch_id, day) DO UPDATE SET
-                        watchtime = watchtime + ?
-                """, (twitch_id, today_date, minutes * 60, minutes * 60))
+        viewer_trouve = False
+        # On cherche si le viewer est déjà dans le générique
+        for v in self.session_data.get("viewers", []):
+            if v["name"].lower() == name.lower():
+                # On ajoute les minutes à son compteur pour l'affichage
+                v["watchtime"] = v.get("watchtime", 0) + minutes
+                viewer_trouve = True
+                break
                 
-                # On en profite pour mettre aussi à jour le Watchtime GLOBAL
-                conn.execute("""
-                    UPDATE viewers SET watchtime = watchtime + ? WHERE twitch_id = ?
-                """, (minutes * 60, twitch_id))
-                
-                conn.commit()
-            conn.close()
-        except Exception as e:
-            logger.error(f"Erreur sync SQLite Watchtime pour {name}: {e}")
+        # S'il n'est pas encore dans le générique, on l'ajoute
+        if not viewer_trouve:
+            self.session_data.setdefault("viewers", []).append({
+                "name": name, 
+                "label": "Viewer",
+                "watchtime": minutes
+            })
+            
+        self._save_session()
 
     def log_event(self, category, name, label=""):
         if category not in self.categories and category != "viewers": return

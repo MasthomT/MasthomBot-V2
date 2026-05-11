@@ -112,6 +112,10 @@ async def get_deck_overlay(request: Request):
     """Route pour l'overlay dédié aux sons et images du Deck"""
     return templates.TemplateResponse(request=request, name="overlay_deck.html")
 
+@router.get("/overlay/felix", response_class=HTMLResponse)
+async def felix_overlay_page(request:Request):
+    return templates.TemplateResponse(request=request, name="felix_overlay.html")
+
 @router.get("/overlay/twitch_poll", response_class=HTMLResponse)
 async def get_twitch_poll_overlay(request: Request):
     """

@@ -379,7 +379,16 @@ app.get('/events', (req, res) => {
     res.setHeader('Connection', 'keep-alive');
     const id = Date.now();
     clients.push({ id, res });
-    req.on('close', () => clients = clients.filter(c => c.id !== id));
+    
+    // 🫀 AJOUT DU HEARTBEAT : Envoie un ping toutes les 15 secondes
+    const heartbeat = setInterval(() => {
+        res.write(`event: ping\ndata: {"time": "${new Date().toISOString()}"}\n\n`);
+    }, 15000);
+
+    req.on('close', () => {
+        clearInterval(heartbeat); // 🛑 Arrêt propre du heartbeat à la déconnexion
+        clients = clients.filter(c => c.id !== id);
+    });
 });
 
 function broadcast(data) { clients.forEach(c => c.res.write(`data: ${JSON.stringify(data)}\n\n`)); }
@@ -436,6 +445,9 @@ app.get('/shoutout', (req, res) => {
         const wrapper = document.getElementById('wrapper');
         const p = document.getElementById('progress');
         
+        let source;
+        let watchdogTimer;
+
         const finishClip = () => {
             if (!v.isEnding) {
                 v.isEnding = true;
@@ -454,24 +466,41 @@ app.get('/shoutout', (req, res) => {
         
         v.addEventListener('ended', finishClip);
 
-        const source = new EventSource('/events');
-        source.onmessage = (e) => {
-            const d = JSON.parse(e.data);
-            if(d.type === 'play_clip') {
-                document.getElementById('avatar').src = d.meta.avatar;
-                document.getElementById('name').textContent = d.meta.name;
-                document.getElementById('game').textContent = d.meta.game;
-                document.getElementById('date').textContent = d.meta.date;
-                document.getElementById('title').textContent = d.meta.title;
-                
-                p.style.width = '0%';
-                v.isEnding = false;
-                v.src = d.url;
-                
-                wrapper.classList.add('visible');
-                v.play().catch(err => console.error(err));
-            }
-        };
+        // ⚡ AJOUT DE LA CONNEXION ROBUSTE (AUTO-RECONNECT)
+        function connect() {
+            if (source) source.close();
+            source = new EventSource('/events');
+
+            source.addEventListener('ping', (e) => {
+                clearTimeout(watchdogTimer);
+                watchdogTimer = setTimeout(() => { connect(); }, 35000);
+            });
+
+            source.onmessage = (e) => {
+                const d = JSON.parse(e.data);
+                if(d.type === 'play_clip') {
+                    document.getElementById('avatar').src = d.meta.avatar;
+                    document.getElementById('name').textContent = d.meta.name;
+                    document.getElementById('game').textContent = d.meta.game;
+                    document.getElementById('date').textContent = d.meta.date;
+                    document.getElementById('title').textContent = d.meta.title;
+                    
+                    p.style.width = '0%';
+                    v.isEnding = false;
+                    v.src = d.url;
+                    
+                    wrapper.classList.add('visible');
+                    v.play().catch(err => console.error(err));
+                }
+            };
+
+            source.onerror = () => {
+                clearTimeout(watchdogTimer);
+                setTimeout(connect, 5000);
+            };
+        }
+        
+        connect();
     </script>
 </body>
 </html>
@@ -515,6 +544,9 @@ app.get('/brb', (req, res) => {
         const a = document.getElementById('author');
         const p = document.getElementById('progress');
 
+        let source;
+        let watchdogTimer;
+
         const triggerNextClip = () => {
             if (!v.isEnding) {
                 v.isEnding = true;
@@ -531,29 +563,46 @@ app.get('/brb', (req, res) => {
         
         v.addEventListener('ended', triggerNextClip);
 
-        const source = new EventSource('/events');
-        source.onmessage = (e) => {
-            const d = JSON.parse(e.data);
-            
-            if(d.type === 'change_scene' || d.type === 'init'){
-                if(d.scene === 'brb') {
-                    c.style.opacity = 1;
-                    if (v.src) v.play().catch(e=>console.log(e));
-                } else { 
-                    c.style.opacity = 0; 
-                    v.pause(); 
+        // ⚡ AJOUT DE LA CONNEXION ROBUSTE (AUTO-RECONNECT)
+        function connect() {
+            if (source) source.close();
+            source = new EventSource('/events');
+
+            source.addEventListener('ping', (e) => {
+                clearTimeout(watchdogTimer);
+                watchdogTimer = setTimeout(() => { connect(); }, 35000);
+            });
+
+            source.onmessage = (e) => {
+                const d = JSON.parse(e.data);
+                
+                if(d.type === 'change_scene' || d.type === 'init'){
+                    if(d.scene === 'brb') {
+                        c.style.opacity = 1;
+                        if (v.src) v.play().catch(e=>console.log(e));
+                    } else { 
+                        c.style.opacity = 0; 
+                        v.pause(); 
+                    }
                 }
-            }
-            
-            if(d.type === 'brb_clip'){
-                p.style.width = '0%';
-                v.isEnding = false;
-                v.src = d.url;
-                t.textContent = d.title;
-                a.textContent = d.creator || "Inconnu";
-                v.play().catch(err => console.error(err));
-            }
-        };
+                
+                if(d.type === 'brb_clip'){
+                    p.style.width = '0%';
+                    v.isEnding = false;
+                    v.src = d.url;
+                    t.textContent = d.title;
+                    a.textContent = d.creator || "Inconnu";
+                    v.play().catch(err => console.error(err));
+                }
+            };
+
+            source.onerror = () => {
+                clearTimeout(watchdogTimer);
+                setTimeout(connect, 5000);
+            };
+        }
+        
+        connect();
     </script>
 </body>
 </html>

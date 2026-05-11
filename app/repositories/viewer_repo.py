@@ -21,6 +21,12 @@ def _inject_level(viewer_dict):
 async def init_tables() -> None:
     """S'assure que les tables d'historique existent au démarrage."""
     async with get_db_connection() as db:
+        
+        # --- 🚀 LES 3 LIGNES MAGIQUES ANTI "DATABASE IS LOCKED" ---
+        await db.execute("PRAGMA journal_mode=WAL;")
+        await db.execute("PRAGMA synchronous=NORMAL;")
+        await db.execute("PRAGMA busy_timeout=20000;") # Force SQLite à patienter 20s au lieu de planter
+
         # Table principale (Totaux)
         await db.execute('''
             CREATE TABLE IF NOT EXISTS viewers (
@@ -63,11 +69,22 @@ async def init_tables() -> None:
 async def ensure_viewer(twitch_id: str, username: str) -> None:
     """Enregistre le viewer s'il n'existe pas encore (pour débloquer l'EXP)."""
     async with get_db_connection() as db:
+        
+        # 1. On tente d'insérer le nouveau viewer. 
+        # S'il y a le moindre conflit (ID ou pseudo), "OR IGNORE" annule silencieusement l'erreur.
         await db.execute("""
-            INSERT INTO viewers (twitch_id, username, points, messages, watchtime) 
+            INSERT OR IGNORE INTO viewers (twitch_id, username, points, messages, watchtime)
             VALUES (?, ?, 0, 0, 0)
-            ON CONFLICT(twitch_id) DO UPDATE SET username = excluded.username
         """, (twitch_id, username))
+        
+        # 2. On s'assure que le pseudo est bien à jour par rapport à l'ID Twitch
+        # (Pratique si un viewer a changé de pseudo sur Twitch !)
+        await db.execute("""
+            UPDATE viewers 
+            SET username = ?, last_seen = CURRENT_TIMESTAMP 
+            WHERE twitch_id = ?
+        """, (username, twitch_id))
+        
         await db.commit()
 
 async def get_viewer(twitch_id: str) -> Optional[ViewerResponse]:

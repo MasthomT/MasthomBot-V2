@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <title>Générique de Fin - OBS</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono:wght@800&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        /* CSS 100% INLINE POUR GARANTIR LE RENDU OBS */
         :root {
-            --bg: transparent; /* Transparent pour OBS */
+            --bg: transparent; 
         }
         
         body, html {
@@ -20,7 +20,7 @@
         
         #credits-container {
             position: absolute;
-            top: 100vh; /* Départ hors écran en bas */
+            top: 100vh; 
             left: 0;
             width: 100vw;
             display: flex;
@@ -44,7 +44,7 @@
             font-size: 3.5rem;
             font-weight: 800;
             margin-top: 6rem;
-            margin-bottom: 50vh; /* Laisse l'écran se vider proprement à la fin */
+            margin-bottom: 50vh; 
             color: #94a3b8;
             text-shadow: 0 5px 20px rgba(0,0,0,0.5);
         }
@@ -98,9 +98,10 @@
             font-weight: 800;
             color: #cbd5e1;
             font-family: 'JetBrains Mono', monospace;
+            display: flex;
+            align-items: center;
         }
 
-        /* Style spécifique pour la masse des Viewers (Lurkers) */
         .section.viewers .names-grid { gap: 1rem; }
         .section.viewers .name-item {
             padding: 8px 16px;
@@ -116,9 +117,7 @@
     </style>
 </head>
 <body>
-    <div id="credits-container">
-        <!-- Le contenu est généré par JS -->
-    </div>
+    <div id="credits-container"></div>
 
     <script>
         const MODULES = {
@@ -133,9 +132,17 @@
             'viewers':     { label: '👀 Viewers', color: '#94a3b8' }
         };
 
+        // Fonction pour formater les minutes en "2h15" ou "45 min"
+        function formatWatchtime(minutes) {
+            if (!minutes || minutes <= 0) return '';
+            let h = Math.floor(minutes / 60);
+            let m = minutes % 60;
+            let timeStr = h > 0 ? `${h}h${m < 10 ? '0'+m : m}` : `${m} min`;
+            return `<span class="user-label" style="font-size:0.75rem; color:#38bdf8; background:rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.2);"><i class="fas fa-clock" style="margin-right: 6px;"></i>${timeStr}</span>`;
+        }
+
         async function loadCredits() {
             try {
-                // On récupère les données fraîches depuis FastAPI
                 const res = await fetch('/api/credits/data');
                 const data = await res.json();
                 
@@ -143,11 +150,9 @@
                 const config = data.config;
                 
                 let html = `<h1 class="main-title">${config.main_title || 'MERCI À TOUS !'}</h1>`;
-                
-                // Ce Set sert UNIQUEMENT à éviter de répéter les gens dans la grande catégorie "Viewers (Lurkers)" à la fin
                 let allImportantUsers = new Set();
 
-                // 1. AFFICHAGE DES CATÉGORIES IMPORTANTES (Avec doublons autorisés !)
+                // 1. CATÉGORIES IMPORTANTES
                 for (let key of config.order) {
                     if (key === 'viewers') continue; 
                     if (!stats[key] || stats[key].length === 0) continue;
@@ -157,19 +162,19 @@
                     html += `<div class="names-grid">`;
                     
                     stats[key].forEach(user => {
-                        // On le note pour ne pas l'afficher dans les Lurkers tout en bas
                         allImportantUsers.add(user.name.toLowerCase());
                         
                         let labelHtml = user.label ? `<span class="user-label">${user.label}</span>` : '';
-                        html += `<div class="name-item"><span class="user-name">${user.name}</span>${labelHtml}</div>`;
+                        let watchtimeHtml = formatWatchtime(user.watchtime); // Ajout du badge temps
+                        
+                        html += `<div class="name-item"><span class="user-name">${user.name}</span>${labelHtml}${watchtimeHtml}</div>`;
                     });
                     
                     html += `</div></div>`;
                 }
                 
-                // 2. AFFICHAGE DE LA CATÉGORIE "VIEWERS" (Ceux qui n'ont fait que regarder)
+                // 2. VIEWERS (Lurkers)
                 if (stats['viewers'] && stats['viewers'].length > 0) {
-                    // On filtre tous ceux qui sont DÉJÀ passés au-dessus (pour ne pas rabaisser un modo au rang de lurker)
                     let lurkers = stats['viewers'].filter(v => !allImportantUsers.has(v.name.toLowerCase()));
                     
                     if (lurkers.length > 0) {
@@ -178,7 +183,9 @@
                         html += `<div class="names-grid">`;
                         lurkers.forEach(user => {
                             let labelHtml = user.label ? `<span class="user-label" style="font-size:0.75rem; color:#64748b; background:transparent;">${user.label}</span>` : '';
-                            html += `<div class="name-item"><span class="user-name">${user.name}</span>${labelHtml}</div>`;
+                            let watchtimeHtml = formatWatchtime(user.watchtime); // Ajout du badge temps pour les lurkers aussi !
+                            
+                            html += `<div class="name-item"><span class="user-name">${user.name}</span>${labelHtml}${watchtimeHtml}</div>`;
                         });
                         html += `</div></div>`;
                     }
@@ -189,8 +196,6 @@
                 const container = document.getElementById('credits-container');
                 container.innerHTML = html;
                 
-                // 3. ANIMATION DE DÉFILEMENT 
-                // On calcule la hauteur dynamique pour s'arrêter juste au bon moment
                 const totalHeight = container.scrollHeight;
                 const duration = config.duration || 60;
                 
@@ -208,7 +213,6 @@
             }
         }
 
-        // On patiente 2 secondes que OBS soit bien réveillé avant de démarrer la vidéo
         setTimeout(loadCredits, 2000);
     </script>
 </body>
