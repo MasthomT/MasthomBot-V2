@@ -23,6 +23,7 @@ from app.services.live_monitor import check_twitch_lives_routine
 from app.services.eventsub_service import eventsub_routine
 from app.services.unfollow_monitor import unfollow_monitor_routine
 from app.services.stats_service import update_time_loop, update_twitch_stats_loop
+from app.services.trophy_engine import start_trophy_engine
 
 # --- IMPORT DES REPERTOIRES ---
 from app.repositories import viewer_repo
@@ -47,6 +48,9 @@ async def lifespan(app: FastAPI):
     global node_process
     logger.info("🚀 [STARTUP] Démarrage de Masthbot V2...")
 
+    # 🔌 LE CÂBLE MAGIQUE ENTRE LE WEB ET TWITCH :
+    app.state.bot = twitch_bot
+
     # 1. Initialisation Database
     await viewer_repo.init_tables()
     logger.info("✅ [DATABASE] Tables SQLite initialisées.")
@@ -59,6 +63,7 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(update_time_loop())
     asyncio.create_task(update_twitch_stats_loop())
     asyncio.create_task(db_writer_worker(DB_PATH))
+    asyncio.create_task(start_trophy_engine())
 
     # 3. Lancement de l'overlay Node.js
     server_js_path = os.path.join(BASE_DIR, "server.js")

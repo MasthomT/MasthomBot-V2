@@ -12,6 +12,9 @@ class CreditsService:
     def __init__(self):
         self.session_watchtime = {}
         self.session_messages = {}
+        self.session_data = {"viewers": []}
+        self.session_data = {"viewers": []}
+
         # Les catégories spécifiques (Actions)
         self.categories = {
             "subscribers": {}, "gifters": {}, "bits": {}, "raiders": {},

@@ -25,7 +25,7 @@ async def init_tables() -> None:
             # --- 🚀 LES 3 LIGNES MAGIQUES ANTI "DATABASE IS LOCKED" ---
             await db.execute("PRAGMA journal_mode=WAL;")
             await db.execute("PRAGMA synchronous=NORMAL;")
-            await db.execute("PRAGMA busy_timeout=20000;") # Force SQLite à patienter 20s au lieu de planter
+            await db.execute("PRAGMA busy_timeout=20000;")
 
             # Table principale (Totaux)
             await db.execute('''
@@ -37,6 +37,29 @@ async def init_tables() -> None:
                     watchtime INTEGER DEFAULT 0,
                     points INTEGER DEFAULT 0,
                     last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+            # --- 🛠️ AUTO-RÉPARATION : AJOUT DES COLONNES VIP MANQUANTES ---
+            colonnes_manquantes = [
+                ("is_vip", "BOOLEAN DEFAULT 0"),
+                ("vip_expiry_date", "TIMESTAMP"),
+                ("roast_level", "INTEGER DEFAULT 0")
+            ]
+            for col_name, col_type in colonnes_manquantes:
+                try:
+                    await db.execute(f"ALTER TABLE viewers ADD COLUMN {col_name} {col_type}")
+                except Exception:
+                    pass # Si ça plante, c'est que la colonne existe déjà, on ignore silencieusement !
+
+            # --- 🛠️ AUTO-RÉPARATION : CRÉATION DE LA TABLE ANNONCES ---
+            await db.execute('''
+                CREATE TABLE IF NOT EXISTS announcements (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT,
+                    message TEXT NOT NULL,
+                    interval INTEGER DEFAULT 15,
+                    is_active BOOLEAN DEFAULT 1
                 )
             ''')
 
@@ -72,12 +95,12 @@ async def ensure_viewer(twitch_id: str, username: str) -> None:
     """Enregistre le viewer s'il n'existe pas encore (pour débloquer l'EXP)."""
     try:
         async with get_db_connection() as db:
-            # Code robuste combinant les deux versions (Insertion ou Mise à jour intelligente)
+            # FIX : On gère le conflit sur le 'username' au lieu du 'twitch_id'
             await db.execute("""
-                INSERT INTO viewers (twitch_id, username, points, messages, watchtime) 
+                INSERT INTO viewers (twitch_id, username, points, messages, watchtime)
                 VALUES (?, ?, 0, 0, 0)
-                ON CONFLICT(twitch_id) DO UPDATE SET 
-                    username = excluded.username,
+                ON CONFLICT(username) DO UPDATE SET
+                    twitch_id = excluded.twitch_id,
                     last_seen = CURRENT_TIMESTAMP
             """, (twitch_id, username))
             await db.commit()

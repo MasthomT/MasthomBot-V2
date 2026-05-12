@@ -1,5 +1,2 @@
-<<<<<<< HEAD
 mark0_p0l0187
-=======
-AlexDeCatarina
->>>>>>> 429a12a9b292f5405ce2f4e4d56ddd0d1ad54d4e
+

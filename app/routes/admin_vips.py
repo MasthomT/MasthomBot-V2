@@ -130,35 +130,77 @@ async def sync_vips_from_twitch():
 
 # On garde juste l'attribution de VIP manuelle avec Date si jamais tu as besoin de faire des VIP Temporaires.
 @router.post("/vips/add")
-async def add_vip(username: str = Form(...), duration_days: int = Form(...), exact_date: str = Form(None)):
+async def add_vip(request: Request, username: str = Form(...), duration_days: int = Form(...), exact_date: str = Form(None)):
+    logger.warning(f"🚨 TENTATIVE D'AJOUT VIP WEB POUR : {username}")
     conn = get_db()
     try:
         clean_username = username.lower().strip().replace("@", "")
         expiry = None
         viewer = conn.execute("SELECT twitch_id FROM viewers WHERE LOWER(username) = ?", (clean_username,)).fetchone()
         if not viewer:
+            logger.warning("❌ Utilisateur introuvable dans la base.")
             return RedirectResponse(url="/admin/vips?error=not_found", status_code=303)
         twitch_id = viewer["twitch_id"]
-        
+
         if duration_days == -1:
             if not exact_date: return RedirectResponse(url="/admin/vips?error=missing_date", status_code=303)
             expiry = exact_date.replace("T", " ")
             if len(expiry) == 16: expiry += ":00"
         elif duration_days > 0:
             expiry = (datetime.now() + timedelta(days=duration_days)).isoformat()
-        
+
         conn.execute("UPDATE viewers SET is_vip = 1, vip_expiry = ? WHERE twitch_id = ?", (expiry, twitch_id))
         conn.commit()
+        logger.warning("✅ Base de données mise à jour.")
+
+        # --- NOUVEAU : Appel à l'API Twitch via le moteur réseau du bot ---
+        if hasattr(request.app.state, 'bot'):
+            bot = request.app.state.bot
+            try:
+                headers = {"Client-ID": bot._http.client_id, "Authorization": f"Bearer {bot.master_token}"}
+                url = f"https://api.twitch.tv/helix/channels/vips?broadcaster_id={bot.broadcaster_id}&user_id={twitch_id}"
+                
+                session = await bot.get_web_session()
+                async with session.post(url, headers=headers) as resp:
+                    if resp.status in (200, 204):
+                        logger.warning("✅ Badge Twitch accordé avec succès !")
+                    else:
+                        logger.error(f"⚠️ Twitch a répondu avec le code {resp.status}")
+            except Exception as e:
+                logger.error(f"❌ Erreur réseau API Twitch (Add VIP) : {e}")
+        else:
+            logger.error("❌ ERREUR FATALE : app.state.bot manquant !")
+
         return RedirectResponse(url="/admin/vips?success=added", status_code=303)
     finally:
         conn.close()
 
 @router.post("/vips/revoke/{twitch_id}")
-async def revoke_vip(twitch_id: str):
+async def revoke_vip(request: Request, twitch_id: str):
+    logger.warning(f"🚨 TENTATIVE DE RETRAIT VIP WEB POUR L'ID : {twitch_id}")
     conn = get_db()
     try:
         conn.execute("UPDATE viewers SET is_vip = 0, vip_expiry = NULL WHERE twitch_id = ?", (twitch_id,))
         conn.commit()
+        logger.warning("✅ Base de données mise à jour (Retrait).")
+
+        # --- NOUVEAU : Appel à l'API Twitch via le moteur réseau du bot ---
+        if hasattr(request.app.state, 'bot'):
+            bot = request.app.state.bot
+            try:
+                headers = {"Client-ID": bot._http.client_id, "Authorization": f"Bearer {bot.master_token}"}
+                url = f"https://api.twitch.tv/helix/channels/vips?broadcaster_id={bot.broadcaster_id}&user_id={twitch_id}"
+                
+                session = await bot.get_web_session()
+                async with session.delete(url, headers=headers) as resp:
+                    if resp.status in (200, 204):
+                        logger.warning("✅ Badge Twitch retiré avec succès !")
+                    else:
+                        logger.error(f"⚠️ Twitch a répondu avec le code {resp.status}")
+            except Exception as e:
+                logger.error(f"❌ Erreur réseau API Twitch (Revoke VIP) : {e}")
+
         return RedirectResponse(url="/admin/vips?success=revoked", status_code=303)
     finally:
         conn.close()
+

@@ -999,9 +999,9 @@ class MasthbotTwitch(commands.Bot):
         except Exception as e:
             logger.error(f"❌ [DB FATAL] Erreur critique routine Watchtime : {e}")
 
-    @routines.routine(hours=1)
+    @routines.routine(minutes=1)
     async def vip_expiration_timer(self):
-        """Vérifie et supprime les grades VIP expirés de façon sécurisée."""
+        """Vérifie et supprime les grades VIP expirés de façon sécurisée (DB + Twitch)."""
         try:
             if not getattr(self, 'broadcaster_id', None):
                 users = await self.fetch_users(names=[self.channel_name])
@@ -1012,52 +1012,58 @@ class MasthbotTwitch(commands.Bot):
 
             now = datetime.now()
             expired_vips = []
-            
+
             async with get_db_connection() as conn:
                 cursor = await conn.execute("""
-                    SELECT twitch_id, username, vip_expiry FROM viewers 
+                    SELECT twitch_id, username, vip_expiry FROM viewers
                     WHERE is_vip = 1 AND vip_expiry IS NOT NULL
                 """)
                 vips_to_check = await cursor.fetchall()
-            
+
                 for v in vips_to_check:
+                    twitch_id = v['twitch_id'] if hasattr(v, 'keys') else v[0]
+                    username = v['username'] if hasattr(v, 'keys') else v[1]
+                    vip_expiry = v['vip_expiry'] if hasattr(v, 'keys') else v[2]
+
                     try:
-                        expiry_str = v['vip_expiry'].replace("T", " ")
+                        expiry_str = str(vip_expiry).replace("T", " ")
                         if len(expiry_str) == 16:
                             expiry_str += ":00"
-                        
                         expiry_dt = datetime.strptime(expiry_str[:19], '%Y-%m-%d %H:%M:%S')
-                        
+
                         if expiry_dt <= now:
-                            expired_vips.append(v)
+                            expired_vips.append({"twitch_id": twitch_id, "username": username})
                     except Exception as e:
-                        logger.error(f"❌ Erreur lecture date pour {v['username']} : {e}")
+                        logger.error(f"❌ Erreur lecture date pour {username} : {e}")
 
                 if expired_vips:
+                    # --- PRÉPARATION DU MOTEUR RÉSEAU POUR TWITCH ---
+                    headers = {"Client-ID": self._http.client_id, "Authorization": f"Bearer {self.master_token}"}
+                    session = await self.get_web_session()
+
                     for v in expired_vips:
+                        # 1. On l'enlève de la base de données
                         await conn.execute(
-                            "UPDATE viewers SET is_vip = 0, vip_expiry = NULL WHERE twitch_id = ?", 
+                            "UPDATE viewers SET is_vip = 0, vip_expiry = NULL WHERE twitch_id = ?",
                             (str(v['twitch_id']),)
                         )
+                        
+                        # 2. 🚀 ON L'ENLÈVE EN DIRECT SUR TWITCH !
+                        try:
+                            url = f"https://api.twitch.tv/helix/channels/vips?broadcaster_id={self.broadcaster_id}&user_id={v['twitch_id']}"
+                            async with session.delete(url, headers=headers) as resp:
+                                if resp.status in (200, 204):
+                                    logger.info(f"✅ VIP Temporaire expiré et retiré sur Twitch pour {v['username']}")
+                                else:
+                                    logger.error(f"⚠️ Impossible de retirer le VIP de {v['username']} sur Twitch (Erreur {resp.status})")
+                        except Exception as e:
+                            logger.error(f"❌ Erreur réseau API Twitch pour expiration {v['username']} : {e}")
+
                     await conn.commit()
-                    logger.info(f"💾 [DB] Grades de {len(expired_vips)} viewers supprimés pour expiration.")
-
-            # 🔥 NOUVEAU : On allume le moteur réseau UNE SEULE FOIS pour tous les VIP expirés
-            session = await self.get_web_session()
-            
-            for v in expired_vips:
-                try:
-                    headers = {"Client-ID": self._http.client_id, "Authorization": f"Bearer {self.master_token}"}
-                    url = f"https://api.twitch.tv/helix/channels/vips?broadcaster_id={self.broadcaster_id}&user_id={v['twitch_id']}"
-                    
-                    async with session.delete(url, headers=headers) as resp:
-                        if resp.status in [200, 204]:
-                            logger.info(f"✅ [API] Badge de {v['username']} retiré sur Twitch.")
-                except Exception as api_err:
-                    logger.error(f"❌ Erreur réseau Twitch (VIP) : {api_err}")
-
+                    logger.info(f"💾 [DB & TWITCH] Grades de {len(expired_vips)} viewers expirés et retirés avec succès.")
+                        
         except Exception as e:
-            logger.error(f"❌ [DB FATAL] Erreur critique routine VIP : {e}")
+            logger.error(f"💥 CRASH DANS LA ROUTINE VIP : {e}", exc_info=True)
 
     # =====================================================================
     # 🤖 ASPIRATEUR AUTOMATIQUE DES MODOS ET VIPs DEPUIS TWITCH
@@ -1325,8 +1331,13 @@ class MasthbotTwitch(commands.Bot):
 
         for name, routine in routines_to_check.items():
             try:
-                if routine._task is None or routine._task.done():
-                    logger.warning(f"⚠️ [WATCHDOG] La routine '{name}' s'est arrêtée ! Relance en cours...")
+                if routine._task is None:
+                    # Si la routine n'a jamais démarré, on l'allume proprement
+                    logger.info(f"▶️ [WATCHDOG] Démarrage initial de la routine '{name}'...")
+                    routine.start()
+                elif routine._task.done():
+                    # Si elle avait démarré mais qu'elle s'est arrêtée, c'est un vrai crash
+                    logger.warning(f"⚠️ [WATCHDOG] La routine '{name}' a crashé ! Relance de force...")
                     routine.restart()
             except Exception as e:
                 logger.error(f"❌ [WATCHDOG] Erreur inattendue lors de la vérification de '{name}' : {e}")
