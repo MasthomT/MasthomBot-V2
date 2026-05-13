@@ -1,4 +1,4 @@
-require('dotenv').config({ path: '/home/masthom/BOT_V2/.env' });
+require('dotenv').config({ path: '/home/thomas/masthom/BOT_V2/.env' });
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
@@ -14,7 +14,7 @@ let HELIX_TOKEN = "";
 function loadToken() {
     try {
         // Lecture directe du fichier physique pour contourner le cache de Node
-        const fileContent = fs.readFileSync('/home/masthom/BOT_V2/.env');
+        const fileContent = fs.readFileSync('/home/thomas/masthom/BOT_V2/.env');
         const envConfig = dotenv.parse(fileContent);
         
         const rawEnv = envConfig.TWITCH_OAUTH_TOKEN || "";
@@ -64,7 +64,7 @@ const obs = new OBSWebSocket();
 
 app.use(cors());
 app.use(express.json());
-
+app.use('/static/uploads', express.static('/home/thomas/masthom/BOT_V2/app/static/uploads'));
 // =================================================================
 // 3. CONNEXION OBS
 // =================================================================
@@ -251,25 +251,34 @@ async function processQueue() {
                 const gameName = await getGameName(finalClip.game_id);
                 const dateStr = new Date(finalClip.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
-                broadcast({ 
-                    type: 'play_clip', 
-                    url: mp4Url,
-                    meta: {
-                        name: targetUser ? targetUser.display_name : finalClip.broadcaster_name,
-                        avatar: targetUser ? targetUser.profile_image_url : '',
-                        title: finalClip.title,
-                        game: gameName,
-                        date: dateStr
-                    }
-                });
+                // 🧚‍♂️ 1. ON LANCE LE SON INSTANTANÉMENT
+                broadcast({ type: 'play_sound', file: '/static/uploads/hey_listen.mp3' });
 
+                // ⏱️ 2. ON ATTEND 1.5 SECONDES (le temps que Navi finisse de parler)
+                setTimeout(() => {
+                    // 🎬 3. ON AFFICHE LE CLIP SUR OBS
+                    broadcast({ 
+                        type: 'play_clip', 
+                        url: mp4Url,
+                        meta: {
+                            name: targetUser ? targetUser.display_name : finalClip.broadcaster_name,
+                            avatar: targetUser ? targetUser.profile_image_url : '',
+                            title: finalClip.title,
+                            game: gameName,
+                            date: dateStr
+                        }
+                    });
+                }, 1500); // <-- C'est ici qu'on crée le décalage parfait !
+
+                // 4. On ajuste le temps d'attente total en rajoutant nos 1.5 secondes
                 const waitTime = finalClip.duration || 30;
                 if (currentQueueItemTimer) clearTimeout(currentQueueItemTimer);
                 currentQueueItemTimer = setTimeout(() => {
                     isProcessing = false;
                     processQueue();
-                }, (waitTime * 1000) + 15000); 
+                }, (waitTime * 1000) + 15000 + 1500); 
                 return;
+
             } else {
                 console.error(`❌ Impossible de récupérer la vidéo MP4 pour ce clip.`);
             }
@@ -478,6 +487,12 @@ app.get('/shoutout', (req, res) => {
 
             source.onmessage = (e) => {
                 const d = JSON.parse(e.data);
+                if(d.type === 'play_sound') {
+                    const audio = new Audio(d.file);
+                    audio.volume = 0.5; // Tu pourras modifier le volume ici (0.8 = 80%)
+                    audio.play().catch(err => console.error("Erreur Audio:", err));
+                }
+
                 if(d.type === 'play_clip') {
                     document.getElementById('avatar').src = d.meta.avatar;
                     document.getElementById('name').textContent = d.meta.name;

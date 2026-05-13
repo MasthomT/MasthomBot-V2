@@ -7,7 +7,7 @@ import os
 from app.services.notification_service import notification_service
 
 logger = logging.getLogger("masthbot.monitor")
-DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
+DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
 
 def _upgrade_database_schema():
     """S'assure que les colonnes nécessaires existent dans la base de données."""

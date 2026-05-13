@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 # Charge les variables d'environnement depuis le .env à la racine
 # On utilise le chemin absolu pour garantir la lecture sur le Raspberry Pi
-env_path = "/home/masthom/BOT_V2/.env"
+env_path = "/home/thomas/masthom/BOT_V2/.env"
 load_dotenv(dotenv_path=env_path)
 
 # =================================================================
@@ -23,11 +23,11 @@ def get_clean_env(key, default=None):
 # =================================================================
 # 2. CHEMINS SYSTÈME (FIX CRITIQUE)
 # =================================================================
-# Racine du projet (/home/masthom/BOT_V2)
-BASE_DIR = "/home/masthom/BOT_V2"
+# Racine du projet (/home/thomas/masthom/BOT_V2)
+BASE_DIR = "/home/thomas/masthom/BOT_V2"
 
 # Dossiers pour les JSON
-DATA_DIR = "/home/masthom/BASE_JSON"
+DATA_DIR = "/home/thomas/masthom/BASE_JSON"
 if not os.path.exists(DATA_DIR):
     os.makedirs(DATA_DIR, exist_ok=True)
 
@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     """
     # --- CHEMINS ET LOGS ---
     BASE_DIR: str = BASE_DIR
-    DB_PATH: str = "/home/masthom/BOT_V2/bot_database.db"
+    DB_PATH: str = "/home/thomas/masthom/BOT_V2/bot_database.db"
     DATA_DIR: str = DATA_DIR
     LOG_FILE_PATH: str = os.path.join(BASE_DIR, "app_bot.log")
     TWITCH_CHAT_LOG_FILE: str = os.path.join(BASE_DIR, "twitch_chat.log")

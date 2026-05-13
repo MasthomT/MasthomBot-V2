@@ -11,7 +11,7 @@ from app.services.twitch_service import twitch_bot
 from app.core.config import settings
 
 logger = logging.getLogger("masthbot.trophies")
-DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
+DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
 
 async def auto_trophy_routine():
     """Scanne les viewers pour décerner les trophées selon TOUTES les stats exhaustives du panel."""

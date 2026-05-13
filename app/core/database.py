@@ -8,7 +8,7 @@ logger = logging.getLogger("masthbot.database")
 
 from typing import Optional
 # LE CHEMIN ABSOLU ET UNIQUE POUR TOUT LE BOT
-DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
+DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
 
 write_queue: Optional[asyncio.Queue] = None
 

@@ -6,7 +6,7 @@ from datetime import datetime
 import dotenv
 
 logger = logging.getLogger("masthbot.unfollows")
-DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
+DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
 
 def init_cache_table():
     """Crée une table invisible pour stocker la liste des followers entre chaque scan."""

@@ -1,6 +1,6 @@
 import sqlite3
 
-db_path = "/home/masthom/BOT_V2/bot_database.db"
+db_path = "/home/thomas/masthom/BOT_V2/bot_database.db"
 
 def fix():
     conn = sqlite3.connect(db_path)

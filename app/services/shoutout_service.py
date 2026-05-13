@@ -2,7 +2,7 @@ import requests
 import sqlite3
 import os
 
-DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
+DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
 NODE_URL = "http://192.168.1.109:3005" # Ton IP locale pour le Node
 
 class ShoutoutService:

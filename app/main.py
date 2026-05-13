@@ -1,4 +1,9 @@
 import asyncio
+try:
+    asyncio.get_running_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
+
 import subprocess
 import contextlib
 import os
@@ -15,7 +20,7 @@ from app.core.database import db_writer_worker, DB_PATH
 
 # --- IMPORT DES ROUTES ---
 from app.routes import admin, viewers, api, announcements, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes
-from app.routes.credits import router as credits_router 
+from app.routes.credits import router as credits_router
 
 # --- IMPORT DES SERVICES ---
 from app.services.twitch_service import twitch_bot
@@ -40,8 +45,6 @@ logging.getLogger("websockets.server").setLevel(logging.WARNING)
 node_process = None
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-felix_est_la = False
-FELICAM_REWARD_ID = "822e3f13-5fc4-43b5-913e-a39169650297"
 # --- GESTION DU CYCLE DE VIE (LIFESPAN) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -83,19 +86,20 @@ async def lifespan(app: FastAPI):
             if hasattr(twitch_bot, '_connection') and twitch_bot._connection:
                 await twitch_bot.close()
 
+# --- INITIALISATION APP ---
 app = FastAPI(title="MasthomBot V2", version="2.0.0", lifespan=lifespan)
 
 # =====================================================================
-# 🌐 CONFIGURATION CORS ULTRA-COMPLÈTE
+# 🌐 CONFIGURATION CORS (AUTORISE VERCEL ET NGROK)
 # =====================================================================
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://fel-x.vercel.app",
-        "https://prime-nearby-tick.ngrok-free.app", # Ton tunnel Ngrok officiel
+        "https://prime-nearby-tick.ngrok-free.app",
         "http://localhost:3000"
     ],
-    allow_credentials=True, # Autorise les échanges sécurisés (cookies/headers)
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"]
@@ -126,9 +130,7 @@ app.include_router(labels_routes.router)
 
 @app.get("/api/felix/toggle")
 async def toggle_felix():
-    state_file = "/home/masthom/BOT_V2/felix_state.txt"
-
-    # 1. Lecture de l'état
+    state_file = "/home/thomas/masthom/BOT_V2/felix_state.txt"
     actuel = False
     if os.path.exists(state_file):
         try:
@@ -137,17 +139,15 @@ async def toggle_felix():
         except Exception:
             actuel = False
 
-    # 2. Inversion et Sauvegarde de l'état (Ce qui met à jour OBS et le Deck !)
     nouvel_etat = not actuel
     with open(state_file, "w") as f:
         f.write("1" if nouvel_etat else "0")
 
-    # 3. ON NE TOUCHE PAS A TWITCH (Supprimé !)
-    print(f"🐱 Présence de Félix modifiée en interne : {'PRÉSENT' if nouvel_etat else 'ABSENT'}")
-
-    # On renvoie le succès au téléphone pour qu'il affiche la couleur Vert/Rouge
     return {"status": "success", "is_enabled": nouvel_etat}
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    config = uvicorn.Config(app, host="0.0.0.0", port=8000, loop="asyncio")
+    server = uvicorn.Server(config)
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(server.serve())

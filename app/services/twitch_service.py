@@ -20,7 +20,7 @@ from app.routes.overlays import trigger_overlay_event
 from app.core.database import init_db, get_db_connection
 
 logger = logging.getLogger("masthbot.twitch")
-DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
+DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
 
 class MasthbotTwitch(commands.Bot):
     def __init__(self):
@@ -560,16 +560,26 @@ class MasthbotTwitch(commands.Bot):
             else:
                 query = content
 
-        # 🔥 NOUVEAU : On récupère notre moteur réseau
         session = await self.get_web_session()
-        
+
         try:
+            # 1. We trigger the replay overlay
             payload = {"slug": slug, "query": query}
-            # Envoi instantané via la session globale
             async with session.post("http://127.0.0.1:3005/api/replay", json=payload) as _:
                 pass
+            
+            # 2. 🧚‍♂️ NEW: We trigger the "Hey Listen" sound!
+            # We send an event to the overlay to play the audio file
+            sound_payload = {
+                "type": "play_sound", 
+                "file": "/static/uploads/hey_listen.mp3"
+            }
+            # Adjust the URL below if your overlay has a specific endpoint for generic sounds/alerts
+            async with session.post("http://127.0.0.1:3005/api/alert", json=sound_payload) as _:
+                pass
+
         except Exception as e:
-            print(f"❌ [REPLAY ERROR] : {e}")
+             logger.error(f"❌ [REPLAY ERROR] : {e}")
 
     @commands.command(name='renotif')
     async def cmd_renotif(self, ctx):

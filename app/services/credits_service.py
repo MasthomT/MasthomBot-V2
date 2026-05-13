@@ -6,7 +6,7 @@ import sqlite3
 from datetime import date
 
 logger = logging.getLogger("masthbot.credits")
-SESSION_FILE = "/home/masthom/BOT_V2/credits_session.json"
+SESSION_FILE = "/home/thomas/masthom/BOT_V2/credits_session.json"
 
 class CreditsService:
     def __init__(self):

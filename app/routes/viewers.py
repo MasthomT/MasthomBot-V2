@@ -10,7 +10,7 @@ from app.models.viewer import ViewerResponse
 logger = logging.getLogger("masthbot.viewers")
 router = APIRouter(tags=["viewers"])
 templates = Jinja2Templates(directory="app/templates")
-DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
+DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
 
 # --- MÉTHODES UTILITAIRES ---
 def get_db():

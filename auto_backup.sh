@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Chemins
-REPO_DIR="/home/masthom/BOT_V2"
+REPO_DIR="/home/thomas/masthom/BOT_V2"
 DB_NAME="bot_database.db"
 BACKUP_NAME="database_backup.sql"
 

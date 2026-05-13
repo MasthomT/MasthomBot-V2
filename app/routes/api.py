@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 logger = logging.getLogger("masthbot.api")
 router = APIRouter(prefix="/api/v1", tags=["api"])
-DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
+DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
 
 # ==========================================================
 # 🛑 LISTE D'EXCLUSION GLOBALE

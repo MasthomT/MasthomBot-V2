@@ -11,7 +11,7 @@ from app.services.notification_service import notification_service
 logger = logging.getLogger("masthbot.polls")
 router = APIRouter(tags=["polls_faq"])
 templates = Jinja2Templates(directory="app/templates")
-DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
+DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)

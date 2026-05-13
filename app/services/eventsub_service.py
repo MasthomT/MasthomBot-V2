@@ -15,7 +15,7 @@ from app.services import twitch_poll_state
 
 # Configuration du logger pour le service
 logger = logging.getLogger("masthbot.eventsub")
-DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
+DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
 
 # 🛡️ BOUCLIER ANTI-DOUBLONS (Garde en mémoire les 200 derniers ID d'événements Twitch)
 processed_message_ids = collections.deque(maxlen=200)
@@ -154,7 +154,7 @@ async def subscribe_to_event(session, client_id, token, ws_session_id, sub_type,
 
 async def eventsub_routine():
     """Gère la connexion continue et traite les messages Twitch en direct."""
-    env = dotenv.dotenv_values("/home/masthom/BOT_V2/.env")
+    env = dotenv.dotenv_values("/home/thomas/masthom/BOT_V2/.env")
     client_id = env.get("TWITCH_CLIENT_ID", "").strip()
     token = env.get("TWITCH_OAUTH_TOKEN", "").replace("oauth:", "").strip()
     channel_name = env.get("TWITCH_CHANNEL", "").replace("#", "").strip()

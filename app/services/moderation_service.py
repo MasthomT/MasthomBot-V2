@@ -8,7 +8,7 @@ from datetime import datetime
 from collections import defaultdict
 
 logger = logging.getLogger("masthbot.moderation")
-DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
+DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
 
 class ModerationService:
     def __init__(self):

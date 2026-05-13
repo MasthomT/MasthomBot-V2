@@ -5,7 +5,7 @@ logger = logging.getLogger(__name__)
 
 # 🛠️ SOLUTION RADICALE : On écrit le chemin en dur pour éviter les erreurs
 # C'est l'endroit exact où ton bot va travailler.
-LABELS_DIR = "/home/masthom/BOT_V2/labels"
+LABELS_DIR = "/home/thomas/masthom/BOT_V2/labels"
 
 def init_labels_dir():
     """Vérifie si le dossier 'labels' existe, sinon le crée."""

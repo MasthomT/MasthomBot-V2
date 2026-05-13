@@ -22,8 +22,8 @@ logger = logging.getLogger("masthbot.deck")
 router = APIRouter(tags=["deck"])
 templates = Jinja2Templates(directory="app/templates")
 
-DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
-UPLOAD_DIR = "/home/masthom/BOT_V2/app/static/uploads"
+DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
+UPLOAD_DIR = "/home/thomas/masthom/BOT_V2/app/static/uploads"
 
 class DeckAction(BaseModel):
     action: str
@@ -140,7 +140,7 @@ async def deck_status():
 
     # 🐱 STATUT PRÉSENCE FÉLIX (Fichier texte)
     felix_present = False
-    state_file = "/home/masthom/BOT_V2/felix_state.txt"
+    state_file = "/home/thomas/masthom/BOT_V2/felix_state.txt"
     if os.path.exists(state_file):
         try:
             with open(state_file, "r") as f:
@@ -160,7 +160,7 @@ async def deck_action(data: DeckAction):
 
     # --- 1. ACTION PRÉSENCE FÉLIX (Pour l'Overlay Patte) ---
     if data.action == "toggle_felix":
-        state_file = "/home/masthom/BOT_V2/felix_state.txt"
+        state_file = "/home/thomas/masthom/BOT_V2/felix_state.txt"
         actuel = False
         if os.path.exists(state_file):
             try:

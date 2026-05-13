@@ -18,7 +18,7 @@ from app.services.credits_service import credits_service
 from app.services.obs_service import obs_service
 
 logger = logging.getLogger("masthbot.twitch")
-DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
+DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
 
 class MasthbotTwitch(commands.Bot):
     def __init__(self):

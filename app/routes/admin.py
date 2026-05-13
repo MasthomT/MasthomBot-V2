@@ -30,7 +30,7 @@ VRAIS_TONS = {
 }
 
 # --- CONFIGURATION DES CHEMINS ---
-DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
+DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(os.path.dirname(CURRENT_DIR), "templates")
 

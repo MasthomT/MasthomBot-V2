@@ -17,7 +17,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 templates = Jinja2Templates(directory="app/templates")
 
 # --- CHEMIN DE LA BASE DE DONNÉES ---
-DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
+DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
 
 # =================================================================
 # 🛑 LISTE D'EXCLUSION GLOBALE (Bots, Streamer, Vestale)

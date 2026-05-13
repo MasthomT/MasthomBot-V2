@@ -13,7 +13,7 @@ router = APIRouter(tags=["announcements"])
 templates = Jinja2Templates(directory="app/templates")
 
 # CHEMIN OFFICIEL DE LA BASE DE DONNÉES (CORRIGÉ)
-DB_PATH = "/home/masthom/BOT_V2/bot_database.db"
+DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
 
 # Schéma de données attendu depuis le Javascript de l'interface
 class Announcement(BaseModel):
