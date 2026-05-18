@@ -18,6 +18,7 @@ from app.services.credits_service import credits_service
 from app.services.obs_service import obs_service
 from app.routes.overlays import trigger_overlay_event
 from app.core.database import init_db, get_db_connection
+from app.routes.clips import start_clips_poll
 
 logger = logging.getLogger("masthbot.twitch")
 DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
@@ -845,6 +846,23 @@ class MasthbotTwitch(commands.Bot):
             await ctx.send(f"⏱️ Chronomètre lancé à l'écran : {label.upper()}")
         except Exception as e:
             logger.error(f"Erreur Envoi Chrono OBS : {e}")
+
+    @commands.command(name='voteclips')
+    async def voteclips_cmd(self, ctx: commands.Context):
+        # Sécurité : On vérifie que c'est bien toi (le streamer) ou un modo
+        if ctx.author.is_mod or ctx.author.is_broadcaster:
+            
+            # On appelle la fonction FastAPI qui gère l'API Twitch
+            result = await start_clips_poll()
+            
+            # On lit la réponse pour voir si Twitch a accepté
+            if "error" in result:
+                await ctx.send(f"❌ Erreur : {result['error']}")
+            else:
+                await ctx.send("📊 Le sondage est lancé ! Votez pour votre clip préféré en haut du t'chat !")
+        else:
+            # Optionnel : petit message si un viewer essaie de forcer la commande
+            await ctx.send("Désolé, seuls les modérateurs peuvent lancer le vote des clips !")
 
     @commands.command(name='addvip')
     async def cmd_addvip(self, ctx, target: str = None, duration_days: int = 0):

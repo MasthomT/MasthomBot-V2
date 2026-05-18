@@ -8,6 +8,7 @@ from datetime import datetime
 from app.repositories import viewer_repo 
 # Import du bot Twitch et de la configuration pour envoyer des messages
 from app.services.twitch_service import twitch_bot
+from app.routes.overlays import trigger_overlay_event
 from app.core.config import settings
 
 logger = logging.getLogger("masthbot.trophies")
@@ -110,18 +111,16 @@ async def auto_trophy_routine():
                 
                 # 1. ENVOI DE L'ANIMATION OBS
                 try:
-                    timeout = aiohttp.ClientTimeout(total=3)
-                    async with aiohttp.ClientSession(timeout=timeout) as session:
-                        payload = {
-                            "type": "trophy_unlock",
-                            "details": {
-                                "username": w['username'],
-                                "trophy_name": r['label'],
-                                "icon": r['icon'],
-                                "tier": r.get('tier', 'Standard')
-                            }
+                    payload = {
+                        "type": "trophy_unlock",
+                        "details": {
+                            "username": w['username'],
+                            "trophy_name": r['label'],
+                            "icon": r['icon'],
+                            "tier": r.get('tier', 'Standard')
                         }
-                        await session.post("http://127.0.0.1:3005/api/trigger", json=payload)
+                    }
+                    await trigger_overlay_event(payload)
                 except Exception as e:
                     logger.error(f"❌ Erreur Overlay Trophée : {e}")
                 

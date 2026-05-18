@@ -19,9 +19,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import db_writer_worker, DB_PATH
 
 # --- IMPORT DES ROUTES ---
-from app.routes import admin, viewers, api, announcements, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes
+from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes
 from app.routes.credits import router as credits_router
-
 # --- IMPORT DES SERVICES ---
 from app.services.twitch_service import twitch_bot
 from app.services.live_monitor import check_twitch_lives_routine
@@ -127,6 +126,7 @@ app.include_router(rewards.router)
 app.include_router(admin_vips.router)
 app.include_router(api_deck.router)
 app.include_router(labels_routes.router)
+app.include_router(clips.router)
 
 @app.get("/api/felix/toggle")
 async def toggle_felix():
@@ -147,7 +147,24 @@ async def toggle_felix():
 
 if __name__ == "__main__":
     import uvicorn
-    config = uvicorn.Config(app, host="0.0.0.0", port=8000, loop="asyncio")
+    import logging
+
+    # 1. On laisse le niveau global sur INFO pour voir tes emojis
+    logging.getLogger().setLevel(logging.INFO)
+    
+    # 2. MAIS on force uniquement Uvicorn (le serveur) à se taire
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
+
+    config = uvicorn.Config(
+        app, 
+        host="0.0.0.0", 
+        port=8000, 
+        loop="asyncio",
+        access_log=False,   # C'est lui qui tue les "GET /api/..."
+        log_level="warning" # C'est lui qui tue les infos de serveur
+    )
+    
     server = uvicorn.Server(config)
     loop = asyncio.get_event_loop()
     loop.run_until_complete(server.serve())

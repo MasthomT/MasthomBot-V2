@@ -127,3 +127,12 @@ async def get_twitch_poll_overlay(request: Request):
         request=request, 
         name="overlays/twitch_poll_overlay.html" # Vérifie bien ce nom !
     )
+
+@router.get("/overlay/clips", response_class=HTMLResponse)
+async def overlay_clips_quad(request: Request):
+    # Modifie le chemin si tu l'as mis dans un sous-dossier !
+    return templates.TemplateResponse(
+        request=request,
+        name="clips_quad_overlay.html", 
+        context={"request": request}
+    )

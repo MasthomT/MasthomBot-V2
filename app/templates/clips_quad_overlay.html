@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Overlay Clips Dynamique</title>
+    <style>
+        body { margin: 0; padding: 0; width: 1920px; height: 1080px; overflow: hidden; background: transparent; font-family: 'Inter', sans-serif; }
+        #clips-container { position: relative; width: 100%; height: 100%; display: none; }
+        
+        /* Style de base des boîtes de clip */
+        .clip-box {
+            position: absolute; background: #0f172a; border-radius: 16px; overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 4px solid #334155;
+            transition: all 0.8s cubic-bezier(0.25, 1, 0.5, 1); z-index: 1;
+        }
+        
+        video { width: 100%; height: 100%; object-fit: cover; }
+
+        /* ÉTAT ZOOMÉ (S'applique à n'importe quel clip) */
+        .clip-box.active {
+            top: 40px !important; left: 100px !important; width: 1720px !important; height: 900px !important;
+            z-index: 10; border-color: #6366f1; box-shadow: 0 20px 60px rgba(0,0,0,0.8), 0 0 40px rgba(99, 102, 241, 0.4);
+        }
+
+        .clip-number {
+            position: absolute; top: 15px; left: 15px; background: #6366f1; color: white;
+            font-size: 24px; font-weight: bold; width: 45px; height: 45px; border-radius: 50%;
+            display: flex; justify-content: center; align-items: center; z-index: 5;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3); border: 2px solid white; transition: all 0.5s;
+        }
+        .clip-box.active .clip-number { font-size: 32px; width: 60px; height: 60px; background: #2dd4bf; }
+
+        .clip-metadata {
+            position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(15, 23, 42, 0.80);
+            backdrop-filter: blur(5px); padding: 15px 20px 20px 20px; box-sizing: border-box;
+            color: white; border-top: 1px solid rgba(255,255,255,0.1); z-index: 5; transition: all 0.5s;
+        }
+        .clip-title { font-size: 18px; font-weight: bold; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .clip-creator { font-size: 14px; color: #cbd5e1; }
+        
+        .clip-box.active .clip-title { font-size: 26px; }
+        .clip-box.active .clip-creator { font-size: 18px; color: #2dd4bf; }
+
+        .progress-container { position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background: rgba(255, 255, 255, 0.2); z-index: 10; transition: height 0.5s; }
+        .progress-fill { height: 100%; width: 0%; background: #94a3b8; transition: width 0.1s linear, background 0.5s; }
+        .clip-box.active .progress-container { height: 10px; }
+        .clip-box.active .progress-fill { background: #2dd4bf; box-shadow: 0 0 10px rgba(45, 212, 191, 0.8); }
+    </style>
+</head>
+<body>
+
+    <div id="init-screen" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.95); z-index: 9999; display: flex; justify-content: center; align-items: center; cursor: pointer;">
+        <div style="background: #ef4444; color: white; padding: 30px 50px; border-radius: 15px; text-align: center; font-size: 30px; font-weight: bold; border: 4px solid #b91c1c;">
+            🔴 CLIQUEZ ICI (Clic droit -> Interagir)
+        </div>
+    </div>
+
+    <div id="clips-container"></div>
+
+    <script>
+        document.getElementById('init-screen').addEventListener('click', function() {
+            this.style.display = 'none';
+        });
+
+        const source = new EventSource('/overlay_events');
+        let totalClips = 0;
+        
+        source.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.type === 'start_quad_clips') {
+                buildAndStartShowcase(data.urls, data.meta);
+            }
+        };
+
+        // 🧠 FONCTION MAGIQUE QUI CALCULE LES POSITIONS SEMAINE APRÈS SEMAINE
+        function getLayoutPositions(count) {
+            const positions = [];
+            if (count === 1) {
+                positions.push({ top: 140, left: 360, width: 1200, height: 800 });
+            } else if (count === 2) {
+                positions.push({ top: 300, left: 40, width: 900, height: 480 });
+                positions.push({ top: 300, left: 980, width: 900, height: 480 });
+            } else if (count === 3) {
+                positions.push({ top: 40, left: 40, width: 900, height: 480 });
+                positions.push({ top: 40, left: 980, width: 900, height: 480 });
+                positions.push({ top: 560, left: 510, width: 900, height: 480 }); // Centré en bas
+            } else {
+                // Configuration classique à 4 clips
+                positions.push({ top: 40, left: 40, width: 900, height: 480 });
+                positions.push({ top: 40, left: 980, width: 900, height: 480 });
+                positions.push({ top: 560, left: 40, width: 900, height: 480 });
+                positions.push({ top: 560, left: 980, width: 900, height: 480 });
+            }
+            return positions;
+        }
+
+        function buildAndStartShowcase(urls, meta) {
+            const container = document.getElementById('clips-container');
+            container.innerHTML = ''; // On vide l'ancien test
+            totalClips = urls.length;
+
+            const positions = getLayoutPositions(totalClips);
+
+            // On génère le HTML à la volée pour le nombre exact de clips choisis
+            for (let i = 0; i < totalClips; i++) {
+                const pos = positions[i];
+                const html = `
+                    <div class="clip-box" id="clip-${i}" style="top: ${pos.top}px; left: ${pos.left}px; width: ${pos.width}px; height: ${pos.height}px;">
+                        <div class="clip-number">${i + 1}</div>
+                        <video id="video-${i}" preload="auto"></video>
+                        <div class="clip-metadata">
+                            <div class="clip-title">${meta[i].title}</div>
+                            <div class="clip-creator">Clip par : ${meta[i].creator}</div>
+                        </div>
+                        <div class="progress-container"><div class="progress-fill" id="progress-${i}"></div></div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', html);
+            }
+
+            container.style.display = 'block';
+
+            // Liaison des événements sur les nouveaux éléments créés
+            for (let i = 0; i < totalClips; i++) {
+                const box = document.getElementById(`clip-${i}`);
+                const video = document.getElementById(`video-${i}`);
+                const progressBar = document.getElementById(`progress-${i}`);
+
+                video.addEventListener('timeupdate', function() {
+                    if (this.duration) {
+                        const percent = (this.currentTime / this.duration) * 100;
+                        progressBar.style.width = percent + '%';
+                    }
+                });
+
+                video.onended = function() {
+                    if (box.classList.contains('active')) {
+                        box.classList.remove('active');
+                        this.muted = true;
+                        this.currentTime = 0;
+                        this.play().catch(e => console.log(e));
+                        
+                        setTimeout(() => playNextClip(i + 1), 1500);
+                    } else {
+                        this.currentTime = 0;
+                        this.play().catch(e => console.log(e));
+                    }
+                };
+
+                video.src = urls[i];
+                video.volume = 1.0;
+                video.currentTime = 0;
+                video.muted = true;
+                video.play().catch(e => console.log(e));
+            }
+
+            // Lancement de la séquence
+            playNextClip(0);
+        }
+
+        function playNextClip(index) {
+            if (index >= totalClips) return; // S'arrête selon le nombre de clips réels
+
+            const box = document.getElementById(`clip-${index}`);
+            const video = document.getElementById(`video-${index}`);
+
+            if (!box || !video) return;
+
+            video.currentTime = 0;
+            box.classList.add('active');
+            
+            setTimeout(() => { 
+                video.muted = false; 
+            }, 500);
+        }
+    </script>
+</body>
+</html>
