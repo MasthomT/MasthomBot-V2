@@ -10,7 +10,8 @@ class ShoutoutService:
     async def get_config(self):
         """Récupère la config depuis PostgreSQL."""
         async with get_db_connection() as conn:
-            row = await conn.fetchrow("SELECT * FROM settings LIMIT 1")
+            c = await conn.execute("SELECT * FROM settings LIMIT 1")
+            row = await c.fetchone()
             return dict(row) if row else {}
 
     async def trigger_replay(self, slug=None, query=None):

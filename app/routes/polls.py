@@ -4,7 +4,8 @@ from datetime import datetime
 from fastapi import APIRouter, Request, Form, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-
+from app.core.database import get_db_connection
+from app.services.notification_service import notification_service
 from app.core.database import get_db_connection
 from app.services.notification_service import notification_service
 
@@ -90,33 +91,25 @@ async def admin_polls_faq_page(request: Request):
 
 @router.post("/admin/polls_faq/create")
 async def create_poll(
-    question: str = Form(...), 
-    option1: str = Form(...), 
-    option2: str = Form(...), 
-    option3: str = Form(""), 
-    option4: str = Form("")
+    question: str = Form(...),
+    option1: str = Form(...),
+    option2: str = Form(...),
+    option3: str = Form(""),
+    option4: str = Form(""),
 ):
-    conn = get_db()
-    try:
-        conn.execute("UPDATE polls SET is_active = 0")
-        conn.execute("""
-            INSERT INTO polls (question, option1, option2, option3, option4, is_active) 
-            VALUES (?, ?, ?, ?, ?, 1)
-        """, (question, option1, option2, option3, option4))
-        conn.commit()
-        return RedirectResponse(url="/admin/polls_faq?created=1", status_code=303)
-    finally:
-        conn.close()
+    async with get_db_connection() as conn:
+        await conn.execute("UPDATE polls SET is_active = 0")
+        await conn.execute(
+            "INSERT INTO polls (question, option1, option2, option3, option4, is_active) VALUES ($1, $2, $3, $4, $5, 1)",
+            (question, option1, option2, option3 or None, option4 or None),
+        )
+    return RedirectResponse(url="/admin/polls_faq?created=1", status_code=303)
 
 @router.post("/admin/polls_faq/close")
 async def close_poll():
-    conn = get_db()
-    try:
-        conn.execute("UPDATE polls SET is_active = 0")
-        conn.commit()
-        return RedirectResponse(url="/admin/polls_faq?closed=1", status_code=303)
-    finally:
-        conn.close()
+    async with get_db_connection() as conn:
+        await conn.execute("UPDATE polls SET is_active = 0")
+    return RedirectResponse(url="/admin/polls_faq?closed=1", status_code=303)
 
 # ==========================================================
 # ❓ ACTIONS : QUESTIONS / FAQ
@@ -125,42 +118,37 @@ async def close_poll():
 @router.post("/admin/polls_faq/questions/answer")
 async def answer_question(
     background_tasks: BackgroundTasks,
-    id: int = Form(...), 
-    answer: str = Form(...), 
-    is_public: int = Form(0)
+    id: int = Form(...),
+    answer: str = Form(...),
+    is_public: int = Form(0),
 ):
-    """
-    Enregistre la réponse et publie sur Discord si coché.
-    """
-    conn = get_db()
-    try:
-        q_row = conn.execute("SELECT question_text FROM questions WHERE id = ?", (id,)).fetchone()
+    question_text = None
+    async with get_db_connection() as conn:
+        c = await conn.execute("SELECT question_text FROM questions WHERE id = $1", (id,))
+        q_row = await c.fetchone()
+        if q_row:
+            question_text = q_row["question_text"]
+            
+        await conn.execute(
+            """
+            UPDATE questions
+            SET answer_text = $1, is_public = $2, answered_at = NOW()
+            WHERE id = $3
+            """,
+            (answer, is_public, id),
+        )
         
-        conn.execute("""
-            UPDATE questions 
-            SET answer_text = ?, is_public = ?, answered_at = CURRENT_TIMESTAMP 
-            WHERE id = ?
-        """, (answer, is_public, id))
-        conn.commit()
-
-        # ✅ SI PUBLIC : Publication Discord en tâche de fond (Anonyme)
-        if is_public and q_row:
-            background_tasks.add_task(
-                notification_service.send_faq_public_answer,
-                q_row['question_text'], 
-                answer
-            )
-
-        return RedirectResponse(url="/admin/polls_faq?success=1", status_code=303)
-    finally:
-        conn.close()
+    # Notification Discord en tâche de fond (ne bloque pas la page Web)
+    if is_public and question_text:
+        background_tasks.add_task(
+            notification_service.send_faq_public_answer,
+            question_text,
+            answer,
+        )
+    return RedirectResponse(url="/admin/polls_faq?success=1", status_code=303)
 
 @router.post("/admin/polls_faq/questions/delete/{id}")
 async def delete_question(id: int):
-    conn = get_db()
-    try:
-        conn.execute("DELETE FROM questions WHERE id = ?", (id,))
-        conn.commit()
-        return RedirectResponse(url="/admin/polls_faq?deleted=1", status_code=303)
-    finally:
-        conn.close()
+    async with get_db_connection() as conn:
+        await conn.execute("DELETE FROM questions WHERE id = $1", (id,))
+    return RedirectResponse(url="/admin/polls_faq?deleted=1", status_code=303)

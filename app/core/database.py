@@ -1,14 +1,21 @@
+import os
+import dotenv
 import asyncpg
 import re
 import logging
 import asyncio
 import random
+from .postgres_wrapper import PostgresCursorWrapper
 from contextlib import asynccontextmanager
 from typing import Optional
 
 logger = logging.getLogger("masthbot.database")
 
-DATABASE_URL = "postgresql://thomas:Thomas.c1992@localhost:5432/masthbot_db"
+env_vars = dotenv.dotenv_values(".env")
+DATABASE_URL = env_vars.get("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL est introuvable dans le fichier .env !")
 
 write_queue: Optional[asyncio.Queue] = None
 

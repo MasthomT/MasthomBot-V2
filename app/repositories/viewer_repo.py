@@ -97,16 +97,18 @@ async def ensure_viewer(twitch_id: str, username: str) -> None:
     except Exception as e:
         logger.error(f"❌ [DB ERROR] Erreur ensure_viewer : {e}")
 
-async def get_viewer(twitch_id: str) -> Optional[ViewerResponse]:
+async def get_viewer(twitch_id: str):
+    """Récupère un viewer depuis PostgreSQL via son ID Twitch."""
     try:
         async with get_db_connection() as db:
-            row = await db.fetchrow("SELECT * FROM viewers WHERE twitch_id = $1", twitch_id)
+            c = await db.execute("SELECT * FROM viewers WHERE twitch_id = $1", (twitch_id,))
+            row = await c.fetchone()
             if row:
-                data = _inject_level(dict(row))
-                try:
-                    return ViewerResponse(**data)
-                except Exception as e:
-                    return data
+                data = dict(row)
+                # Si tu as une fonction _inject_level dans ce fichier, on l'applique :
+                if "_inject_level" in globals():
+                    data = _inject_level(data)
+                return data
             return None
     except Exception as e:
         logger.error(f"❌ [DB ERROR] Erreur get_viewer : {e}")

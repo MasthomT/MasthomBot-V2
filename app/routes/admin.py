@@ -117,7 +117,7 @@ async def execute_tool(
     query: str = Form(None)
 ):
     """Déclenche les actions de stream via les services ou l'overlay Node.js."""
-    OVERLAY_URL = "http://192.168.1.109:3005"
+    OVERLAY_URL = "http://192.168.1.32:3005"
 
     async with aiohttp.ClientSession() as session:
         if action == "shoutout" and target:
