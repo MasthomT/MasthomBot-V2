@@ -3,6 +3,7 @@ import logging
 from twitchio.ext import commands
 from app.repositories import viewer_repo
 from app.core.database import get_db_connection
+from app.core.config import settings
 
 logger = logging.getLogger("masthbot.plugins.viewers")
 
@@ -35,7 +36,7 @@ class ViewerToolsPlugin(commands.Cog):
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 payload = {"type": "show_poll"}
                 try:
-                    await session.post("http://127.0.0.1:3005/api/trigger", json=payload)
+                    await session.post(f"{settings.OVERLAY_NODE_URL}/api/trigger", json=payload)
                 except Exception:
                     pass
 

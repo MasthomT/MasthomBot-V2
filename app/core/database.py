@@ -5,7 +5,6 @@ import re
 import logging
 import asyncio
 import random
-from .postgres_wrapper import PostgresCursorWrapper
 from contextlib import asynccontextmanager
 from typing import Optional
 
@@ -171,7 +170,8 @@ async def init_db():
             "ALTER TABLE viewers ADD COLUMN IF NOT EXISTS is_mod INTEGER DEFAULT 0",
             "ALTER TABLE viewers ADD COLUMN IF NOT EXISTS is_artist INTEGER DEFAULT 0",
             "ALTER TABLE announcements ADD COLUMN IF NOT EXISTS last_triggered TIMESTAMP",
-            "ALTER TABLE viewer_exp_log ADD COLUMN IF NOT EXISTS twitch_id TEXT"
+            "ALTER TABLE viewer_exp_log ADD COLUMN IF NOT EXISTS twitch_id TEXT",
+            "ALTER TABLE viewers ADD COLUMN IF NOT EXISTS vip_expiry TIMESTAMP",
         ]
         for query in migrations:
             try:

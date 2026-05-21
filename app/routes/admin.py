@@ -117,33 +117,33 @@ async def execute_tool(
     query: str = Form(None)
 ):
     """Déclenche les actions de stream via les services ou l'overlay Node.js."""
-    OVERLAY_URL = "http://192.168.1.32:3005"
+    overlay_url = settings.OVERLAY_NODE_URL
 
     async with aiohttp.ClientSession() as session:
         if action == "shoutout" and target:
             clean_target = target.replace('@', '').strip()
             try:
-                shoutout_service.trigger_shoutout(target=clean_target, slug=clip_link)
+                await shoutout_service.trigger_shoutout(target=clean_target, slug=clip_link)
             except Exception as e:
-                print(f"⚠️ Erreur Service SO : {e}")
+                logger.error(f"⚠️ Erreur Service SO : {e}")
         
         elif action == "replay":
             try:
-                shoutout_service.trigger_replay(slug=clip_link, query=query)
+                await shoutout_service.trigger_replay(slug=clip_link, query=query)
             except Exception as e:
-                print(f"⚠️ Erreur Service Replay : {e}")
+                logger.error(f"⚠️ Erreur Service Replay : {e}")
             
         elif action == "brb_on":
             try:
-                await session.post(f"{OVERLAY_URL}/api/overlay/scene", json={"scene": "brb"})
+                await session.post(f"{overlay_url}/api/overlay/scene", json={"scene": "brb"})
             except Exception as e:
-                print(f"❌ Erreur de connexion au serveur Node (3005) : {e}")
+                logger.error(f"❌ Erreur de connexion au serveur Node (3005) : {e}")
             
         elif action == "brb_off":
             try:
-                await session.post(f"{OVERLAY_URL}/api/overlay/scene", json={"scene": "main"})
+                await session.post(f"{overlay_url}/api/overlay/scene", json={"scene": "main"})
             except Exception as e:
-                print(f"❌ Erreur de connexion au serveur Node (3005) : {e}")
+                logger.error(f"❌ Erreur de connexion au serveur Node (3005) : {e}")
 
     return RedirectResponse(url="/admin/shoutout", status_code=303)
 

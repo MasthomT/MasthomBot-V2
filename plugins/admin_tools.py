@@ -4,6 +4,7 @@ import logging
 from twitchio.ext import commands
 from app.services.notification_service import notification_service
 from app.core.database import get_db_connection
+from app.core.config import settings
 
 logger = logging.getLogger("masthbot.plugins.admin")
 
@@ -61,7 +62,7 @@ class AdminToolsPlugin(commands.Cog):
         timeout_node = aiohttp.ClientTimeout(total=3)
         async with aiohttp.ClientSession(timeout=timeout_node) as session:
             try:
-                await session.post("http://127.0.0.1:3005/api/shoutout", json={"target": target_name, "slug": slug_for_node})
+                await session.post(f"{settings.OVERLAY_NODE_URL}/api/shoutout", json={"target": target_name, "slug": slug_for_node})
             except: pass
 
     @commands.command(name='replay')
@@ -85,7 +86,7 @@ class AdminToolsPlugin(commands.Cog):
         async with aiohttp.ClientSession(timeout=timeout) as session:
             try:
                 payload = {"slug": slug, "query": query}
-                await session.post("http://127.0.0.1:3005/api/replay", json=payload)
+                await session.post(f"{settings.OVERLAY_NODE_URL}/api/replay", json=payload)
             except Exception as e:
                 logger.error(f"❌ [REPLAY ERROR] : {e}")
 
@@ -202,7 +203,7 @@ class AdminToolsPlugin(commands.Cog):
             timeout = aiohttp.ClientTimeout(total=3)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 try:
-                    await session.post("http://127.0.0.1:3005/api/trigger", json=payload)
+                    await session.post(f"{settings.OVERLAY_NODE_URL}/api/trigger", json=payload)
                     await ctx.send("🛑 Timer effacé de l'écran !")
                 except Exception as e:
                     logger.error(f"Erreur Stop Timer OBS : {e}")
@@ -221,7 +222,7 @@ class AdminToolsPlugin(commands.Cog):
                 "details": { "action": "start", "mode": "timer", "duration": duration_seconds, "label": label.upper() }
             }
             try:
-                await session.post("http://127.0.0.1:3005/api/trigger", json=payload)
+                await session.post(f"{settings.OVERLAY_NODE_URL}/api/trigger", json=payload)
                 await ctx.send(f"⏱️ Timer de {minutes} minute(s) lancé à l'écran : {label.upper()}")
             except Exception as e:
                 logger.error(f"Erreur Envoi Timer OBS : {e}")
@@ -235,7 +236,7 @@ class AdminToolsPlugin(commands.Cog):
             timeout = aiohttp.ClientTimeout(total=3)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 try:
-                    await session.post("http://127.0.0.1:3005/api/trigger", json=payload)
+                    await session.post(f"{settings.OVERLAY_NODE_URL}/api/trigger", json=payload)
                     await ctx.send("🛑 Chrono effacé de l'écran !")
                 except Exception as e:
                     logger.error(f"Erreur Stop Chrono OBS : {e}")
@@ -248,7 +249,7 @@ class AdminToolsPlugin(commands.Cog):
                 "details": { "action": "start", "mode": "chrono", "duration": 0, "label": label.upper() }
             }
             try:
-                await session.post("http://127.0.0.1:3005/api/trigger", json=payload)
+                await session.post(f"{settings.OVERLAY_NODE_URL}/api/trigger", json=payload)
                 await ctx.send(f"⏱️ Chronomètre lancé à l'écran : {label.upper()}")
             except Exception as e:
                 logger.error(f"Erreur Envoi Chrono OBS : {e}")

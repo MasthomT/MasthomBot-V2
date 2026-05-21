@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     # --- SERVICES EXTERNES ---
     OPENAI_API_KEY: str = get_clean_env("OPENAI_API_KEY", "")
     
+    # --- OVERLAY NODE.JS (OBS local, port 3005) ---
+    OVERLAY_NODE_URL: str = get_clean_env("OVERLAY_NODE_URL", "http://192.168.1.32:3005").rstrip("/")
+
     # --- OBS WEB SOCKET ---
     OBS_HOST: str = get_clean_env("OBS_HOST", "127.0.0.1")
     OBS_PORT: int = int(get_clean_env("OBS_PORT", 4455))

@@ -2,9 +2,9 @@ import asyncio
 import aiohttp
 import logging
 from app.core.database import get_db_connection
+from app.core.config import settings
 
 logger = logging.getLogger("masthbot.shoutout")
-NODE_URL = "http://192.168.1.32:3005"
 
 class ShoutoutService:
     async def get_config(self):
@@ -20,7 +20,7 @@ class ShoutoutService:
         
         try:
             async with aiohttp.ClientSession(timeout=timeout_node) as session:
-                await session.post(f"{NODE_URL}/api/replay", json=payload)
+                await session.post(f"{settings.OVERLAY_NODE_URL}/api/replay", json=payload)
                 return True
         except asyncio.TimeoutError:
             logger.warning("⏳ [REPLAY] L'overlay Node.js a mis trop de temps à répondre, mais le replay est sûrement lancé !")
@@ -35,7 +35,7 @@ class ShoutoutService:
         
         try:
             async with aiohttp.ClientSession(timeout=timeout_node) as session:
-                await session.post(f"{NODE_URL}/api/shoutout", json=payload)
+                await session.post(f"{settings.OVERLAY_NODE_URL}/api/shoutout", json=payload)
                 return True
         except asyncio.TimeoutError:
             logger.warning("⏳ [SHOUTOUT] L'overlay Node.js a mis trop de temps à répondre, mais le SO est sûrement lancé !")

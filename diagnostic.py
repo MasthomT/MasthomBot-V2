@@ -7,6 +7,7 @@ import sys
 # Importation de ta connexion BDD
 try:
     from app.core.database import get_db_connection
+    from app.core.config import settings
 except ImportError:
     print("❌ Impossible d'importer get_db_connection. Es-tu à la racine du projet ?")
     sys.exit(1)
@@ -79,7 +80,7 @@ async def run_diagnostics():
     try:
         async with aiohttp.ClientSession() as session:
             # On tente une requête GET basique sur le serveur local
-            async with session.get("http://127.0.0.1:3005", timeout=2) as resp:
+            async with session.get(f"{settings.OVERLAY_NODE_URL}/", timeout=2) as resp:
                 print(f"  ✅ Overlay Node.js en ligne (Status: {resp.status})")
     except asyncio.TimeoutError:
         print("  ❌ Overlay Node.js : Timeout (Le serveur ne répond pas)")

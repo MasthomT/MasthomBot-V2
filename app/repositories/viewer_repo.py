@@ -117,7 +117,8 @@ async def get_viewer(twitch_id: str):
 async def get_viewer_by_name(username: str) -> Optional[ViewerResponse]:
     try:
         async with get_db_connection() as db:
-            row = await db.fetchrow("SELECT * FROM viewers WHERE LOWER(username) = LOWER($1)", username)
+            c = await db.execute("SELECT * FROM viewers WHERE LOWER(username) = LOWER($1)", (username,))
+            row = await c.fetchone()
             if row:
                 data = _inject_level(dict(row))
                 try:
@@ -131,7 +132,8 @@ async def get_viewer_by_name(username: str) -> Optional[ViewerResponse]:
 async def get_all_viewers():
     try:
         async with get_db_connection() as db:
-            rows = await db.fetch("SELECT * FROM viewers ORDER BY points DESC, watchtime DESC")
+            c = await db.execute("SELECT * FROM viewers ORDER BY points DESC, watchtime DESC")
+            rows = await c.fetchall()
             return [_inject_level(dict(row)) for row in rows]
     except Exception as e:
         return []

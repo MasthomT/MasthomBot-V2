@@ -6,8 +6,6 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from app.core.database import get_db_connection
 from app.services.notification_service import notification_service
-from app.core.database import get_db_connection
-from app.services.notification_service import notification_service
 
 logger = logging.getLogger("masthbot.polls")
 router = APIRouter(tags=["polls_faq"])

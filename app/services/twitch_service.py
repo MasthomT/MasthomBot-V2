@@ -282,7 +282,7 @@ class MasthbotTwitch(commands.Bot):
                         "details": { "urls": emote_urls }
                     }
                     try:
-                        await session.post("http://127.0.0.1:3005/api/trigger", json=payload)
+                        await session.post(f"{settings.OVERLAY_NODE_URL}/api/trigger", json=payload)
                     except Exception as e:
                         logger.error(f"Erreur Envoi Emotes OBS : {e}")
 
@@ -564,7 +564,7 @@ class MasthbotTwitch(commands.Bot):
             pass
 
         try:
-            async with session.post("http://127.0.0.1:3005/api/shoutout", json={"target": target_name_clean, "slug": slug_for_node}) as _:
+            async with session.post(f"{settings.OVERLAY_NODE_URL}/api/shoutout", json={"target": target_name_clean, "slug": slug_for_node}) as _:
                 pass
         except Exception as e:
             logger.error(f"Erreur Envoi SO Node : {e}")
@@ -586,14 +586,14 @@ class MasthbotTwitch(commands.Bot):
 
         try:
             payload = {"slug": slug, "query": query}
-            async with session.post("http://127.0.0.1:3005/api/replay", json=payload) as _:
+            async with session.post(f"{settings.OVERLAY_NODE_URL}/api/replay", json=payload) as _:
                 pass
             
             sound_payload = {
                 "type": "play_sound", 
                 "file": "/static/uploads/hey_listen.mp3"
             }
-            async with session.post("http://127.0.0.1:3005/api/alert", json=sound_payload) as _:
+            async with session.post(f"{settings.OVERLAY_NODE_URL}/api/alert", json=sound_payload) as _:
                 pass
 
         except Exception as e:
@@ -651,16 +651,26 @@ class MasthbotTwitch(commands.Bot):
             return await ctx.send("💤 Aucun copain n'est en ligne.")
 
         notified_count = 0
-        for s in streams:
-            partner_msg = f"**{s.user.name}** est en live sur **{{CATEGORIE}}**, foncez lui donner de la force !"
-            await notification_service.send_discord_live_notification(
-                channel_id=channel_id,
-                channel_name=s.user.name,
-                title=s.title,
-                game=s.game_name,
-                custom_message=partner_msg
-            )
-            notified_count += 1
+        tracked_by_login = {t["login"].lower(): t for t in tracked}
+        async with get_db_connection() as conn:
+            for s in streams:
+                login = (getattr(s.user, "login", None) or s.user.name or "").lower()
+                partner_msg = f"**{s.user.name}** est en live sur **{{CATEGORIE}}**, foncez lui donner de la force !"
+                msg_id = await notification_service.send_discord_live_notification(
+                    channel_id=channel_id,
+                    channel_name=s.user.name,
+                    title=s.title,
+                    game=s.game_name,
+                    custom_message=partner_msg,
+                )
+                if msg_id:
+                    notified_count += 1
+                    streamer = tracked_by_login.get(login)
+                    if streamer:
+                        await conn.execute(
+                            "UPDATE tracked_streamers SET last_live_id=$1, last_message_id=$2 WHERE id=$3",
+                            (str(s.id), str(msg_id), streamer["id"]),
+                        )
 
         await ctx.send(f"✅ {notified_count} alertes envoyées !")
 
@@ -804,7 +814,7 @@ class MasthbotTwitch(commands.Bot):
         if time_str.lower() in ["stop", "reset", "off", "clear"]:
             payload = { "type": "time_event", "details": { "action": "stop" } }
             try:
-                async with session.post("http://127.0.0.1:3005/api/trigger", json=payload) as _:
+                async with session.post(f"{settings.OVERLAY_NODE_URL}/api/trigger", json=payload) as _:
                     pass
                 await ctx.send("🛑 Timer effacé de l'écran !")
             except Exception as e:
@@ -822,7 +832,7 @@ class MasthbotTwitch(commands.Bot):
             "details": { "action": "start", "mode": "timer", "duration": duration_seconds, "label": label.upper() }
         }
         try:
-            async with session.post("http://127.0.0.1:3005/api/trigger", json=payload) as _:
+            async with session.post(f"{settings.OVERLAY_NODE_URL}/api/trigger", json=payload) as _:
                 pass
             await ctx.send(f"⏱️ Timer de {minutes} minute(s) lancé à l'écran : {label.upper()}")
         except Exception as e:
@@ -837,7 +847,7 @@ class MasthbotTwitch(commands.Bot):
         if label and label.lower() in ["stop", "reset", "off", "clear"]:
             payload = { "type": "time_event", "details": { "action": "stop" } }
             try:
-                async with session.post("http://127.0.0.1:3005/api/trigger", json=payload) as _:
+                async with session.post(f"{settings.OVERLAY_NODE_URL}/api/trigger", json=payload) as _:
                     pass
                 await ctx.send("🛑 Chrono effacé de l'écran !")
             except Exception as e:
@@ -849,7 +859,7 @@ class MasthbotTwitch(commands.Bot):
             "details": { "action": "start", "mode": "chrono", "duration": 0, "label": label.upper() }
         }
         try:
-            async with session.post("http://127.0.0.1:3005/api/trigger", json=payload) as _:
+            async with session.post(f"{settings.OVERLAY_NODE_URL}/api/trigger", json=payload) as _:
                 pass
             await ctx.send(f"⏱️ Chronomètre lancé à l'écran : {label.upper()}")
         except Exception as e:
@@ -1364,7 +1374,7 @@ class MasthbotTwitch(commands.Bot):
 
         try:
             session = await self.get_web_session()
-            async with session.get("http://127.0.0.1:3005/", timeout=2) as resp:
+            async with session.get(f"{settings.OVERLAY_NODE_URL}/", timeout=2) as resp:
                 pass
         except Exception:
             logger.error("🚨 [WATCHDOG FATAL] Impossible de contacter Node.js (Port 3005) ! L'overlay est probablement éteint ou planté.")
