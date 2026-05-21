@@ -1,9 +1,6 @@
 import logging
 import json
 import os
-import sqlite3
-
-from datetime import date
 
 logger = logging.getLogger("masthbot.credits")
 SESSION_FILE = "/home/thomas/masthom/BOT_V2/credits_session.json"
@@ -12,20 +9,18 @@ class CreditsService:
     def __init__(self):
         self.session_watchtime = {}
         self.session_messages = {}
-        self.session_data = {"viewers": []}
-        self.session_data = {"viewers": []}
-
-        # Les catégories spécifiques (Actions)
         self.categories = {
             "subscribers": {}, "gifters": {}, "bits": {}, "raiders": {},
             "followers": {}, "moderators": {}, "vips": {}, "chatters": {}
         }
+        
         self.config = {
             "main_title": "MERCI À TOUS !",
             "subtitle": "À BIENTÔT SUR LE LIVE",
             "duration": 60,
             "order": ["subscribers", "gifters", "bits", "raiders", "followers", "vips", "moderators", "chatters", "viewers"]
         }
+        
         self._load_session()
 
     def _load_session(self):
@@ -36,97 +31,61 @@ class CreditsService:
                     self.session_watchtime = data.get("session_watchtime", {})
                     self.session_messages = data.get("session_messages", {})
                     self.categories = data.get("categories", self.categories)
-            except: pass
+            except Exception as e:
+                # FINI DE CACHER LES ERREURS
+                logger.error(f"❌ [CREDITS FATAL] Impossible de lire le fichier JSON : {e}")
 
     def _save_session(self):
         try:
-            data = {"session_watchtime": self.session_watchtime, "session_messages": self.session_messages, "categories": self.categories, "config": self.config}
+            data = {
+                "session_watchtime": self.session_watchtime, 
+                "session_messages": self.session_messages, 
+                "categories": self.categories
+            }
             with open(SESSION_FILE, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=4)
-        except: pass
+        except Exception as e:
+            logger.error(f"❌ [CREDITS FATAL] Impossible de sauvegarder le fichier JSON : {e}")
 
     def add_watchtime(self, name, minutes=1):
-        """
-        Stocke le viewer et additionne son temps de visionnage (en mémoire JSON) pour le générique.
-        L'écriture dans SQLite est désormais gérée par batch_update_watchtime dans viewer_repo.py !
-        """
-        self._load_session()
-        
-        viewer_trouve = False
-        # On cherche si le viewer est déjà dans le générique
-        for v in self.session_data.get("viewers", []):
-            if v["name"].lower() == name.lower():
-                # On ajoute les minutes à son compteur pour l'affichage
-                v["watchtime"] = v.get("watchtime", 0) + minutes
-                viewer_trouve = True
-                break
-                
-        # S'il n'est pas encore dans le générique, on l'ajoute
-        if not viewer_trouve:
-            self.session_data.setdefault("viewers", []).append({
-                "name": name, 
-                "label": "Viewer",
-                "watchtime": minutes
-            })
-            
+        self._load_session() # On recharge pour être sûr de ne pas écraser les autres
+        name_lower = name.lower()
+        self.session_watchtime[name_lower] = self.session_watchtime.get(name_lower, 0) + minutes
         self._save_session()
 
     def log_event(self, category, name, label=""):
-        if category not in self.categories and category != "viewers": return
-        n = name.lower()
-        if category in ["chatters", "moderators", "vips"]:
-            self.session_messages[n] = self.session_messages.get(n, 0) + 1
-        
-        if category != "viewers":
-            self.categories[category][n] = {"name": name, "label": label}
-            
-        # ✅ LE FIX ABSOLU EST ICI : 
-        # Si quelqu'un déclenche un event (sub, vip, mod, chatter...)
-        # On l'injecte immédiatement dans le watchtime avec 0 min (s'il n'y est pas déjà).
-        # Il apparaîtra donc FORCÉMENT dans la catégorie Viewers à la fin !
-        if n not in self.session_watchtime:
-            self.session_watchtime[n] = 0
-
+        self._load_session()
+        name_lower = name.lower()
+        if category in self.categories:
+            self.categories[category][name_lower] = {"name": name, "label": label}
+        self.session_messages[name_lower] = self.session_messages.get(name_lower, 0) + 1
         self._save_session()
 
     def get_stats(self):
-        """Prépare les listes pour l'overlay OBS."""
+        self._load_session() # On lit la toute dernière version fraîche
         data = {}
-
-        # 1. On traite les catégories d'actions (Subs, Modos, etc.)
         for cat, users in self.categories.items():
             cat_list = []
             for n, info in users.items():
-                final_label = info["label"]
-                if cat in ["chatters", "moderators", "vips"]:
-                    msg_count = self.session_messages.get(n, 1)
-                    final_label = f"{final_label} • 💬 {msg_count} msg" if final_label else f"💬 {msg_count} msg"
-                cat_list.append({"name": info["name"], "label": final_label})
-            data[cat] = sorted(cat_list, key=lambda x: x["name"].lower())
-
-        # 2. ✅ LA CATÉGORIE VIEWERS (LISTE GLOBALE DE TOUS CEUX QUI ONT INTERAGI)
-        viewers_list = []
-        for n, minutes in self.session_watchtime.items():
-            # On cherche le vrai nom (avec majuscules) dans les autres tables
-            display_name = n.capitalize()
-            for cat in self.categories:
-                if n in self.categories[cat]:
-                    display_name = self.categories[cat][n]["name"]
-                    break
-            
-            wt_str = f"{minutes} min" if minutes < 60 else f"{minutes//60}h{minutes%60:02d}"
-            viewers_list.append({
-                "name": display_name,
-                "label": f"⏱️ {wt_str}"
-            })
+                msg_count = self.session_messages.get(n.lower(), 0)
+                cat_list.append({
+                    "name": info["name"], 
+                    "label": info["label"], 
+                    "messages": msg_count
+                })
+            data[cat] = cat_list
         
-        data["viewers"] = sorted(viewers_list, key=lambda x: x["name"].lower())
+        viewers_list = []
+        for n, wt in self.session_watchtime.items():
+            viewers_list.append({"name": n.capitalize(), "watchtime": wt})
+            
+        data["viewers"] = viewers_list
         return data
 
     def reset_session(self):
-        self.session_watchtime = {}
-        self.session_messages = {}
+        self.session_watchtime, self.session_messages = {}, {}
         for cat in self.categories: self.categories[cat] = {}
         self._save_session()
+        logger.info("♻️ [CREDITS] Session réinitialisée !")
 
 credits_service = CreditsService()

@@ -1,21 +1,17 @@
 import os
-import sqlite3
 import aiohttp
 from fastapi import APIRouter, Request, Response, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from dotenv import load_dotenv
 
+# --- IMPORT CORE POSTGRESQL ---
+from app.core.database import get_db_connection
+
 load_dotenv()
 
 router = APIRouter(tags=["public"])
 templates = Jinja2Templates(directory="app/templates")
-DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
-
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
 
 # ==========================================
 # 1. PORTAIL D'ACCUEIL & AUTHENTIFICATION
@@ -60,14 +56,13 @@ async def auth_callback(request: Request, code: str = None):
             
         user = user_data["data"][0]
 
-        conn = get_db()
-        row = conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (user["id"],)).fetchone()
-        if not row:
-            conn.execute("INSERT INTO viewers (twitch_id, username, points, messages, watchtime) VALUES (?, ?, 0, 0, 0)", (user["id"], user["display_name"]))
-        else:
-            conn.execute("UPDATE viewers SET username = ? WHERE twitch_id = ?", (user["display_name"], user["id"]))
-        conn.commit()
-        conn.close()
+        async with get_db_connection() as conn:
+            cursor = await conn.execute("SELECT * FROM viewers WHERE twitch_id = $1", (user["id"],))
+            row = await cursor.fetchone()
+            if not row:
+                await conn.execute("INSERT INTO viewers (twitch_id, username, points, messages, watchtime) VALUES ($1, $2, 0, 0, 0)", (user["id"], user["display_name"]))
+            else:
+                await conn.execute("UPDATE viewers SET username = $1 WHERE twitch_id = $2", (user["display_name"], user["id"]))
 
         response = RedirectResponse(url="/profile")
         response.set_cookie("viewer_id", user["id"], max_age=2592000, httponly=True)
@@ -91,46 +86,48 @@ async def profile_page(request: Request):
     viewer_id = request.cookies.get("viewer_id")
     if not viewer_id: return RedirectResponse(url="/")
     
-    conn = get_db()
-    row = conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (viewer_id,)).fetchone()
-    if not row:
-        conn.close()
-        return RedirectResponse(url="/logout")
-        
-    viewer = dict(row)
-    
-    # Calculs XP et Niveau
-    xp = viewer.get("points", 0)
-    level = max(1, int((xp / 100) ** (1 / 2.2))) if xp > 0 else 1
-    next_xp = int(100 * ((level + 1) ** 2.2))
-    curr_base = int(100 * (level ** 2.2)) if level > 1 else 0
-    progress = min(100, max(0, ((xp - curr_base) / (next_xp - curr_base)) * 100)) if next_xp > curr_base else 100
-        
-    wt = viewer.get("watchtime", 0)
-    watchtime_str = f"{wt // 3600}h {(wt % 3600) // 60}m"
-    rank = conn.execute("SELECT COUNT(*) FROM viewers WHERE points > ?", (xp,)).fetchone()[0] + 1
-    
-    # Historique personnalisé et formaté
-    raw_logs = conn.execute("SELECT * FROM viewer_exp_log WHERE twitch_id = ? ORDER BY timestamp DESC LIMIT 15", (viewer_id,)).fetchall()
-    history = []
-    for h in raw_logs:
-        log = dict(h)
-        evt = log.get("event_type", "").lower()
-        icon, color = "✨", "#ffffff"
-        if "présence" in evt or "watchtime" in evt: icon, color = "🎬", "#00ffcc"
-        elif "message" in evt or "chat" in evt: icon, color = "💬", "#60a5fa"
-        elif "sub" in evt or "abonnement" in evt: icon, color = "⭐", "#fbbf24"
-        elif "raid" in evt: icon, color = "⚔️", "#f87171"
-        elif "follow" in evt: icon, color = "❤️", "#f472b6"
-        elif "bits" in evt or "cheer" in evt: icon, color = "💎", "#c084fc"
-        
-        ts = log.get("timestamp", "")
-        d_str, t_str = ts.split(" ")[0] if " " in ts else ts, ts.split(" ")[1][:5] if " " in ts else ""
+    async with get_db_connection() as conn:
+        cursor = await conn.execute("SELECT * FROM viewers WHERE twitch_id = $1", (viewer_id,))
+        row = await cursor.fetchone()
+        if not row:
+            return RedirectResponse(url="/logout")
             
-        history.append({"label": log["event_type"], "amount": log["amount"], "date": d_str, "time": t_str, "icon": icon, "color": color})
+        viewer = dict(row)
         
-    conn.close()
-    
+        # Calculs XP et Niveau
+        xp = viewer.get("points", 0)
+        level = max(1, int((xp / 100) ** (1 / 2.2))) if xp > 0 else 1
+        next_xp = int(100 * ((level + 1) ** 2.2))
+        curr_base = int(100 * (level ** 2.2)) if level > 1 else 0
+        progress = min(100, max(0, ((xp - curr_base) / (next_xp - curr_base)) * 100)) if next_xp > curr_base else 100
+            
+        wt = viewer.get("watchtime", 0)
+        watchtime_str = f"{wt // 3600}h {(wt % 3600) // 60}m"
+        
+        cursor_rank = await conn.execute("SELECT COUNT(*) FROM viewers WHERE points > $1", (xp,))
+        rank_row = await cursor_rank.fetchone()
+        rank = (rank_row[0] if rank_row else 0) + 1
+        
+        # Historique personnalisé et formaté
+        cursor_logs = await conn.execute("SELECT * FROM viewer_exp_log WHERE twitch_id = $1 ORDER BY timestamp DESC LIMIT 15", (viewer_id,))
+        raw_logs = await cursor_logs.fetchall()
+        history = []
+        for h in raw_logs:
+            log = dict(h)
+            evt = log.get("event_type", "").lower()
+            icon, color = "✨", "#ffffff"
+            if "présence" in evt or "watchtime" in evt: icon, color = "🎬", "#00ffcc"
+            elif "message" in evt or "chat" in evt: icon, color = "💬", "#60a5fa"
+            elif "sub" in evt or "abonnement" in evt: icon, color = "⭐", "#fbbf24"
+            elif "raid" in evt: icon, color = "⚔️", "#f87171"
+            elif "follow" in evt: icon, color = "❤️", "#f472b6"
+            elif "bits" in evt or "cheer" in evt: icon, color = "💎", "#c084fc"
+            
+            ts = log.get("timestamp", "")
+            d_str, t_str = ts.split(" ")[0] if " " in ts else ts, ts.split(" ")[1][:5] if " " in ts else ""
+                
+            history.append({"label": log["event_type"], "amount": log["amount"], "date": d_str, "time": t_str, "icon": icon, "color": color})
+        
     return templates.TemplateResponse("public/profile.html", {
         "request": request, "viewer": viewer, "level": level, "next_xp": next_xp,
         "progress": progress, "watchtime_str": watchtime_str, "rank": rank,
@@ -142,10 +139,10 @@ async def felix_page(request: Request):
     viewer_id = request.cookies.get("viewer_id")
     if not viewer_id: return RedirectResponse(url="/")
         
-    conn = get_db()
-    row = conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (viewer_id,)).fetchone()
-    conn.close()
-    if not row: return RedirectResponse(url="/logout")
+    async with get_db_connection() as conn:
+        cursor = await conn.execute("SELECT * FROM viewers WHERE twitch_id = $1", (viewer_id,))
+        row = await cursor.fetchone()
+        if not row: return RedirectResponse(url="/logout")
         
     return templates.TemplateResponse("public/felix.html", {"request": request, "viewer": dict(row)})
 
@@ -155,17 +152,15 @@ async def felix_save(request: Request):
     if not viewer_id: return RedirectResponse(url="/")
         
     form = await request.form()
-    conn = get_db()
-    conn.execute("""
-        UPDATE viewers SET 
-            nickname = ?, nickname_for_bot = ?, birthday = ?, sleep_pattern = ?, 
-            vibe = ?, roast_level = ?, favorite_game = ?, favorite_food = ?, free_message = ?
-        WHERE twitch_id = ?
-    """, (
-        form.get("nickname"), form.get("felix_nickname"), form.get("birthday"), 
-        form.get("sleep_pattern"), form.get("vibe"), int(form.get("roast_level") or 5), 
-        form.get("favorite_game"), form.get("favorite_food"), form.get("free_message"), viewer_id
-    ))
-    conn.commit()
-    conn.close()
+    async with get_db_connection() as conn:
+        await conn.execute("""
+            UPDATE viewers SET 
+                nickname = $1, nickname_for_bot = $2, birthday = $3, sleep_pattern = $4, 
+                vibe = $5, roast_level = $6, favorite_game = $7, favorite_food = $8, free_message = $9
+            WHERE twitch_id = $10
+        """, (
+            form.get("nickname"), form.get("felix_nickname"), form.get("birthday"), 
+            form.get("sleep_pattern"), form.get("vibe"), int(form.get("roast_level") or 5), 
+            form.get("favorite_game"), form.get("favorite_food"), form.get("free_message"), viewer_id
+        ))
     return RedirectResponse(url="/felix?saved=1", status_code=303)

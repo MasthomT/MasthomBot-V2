@@ -1,47 +1,46 @@
-import requests
-import sqlite3
-import os
+import asyncio
+import aiohttp
+import logging
+from app.core.database import get_db_connection
 
-DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
-NODE_URL = "http://192.168.1.109:3005" # Ton IP locale pour le Node
+logger = logging.getLogger("masthbot.shoutout")
+NODE_URL = "http://192.168.1.32:3005"
 
 class ShoutoutService:
-    # --- LA FONCTION QU'IL MANQUAIT ---
-    def get_config(self):
-        """Récupère la config pour le Node.js depuis la base de données"""
-        try:
-            conn = sqlite3.connect(DB_PATH)
-            conn.row_factory = sqlite3.Row
-            row = conn.execute("SELECT * FROM settings LIMIT 1").fetchone()
-            conn.close()
+    async def get_config(self):
+        """Récupère la config depuis PostgreSQL."""
+        async with get_db_connection() as conn:
+            row = await conn.fetchrow("SELECT * FROM settings LIMIT 1")
             return dict(row) if row else {}
-        except Exception as e:
-            print(f"❌ [DB Error] Impossible de lire la config: {e}")
-            return {}
 
-    # --- LES FONCTIONS DE DECLENCHEMENT ---
-    def trigger_replay(self, slug=None, query=None):
-        """Envoie l'ordre de replay au serveur Node.js"""
+    async def trigger_replay(self, slug=None, query=None):
         payload = {"slug": slug, "query": query}
+        timeout_node = aiohttp.ClientTimeout(total=5) # ⏱️ On passe à 5 secondes
+        
         try:
-            requests.post(f"{NODE_URL}/api/replay", json=payload, timeout=2)
-            return True
+            async with aiohttp.ClientSession(timeout=timeout_node) as session:
+                await session.post(f"{NODE_URL}/api/replay", json=payload)
+                return True
+        except asyncio.TimeoutError:
+            logger.warning("⏳ [REPLAY] L'overlay Node.js a mis trop de temps à répondre, mais le replay est sûrement lancé !")
+            return True # On renvoie True pour que le Stream Deck valide quand même l'action
         except Exception as e:
-            print(f"❌ [Node Replay Error] : {e}")
+            logger.error(f"❌ [REPLAY] Erreur avec l'overlay : {e}")
             return False
 
-    def trigger_shoutout(self, target, slug=None, duration=30):
-        """Envoie l'ordre de Shoutout au serveur Node.js"""
-        payload = {
-            "target": target,
-            "slug": slug,
-            "duration": duration
-        }
+    async def trigger_shoutout(self, target, slug=None, duration=30):
+        payload = {"target": target, "slug": slug, "duration": duration}
+        timeout_node = aiohttp.ClientTimeout(total=5) # ⏱️ On passe à 5 secondes
+        
         try:
-            requests.post(f"{NODE_URL}/api/shoutout", json=payload, timeout=2)
-            return True
+            async with aiohttp.ClientSession(timeout=timeout_node) as session:
+                await session.post(f"{NODE_URL}/api/shoutout", json=payload)
+                return True
+        except asyncio.TimeoutError:
+            logger.warning("⏳ [SHOUTOUT] L'overlay Node.js a mis trop de temps à répondre, mais le SO est sûrement lancé !")
+            return True # On renvoie True pour que le Stream Deck valide quand même l'action
         except Exception as e:
-            print(f"❌ [Node SO Error] : {e}")
+            logger.error(f"❌ [SHOUTOUT] Erreur avec l'overlay : {e}")
             return False
 
 shoutout_service = ShoutoutService()

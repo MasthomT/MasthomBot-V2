@@ -16,7 +16,8 @@ from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 
 # --- IMPORT CORE ---
-from app.core.database import db_writer_worker, DB_PATH
+# On vire db_writer_worker car PostgreSQL gère ça beaucoup mieux tout seul !
+from app.core.database import init_db
 
 # --- IMPORT DES ROUTES ---
 from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes
@@ -54,8 +55,9 @@ async def lifespan(app: FastAPI):
     app.state.bot = twitch_bot
 
     # 1. Initialisation Database
+    await init_db()
     await viewer_repo.init_tables()
-    logger.info("✅ [DATABASE] Tables SQLite initialisées.")
+    logger.info("✅ [DATABASE] Tables PostgreSQL initialisées avec succès !")
 
     # 2. Lancement des services Twitch
     asyncio.create_task(twitch_bot.start())
@@ -64,7 +66,6 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(unfollow_monitor_routine())
     asyncio.create_task(update_time_loop())
     asyncio.create_task(update_twitch_stats_loop())
-    asyncio.create_task(db_writer_worker(DB_PATH))
     asyncio.create_task(start_trophy_engine())
 
     # 3. Lancement de l'overlay Node.js
@@ -149,10 +150,7 @@ if __name__ == "__main__":
     import uvicorn
     import logging
 
-    # 1. On laisse le niveau global sur INFO pour voir tes emojis
     logging.getLogger().setLevel(logging.INFO)
-    
-    # 2. MAIS on force uniquement Uvicorn (le serveur) à se taire
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
 
@@ -161,8 +159,8 @@ if __name__ == "__main__":
         host="0.0.0.0", 
         port=8000, 
         loop="asyncio",
-        access_log=False,   # C'est lui qui tue les "GET /api/..."
-        log_level="warning" # C'est lui qui tue les infos de serveur
+        access_log=False,
+        log_level="warning"
     )
     
     server = uvicorn.Server(config)

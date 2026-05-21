@@ -171,7 +171,7 @@
         } catch (e) { console.error("Erreur chargement:", e); }
     }
 
-    function renderModuleCard(key, config, items) {
+function renderModuleCard(key, config, items) {
         const div = document.createElement('div');
         div.className = `draggable-item bg-slate-900/50 rounded-2xl border border-slate-800 hover:border-indigo-500/30 transition-all cursor-grab active:cursor-grabbing border-l-4 ${config.borderColor}`;
         div.setAttribute('data-key', key);
@@ -182,13 +182,39 @@
         } else {
             items.forEach(item => {
                 const name = item.name || "Inconnu";
-                let label = item.label || "";
-                const cleanBadge = label.replace(/[🌟🚀💎🛡️🎁💬🕒]/g, '').trim();
+                
+                // LA RÈGLE STRICTE : On détermine la SEULE donnée qui s'affiche à droite
+                let rightBadgeHtml = '';
+
+                // 1. Catégories avec Label (Subs, Gifts, Bits, Raiders, Followers)
+                if (['subscribers', 'gifters', 'bits', 'raiders', 'followers'].includes(key)) {
+                    let label = item.label || "";
+                    const cleanBadge = label.replace(/[🌟🚀💎🛡️🎁💬🕒]/g, '').trim();
+                    if (cleanBadge) {
+                        rightBadgeHtml = `<span class="bg-slate-800 text-indigo-300 px-2 py-0.5 rounded text-[10px] font-bold border border-slate-700">${cleanBadge}</span>`;
+                    }
+                } 
+                // 2. Catégories à Messages (VIPs, Modérateurs, Chatters)
+                else if (['vips', 'moderators', 'chatters'].includes(key)) {
+                    let msgs = item.messages || 0;
+                    rightBadgeHtml = `<span class="bg-slate-800 text-emerald-300 px-2 py-0.5 rounded text-[10px] font-bold border border-emerald-900/50">${msgs} msg</span>`;
+                }
+                // 3. Catégorie Temps (Viewers / Lurkers)
+                else if (key === 'viewers') {
+                    let totalMins = item.watchtime || 0;
+                    if (totalMins > 60000) { totalMins = Math.floor(totalMins / 60000); } // Sécurité ms -> min
+                    
+                    const hours = Math.floor(totalMins / 60);
+                    const mins = totalMins % 60;
+                    const timeDisplay = totalMins > 0 ? `${hours > 0 ? hours + 'h' : ''}${mins}m` : '0m';
+                    
+                    rightBadgeHtml = `<span class="text-[10px] font-mono text-sky-400 bg-sky-950/50 px-2 py-0.5 rounded border border-sky-900/50">${timeDisplay}</span>`;
+                }
 
                 previewHtml += `
-                    <div class="flex justify-between items-center py-1.5 border-b border-slate-800/50 last:border-0">
-                        <span class="text-sm font-bold text-slate-300">${name}</span>
-                        ${cleanBadge ? `<span class="bg-slate-800 text-white px-2 py-0.5 rounded text-[10px] font-bold border border-slate-700">${cleanBadge}</span>` : ''}
+                    <div class="flex justify-between items-center py-2 px-3 border-b border-slate-800/50 hover:bg-slate-800/30 rounded-lg transition-colors">
+                        <span class="text-sm font-bold text-slate-200">${name}</span>
+                        <div>${rightBadgeHtml}</div>
                     </div>`;
             });
         }

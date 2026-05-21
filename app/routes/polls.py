@@ -1,4 +1,3 @@
-import sqlite3
 import logging
 import asyncio
 from datetime import datetime
@@ -6,17 +5,12 @@ from fastapi import APIRouter, Request, Form, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from app.core.database import get_db_connection
 from app.services.notification_service import notification_service
 
 logger = logging.getLogger("masthbot.polls")
 router = APIRouter(tags=["polls_faq"])
 templates = Jinja2Templates(directory="app/templates")
-DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
-
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
 
 # ==========================================================
 # 🖥️ PAGE PRINCIPALE : SONDAGES & FAQ (ADMIN)
@@ -27,49 +21,54 @@ async def admin_polls_faq_page(request: Request):
     """
     Affiche l'interface fusionnée sur le Raspberry Pi.
     """
-    conn = get_db()
     try:
-        # 1. RÉCUPÉRATION DU SONDAGE ACTIF
-        active_poll = conn.execute(
-            "SELECT * FROM polls WHERE is_active = 1 ORDER BY id DESC LIMIT 1"
-        ).fetchone()
-        
-        poll_data = None
-        if active_poll:
-            poll_data = dict(active_poll)
-            votes_rows = conn.execute("""
-                SELECT pv.option_index, v.username 
-                FROM poll_votes pv
-                LEFT JOIN viewers v ON pv.twitch_id = v.twitch_id
-                WHERE pv.poll_id = ?
-            """, (poll_data['id'],)).fetchall()
+        async with get_db_connection() as conn:
+            # 1. RÉCUPÉRATION DU SONDAGE ACTIF
+            cursor = await conn.execute(
+                "SELECT * FROM polls WHERE is_active = 1 ORDER BY id DESC LIMIT 1"
+            )
+            active_poll = await cursor.fetchone()
             
-            results = {"1": 0, "2": 0, "3": 0, "4": 0}
-            voters = {"1": [], "2": [], "3": [], "4": []}
-            total_votes = 0
-            
-            # ✅ BOUCLE DE COMPTAGE (Ligne qui posait l'IndentationError)
-            for v in votes_rows:
-                idx = str(v['option_index'])
-                if idx in results:
-                    results[idx] += 1
-                    voters[idx].append(v['username'] or "Inconnu")
-                    total_votes += 1
-            
-            poll_data.update({
-                "results": results, 
-                "voters": voters, 
-                "total_votes": total_votes
-            })
+            poll_data = None
+            if active_poll:
+                poll_data = dict(active_poll)
+                cursor_votes = await conn.execute("""
+                    SELECT pv.option_index, v.username 
+                    FROM poll_votes pv
+                    LEFT JOIN viewers v ON pv.twitch_id = v.twitch_id
+                    WHERE pv.poll_id = $1
+                """, (poll_data['id'],))
+                votes_rows = await cursor_votes.fetchall()
+                
+                results = {"1": 0, "2": 0, "3": 0, "4": 0}
+                voters = {"1": [], "2": [], "3": [], "4": []}
+                total_votes = 0
+                
+                for v in votes_rows:
+                    idx = str(v['option_index'])
+                    if idx in results:
+                        results[idx] += 1
+                        voters[idx].append(v['username'] or "Inconnu")
+                        total_votes += 1
+                
+                poll_data.update({
+                    "results": results, 
+                    "voters": voters, 
+                    "total_votes": total_votes
+                })
 
-        # 2. RÉCUPÉRATION DES QUESTIONS
-        pending = [dict(q) for q in conn.execute(
-            "SELECT * FROM questions WHERE answer_text IS NULL ORDER BY created_at DESC"
-        ).fetchall()]
-        
-        answered = [dict(q) for q in conn.execute(
-            "SELECT * FROM questions WHERE answer_text IS NOT NULL ORDER BY answered_at DESC LIMIT 20"
-        ).fetchall()]
+            # 2. RÉCUPÉRATION DES QUESTIONS
+            cursor_pending = await conn.execute(
+                "SELECT * FROM questions WHERE answer_text IS NULL ORDER BY created_at DESC"
+            )
+            pending_rows = await cursor_pending.fetchall()
+            pending = [dict(q) for q in pending_rows]
+            
+            cursor_answered = await conn.execute(
+                "SELECT * FROM questions WHERE answer_text IS NOT NULL ORDER BY answered_at DESC LIMIT 20"
+            )
+            answered_rows = await cursor_answered.fetchall()
+            answered = [dict(q) for q in answered_rows]
 
         return templates.TemplateResponse(
             request=request,
@@ -81,8 +80,9 @@ async def admin_polls_faq_page(request: Request):
                 "answered_questions": answered
             }
         )
-    finally:
-        conn.close()
+    except Exception as e:
+        logger.error(f"❌ Erreur admin_polls_faq_page : {e}")
+        return HTMLResponse(content=f"<h1>Erreur lors du chargement des sondages</h1><p>{e}</p>", status_code=500)
 
 # ==========================================================
 # 🗳️ ACTIONS : SONDAGES

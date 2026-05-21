@@ -1,122 +1,70 @@
 import asyncio
 import aiohttp
-import sqlite3
 import logging
+import os
 from datetime import datetime
-import dotenv
+from app.core.database import get_db_connection
+from app.core.config import settings # IMPORTANT pour récupérer les IDs
 
 logger = logging.getLogger("masthbot.unfollows")
-DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
 
-def init_cache_table():
-    """Crée une table invisible pour stocker la liste des followers entre chaque scan."""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.execute("CREATE TABLE IF NOT EXISTS followers_cache (user_id TEXT PRIMARY KEY, user_name TEXT)")
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        logger.error(f"Erreur création cache: {e}")
+async def init_cache_table():
+    """Initialise la table de cache dans PostgreSQL."""
+    async with get_db_connection() as conn:
+        await conn.execute("CREATE TABLE IF NOT EXISTS followers_cache (user_id TEXT PRIMARY KEY, user_name TEXT)")
 
 async def fetch_all_followers(session, client_id, token, broadcaster_id):
-    """Télécharge toute la liste de tes followers en gérant les pages."""
     url = f"https://api.twitch.tv/helix/channels/followers?broadcaster_id={broadcaster_id}&first=100"
     headers = {"Client-ID": client_id, "Authorization": f"Bearer {token}"}
     followers = {}
     cursor = ""
-
     while True:
         page_url = url if not cursor else f"{url}&after={cursor}"
-        try:
-            async with session.get(page_url, headers=headers) as resp:
-                if resp.status != 200:
-                    break
-                data = await resp.json()
-                for item in data.get("data", []):
-                    followers[item["user_id"]] = item["user_name"]
-
-                cursor = data.get("pagination", {}).get("cursor")
-                if not cursor:
-                    break
-        except Exception:
-            break
-        await asyncio.sleep(0.1) # Petite pause pour ne pas brusquer l'API Twitch
+        async with session.get(page_url, headers=headers) as resp:
+            if resp.status != 200: break
+            data = await resp.json()
+            for item in data.get("data", []):
+                followers[item["user_id"]] = item["user_name"]
+            cursor = data.get("pagination", {}).get("cursor")
+            if not cursor: break
     return followers
 
 async def unfollow_monitor_routine():
-    init_cache_table()
-    await asyncio.sleep(15) # Attendre que le bot démarre bien
+    await init_cache_table()
+    
+    # Récupération propre des infos Twitch
+    client_id = settings.TWITCH_CLIENT_ID
+    token = settings.TWITCH_OAUTH_TOKEN.replace("oauth:", "")
+    # Note : Si tu n'as pas le broadcaster_id, il faut le récupérer via l'API ou le mettre en dur
+    broadcaster_id = "439356462" 
 
     while True:
         try:
-            env = dotenv.dotenv_values(".env")
-            client_id = env.get("TWITCH_CLIENT_ID", "").strip()
-            token = env.get("TWITCH_OAUTH_TOKEN", "").replace("oauth:", "").strip()
-            channel = env.get("TWITCH_CHANNEL", "masthom_").replace("#", "").strip()
+            async with get_db_connection() as conn:
+                # 1. Charger le cache actuel (On utilise execute + fetchall)
+                await conn.execute("SELECT * FROM followers_cache")
+                rows = await conn.fetchall()
+                cached_followers = {row['user_id']: row['user_name'] for row in rows}
 
-            if not client_id or not token:
-                await asyncio.sleep(300)
-                continue
+                # 2. Scanner Twitch
+                async with aiohttp.ClientSession() as session:
+                    current_followers = await fetch_all_followers(session, client_id, token, broadcaster_id)
 
-            async with aiohttp.ClientSession() as session:
-                # 1. Obtenir ton ID
-                headers = {"Client-ID": client_id, "Authorization": f"Bearer {token}"}
-                async with session.get(f"https://api.twitch.tv/helix/users?login={channel}", headers=headers) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        broadcaster_id = data["data"][0]["id"]
-                    else:
-                        await asyncio.sleep(300)
-                        continue
+                    unfollowers = [name for uid, name in cached_followers.items() if uid not in current_followers]
 
-                # 2. Scanner les followers actuels
-                current_followers = await fetch_all_followers(session, client_id, token, broadcaster_id)
+                    # 3. Mise à jour PostgreSQL (SYNTAXE CORRECTE $1, $2)
+                    for uid in [uid for uid in cached_followers if uid not in current_followers]:
+                        await conn.execute("DELETE FROM followers_cache WHERE user_id = $1", (uid,))
 
-                if not current_followers:
-                    # Sécurité : Si l'API bug et renvoie 0, on annule pour ne pas croire que tout le monde a unfollow
-                    await asyncio.sleep(1800)
-                    continue
-
-                # 3. Comparer avec la Base de Données
-                conn = sqlite3.connect(DB_PATH)
-                conn.row_factory = sqlite3.Row
-
-                cached_rows = conn.execute("SELECT * FROM followers_cache").fetchall()
-                cached_followers = {row["user_id"]: row["user_name"] for row in cached_rows}
-
-                if not cached_followers:
-                    # PREMIER LANCEMENT : On prend juste une "photo" de départ
-                    logger.info(f"📸 [UNFOLLOWS] Première capture effectuée ({len(current_followers)} followers mis en cache).")
-                    for uid, uname in current_followers.items():
-                        conn.execute("INSERT INTO followers_cache (user_id, user_name) VALUES (?, ?)", (uid, uname))
-                else:
-                    # SCANS SUIVANTS : On cherche les disparus
-                    unfollowers = []
-                    
-                    # Qui était là avant et n'est plus là ?
-                    for uid, uname in cached_followers.items():
-                        if uid not in current_followers:
-                            unfollowers.append(uname)
-                            # On le supprime du cache
-                            conn.execute("DELETE FROM followers_cache WHERE user_id = ?", (uid,))
-
-                    # Qui est nouveau ? (On l'ajoute au cache pour le surveiller)
                     for uid, uname in current_followers.items():
                         if uid not in cached_followers:
-                            conn.execute("INSERT INTO followers_cache (user_id, user_name) VALUES (?, ?)", (uid, uname))
+                            await conn.execute("INSERT INTO followers_cache (user_id, user_name) VALUES ($1, $2)", (uid, uname))
 
-                    # Si on a trouvé des unfollows, on les ajoute à tes statistiques !
                     if unfollowers:
-                        logger.info(f"💔 [UNFOLLOWS] {len(unfollowers)} traîtres détectés !")
                         for uname in unfollowers:
-                            conn.execute("INSERT INTO unfollows (username, timestamp) VALUES (?, ?)",
-                                         (uname, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
-
-                conn.commit()
-                conn.close()
-
+                            await conn.execute("INSERT INTO unfollows (username, timestamp) VALUES ($1, NOW())", (uname,))
+                            
         except Exception as e:
-            logger.error(f"❌ [UNFOLLOWS] Erreur routine : {e}")
-
-        # Pause de 6 heures avant le prochain scan (21600 secondes)
+            logger.error(f"❌ [UNFOLLOWS] Erreur : {e}")
+        
         await asyncio.sleep(21600)

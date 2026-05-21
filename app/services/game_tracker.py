@@ -1,10 +1,9 @@
-import sqlite3
 import logging
+from app.core.database import get_db_connection
 
-DB_PATH = "bot_database.db"
 logger = logging.getLogger("masthbot.games")
 
-def record_bomb_result(twitch_id: str, username: str, won: bool):
+async def record_bomb_result(twitch_id: str, username: str, won: bool):
     """
     Enregistre le résultat du jeu de la bombe.
     À appeler à la fin d'une partie.
@@ -12,24 +11,16 @@ def record_bomb_result(twitch_id: str, username: str, won: bool):
     column_to_update = "bombs_won" if won else "bombs_lost"
     
     try:
-        conn = sqlite3.connect(DB_PATH)
-        # On utilise COALESCE pour gérer le cas où la valeur serait NULL
-        conn.execute(f"""
-            UPDATE viewers 
-            SET {column_to_update} = COALESCE({column_to_update}, 0) + 1 
-            WHERE twitch_id = ?
-        """, (twitch_id,))
-        
-        # Si la ligne n'a pas été modifiée (le viewer n'existe pas encore), on l'insère
-        if conn.total_changes == 0:
-            conn.execute(f"""
+        async with get_db_connection() as conn:
+            # PostgreSQL permet d'insérer ou mettre à jour en 1 seule requête magique !
+            await conn.execute(f"""
                 INSERT INTO viewers (twitch_id, username, {column_to_update})
-                VALUES (?, ?, 1)
-            """, (twitch_id, username))
+                VALUES ($1, $2, 1)
+                ON CONFLICT(twitch_id) DO UPDATE 
+                SET {column_to_update} = COALESCE(viewers.{column_to_update}, 0) + 1,
+                    username = EXCLUDED.username
+            """, (str(twitch_id), username))
             
-        conn.commit()
-        conn.close()
-        
         resultat = "survécu à" if won else "explosé sur"
         logger.info(f"💣 [JEU] {username} a {resultat} la bombe !")
         

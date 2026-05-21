@@ -1,4 +1,3 @@
-import sqlite3
 import logging
 import aiohttp
 import os
@@ -7,57 +6,52 @@ from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+# --- IMPORT CORE POSTGRESQL & CONFIG ---
+from app.core.database import get_db_connection
 from app.core.config import settings
 
 logger = logging.getLogger("masthbot.vips")
 router = APIRouter(prefix="/admin", tags=["vips_team"])
 templates = Jinja2Templates(directory="app/templates")
-DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
 
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-def init_team_columns():
-    conn = get_db()
-    try:
-        conn.execute("ALTER TABLE viewers ADD COLUMN is_mod INTEGER DEFAULT 0")
-    except: pass
-    try:
-        conn.execute("ALTER TABLE viewers ADD COLUMN is_artist INTEGER DEFAULT 0")
-    except: pass
-    conn.commit()
-    conn.close()
+async def init_team_columns():
+    """Vérifie et ajoute les colonnes d'équipe manquantes proprement sous PostgreSQL."""
+    async with get_db_connection() as conn:
+        try:
+            await conn.execute("ALTER TABLE viewers ADD COLUMN IF NOT EXISTS is_mod INTEGER DEFAULT 0")
+            await conn.execute("ALTER TABLE viewers ADD COLUMN IF NOT EXISTS is_artist INTEGER DEFAULT 0")
+        except Exception as e:
+            logger.warning(f"⚠️ Info init_team_columns : {e}")
 
 # ==========================================
 # 📊 ROUTE PRINCIPALE
 # ==========================================
 @router.get("/vips", response_class=HTMLResponse)
 async def admin_vips_page(request: Request):
-    init_team_columns()
-    conn = get_db()
-    try:
-        # On affiche tout le monde en lecture seule
-        vips = conn.execute("SELECT twitch_id, username, is_vip, vip_expiry FROM viewers WHERE is_vip = 1 ORDER BY username ASC").fetchall()
-        mods = conn.execute("SELECT twitch_id, username FROM viewers WHERE is_mod = 1 ORDER BY username ASC").fetchall()
-        artists = conn.execute("SELECT twitch_id, username FROM viewers WHERE is_artist = 1 ORDER BY username ASC").fetchall()
+    await init_team_columns()
+    async with get_db_connection() as conn:
+        # On affiche tout le monde en lecture seule depuis PostgreSQL
+        c_vips = await conn.execute("SELECT twitch_id, username, is_vip, vip_expiry FROM viewers WHERE is_vip = 1 ORDER BY username ASC")
+        vips = await c_vips.fetchall()
         
-        return templates.TemplateResponse(
-            request=request, 
-            name="admin/admin_vips.html", 
-            context={"request": request, "vips": vips, "mods": mods, "artists": artists}
-        )
-    finally:
-        conn.close()
+        c_mods = await conn.execute("SELECT twitch_id, username FROM viewers WHERE is_mod = 1 ORDER BY username ASC")
+        mods = await c_mods.fetchall()
+        
+        c_artists = await conn.execute("SELECT twitch_id, username FROM viewers WHERE is_artist = 1 ORDER BY username ASC")
+        artists = await c_artists.fetchall()
+        
+    return templates.TemplateResponse(
+        request=request, 
+        name="admin/admin_vips.html", 
+        context={"request": request, "vips": vips, "mods": mods, "artists": artists}
+    )
 
 # ==========================================
 # 🔄 L'ASPIRATEUR AUTOMATIQUE (VIP + MODOS)
 # ==========================================
 @router.post("/vips/sync")
 async def sync_vips_from_twitch():
-    init_team_columns()
-    conn = get_db()
+    await init_team_columns()
     try:
         token = settings.TWITCH_OAUTH_TOKEN.replace("oauth:", "").strip()
         channel_name = settings.TWITCH_CHANNEL.replace("#", "").lower().strip()
@@ -99,44 +93,43 @@ async def sync_vips_from_twitch():
                     cursor = data.get("pagination", {}).get("cursor")
                     if not cursor: break
 
-            # 4. Enregistrement en base de données
-            # On met tout le monde à 0 pour éviter les anciens rôles, puis on recoche
-            conn.execute("UPDATE viewers SET is_vip = 0, is_mod = 0 WHERE is_vip = 1 OR is_mod = 1")
-            
-            count_vips = 0
-            for v in vips:
-                t_id = v['user_id']
-                u_name = v['user_login']
-                conn.execute("INSERT OR IGNORE INTO viewers (twitch_id, username) VALUES (?, ?)", (t_id, u_name))
-                conn.execute("UPDATE viewers SET is_vip = 1 WHERE twitch_id = ?", (t_id,))
-                count_vips += 1
-            
-            count_mods = 0
-            for m in mods:
-                t_id = m['user_id']
-                u_name = m['user_login']
-                conn.execute("INSERT OR IGNORE INTO viewers (twitch_id, username) VALUES (?, ?)", (t_id, u_name))
-                conn.execute("UPDATE viewers SET is_mod = 1 WHERE twitch_id = ?", (t_id,))
-                count_mods += 1
+            async with get_db_connection() as conn:
+                # 4. Enregistrement en base de données PostgreSQL
+                # On met tout le monde à 0 pour éviter les anciens rôles, puis on recoche
+                await conn.execute("UPDATE viewers SET is_vip = 0, is_mod = 0 WHERE is_vip = 1 OR is_mod = 1")
                 
-            conn.commit()
+                count_vips = 0
+                for v in vips:
+                    t_id = v['user_id']
+                    u_name = v['user_login']
+
+                    await conn.execute("INSERT INTO viewers (twitch_id, username) VALUES ($1, $2) ON CONFLICT(twitch_id) DO NOTHING", (str(t_id), u_name))
+                    await conn.execute("UPDATE viewers SET is_vip = 1 WHERE twitch_id = $1", (str(t_id),))
+                    count_vips += 1
+                
+                count_mods = 0
+                for m in mods:
+                    t_id = m['user_id']
+                    u_name = m['user_login']
+                    await conn.execute("INSERT INTO viewers (twitch_id, username) VALUES ($1, $2) ON CONFLICT(twitch_id) DO NOTHING", (str(t_id), u_name))
+                    await conn.execute("UPDATE viewers SET is_mod = 1 WHERE twitch_id = $1", (str(t_id),))
+                    count_mods += 1
+                
             logger.info(f"🔄 [SYNCHRO] {count_vips} VIPs et {count_mods} Modérateurs aspirés depuis Twitch !")
             return RedirectResponse(url="/admin/vips?success=synced", status_code=303)
     except Exception as e:
         logger.error(f"❌ Erreur de synchro VIP/Mods : {e}")
         return RedirectResponse(url="/admin/vips?error=sync_failed", status_code=303)
-    finally:
-        conn.close()
 
-# On garde juste l'attribution de VIP manuelle avec Date si jamais tu as besoin de faire des VIP Temporaires.
 @router.post("/vips/add")
 async def add_vip(request: Request, username: str = Form(...), duration_days: int = Form(...), exact_date: str = Form(None)):
     logger.warning(f"🚨 TENTATIVE D'AJOUT VIP WEB POUR : {username}")
-    conn = get_db()
-    try:
+    async with get_db_connection() as conn:
         clean_username = username.lower().strip().replace("@", "")
         expiry = None
-        viewer = conn.execute("SELECT twitch_id FROM viewers WHERE LOWER(username) = ?", (clean_username,)).fetchone()
+        
+        cursor = await conn.execute("SELECT twitch_id FROM viewers WHERE LOWER(username) = $1", (clean_username,))
+        viewer = await cursor.fetchone()
         if not viewer:
             logger.warning("❌ Utilisateur introuvable dans la base.")
             return RedirectResponse(url="/admin/vips?error=not_found", status_code=303)
@@ -149,11 +142,10 @@ async def add_vip(request: Request, username: str = Form(...), duration_days: in
         elif duration_days > 0:
             expiry = (datetime.now() + timedelta(days=duration_days)).isoformat()
 
-        conn.execute("UPDATE viewers SET is_vip = 1, vip_expiry = ? WHERE twitch_id = ?", (expiry, twitch_id))
-        conn.commit()
+        await conn.execute("UPDATE viewers SET is_vip = 1, vip_expiry = $1 WHERE twitch_id = $2", (expiry, twitch_id))
         logger.warning("✅ Base de données mise à jour.")
 
-        # --- NOUVEAU : Appel à l'API Twitch via le moteur réseau du bot ---
+        # --- Appel à l'API Twitch via le moteur réseau du bot ---
         if hasattr(request.app.state, 'bot'):
             bot = request.app.state.bot
             try:
@@ -172,19 +164,15 @@ async def add_vip(request: Request, username: str = Form(...), duration_days: in
             logger.error("❌ ERREUR FATALE : app.state.bot manquant !")
 
         return RedirectResponse(url="/admin/vips?success=added", status_code=303)
-    finally:
-        conn.close()
 
 @router.post("/vips/revoke/{twitch_id}")
 async def revoke_vip(request: Request, twitch_id: str):
     logger.warning(f"🚨 TENTATIVE DE RETRAIT VIP WEB POUR L'ID : {twitch_id}")
-    conn = get_db()
-    try:
-        conn.execute("UPDATE viewers SET is_vip = 0, vip_expiry = NULL WHERE twitch_id = ?", (twitch_id,))
-        conn.commit()
+    async with get_db_connection() as conn:
+        await conn.execute("UPDATE viewers SET is_vip = 0, vip_expiry = NULL WHERE twitch_id = $1", (str(twitch_id),))
         logger.warning("✅ Base de données mise à jour (Retrait).")
 
-        # --- NOUVEAU : Appel à l'API Twitch via le moteur réseau du bot ---
+        # --- Appel à l'API Twitch via le moteur réseau du bot ---
         if hasattr(request.app.state, 'bot'):
             bot = request.app.state.bot
             try:
@@ -201,6 +189,3 @@ async def revoke_vip(request: Request, twitch_id: str):
                 logger.error(f"❌ Erreur réseau API Twitch (Revoke VIP) : {e}")
 
         return RedirectResponse(url="/admin/vips?success=revoked", status_code=303)
-    finally:
-        conn.close()
-

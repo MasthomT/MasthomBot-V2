@@ -1,6 +1,5 @@
 import re
 import random
-import sqlite3
 import os
 import aiohttp
 import json
@@ -19,9 +18,9 @@ from app.services.obs_service import obs_service
 from app.routes.overlays import trigger_overlay_event
 from app.core.database import init_db, get_db_connection
 from app.routes.clips import start_clips_poll
+from app.services.label_service import write_label, lire_fichier_label
 
 logger = logging.getLogger("masthbot.twitch")
-DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
 
 class MasthbotTwitch(commands.Bot):
     def __init__(self):
@@ -33,7 +32,7 @@ class MasthbotTwitch(commands.Bot):
         self.channel_name = settings.TWITCH_CHANNEL.replace("#", "").lower()
         self.notified_lives = set()
         self.known_levels = {}
-        self.role_checked_users = set() # AJOUT : Mémoire pour éviter de spammer la base de données
+        self.role_checked_users = set()
 
         self.web_session = None
 
@@ -44,27 +43,23 @@ class MasthbotTwitch(commands.Bot):
         )
 
     async def get_web_session(self):
-        """Crée ou retourne la session HTTP persistante du bot."""
         if self.web_session is None or self.web_session.closed:
             self.web_session = aiohttp.ClientSession()
         return self.web_session
 
     async def close(self):
-        """S'assure de fermer proprement la session réseau quand le bot s'éteint."""
         if self.web_session and not self.web_session.closed:
             await self.web_session.close()
         await super().close()
 
     async def get_db_config(self):
-        """Récupère la configuration en utilisant le gestionnaire asynchrone centralisé."""
         try:
             async with get_db_connection() as conn:
-                # Avec aiosqlite, on doit await l'exécution ET le fetch
-                p_cursor = await conn.execute("SELECT * FROM personality LIMIT 1")
-                p_row = await p_cursor.fetchone()
+                c1 = await conn.execute("SELECT * FROM personality LIMIT 1")
+                p_row = await c1.fetchone()
                 
-                s_cursor = await conn.execute("SELECT * FROM settings LIMIT 1")
-                s_row = await s_cursor.fetchone()
+                c2 = await conn.execute("SELECT * FROM settings LIMIT 1")
+                s_row = await c2.fetchone()
 
                 p = dict(p_row) if p_row else {}
                 s = dict(s_row) if s_row else {}
@@ -89,32 +84,27 @@ class MasthbotTwitch(commands.Bot):
                     'personal_last_live_id': s.get('personal_last_live_id', "")
                 }
         except Exception as e:
-            # 🔥 POINT 5 DU P0 : On logge l'erreur proprement au lieu de la cacher
             logger.error(f"❌ [DB FATAL] Impossible de lire la configuration (get_db_config) : {e}")
             return {}
 
-    def log_event(self, event_type, username, details_dict):
+    async def log_event(self, event_type, username, details_dict):
         try:
-            conn = sqlite3.connect(DB_PATH, timeout=20.0)
-            conn.execute(
-                "INSERT INTO stream_events (event_type, username, details, timestamp) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
-                (event_type, username, json.dumps(details_dict))
-            )
-            conn.commit()
-            conn.close()
+            async with get_db_connection() as conn:
+                await conn.execute(
+                    "INSERT INTO stream_events (event_type, username, details, timestamp) VALUES ($1, $2, $3, NOW())",
+                    (event_type, username, json.dumps(details_dict))
+                )
         except Exception as e:
             logger.error(f"❌ [LOG ERROR] : {e}")
 
     async def event_ready(self):
         print(f"✅ [TWITCH] Connecté en tant que : {self.nick}")
         
-        # 1. 🔥 INITIALISATION SÉCURISÉE DE LA BASE DE DONNÉES
         try:
             await init_db()
         except Exception as e:
             print(f"❌ [DB INIT ERROR] Erreur critique lors de l'initialisation : {e}")
 
-        # 2. DÉMARRAGE HABITUEL DU BOT ET DES ROUTINES
         try:
             users = await self.fetch_users(names=[self.channel_name])
             if users:
@@ -151,6 +141,11 @@ class MasthbotTwitch(commands.Bot):
                 self.watchdog_timer.start()
                 self._watchdog_started = True
 
+            if not hasattr(self, "_followers_detector_started"):
+                print("💙 [ROUTINE] Lancement du détecteur de Followers (Temps Réel)...")
+                self.followers_detector_timer.start()
+                self._followers_detector_started = True
+
         except Exception as e:
             print(f"❌ [READY ERROR] : {e}")
 
@@ -179,19 +174,15 @@ class MasthbotTwitch(commands.Bot):
         if message.echo or not message.author:
             return
 
-        # === BLOC CONSERVÉ SELON TES INSTRUCTIONS ===
         content = message.content
-        content_clean = content.strip()  # On nettoie d'abord
-        content_lower = content_clean.lower() # On transforme ensuite
+        content_clean = content.strip()
+        content_lower = content_clean.lower()
 
         await viewer_repo.ensure_viewer(str(message.author.id), message.author.name)
         username = message.author.name.lower()
         display_name = message.author.display_name or message.author.name
         config = await self.get_db_config()
-        # ============================================
 
-        # --- GESTION DU SYSTÈME FEL-X (VERCEL) ---
-        # Commande OBLIGATOIRE : !choix
         if content_lower.startswith("!choix "):
             try:
                 parts = content_clean.split(" ")
@@ -203,15 +194,12 @@ class MasthbotTwitch(commands.Bot):
             except (ValueError, IndexError):
                 pass
 
-        # --- GESTION DU SYSTÈME TWITCH ---
-        # Commande OBLIGATOIRE : !poll
         elif content_lower.startswith("!poll "):
             try:
                 parts = content_clean.split(" ")
                 if len(parts) > 1:
                     choice_idx = int(parts[1])
                     if 1 <= choice_idx <= 4:
-                        # On appelle la fonction dédiée pour Twitch
                         await self._handle_twitch_poll_vote(message, choice_idx)
                         return
             except (ValueError, IndexError):
@@ -221,26 +209,21 @@ class MasthbotTwitch(commands.Bot):
         is_owner = username == self.channel_name
         is_mod = message.author.is_mod or ("moderator" in badges) or is_owner
         is_vip = message.author.is_vip or ("vip" in badges)
-        
-        # ⚠️ LE FIX EST ICI : Twitch appelle ce badge 'artist-badge' dans son API, pas 'artist' !
         is_artist = ("artist-badge" in badges) or ("artist" in badges)
         is_live = bool(config.get('personal_last_live_id', ""))
 
         if (is_vip or is_mod or is_artist) and str(message.author.id) not in self.role_checked_users:
             try:
-                # 🔥 On utilise notre super gestionnaire asynchrone !
                 async with get_db_connection() as conn:
                     if is_vip:
-                        await conn.execute("UPDATE viewers SET is_vip = 1 WHERE twitch_id = ?", (str(message.author.id),))
+                        await conn.execute("UPDATE viewers SET is_vip = 1 WHERE twitch_id = $1", (str(message.author.id),))
                     if is_mod:
-                        await conn.execute("UPDATE viewers SET is_mod = 1 WHERE twitch_id = ?", (str(message.author.id),))
+                        await conn.execute("UPDATE viewers SET is_mod = 1 WHERE twitch_id = $1", (str(message.author.id),))
                     if is_artist:
-                        await conn.execute("UPDATE viewers SET is_artist = 1 WHERE twitch_id = ?", (str(message.author.id),))
+                        await conn.execute("UPDATE viewers SET is_artist = 1 WHERE twitch_id = $1", (str(message.author.id),))
                     
-                    await conn.commit()
                     self.role_checked_users.add(str(message.author.id))
             except Exception as e:
-                # Remplacement du silence par un log structuré (Point 5 du P0)
                 logger.error(f"❌ [DB ERROR] Erreur d'enregistrement auto des badges : {e}")
 
         if is_live:
@@ -304,8 +287,15 @@ class MasthbotTwitch(commands.Bot):
                         logger.error(f"Erreur Envoi Emotes OBS : {e}")
 
         if config.get('ai_enabled') and config.get('enable_twitch'):
-            viewer = await viewer_repo.get_viewer_by_name(username)
-            viewer_dict = dict(viewer) if viewer else {}
+            viewer_dict = {}
+            try:
+                async with get_db_connection() as conn:
+                    c = await conn.execute("SELECT * FROM viewers WHERE LOWER(username) = $1", (username.lower(),))
+                    row = await c.fetchone()
+                    if row:
+                        viewer_dict = dict(row)
+            except Exception as e:
+                logger.error(f"❌ Erreur chargement contexte viewer {username} : {e}")
 
             triggers = ["félix", "felix", f"@{self.nick.lower()}"]
             custom_bot_name = viewer_dict.get('nickname_for_bot')
@@ -358,6 +348,14 @@ class MasthbotTwitch(commands.Bot):
                 except Exception as e:
                     logger.error(f"🔥 [AI ERROR] : {e}")
 
+        if message.tags and message.tags.get('bits'):
+            bits_amount = message.tags.get('bits')
+            # 1. Mise à jour de l'overlay animé OBS (label_anime.html)
+            write_label("dernier_bits.txt", display_name)
+            # 2. Ajout pour le générique de fin
+            credits_service.log_event("bits", display_name, f"{bits_amount} Bits")
+
+        # Reste de ta fonction...
         await self.handle_commands(message)
 
     async def _handle_helix_actions(self, reply, is_admin=False):
@@ -414,56 +412,86 @@ class MasthbotTwitch(commands.Bot):
             logger.error(f"❌ [HELIX ACTION ERROR] : {e}")
 
     async def _handle_chat_vote(self, message, choice_idx):
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
         try:
-            # On récupère le sondage actif
-            active_poll = conn.execute("SELECT id, option1, option2, option3, option4 FROM polls WHERE is_active=1 ORDER BY id DESC LIMIT 1").fetchone()
+            async with get_db_connection() as conn:
+                c = await conn.execute("SELECT id, option1, option2, option3, option4 FROM polls WHERE is_active=1 ORDER BY id DESC LIMIT 1")
+                active_poll = await c.fetchone()
 
-            if not active_poll:
-                return # Aucun sondage Fel-X actif, on ignore silencieusement
+                if not active_poll:
+                    return 
 
-            # 🛡️ PROTECTION : On ne vote par chat QUE pour les sondages Fel-X
-            # Si tu as une colonne 'type' dans ta table polls, on l'utilise.
-            # Sinon, on considère que si le bot a trouvé un sondage actif ici, c'est un Fel-X.
-            
-            opt_key = f"option{choice_idx}"
-            if not active_poll[opt_key]:
-                return # Choix invalide pour ce sondage
+                opt_key = f"option{choice_idx}"
+                if not active_poll[opt_key]:
+                    return 
 
-            # Enregistrement du vote pour Vercel/Local
-            conn.execute("""
-                INSERT INTO poll_votes (poll_id, twitch_id, option_index)
-                VALUES (?, ?, ?)
-                ON CONFLICT(poll_id, twitch_id) DO UPDATE SET option_index = excluded.option_index
-            """, (active_poll['id'], str(message.author.id), choice_idx))
-            conn.commit()
-
-            # Mise à jour visuelle immédiate
+                await conn.execute("""
+                    INSERT INTO poll_votes (poll_id, twitch_id, option_index)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT(poll_id, twitch_id) DO UPDATE SET option_index = EXCLUDED.option_index
+                """, (active_poll['id'], str(message.author.id), choice_idx))
+                
             await trigger_overlay_event({"type": "show_poll"})
 
         except Exception as e:
             logger.error(f"Erreur vote chat: {e}")
-        finally:
-            conn.close()
+
+    async def _handle_twitch_poll_vote(self, message, choice_idx):
+        """Gère les votes du chat (!poll 1, 2...) pour l'overlay Twitch."""
+        try:
+            import app.services.twitch_poll_state as poll_state
+            
+            if choice_idx in poll_state.chat_votes:
+                poll_state.chat_votes[choice_idx] += 1
+                await trigger_overlay_event({
+                    "type": "update_twitch_poll",
+                    "payload": poll_state.chat_votes
+                })
+        except Exception as e:
+            logger.error(f"Erreur lors du vote Twitch (!poll) : {e}")
 
     async def event_poll_begin(self, data):
-        """Se déclenche automatiquement quand un sondage commence sur Twitch."""
         try:
-            from app.routes.overlays import trigger_overlay_event
-            # On envoie le signal spécifique au bandeau Twitch
             await trigger_overlay_event({"type": "show_twitch_poll"})
         except Exception as e:
             logger.error(f"Erreur lors du signal de sondage Twitch : {e}")
 
     async def event_prediction_begin(self, data):
-        """Se déclenche automatiquement quand une prédiction commence sur Twitch."""
         try:
-            from app.routes.overlays import trigger_overlay_event
-            # On envoie un signal spécifique pour les prédictions
             await trigger_overlay_event({"type": "show_twitch_prediction"})
         except Exception as e:
             logger.error(f"Erreur lors du signal de prédiction Twitch : {e}")
+
+    async def event_raw_usernotice(self, channel, tags: dict):
+        """Capte les événements officiels Twitch dans le chat (Subs, Raids, etc.)"""
+        msg_id = tags.get('msg-id')
+        display_name = tags.get('display-name', 'Inconnu')
+
+        # 🌟 ABONNEMENTS ET RESUBS
+        if msg_id in ['sub', 'resub']:
+            # 1. Label animé OBS
+            write_label("dernier_sub.txt", display_name)
+            # 2. Générique de fin
+            months = tags.get('msg-param-cumulative-months', '1')
+            tier = tags.get('msg-param-sub-plan', '1000')
+            tier_name = "Tier 1" if tier == "1000" else "Tier 2" if tier == "2000" else "Tier 3" if tier == "3000" else "Prime"
+            credits_service.log_event("subscribers", display_name, f"{tier_name} • {months} mois")
+
+        # 🎁 CADEAUX D'ABONNEMENTS (Subgifts)
+        elif msg_id == 'subgift':
+            recipient = tags.get('msg-param-recipient-display-name', 'Quelqu\'un')
+            # 1. Labels animés OBS
+            write_label("dernier_subgift.txt", display_name)
+            write_label("dernier_sub.txt", recipient) # Le receveur devient le dernier sub
+            # 2. Générique de fin
+            credits_service.log_event("gifters", display_name, "1 Gift")
+
+        # 🚀 RAIDS
+        elif msg_id == 'raid':
+            viewers = tags.get('msg-param-viewerCount', '0')
+            # 1. Label animé OBS
+            write_label("dernier_raid.txt", display_name)
+            # 2. Générique de fin
+            credits_service.log_event("raiders", display_name, f"{viewers} viewers")
 
     @commands.command(name='so')
     async def shoutout_command(self, ctx, *, content: str = None):
@@ -472,18 +500,14 @@ class MasthbotTwitch(commands.Bot):
         if not content:
             return await ctx.send("Miaou ! Pseudo ou lien requis : !so pseudo")
 
-        # Nettoyage de l'input
         input_val = content.replace("!so", "").strip().split()[0].split("?")[0]
         target_name = None
         slug_for_node = None
 
         client_id = os.getenv("TWITCH_CLIENT_ID", getattr(self._http, 'client_id', ''))
         headers = {"Client-ID": client_id, "Authorization": f"Bearer {self.master_token}"}
-
-        # 🔥 NOUVEAU : On allume le moteur réseau une seule fois pour tout le processus
         session = await self.get_web_session()
 
-        # 1. DÉCODAGE DU LIEN OU DU PSEUDO
         if "twitch.tv" in input_val:
             if "clips.twitch.tv" in input_val:
                 slug_for_node = input_val.split("clips.twitch.tv/")[-1].strip("/")
@@ -517,10 +541,8 @@ class MasthbotTwitch(commands.Bot):
         if not target_name:
             return await ctx.send("❌ Impossible de récupérer le pseudo depuis ce lien ! Vérifie ton URL.")
 
-        # 2. ENVOI DES MESSAGES ET DÉCLENCHEMENT DE L'OVERLAY
         target_name_clean = target_name.lower()
         
-        # Message Twitch
         try:
             async with session.get(f"https://api.twitch.tv/helix/users?login={target_name_clean}", headers=headers) as resp:
                 if resp.status == 200:
@@ -541,7 +563,6 @@ class MasthbotTwitch(commands.Bot):
         except:
             pass
 
-        # Envoi du signal à l'overlay Node.js (OBS)
         try:
             async with session.post("http://127.0.0.1:3005/api/shoutout", json={"target": target_name_clean, "slug": slug_for_node}) as _:
                 pass
@@ -564,18 +585,14 @@ class MasthbotTwitch(commands.Bot):
         session = await self.get_web_session()
 
         try:
-            # 1. We trigger the replay overlay
             payload = {"slug": slug, "query": query}
             async with session.post("http://127.0.0.1:3005/api/replay", json=payload) as _:
                 pass
             
-            # 2. 🧚‍♂️ NEW: We trigger the "Hey Listen" sound!
-            # We send an event to the overlay to play the audio file
             sound_payload = {
                 "type": "play_sound", 
                 "file": "/static/uploads/hey_listen.mp3"
             }
-            # Adjust the URL below if your overlay has a specific endpoint for generic sounds/alerts
             async with session.post("http://127.0.0.1:3005/api/alert", json=sound_payload) as _:
                 pass
 
@@ -615,11 +632,10 @@ class MasthbotTwitch(commands.Bot):
         if not channel_id:
             return await ctx.send("❌ Aucun salon Discord configuré.")
 
-        # 🔥 Nouvelle méthode asynchrone
         try:
             async with get_db_connection() as conn:
-                cursor = await conn.execute("SELECT * FROM tracked_streamers WHERE is_active=1")
-                tracked = await cursor.fetchall()
+                c = await conn.execute("SELECT * FROM tracked_streamers WHERE is_active=1")
+                tracked = await c.fetchall()
         except Exception as e:
             logger.error(f"❌ [DB ERROR] Impossible de lire les copains : {e}")
             return
@@ -650,19 +666,16 @@ class MasthbotTwitch(commands.Bot):
 
     @commands.command(name='sondage')
     async def cmd_sondage(self, ctx):
-        # 🔥 Nouvelle méthode asynchrone
         try:
             async with get_db_connection() as conn:
-                # 1. On récupère le sondage Fel-X actif
-                cursor = await conn.execute("SELECT * FROM polls WHERE is_active=1 ORDER BY id DESC LIMIT 1")
-                poll = await cursor.fetchone()
+                c = await conn.execute("SELECT * FROM polls WHERE is_active=1 ORDER BY id DESC LIMIT 1")
+                poll = await c.fetchone()
 
                 if not poll:
                     return await ctx.send("🐾 Aucun sondage en cours. Crée-en un sur ton interface admin !")
 
-                # 2. Calcul des votes actuels pour le chat
-                cursor_votes = await conn.execute("SELECT option_index, COUNT(*) as count FROM poll_votes WHERE poll_id=? GROUP BY option_index", (poll['id'],))
-                votes = await cursor_votes.fetchall()
+                c2 = await conn.execute("SELECT option_index, COUNT(*) as count FROM poll_votes WHERE poll_id=$1 GROUP BY option_index", (poll['id'],))
+                votes = await c2.fetchall()
                 
                 results = {1: 0, 2: 0, 3: 0, 4: 0}
                 total = 0
@@ -670,10 +683,8 @@ class MasthbotTwitch(commands.Bot):
                     results[v['option_index']] = v['count']
                     total += v['count']
 
-            # 3. On envoie le signal "show_poll" au port 8000
             await trigger_overlay_event({"type": "show_poll"})
 
-            # 4. Préparation du message pour le chat Twitch
             msg = f"📊 SONDAGE : {poll['question']} — "
             options_text = []
 
@@ -694,15 +705,12 @@ class MasthbotTwitch(commands.Bot):
 
     @commands.command(name='testpoll')
     async def cmd_testpoll(self, ctx):
-        """Commande de débogage pour forcer l'affichage de l'overlay Twitch"""
         if not ctx.author.is_mod and not ctx.author.is_broadcaster:
             return
 
         try:
-            # 1. On importe notre mémoire
             import app.services.twitch_poll_state as poll_state
             
-            # 2. On injecte un faux sondage dans la mémoire
             poll_state.chat_votes = {1: 0, 2: 0, 3: 0, 4: 0}
             poll_state.current_twitch_poll = {
                 "title": "Ceci est un test de Félix !",
@@ -714,7 +722,6 @@ class MasthbotTwitch(commands.Bot):
                 ]
             }
 
-            # 3. On envoie le signal à l'overlay
             from app.routes.overlays import trigger_overlay_event
             await trigger_overlay_event({
                 "type": "show_twitch_poll",
@@ -729,11 +736,15 @@ class MasthbotTwitch(commands.Bot):
     @commands.command(name='level')
     async def cmd_level(self, ctx):
         username = ctx.author.name.lower()
-        conn = sqlite3.connect(DB_PATH, timeout=20.0)
-        row = conn.execute("SELECT points FROM viewers WHERE LOWER(username) = ?", (username,)).fetchone()
-        conn.close()
+        try:
+            async with get_db_connection() as conn:
+                c = await conn.execute("SELECT points FROM viewers WHERE LOWER(username) = $1", (username,))
+                row = await c.fetchone()
+        except Exception as e:
+            logger.error(f"Erreur cmd_level : {e}")
+            return
         
-        points = row[0] if row else 0
+        points = row['points'] if row else 0
         if points <= 0:
             return await ctx.send(f"@{ctx.author.name}, tu es Niveau 1 avec 0 EXP ! Parle dans le chat pour progresser. 🐾")
             
@@ -745,10 +756,13 @@ class MasthbotTwitch(commands.Bot):
     @commands.command(name='rang')
     async def cmd_rang(self, ctx):
         username = ctx.author.name.lower()
-        conn = sqlite3.connect(DB_PATH, timeout=20.0)
-        conn.row_factory = sqlite3.Row
-        viewers = conn.execute("SELECT username, points FROM viewers WHERE points > 0 ORDER BY points DESC, watchtime DESC").fetchall()
-        conn.close()
+        try:
+            async with get_db_connection() as conn:
+                c = await conn.execute("SELECT username, points FROM viewers WHERE points > 0 ORDER BY points DESC, watchtime DESC")
+                viewers = await c.fetchall()
+        except Exception as e:
+            logger.error(f"Erreur cmd_rang : {e}")
+            return
         
         if not viewers:
             return await ctx.send(f"@{ctx.author.name}, le classement est vide pour le moment !")
@@ -785,13 +799,11 @@ class MasthbotTwitch(commands.Bot):
         if not ctx.author.is_mod and not ctx.author.is_broadcaster: return
         if not time_str: return await ctx.send("⏱️ Usage : !timer <minutes> [Nom du timer] (ex: !timer 5 Pause café)")
 
-        # 🔥 NOUVEAU : On récupère notre moteur réseau unique
         session = await self.get_web_session()
 
         if time_str.lower() in ["stop", "reset", "off", "clear"]:
             payload = { "type": "time_event", "details": { "action": "stop" } }
             try:
-                # Utilisation du moteur pour envoyer l'ordre à OBS
                 async with session.post("http://127.0.0.1:3005/api/trigger", json=payload) as _:
                     pass
                 await ctx.send("🛑 Timer effacé de l'écran !")
@@ -810,7 +822,6 @@ class MasthbotTwitch(commands.Bot):
             "details": { "action": "start", "mode": "timer", "duration": duration_seconds, "label": label.upper() }
         }
         try:
-            # Utilisation du moteur pour envoyer l'ordre à OBS
             async with session.post("http://127.0.0.1:3005/api/trigger", json=payload) as _:
                 pass
             await ctx.send(f"⏱️ Timer de {minutes} minute(s) lancé à l'écran : {label.upper()}")
@@ -821,13 +832,11 @@ class MasthbotTwitch(commands.Bot):
     async def cmd_chrono(self, ctx, *, label: str = "CHRONO"):
         if not ctx.author.is_mod and not ctx.author.is_broadcaster: return
         
-        # 🔥 NOUVEAU : On récupère notre moteur réseau unique
         session = await self.get_web_session()
 
         if label and label.lower() in ["stop", "reset", "off", "clear"]:
             payload = { "type": "time_event", "details": { "action": "stop" } }
             try:
-                # Utilisation du moteur pour envoyer l'ordre à OBS
                 async with session.post("http://127.0.0.1:3005/api/trigger", json=payload) as _:
                     pass
                 await ctx.send("🛑 Chrono effacé de l'écran !")
@@ -840,7 +849,6 @@ class MasthbotTwitch(commands.Bot):
             "details": { "action": "start", "mode": "chrono", "duration": 0, "label": label.upper() }
         }
         try:
-            # Utilisation du moteur pour envoyer l'ordre à OBS
             async with session.post("http://127.0.0.1:3005/api/trigger", json=payload) as _:
                 pass
             await ctx.send(f"⏱️ Chronomètre lancé à l'écran : {label.upper()}")
@@ -849,19 +857,13 @@ class MasthbotTwitch(commands.Bot):
 
     @commands.command(name='voteclips')
     async def voteclips_cmd(self, ctx: commands.Context):
-        # Sécurité : On vérifie que c'est bien toi (le streamer) ou un modo
         if ctx.author.is_mod or ctx.author.is_broadcaster:
-            
-            # On appelle la fonction FastAPI qui gère l'API Twitch
             result = await start_clips_poll()
-            
-            # On lit la réponse pour voir si Twitch a accepté
             if "error" in result:
                 await ctx.send(f"❌ Erreur : {result['error']}")
             else:
                 await ctx.send("📊 Le sondage est lancé ! Votez pour votre clip préféré en haut du t'chat !")
         else:
-            # Optionnel : petit message si un viewer essaie de forcer la commande
             await ctx.send("Désolé, seuls les modérateurs peuvent lancer le vote des clips !")
 
     @commands.command(name='addvip')
@@ -876,8 +878,8 @@ class MasthbotTwitch(commands.Bot):
 
         try:
             async with get_db_connection() as conn:
-                cursor = await conn.execute("SELECT twitch_id FROM viewers WHERE LOWER(username) = ?", (target_clean,))
-                viewer = await cursor.fetchone()
+                c = await conn.execute("SELECT twitch_id FROM viewers WHERE LOWER(username) = $1", (target_clean,))
+                viewer = await c.fetchone()
 
                 if not viewer:
                     return await ctx.send(f"❌ Le viewer @{target} n'existe pas dans la base de données. Il doit parler au moins une fois.")
@@ -886,13 +888,11 @@ class MasthbotTwitch(commands.Bot):
                 if duration_days > 0:
                     expiry = (datetime.now() + timedelta(days=duration_days)).isoformat()
 
-                await conn.execute("UPDATE viewers SET is_vip = 1, vip_expiry = ? WHERE LOWER(username) = ?", (expiry, target_clean))
-                await conn.commit()
+                await conn.execute("UPDATE viewers SET is_vip = 1, vip_expiry = $1 WHERE LOWER(username) = $2", (expiry, target_clean))
         except Exception as e:
             logger.error(f"❌ [DB ERROR] Erreur API Twitch !addvip (Base de données) : {e}")
             return
 
-        # 🔥 NOUVEAU : Appel à l'API Twitch via notre moteur réseau unique
         try:
             headers = {"Client-ID": self._http.client_id, "Authorization": f"Bearer {self.master_token}"}
             url = f"https://api.twitch.tv/helix/channels/vips?broadcaster_id={self.broadcaster_id}&user_id={viewer['twitch_id']}"
@@ -910,11 +910,10 @@ class MasthbotTwitch(commands.Bot):
 
     @commands.command(name='vip')
     async def cmd_vip(self, ctx):
-        # 🔥 Nouvelle méthode asynchrone
         try:
             async with get_db_connection() as conn:
-                cursor = await conn.execute("SELECT is_vip, vip_expiry FROM viewers WHERE twitch_id = ?", (str(ctx.author.id),))
-                user = await cursor.fetchone()
+                c = await conn.execute("SELECT is_vip, vip_expiry FROM viewers WHERE twitch_id = $1", (str(ctx.author.id),))
+                user = await c.fetchone()
         except Exception as e:
             logger.error(f"❌ [DB ERROR] Erreur cmd_vip : {e}")
             return
@@ -950,8 +949,7 @@ class MasthbotTwitch(commands.Bot):
 
     @routines.routine(seconds=60)
     async def watchtime_timer(self):
-        """Distribue l'EXP et le watchtime de façon sécurisée et groupée."""
-        if not self.broadcaster_id: 
+        if not self.broadcaster_id:
             return
 
         config = await self.get_db_config()
@@ -959,48 +957,55 @@ class MasthbotTwitch(commands.Bot):
             return
 
         exp_to_give = int(config.get('exp_per_watchtime', 5))
-        
+
         try:
             api_success = False
-            # 🔥 NOUVEAU : On utilise notre session réseau unique
             session = await self.get_web_session()
             client_id = os.getenv("TWITCH_CLIENT_ID", getattr(self._http, 'client_id', ''))
             headers = {"Client-ID": client_id, "Authorization": f"Bearer {self.master_token}"}
             url = f"https://api.twitch.tv/helix/chat/chatters?broadcaster_id={self.broadcaster_id}&moderator_id={self.broadcaster_id}"
-            
+
             async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     chatters = data.get('data', [])
-                    
+
                     async with get_db_connection() as conn:
                         count = 0
                         for c in chatters:
                             u_name = c['user_name'].lower()
                             t_id = c['user_id']
-                            
+
                             if u_name in [self.nick.lower(), 'nightbot', 'streamelements', 'wizebot']:
                                 continue
 
                             try:
-                                await conn.execute(
-                                    "INSERT OR IGNORE INTO viewers (twitch_id, username) VALUES (?, ?)",
-                                    (t_id, u_name)
-                                )
-                                await conn.execute(
-                                    "UPDATE viewers SET watchtime = watchtime + 60, points = points + ? WHERE twitch_id = ?",
-                                    (exp_to_give, t_id)
-                                )
+                                await conn.execute("""
+                                    INSERT INTO viewers (twitch_id, username, watchtime, points) 
+                                    VALUES ($1, $2, 60, $3)
+                                    ON CONFLICT(twitch_id) DO UPDATE SET 
+                                        watchtime = viewers.watchtime + 60,
+                                        points = viewers.points + EXCLUDED.points,
+                                        username = EXCLUDED.username
+                                """, (t_id, u_name, exp_to_give))
+                                
+                                await conn.execute("""
+                                    INSERT INTO viewer_daily_stats (twitch_id, day, watchtime, points_gained)
+                                    VALUES ($1, CURRENT_DATE, 60, $2)
+                                    ON CONFLICT(twitch_id, day) DO UPDATE SET
+                                        watchtime = viewer_daily_stats.watchtime + 60,
+                                        points_gained = viewer_daily_stats.points_gained + EXCLUDED.points_gained
+                                """, (t_id, exp_to_give))
+                                
                                 credits_service.add_watchtime(c['user_name'], 1)
                                 count += 1
                             except Exception as e:
                                 logger.warning(f"⚠️ Erreur isolée pour {u_name}: {e}")
-                        
-                        await conn.commit() 
+
                         if count > 0:
                             logger.info(f"💎 Watchtime distribué à {count} personnes.")
                     api_success = True
-                    
+
                 elif resp.status in [401, 403]:
                     logger.error(f"❌ BLOCAGE TWITCH ({resp.status}) : Permissions insuffisantes.")
 
@@ -1012,15 +1017,26 @@ class MasthbotTwitch(commands.Bot):
                         for chatter in channel.chatters:
                             u_name = chatter.name.lower()
                             if u_name in [self.nick.lower(), 'nightbot', 'streamelements', 'wizebot']: continue
+
+                            c = await conn.execute("SELECT twitch_id FROM viewers WHERE LOWER(username) = $1", (u_name,))
+                            row = await c.fetchone()
                             
-                            await conn.execute(
-                                "UPDATE viewers SET watchtime = watchtime + 60, points = points + ? WHERE LOWER(username) = ?",
-                                (exp_to_give, u_name)
-                            )
-                            credits_service.add_watchtime(chatter.name, 1)
-                            count_fb += 1
-                        
-                        await conn.commit()
+                            if row:
+                                t_id = row['twitch_id']
+                                await conn.execute(
+                                    "UPDATE viewers SET watchtime = watchtime + 60, points = points + $1 WHERE twitch_id = $2",
+                                    (exp_to_give, t_id)
+                                )
+                                await conn.execute("""
+                                    INSERT INTO viewer_daily_stats (twitch_id, day, watchtime, points_gained)
+                                    VALUES ($1, CURRENT_DATE, 60, $2)
+                                    ON CONFLICT(twitch_id, day) DO UPDATE SET
+                                        watchtime = viewer_daily_stats.watchtime + 60,
+                                        points_gained = viewer_daily_stats.points_gained + EXCLUDED.points_gained
+                                """, (t_id, exp_to_give))
+                                credits_service.add_watchtime(chatter.name, 1)
+                                count_fb += 1
+
                         if count_fb > 0:
                             logger.info(f"⚠️ Watchtime (Secours) distribué à {count_fb} personnes.")
 
@@ -1029,7 +1045,6 @@ class MasthbotTwitch(commands.Bot):
 
     @routines.routine(minutes=1)
     async def vip_expiration_timer(self):
-        """Vérifie et supprime les grades VIP expirés de façon sécurisée (DB + Twitch)."""
         try:
             if not getattr(self, 'broadcaster_id', None):
                 users = await self.fetch_users(names=[self.channel_name])
@@ -1042,22 +1057,25 @@ class MasthbotTwitch(commands.Bot):
             expired_vips = []
 
             async with get_db_connection() as conn:
-                cursor = await conn.execute("""
+                c = await conn.execute("""
                     SELECT twitch_id, username, vip_expiry FROM viewers
                     WHERE is_vip = 1 AND vip_expiry IS NOT NULL
                 """)
-                vips_to_check = await cursor.fetchall()
+                vips_to_check = await c.fetchall()
 
                 for v in vips_to_check:
-                    twitch_id = v['twitch_id'] if hasattr(v, 'keys') else v[0]
-                    username = v['username'] if hasattr(v, 'keys') else v[1]
-                    vip_expiry = v['vip_expiry'] if hasattr(v, 'keys') else v[2]
+                    twitch_id = v['twitch_id']
+                    username = v['username']
+                    vip_expiry = v['vip_expiry']
 
                     try:
-                        expiry_str = str(vip_expiry).replace("T", " ")
-                        if len(expiry_str) == 16:
-                            expiry_str += ":00"
-                        expiry_dt = datetime.strptime(expiry_str[:19], '%Y-%m-%d %H:%M:%S')
+                        if isinstance(vip_expiry, datetime):
+                            expiry_dt = vip_expiry
+                        else:
+                            expiry_str = str(vip_expiry).replace("T", " ")
+                            if len(expiry_str) == 16:
+                                expiry_str += ":00"
+                            expiry_dt = datetime.strptime(expiry_str[:19], '%Y-%m-%d %H:%M:%S')
 
                         if expiry_dt <= now:
                             expired_vips.append({"twitch_id": twitch_id, "username": username})
@@ -1065,18 +1083,15 @@ class MasthbotTwitch(commands.Bot):
                         logger.error(f"❌ Erreur lecture date pour {username} : {e}")
 
                 if expired_vips:
-                    # --- PRÉPARATION DU MOTEUR RÉSEAU POUR TWITCH ---
                     headers = {"Client-ID": self._http.client_id, "Authorization": f"Bearer {self.master_token}"}
                     session = await self.get_web_session()
 
                     for v in expired_vips:
-                        # 1. On l'enlève de la base de données
                         await conn.execute(
-                            "UPDATE viewers SET is_vip = 0, vip_expiry = NULL WHERE twitch_id = ?",
+                            "UPDATE viewers SET is_vip = 0, vip_expiry = NULL WHERE twitch_id = $1",
                             (str(v['twitch_id']),)
                         )
                         
-                        # 2. 🚀 ON L'ENLÈVE EN DIRECT SUR TWITCH !
                         try:
                             url = f"https://api.twitch.tv/helix/channels/vips?broadcaster_id={self.broadcaster_id}&user_id={v['twitch_id']}"
                             async with session.delete(url, headers=headers) as resp:
@@ -1087,81 +1102,65 @@ class MasthbotTwitch(commands.Bot):
                         except Exception as e:
                             logger.error(f"❌ Erreur réseau API Twitch pour expiration {v['username']} : {e}")
 
-                    await conn.commit()
                     logger.info(f"💾 [DB & TWITCH] Grades de {len(expired_vips)} viewers expirés et retirés avec succès.")
                         
         except Exception as e:
             logger.error(f"💥 CRASH DANS LA ROUTINE VIP : {e}", exc_info=True)
 
-    # =====================================================================
-    # 🤖 ASPIRATEUR AUTOMATIQUE DES MODOS ET VIPs DEPUIS TWITCH
-    # =====================================================================
     @routines.routine(hours=1)
     async def sync_roles_timer(self):
-        """Aspirateur Automatique de Rôles Twitch (Tourne toutes les heures en fond)"""
         if not self.broadcaster_id: return
         
         try:
             client_id = os.getenv("TWITCH_CLIENT_ID", getattr(self._http, 'client_id', ''))
             headers = {"Client-ID": client_id, "Authorization": f"Bearer {self.master_token}"}
-            
-            # 🔥 NOUVEAU : On allume le moteur réseau pour toute la routine
             session = await self.get_web_session()
             
-            # 1. Aspirer les Modérateurs
             mods = []
-            cursor = ""
+            cursor_tw = ""
             while True:
                 url = f"https://api.twitch.tv/helix/moderation/moderators?broadcaster_id={self.broadcaster_id}&first=100"
-                if cursor: url += f"&after={cursor}"
+                if cursor_tw: url += f"&after={cursor_tw}"
                 async with session.get(url, headers=headers) as r:
                     if r.status != 200: break
                     data = await r.json()
                     mods.extend(data.get("data", []))
-                    cursor = data.get("pagination", {}).get("cursor")
-                    if not cursor: break
+                    cursor_tw = data.get("pagination", {}).get("cursor")
+                    if not cursor_tw: break
                     
-            # 2. Aspirer les VIPs
             vips = []
-            cursor = ""
+            cursor_tw = ""
             while True:
                 url = f"https://api.twitch.tv/helix/channels/vips?broadcaster_id={self.broadcaster_id}&first=100"
-                if cursor: url += f"&after={cursor}"
+                if cursor_tw: url += f"&after={cursor_tw}"
                 async with session.get(url, headers=headers) as r:
                     if r.status != 200: break
                     data = await r.json()
                     vips.extend(data.get("data", []))
-                    cursor = data.get("pagination", {}).get("cursor")
-                    if not cursor: break
-                        
-            def _save_sync():
-                conn = sqlite3.connect(DB_PATH, timeout=20.0)
+                    cursor_tw = data.get("pagination", {}).get("cursor")
+                    if not cursor_tw: break
+
+            async with get_db_connection() as conn:
                 count_mods, count_vips = 0, 0
                 for m in mods:
-                    conn.execute("INSERT OR IGNORE INTO viewers (twitch_id, username) VALUES (?, ?)", (m['user_id'], m['user_login']))
-                    conn.execute("UPDATE viewers SET is_mod = 1 WHERE twitch_id = ?", (m['user_id'],))
+                    await conn.execute("INSERT INTO viewers (twitch_id, username) VALUES ($1, $2) ON CONFLICT(twitch_id) DO NOTHING", (str(m['user_id']), m['user_login']))
+                    await conn.execute("UPDATE viewers SET is_mod = 1 WHERE twitch_id = $1", (str(m['user_id']),))
                     count_mods += 1
                 for v in vips:
-                    conn.execute("INSERT OR IGNORE INTO viewers (twitch_id, username) VALUES (?, ?)", (v['user_id'], v['user_login']))
-                    conn.execute("UPDATE viewers SET is_vip = 1 WHERE twitch_id = ?", (v['user_id'],))
+                    await conn.execute("INSERT INTO viewers (twitch_id, username) VALUES ($1, $2) ON CONFLICT(twitch_id) DO NOTHING", (str(v['user_id']), v['user_login']))
+                    await conn.execute("UPDATE viewers SET is_vip = 1 WHERE twitch_id = $1", (str(v['user_id']),))
                     count_vips += 1
-                conn.commit()
-                conn.close()
-                return count_mods, count_vips
 
-            import asyncio
-            count_mods, count_vips = await asyncio.to_thread(_save_sync)
+            logger.info(f"🔄 [ASPIRATEUR] Synchro Twitch terminée : {count_mods} Modos, {count_vips} VIPs.")
 
         except Exception as e:
             logger.error(f"❌ [ROUTINE] Erreur dans l'aspirateur Twitch : {e}")
 
     @routines.routine(minutes=5)
     async def sync_subs_timer(self):
-        """Récupère le nombre total de subs et l'écrit dans le fichier pour OBS."""
         if not self.broadcaster_id: return
 
         try:
-            # 1. Préparation de la requête API Twitch
             client_id = os.getenv("TWITCH_CLIENT_ID", getattr(self._http, 'client_id', ''))
             headers = {
                 "Client-ID": client_id,
@@ -1169,19 +1168,14 @@ class MasthbotTwitch(commands.Bot):
             }
             url = f"https://api.twitch.tv/helix/subscriptions?broadcaster_id={self.broadcaster_id}"
 
-            # 2. On interroge Twitch avec la session globale
             session = await self.get_web_session()
             async with session.get(url, headers=headers) as r:
                 if r.status == 200:
                     data = await r.json()
-                    # L'API Twitch renvoie un champ 'total' très pratique !
                     total_subs = data.get("total", 0)
 
-                    # 3. On importe ton service et on écrit le fichier
                     from app.services.label_service import write_label
                     write_label("nombre_subs.txt", str(total_subs))
-
-                    #logger.info(f"⭐ [AUTO-SYNC] Compteur de subs mis à jour : {total_subs}")
                 else:
                     logger.warning(f"⚠️ [TWITCH API] Impossible de lire les subs (As-tu l'autorisation 'channel:read:subscriptions' ?) Code: {r.status}")
 
@@ -1190,7 +1184,6 @@ class MasthbotTwitch(commands.Bot):
 
     @routines.routine(minutes=2)
     async def sync_viewers_timer(self):
-        """Récupère le nombre de viewers en direct et l'écrit pour OBS."""
         if not self.broadcaster_id: return
 
         try:
@@ -1199,32 +1192,24 @@ class MasthbotTwitch(commands.Bot):
                 "Client-ID": client_id,
                 "Authorization": f"Bearer {self.master_token}"
             }
-            # L'API pour récupérer les infos du stream en cours
             url = f"https://api.twitch.tv/helix/streams?user_id={self.broadcaster_id}"
 
-            # Utilisation de la session globale
             session = await self.get_web_session()
             async with session.get(url, headers=headers) as r:
                 if r.status == 200:
                     data = await r.json()
                     streams = data.get("data", [])
 
-                    # Si la liste est vide, c'est que le stream est hors ligne (donc 0 viewer)
                     viewers_count = streams[0].get("viewer_count", 0) if streams else 0
 
-                    # On écrit le résultat dans le fichier
                     from app.services.label_service import write_label
                     write_label("viewers.txt", str(viewers_count))
-
-                    #logger.info(f"👁️ [AUTO-SYNC] Viewers mis à jour : {viewers_count}")
         except Exception as e:
             logger.error(f"❌ [AUTO-SYNC] Erreur de lecture des viewers : {e}")
 
     @routines.routine(seconds=60)
     async def announcements_timer(self):
-        """Routine gérant l'envoi des annonces automatiques dans le chat."""
         try:
-            # 1. Vérification si le stream est en ligne
             try:
                 streams = await self.fetch_streams(user_logins=[self.channel_name])
                 if not streams:
@@ -1232,10 +1217,9 @@ class MasthbotTwitch(commands.Bot):
             except Exception:
                 return
 
-            # 2. Récupération des annonces en base de données
             async with get_db_connection() as conn:
-                cursor = await conn.execute("SELECT * FROM announcements WHERE is_enabled = 1 AND trigger_type = 'interval'")
-                announcements = await cursor.fetchall()
+                c1 = await conn.execute("SELECT * FROM announcements WHERE is_enabled = 1 AND trigger_type = 'interval'")
+                announcements = await c1.fetchall()
                 
                 channel = self.get_channel(self.channel_name)
                 if not channel or not announcements:
@@ -1243,7 +1227,6 @@ class MasthbotTwitch(commands.Bot):
 
                 now = datetime.now()
                 
-                # 3. Calcul de l'intervalle minimum pour ne pas spammer
                 min_intervals = []
                 for a in announcements:
                     try:
@@ -1253,29 +1236,34 @@ class MasthbotTwitch(commands.Bot):
                 
                 min_interval = min(min_intervals) if min_intervals else 10
                 
-                # Vérification du dernier envoi global
-                cursor_last = await conn.execute("SELECT MAX(last_triggered) as max_date FROM announcements WHERE is_enabled = 1 AND trigger_type = 'interval'")
-                global_last_row = await cursor_last.fetchone()
+                c2 = await conn.execute("SELECT MAX(last_triggered) as max_date FROM announcements WHERE is_enabled = 1 AND trigger_type = 'interval'")
+                global_last_row = await c2.fetchone()
                 
                 if global_last_row and global_last_row["max_date"]:
                     try:
-                        global_last = datetime.strptime(global_last_row["max_date"], '%Y-%m-%d %H:%M:%S')
+                        global_last = global_last_row["max_date"]
+                        if isinstance(global_last, str):
+                            global_last = datetime.strptime(global_last, '%Y-%m-%d %H:%M:%S')
+                            
                         global_diff = (now - global_last).total_seconds() / 60
                         if global_diff < min_interval:
                             return
                     except: pass
 
-                # 4. Sélection de l'annonce la plus "en retard"
                 valid_anns = []
                 for ann in announcements:
                     interval = int(ann["interval_minutes"] or 10)
-                    last_trig_str = ann["last_triggered"]
+                    last_trig_raw = ann["last_triggered"]
                     
-                    if not last_trig_str:
+                    if not last_trig_raw:
                         valid_anns.append((ann, 999999))
                     else:
                         try:
-                            last_trig = datetime.strptime(last_trig_str, '%Y-%m-%d %H:%M:%S')
+                            if isinstance(last_trig_raw, datetime):
+                                last_trig = last_trig_raw
+                            else:
+                                last_trig = datetime.strptime(str(last_trig_raw), '%Y-%m-%d %H:%M:%S')
+                                
                             diff = (now - last_trig).total_seconds() / 60
                             if diff >= interval:
                                 valid_anns.append((ann, diff - interval))
@@ -1286,9 +1274,8 @@ class MasthbotTwitch(commands.Bot):
 
                 valid_anns.sort(key=lambda x: x[1], reverse=True)
                 ann_to_send = valid_anns[0][0]
-                msg = ann_to_send["message_template"]
+                msg = str(dict(ann_to_send).get("message_template") or "")
 
-                # 5. Remplacement des variables dynamiques (Stats P0)
                 if "{viewers}" in msg:
                     msg = msg.replace("{viewers}", str(len(channel.chatters)) if channel else "0")
 
@@ -1302,28 +1289,27 @@ class MasthbotTwitch(commands.Bot):
                         minutes, _ = divmod(rem, 60)
                         msg = msg.replace("{uptime}", f"{hours}h {minutes}m" if hours > 0 else f"{minutes}m")
 
-                # 6. Statistiques complexes (Top XP, Subs, etc.)
                 if any(t in msg for t in ["{top5_xp}", "{top5_msg}", "{levelups}", "{last_sub}", "{last_raid}"]):
-                    excl = "('masthom_', 'felixthebigblackcat', 'streamelements', 'wizebot', 'nightbot')"
+                    excl_list = ['masthom_', 'felixthebigblackcat', 'streamelements', 'wizebot', 'nightbot']
                     
                     if "{top5_xp}" in msg:
-                        cur = await conn.execute(f"SELECT username FROM viewers WHERE LOWER(username) NOT IN {excl} ORDER BY points DESC LIMIT 5")
-                        res = await cur.fetchall()
-                        msg = msg.replace("{top5_xp}", ", ".join([f"@{r['username']}" for r in res]))
+                        c_xp = await conn.execute("SELECT username FROM viewers WHERE LOWER(username) != ALL($1) ORDER BY points DESC LIMIT 5", (excl_list,))
+                        res_xp = await c_xp.fetchall()
+                        msg = msg.replace("{top5_xp}", ", ".join([f"@{r['username']}" for r in res_xp]))
                         
                     if "{top5_msg}" in msg:
-                        cur = await conn.execute(f"SELECT username FROM viewers WHERE LOWER(username) NOT IN {excl} ORDER BY messages DESC LIMIT 5")
-                        res = await cur.fetchall()
-                        msg = msg.replace("{top5_msg}", ", ".join([f"@{r['username']}" for r in res]))
+                        c_msg = await conn.execute("SELECT username FROM viewers WHERE LOWER(username) != ALL($1) ORDER BY messages DESC LIMIT 5", (excl_list,))
+                        res_msg = await c_msg.fetchall()
+                        msg = msg.replace("{top5_msg}", ", ".join([f"@{r['username']}" for r in res_msg]))
 
                     if "{last_sub}" in msg:
-                        cur = await conn.execute("SELECT username FROM stream_events WHERE event_type = 'sub' ORDER BY timestamp DESC LIMIT 1")
-                        ls = await cur.fetchone()
+                        c_sub = await conn.execute("SELECT username FROM stream_events WHERE event_type = 'sub' ORDER BY timestamp DESC LIMIT 1")
+                        ls = await c_sub.fetchone()
                         msg = msg.replace("{last_sub}", ls['username'] if ls else "Personne :(")
 
                     if "{levelups}" in msg:
-                        cur = await conn.execute("SELECT twitch_id, username, points FROM viewers WHERE points > 0")
-                        v_db = await cur.fetchall()
+                        c_lvl = await conn.execute("SELECT twitch_id, username, points FROM viewers WHERE points > 0")
+                        v_db = await c_lvl.fetchall()
                         leveled = []
                         for v in v_db:
                             lvl = max(1, int((v['points'] / 100) ** (1 / 2.2)))
@@ -1333,11 +1319,21 @@ class MasthbotTwitch(commands.Bot):
                             self.known_levels[tid] = lvl
                         msg = msg.replace("{levelups}", ", ".join(leveled[:6]) if leveled else "Pas de level up récent !")
 
-                # 7. Envoi final et mise à jour
-                logger.info(f"📢 [ANNONCE] Envoi : '{ann_to_send['label']}'")
-                await channel.send(msg)
-                await conn.execute("UPDATE announcements SET last_triggered = ? WHERE id = ?", (now.strftime('%Y-%m-%d %H:%M:%S'), ann_to_send['id']))
-                await conn.commit()
+                # 1. On cherche le nom de l'annonce peu importe la colonne
+                nom_annonce = ann_to_send.get("label") or ann_to_send.get("title") or ann_to_send.get("name", "Annonce sans titre")
+                
+                # 2. Si le message est totalement vide, on bloque l'envoi et on analyse !
+                if not msg or not msg.strip():
+                    logger.error(f"❌ ÉCHEC : Le texte de '{nom_annonce}' est vide ! Twitch refuse de l'envoyer.")
+                    logger.error(f"🔍 Voici les VRAIES colonnes de ta base de données : {list(ann_to_send.keys())}")
+                else:
+                    # 3. L'envoi officiel sur Twitch
+                    logger.info(f"📢 [ANNONCE] Envoi sur le chat : '{nom_annonce}'")
+                    if channel:
+                        await channel.send(msg)
+
+                # 4. On valide qu'on l'a traitée pour ne pas boucler indéfiniment
+                await conn.execute("UPDATE announcements SET last_triggered = $1 WHERE id = $2", (now, ann_to_send['id']))
 
         except Exception as e:
             if "closing transport" not in str(e):
@@ -1345,40 +1341,64 @@ class MasthbotTwitch(commands.Bot):
 
     @routines.routine(minutes=5)
     async def watchdog_timer(self):
-        """Superviseur : Vérifie que toutes les routines tournent et ping Node.js."""
-        
-        # 1. Vérification des routines internes (Python)
         routines_to_check = {
             "Watchtime": self.watchtime_timer,
             "Annonces": self.announcements_timer,
             "Aspirateur de Rôles": self.sync_roles_timer,
             "Compteur Subs": self.sync_subs_timer,
             "Compteur Viewers": self.sync_viewers_timer,
-            "Expiration VIP": self.vip_expiration_timer
+            "Expiration VIP": self.vip_expiration_timer,
+            "Détecteur Followers": self.followers_detector_timer
         }
 
         for name, routine in routines_to_check.items():
             try:
                 if routine._task is None:
-                    # Si la routine n'a jamais démarré, on l'allume proprement
                     logger.info(f"▶️ [WATCHDOG] Démarrage initial de la routine '{name}'...")
                     routine.start()
                 elif routine._task.done():
-                    # Si elle avait démarré mais qu'elle s'est arrêtée, c'est un vrai crash
                     logger.warning(f"⚠️ [WATCHDOG] La routine '{name}' a crashé ! Relance de force...")
                     routine.restart()
             except Exception as e:
                 logger.error(f"❌ [WATCHDOG] Erreur inattendue lors de la vérification de '{name}' : {e}")
 
-        # 2. 🔥 NOUVEAU : Vérification de la santé du serveur externe (Node.js)
         try:
-            # On utilise le timeout=2 pour ne pas bloquer le bot si Node.js est figé
             session = await self.get_web_session()
             async with session.get("http://127.0.0.1:3005/", timeout=2) as resp:
-                pass # Si on arrive ici, c'est que Node.js est allumé et répond au réseau !
+                pass
         except Exception:
-            # Si le port 3005 est fermé ou injoignable, on déclenche une alerte rouge
             logger.error("🚨 [WATCHDOG FATAL] Impossible de contacter Node.js (Port 3005) ! L'overlay est probablement éteint ou planté.")
 
-# --- FIN DU FICHIER ---
+    @routines.routine(seconds=3)
+    async def followers_detector_timer(self):
+        """Détecteur ultra-rapide de followers (Instantané)"""
+        if not self.broadcaster_id: return
+
+        try:
+            client_id = os.getenv("TWITCH_CLIENT_ID", getattr(self._http, 'client_id', ''))
+            headers = {
+                "Client-ID": client_id,
+                "Authorization": f"Bearer {self.master_token}"
+            }
+            # On interroge Twitch pour voir le tout dernier follower
+            url = f"https://api.twitch.tv/helix/channels/followers?broadcaster_id={self.broadcaster_id}&first=1"
+
+            session = await self.get_web_session()
+            async with session.get(url, headers=headers) as r:
+                if r.status == 200:
+                    data = await r.json()
+                    if data.get("data"):
+                        latest_follower = data["data"][0]["user_name"]
+                        
+                        # On lit le dernier enregistré
+                        current_follower = lire_fichier_label("dernier_follow.txt")
+                        
+                        # Si c'est un NOUVEAU follower (Réaction à la seconde près !)
+                        if current_follower.lower() != latest_follower.lower():
+                            write_label("dernier_follow.txt", latest_follower)
+                            credits_service.log_event("followers", latest_follower, "Bienvenue !")
+                            logger.info(f"💙 Nouveau Follower instantané : {latest_follower}")
+        except Exception as e:
+            logger.error(f"❌ [DETECTOR] Erreur Follow : {e}")
+
 twitch_bot = MasthbotTwitch()

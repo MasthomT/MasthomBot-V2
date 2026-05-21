@@ -2,35 +2,24 @@ import asyncio
 import aiohttp
 import json
 import logging
-import sqlite3
 import os
 import collections
 from datetime import datetime
 import dotenv
 
+from app.core.database import get_db_connection
 from app.repositories import viewer_repo
 from app.services.credits_service import credits_service
 from app.routes.overlays import trigger_overlay_event
 from app.services import twitch_poll_state
 
-# Configuration du logger pour le service
 logger = logging.getLogger("masthbot.eventsub")
-DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
 
-# 🛡️ BOUCLIER ANTI-DOUBLONS (Garde en mémoire les 200 derniers ID d'événements Twitch)
 processed_message_ids = collections.deque(maxlen=200)
 
-# =====================================================================
-# 🛠️ UTILITAIRES DE JOURNALISATION ET MISE À JOUR
-# =====================================================================
-
-def log_stream_event(event_type, username, details):
-    """Enregistre un événement dans la table stream_events pour l'historique du dashboard."""
+async def log_stream_event(event_type, username, details):
     try:
-        conn = sqlite3.connect(DB_PATH)
         clean_username = str(username or "Inconnu").strip()
-
-        # Formatage intelligent en français pour le Dashboard
         formatted_details = details
         if isinstance(details, dict):
             if event_type == "sub":
@@ -53,64 +42,49 @@ def log_stream_event(event_type, username, details):
             else:
                 formatted_details = json.dumps(details, ensure_ascii=False)
 
-        conn.execute(
-            "INSERT INTO stream_events (event_type, username, details, timestamp) VALUES (?, ?, ?, ?)",
-            (event_type, clean_username, str(formatted_details), datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-        )
-        conn.commit()
-        conn.close()
+        async with get_db_connection() as conn:
+            await conn.execute(
+                "INSERT INTO stream_events (event_type, username, details, timestamp) VALUES (?, ?, ?, NOW())",
+                (event_type, clean_username, str(formatted_details))
+            )
         logger.info(f"🎉 [EVENT enregistré] {clean_username} -> {event_type.upper()}")
     except Exception as e:
         logger.error(f"❌ [DB EVENT ERROR] : {e}")
 
-def update_viewer_stat(user_id, username, stat_column, value, increment=True):
-    """
-    Met à jour les statistiques de trophées d'un viewer.
-    - increment=True : Additionne la valeur (Bits, Cadeaux, Points de chaîne)
-    - increment=False : Écrase la valeur (Mois de sub cumulés)
-    """
-    if not user_id or not username:
-        return
-        
+async def update_viewer_stat(user_id, username, stat_column, value, increment=True):
+    if not user_id or not username: return
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        if increment:
-            query = f"""
-                INSERT INTO viewers (twitch_id, username, {stat_column})
-                VALUES (?, ?, ?)
-                ON CONFLICT(twitch_id) DO UPDATE SET
-                    {stat_column} = COALESCE({stat_column}, 0) + ?,
-                    username = excluded.username
-            """
-            cursor.execute(query, (user_id, username, value, value))
-        else:
-            query = f"""
-                INSERT INTO viewers (twitch_id, username, {stat_column})
-                VALUES (?, ?, ?)
-                ON CONFLICT(twitch_id) DO UPDATE SET
-                    {stat_column} = ?,
-                    username = excluded.username
-            """
-            cursor.execute(query, (user_id, username, value, value))
-            
-        conn.commit()
-        conn.close()
+        async with get_db_connection() as conn:
+            if increment:
+                query = f"""
+                    INSERT INTO viewers (twitch_id, username, {stat_column})
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(twitch_id) DO UPDATE SET
+                        {stat_column} = COALESCE(viewers.{stat_column}, 0) + ?,
+                        username = excluded.username
+                """
+                await conn.execute(query, (str(user_id), username, value, value))
+            else:
+                query = f"""
+                    INSERT INTO viewers (twitch_id, username, {stat_column})
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(twitch_id) DO UPDATE SET
+                        {stat_column} = ?,
+                        username = excluded.username
+                """
+                await conn.execute(query, (str(user_id), username, value, value))
         logger.info(f"🏆 [STAT MAJ] {username} -> {stat_column} mis à jour (+{value} si inc).")
     except Exception as e:
         logger.error(f"❌ [DB STAT ERROR] Impossible de mettre à jour {stat_column} pour {username}: {e}")
 
-def get_current_xp_settings():
-    """Récupère les réglages d'EXP depuis la table settings."""
+async def get_current_xp_settings():
     try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        row = conn.execute("SELECT * FROM settings WHERE id=1").fetchone()
-        conn.close()
-        if row:
-            d = dict(row)
-            return {k: (v if v is not None else 0) for k, v in d.items()}
+        async with get_db_connection() as conn:
+            cur = await conn.execute("SELECT * FROM settings WHERE id=1")
+            row = await cur.fetchone()
+            if row:
+                d = dict(row)
+                return {k: (v if v is not None else 0) for k, v in d.items()}
     except Exception as e:
         logger.error(f"❌ [SETTINGS ERROR] : {e}")
 
@@ -120,12 +94,7 @@ def get_current_xp_settings():
         "exp_raid_per_viewer": 10
     }
 
-# =====================================================================
-# 📡 GESTION DES ABONNEMENTS TWITCH
-# =====================================================================
-
 async def subscribe_to_event(session, client_id, token, ws_session_id, sub_type, version, condition):
-    """Envoie une requête EventSub pour s'abonner à un événement précis."""
     url = "https://api.twitch.tv/helix/eventsub/subscriptions"
     headers = {
         "Client-ID": client_id,
@@ -133,13 +102,8 @@ async def subscribe_to_event(session, client_id, token, ws_session_id, sub_type,
         "Content-Type": "application/json"
     }
     payload = {
-        "type": sub_type,
-        "version": version,
-        "condition": condition,
-        "transport": {
-            "method": "websocket",
-            "session_id": ws_session_id
-        }
+        "type": sub_type, "version": version, "condition": condition,
+        "transport": { "method": "websocket", "session_id": ws_session_id }
     }
     async with session.post(url, headers=headers, json=payload) as resp:
         if resp.status == 202:
@@ -148,12 +112,7 @@ async def subscribe_to_event(session, client_id, token, ws_session_id, sub_type,
             err = await resp.text()
             logger.error(f"❌ Échec abonnement {sub_type} : {err}")
 
-# =====================================================================
-# 🌀 BOUCLE PRINCIPALE WEBSOCKET
-# =====================================================================
-
 async def eventsub_routine():
-    """Gère la connexion continue et traite les messages Twitch en direct."""
     env = dotenv.dotenv_values("/home/thomas/masthom/BOT_V2/.env")
     client_id = env.get("TWITCH_CLIENT_ID", "").strip()
     token = env.get("TWITCH_OAUTH_TOKEN", "").replace("oauth:", "").strip()
@@ -165,40 +124,32 @@ async def eventsub_routine():
         return
 
     async with aiohttp.ClientSession() as session:
-        # 1. Récupération de l'ID du Streamer
         headers = {"Client-ID": client_id, "Authorization": f"Bearer {token}"}
         async with session.get(f"https://api.twitch.tv/helix/users?login={channel_name}", headers=headers) as resp:
             data = await resp.json()
             if not data.get("data"):
-                logger.error(f"❌ Impossible de trouver l'ID de la chaîne {channel_name}")
                 return
             broadcaster_id = data["data"][0]["id"]
 
-        # 2. Ouverture du tunnel avec Twitch
         async with session.ws_connect("wss://eventsub.wss.twitch.tv/ws") as ws:
             logger.info("📡 [WebSocket] Connexion établie. Écoute du direct lancée...")
-
             async for msg in ws:
                 if msg.type == aiohttp.WSMsgType.TEXT:
                     data = json.loads(msg.data)
                     msg_type = data.get("metadata", {}).get("message_type")
                     msg_id = data.get("metadata", {}).get("message_id")
 
-                    # 🛡️ Anti-doublons
                     if msg_id:
                         if msg_id in processed_message_ids: continue
                         processed_message_ids.append(msg_id)
 
-                    # --- A. INITIALISATION ---
                     if msg_type == "session_welcome":
                         ws_id = data["payload"]["session"]["id"]
                         logger.info(f"🆔 Session EventSub validée : {ws_id}")
-
                         c_broad = {"broadcaster_user_id": broadcaster_id}
                         c_raid = {"to_broadcaster_user_id": broadcaster_id}
                         c_mod = {"broadcaster_user_id": broadcaster_id, "moderator_user_id": broadcaster_id}
 
-                        # Liste exhaustive des abonnements
                         await subscribe_to_event(session, client_id, token, ws_id, "channel.subscribe", "1", c_broad)
                         await subscribe_to_event(session, client_id, token, ws_id, "channel.subscription.message", "1", c_broad)
                         await subscribe_to_event(session, client_id, token, ws_id, "channel.subscription.gift", "1", c_broad)
@@ -206,9 +157,7 @@ async def eventsub_routine():
                         await subscribe_to_event(session, client_id, token, ws_id, "channel.cheer", "1", c_broad)
                         await subscribe_to_event(session, client_id, token, ws_id, "channel.follow", "2", c_mod)
                         await subscribe_to_event(session, client_id, token, ws_id, "channel.ban", "1", c_broad)
-                        # Nouveau : Points de chaîne
                         await subscribe_to_event(session, client_id, token, ws_id, "channel.channel_points_custom_reward_redemption.add", "1", c_broad)
-                        # Abonnements aux Sondages et Prédictions Twitch
                         await subscribe_to_event(session, client_id, token, ws_id, "channel.poll.begin", "1", c_broad)
                         await subscribe_to_event(session, client_id, token, ws_id, "channel.poll.progress", "1", c_broad)
                         await subscribe_to_event(session, client_id, token, ws_id, "channel.poll.end", "1", c_broad)
@@ -216,38 +165,31 @@ async def eventsub_routine():
                         await subscribe_to_event(session, client_id, token, ws_id, "channel.prediction.progress", "1", c_broad)
                         await subscribe_to_event(session, client_id, token, ws_id, "channel.prediction.end", "1", c_broad)
 
-                    # --- B. RÉCEPTION DE NOTIFICATION ---
                     elif msg_type == "notification":
-                        
-                        # 👉 LES 3 LIGNES À RAJOUTER SONT ICI :
                         sub_type = data["metadata"]["subscription_type"]
                         event = data["payload"]["event"]
-                        conf = get_current_xp_settings()
+                        conf = await get_current_xp_settings()
 
-                        # 1. SUBS ET RÉABONNEMENTS
                         if sub_type in ["channel.subscribe", "channel.subscription.message"]:
                             user_name = event.get("user_name", "Inconnu")
                             user_id = event.get("user_id")
                             tier = event.get("tier", "1000")[0] 
                             
-                            # Mise à jour des mois (écrase la valeur précédente)
                             cumulative_months = event.get("cumulative_months", 1)
-                            update_viewer_stat(user_id, user_name, "sub_months", cumulative_months, increment=False)
+                            await update_viewer_stat(user_id, user_name, "sub_months", cumulative_months, increment=False)
                             
-                            # 🏷️ STREAM LABEL : Dernier Sub
                             from app.services.label_service import write_label
                             write_label("dernier_sub.txt", f"{user_name} | {cumulative_months} mois")
                             
                             if not event.get("is_gift"):
                                 xp = int(conf.get(f"exp_sub_t{tier}") or 500)
                                 await viewer_repo.add_experience(user_id, user_name, xp, "SUB", f"Abonnement Tier {tier}")
-                                log_stream_event("sub", user_name, {"tier": tier, "xp": xp, "is_gift": False})
+                                await log_stream_event("sub", user_name, {"tier": tier, "xp": xp, "is_gift": False})
                                 credits_service.log_event("subscribers", user_name, f"Tier {tier}")
                             else:
-                                log_stream_event("sub", user_name, {"tier": tier, "is_gift": True})
+                                await log_stream_event("sub", user_name, {"tier": tier, "is_gift": True})
                                 credits_service.log_event("subscribers", user_name, f"Cadeau Reçu")
 
-                        # 2. SUBGIFTS (CADEAUX)
                         elif sub_type == "channel.subscription.gift":
                             if not event.get("is_anonymous"):
                                 user_name = event.get("user_name", "Anonyme")
@@ -257,18 +199,15 @@ async def eventsub_routine():
                                 val_per_sub = int(conf.get(f"exp_subgift_t{tier}") or 500)
                                 total_xp = val_per_sub * count
 
-                                # 🏷️ STREAM LABEL : Dernier Subgift
                                 from app.services.label_service import write_label
                                 write_label("dernier_subgift.txt", f"{user_name} | {count} subs")
 
-                                # Incrément du compteur de cadeaux
-                                update_viewer_stat(user_id, user_name, "gifts_count", count, increment=True)
+                                await update_viewer_stat(user_id, user_name, "gifts_count", count, increment=True)
 
                                 credits_service.log_event("gifters", user_name, f"{count} Subs offerts")
                                 await viewer_repo.add_experience(user_id, user_name, total_xp, "SUBGIFT", f"Offre {count} Subs Tier {tier}")
-                                log_stream_event("subgift", user_name, {"count": count, "tier": tier, "xp": total_xp})
+                                await log_stream_event("subgift", user_name, {"count": count, "tier": tier, "xp": total_xp})
 
-                        # 3. RAIDS
                         elif sub_type == "channel.raid":
                             raider_name = event.get("from_broadcaster_user_name", "Inconnu")
                             raider_id = event.get("from_broadcaster_user_id")
@@ -276,16 +215,14 @@ async def eventsub_routine():
                             xp_per_head = int(conf.get("exp_raid_per_viewer") or 10)
                             total_xp = v_count * xp_per_head
 
-                            # 🏷️ STREAM LABEL : Dernier Raid
                             from app.services.label_service import write_label
                             write_label("dernier_raid.txt", f"{raider_name} | {v_count} viewers")
 
                             if raider_id:
                                 await viewer_repo.add_experience(raider_id, raider_name, total_xp, "RAID", f"Raid de {v_count} personnes")
-                            log_stream_event("raid", raider_name, {"viewers": v_count, "xp": total_xp})
+                            await log_stream_event("raid", raider_name, {"viewers": v_count, "xp": total_xp})
                             credits_service.log_event("raiders", raider_name, f"{v_count} Viewers")
 
-                        # 4. BITS (CHEERS)
                         elif sub_type == "channel.cheer":
                             is_anon = event.get("is_anonymous", False)
                             user_name = "Anonyme" if is_anon else event.get("user_name", "Anonyme")
@@ -293,49 +230,39 @@ async def eventsub_routine():
                             bits = int(event.get("bits", 0))
                             total_xp = bits * 5
 
-                            # 🏷️ STREAM LABEL : Dernier Cheer (Bits)
                             from app.services.label_service import write_label
                             write_label("dernier_bits.txt", f"{user_name} | {bits} bits")
 
                             if not is_anon and user_id:
-                                # Incrément du compteur de Bits
-                                update_viewer_stat(user_id, user_name, "bits_count", bits, increment=True)
+                                await update_viewer_stat(user_id, user_name, "bits_count", bits, increment=True)
                                 await viewer_repo.add_experience(user_id, user_name, total_xp, "CHEER", f"Don de {bits} bits")
 
-                            log_stream_event("cheer", user_name, {"bits": bits, "xp_gained": total_xp})
+                            await log_stream_event("cheer", user_name, {"bits": bits, "xp_gained": total_xp})
                             credits_service.log_event("bits", user_name, f"{bits} Bits")
 
-                        # 5. POINTS DE CHAÎNE (RÉCOMPENSES)
                         elif sub_type == "channel.channel_points_custom_reward_redemption.add":
                             user_name = event.get("user_name", "Inconnu")
                             user_id = event.get("user_id")
                             reward_title = event.get("reward", {}).get("title", "Inconnue")
                             
-                            # Incrément du compteur de récompenses pour les trophées
-                            update_viewer_stat(user_id, user_name, "rewards_claimed", 1, increment=True)
-                            log_stream_event("reward", user_name, {"reward_name": reward_title})
+                            await update_viewer_stat(user_id, user_name, "rewards_claimed", 1, increment=True)
+                            await log_stream_event("reward", user_name, {"reward_name": reward_title})
 
-                        # 6. FOLLOWS
                         elif sub_type == "channel.follow":
                             user_name = event.get("user_name", "Inconnu")
-                            
-                            # 🏷️ STREAM LABEL : Dernier Follow
                             from app.services.label_service import write_label
                             write_label("dernier_follow.txt", f"{user_name}")
-                            
-                            log_stream_event("follow", user_name, {"msg": "Bienvenue !"})
+                            await log_stream_event("follow", user_name, {"msg": "Bienvenue !"})
                             credits_service.log_event("followers", user_name)
 
-                        # 7. SANCTIONS (BAN/TIMEOUT)
                         elif sub_type == "channel.ban":
                             user_name = event.get("user_name", "Inconnu")
                             mod = event.get("moderator_user_name", "Modo")
                             if mod.lower() != bot_name:
                                 action = "Ban" if event.get("is_permanent") else "Timeout"
                                 reason = event.get("reason") or "Aucune raison"
-                                log_stream_event("sanction", user_name, {"reason": f"{action} par {mod} : {reason}"})
+                                await log_stream_event("sanction", user_name, {"reason": f"{action} par {mod} : {reason}"})
 
-                        # 8. SONDAGES ET PRÉDICTIONS
                         elif sub_type in [
                             "channel.poll.begin", "channel.poll.progress", "channel.poll.end",
                             "channel.prediction.begin", "channel.prediction.progress", "channel.prediction.end"
@@ -348,7 +275,6 @@ async def eventsub_routine():
                             is_begin_event = "begin" in sub_type 
                             status = "end" if is_end_event else "update"
                             
-                            # Si c'est un nouveau sondage, on remet les compteurs à zéro
                             if is_begin_event:
                                 poll_state.chat_votes = {1: 0, 2: 0, 3: 0, 4: 0}
                             
@@ -358,34 +284,21 @@ async def eventsub_routine():
                             choices = []
                             
                             raw_choices = event.get("outcomes", []) if is_prediction else event.get("choices", [])
-                            
                             for c in raw_choices:
                                 title_choice = c.get("title", "")
-                                if is_prediction:
-                                    native_votes = c.get("channel_points", 0)
-                                else:
-                                    native_votes = c.get("votes", 0) + c.get("channel_points_votes", 0)
-                                    
+                                native_votes = c.get("channel_points", 0) if is_prediction else c.get("votes", 0) + c.get("channel_points_votes", 0)
                                 total_votes += native_votes
                                 choices.append({"title": title_choice, "votes": native_votes})
 
-                            # ==========================================
-                            # 💬 ANNONCES DANS LE T'CHAT TWITCH
-                            # ==========================================
                             try:
-                                # On importe ton bot depuis le dossier SERVICES
                                 from app.services.twitch_service import twitch_bot 
                                 channel = twitch_bot.get_channel(twitch_bot.channel_name)
                                 
                                 if channel:
                                     prefixe = "🔮 PRÉDICTION" if is_prediction else "📊 SONDAGE"
-                                    
                                     if is_begin_event:
                                         await channel.send(f"{prefixe} EN COURS : {title} ! Participez en haut du t'chat ! ⏳")
-                                        
                                     elif is_end_event:
-                                        # ✅ LE CORRECTIF EST ICI : Le bouclier anti-double message
-                                        # On s'assure qu'on n'a pas déjà vidé la mémoire (ce qui signifierait qu'on a déjà traité la fin)
                                         if poll_state.current_twitch_poll is not None:
                                             if total_votes > 0:
                                                 winner = max(choices, key=lambda x: x["votes"])
@@ -394,53 +307,30 @@ async def eventsub_routine():
                                             else:
                                                 await channel.send(f"✅ {prefixe} TERMINÉ : {title} | 🤷‍♂️ Aucun participant pour cette fois !")
                             except Exception as e:
-                                # Si le chat échoue, on l'affiche dans la console mais on NE BLOQUE PAS l'overlay
                                 print(f"⚠️ Erreur chat (Sondage) : {e}")
 
-                            # ==========================================
-                            # 📺 GESTION DE L'ENVOI À OBS (OVERLAY)
-                            # ==========================================
                             if is_end_event:
                                 final_poll_data = {
-                                    "title": f"✅ {title} (Terminé)",
-                                    "total_votes": total_votes,
-                                    "is_prediction": is_prediction,
-                                    "choices": choices,
-                                    "ends_at": ends_at
+                                    "title": f"✅ {title} (Terminé)", "total_votes": total_votes,
+                                    "is_prediction": is_prediction, "choices": choices, "ends_at": ends_at
                                 }
-                                
-                                await trigger_overlay_event({
-                                    "type": "twitch_event_end",
-                                    "payload": final_poll_data
-                                })
-                                
+                                await trigger_overlay_event({"type": "twitch_event_end", "payload": final_poll_data})
                                 poll_state.current_twitch_poll = None
-
                             else:
                                 poll_state.current_twitch_poll = {
-                                    "title": title,
-                                    "total_votes": total_votes,
-                                    "is_prediction": is_prediction,
-                                    "choices": choices,
-                                    "ends_at": ends_at
+                                    "title": title, "total_votes": total_votes, "is_prediction": is_prediction,
+                                    "choices": choices, "ends_at": ends_at
                                 }
-                                
-                                await trigger_overlay_event({
-                                    "type": f"twitch_event_{status}",
-                                    "payload": poll_state.current_twitch_poll
-                                })
+                                await trigger_overlay_event({"type": f"twitch_event_{status}", "payload": poll_state.current_twitch_poll})
 
-                    # --- C. RECONNEXION ---
                     elif msg_type == "session_reconnect":
                         new_url = data["payload"]["session"]["reconnect_url"]
                         logger.info(f"🔄 Reconnexion requise : {new_url}")
                         break
-
                 elif msg.type in [aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR]:
                     break
 
 async def start_eventsub():
-    """Lance le service avec une sécurité de redémarrage automatique."""
     while True:
         try:
             await eventsub_routine()

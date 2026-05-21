@@ -1,4 +1,3 @@
-import sqlite3
 import logging
 import os
 import shutil
@@ -22,7 +21,6 @@ logger = logging.getLogger("masthbot.deck")
 router = APIRouter(tags=["deck"])
 templates = Jinja2Templates(directory="app/templates")
 
-DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
 UPLOAD_DIR = "/home/thomas/masthom/BOT_V2/app/static/uploads"
 
 class DeckAction(BaseModel):
@@ -245,89 +243,114 @@ async def deck_action(data: DeckAction):
 
 @router.post("/api/instant-replay")
 async def deck_replay():
-    shoutout_service.trigger_replay()
+    await shoutout_service.trigger_replay()
     return {"status": "success"}
 
 # ========================================================
 # 🎵 GESTION DE LA PAGE 3 (SONS & IMAGES)
 # ========================================================
+from app.core.database import get_db_connection
+
 @router.get("/api/deck/buttons")
 async def deck_buttons():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
     try:
-        conn.execute("CREATE TABLE IF NOT EXISTS deck_buttons (id INTEGER PRIMARY KEY AUTOINCREMENT, label TEXT, type TEXT, mode TEXT, file TEXT)")
-        
-        # 🧠 Mise à jour automatique de la base de données pour le Volume
-        try:
-            conn.execute("SELECT volume FROM deck_buttons LIMIT 1")
-        except sqlite3.OperationalError:
-            conn.execute("ALTER TABLE deck_buttons ADD COLUMN volume INTEGER DEFAULT 100")
-            conn.commit()
+        async with get_db_connection() as conn:
+            # 1. Création de la table (Syntaxe PostgreSQL : SERIAL PRIMARY KEY)
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS deck_buttons (
+                    id SERIAL PRIMARY KEY, 
+                    label TEXT, 
+                    type TEXT, 
+                    mode TEXT, 
+                    file TEXT,
+                    volume INTEGER DEFAULT 100
+                )
+            """)
 
-        if conn.execute("SELECT COUNT(*) FROM deck_buttons").fetchone()[0] == 0:
-            for _ in range(12): 
-                conn.execute("INSERT INTO deck_buttons (label, type, mode, file, volume) VALUES ('Vide', 'none', 'click', '', 100)")
-            conn.commit()
+            # 🧠 2. Mise à jour automatique propre
+            try:
+                await conn.execute("ALTER TABLE deck_buttons ADD COLUMN IF NOT EXISTS volume INTEGER DEFAULT 100")
+            except Exception as e:
+                pass # Déjà géré par PostgreSQL
+
+            # 3. Initialisation des 12 boutons vides si la table est vierge
+            c_count = await conn.execute("SELECT COUNT(*) FROM deck_buttons")
+            count_res = await c_count.fetchone()
+            if count_res and count_res[0] == 0:
+                for _ in range(12):
+                    await conn.execute(
+                        "INSERT INTO deck_buttons (label, type, mode, file, volume) VALUES ($1, $2, $3, $4, $5)", 
+                        ('Vide', 'none', 'click', '', 100)
+                    )
+
+            # 4. Retour des boutons
+            c_buttons = await conn.execute("SELECT * FROM deck_buttons ORDER BY id ASC")
+            buttons = await c_buttons.fetchall()
+            return [dict(b) for b in buttons]
             
-        return [dict(b) for b in conn.execute("SELECT * FROM deck_buttons").fetchall()]
-    finally:
-        conn.close()
+    except Exception as e:
+        logger.error(f"❌ Erreur chargement deck_buttons : {e}")
+        return []
 
 @router.post("/api/deck/edit_button")
 async def edit_deck_button(
-    request: Request, 
-    id: int = Form(...), 
-    label: str = Form(...), 
-    type: str = Form(...), 
-    mode: str = Form("click"), 
-    volume: int = Form(100), # 🎚️ Nouveau paramètre reçu du formulaire
+    request: Request,
+    id: int = Form(...),
+    label: str = Form(...),
+    type: str = Form(...),
+    mode: str = Form("click"),
+    volume: int = Form(100),
     file: UploadFile = File(None)
 ):
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA busy_timeout = 5000")
-    
     try:
         filename = None
+        
+        # Gestion du fichier uploadé
         if file and file.filename:
             os.makedirs(UPLOAD_DIR, exist_ok=True)
             safe_name = file.filename.replace(" ", "_").replace("'", "")
             file_path = os.path.join(UPLOAD_DIR, safe_name)
-            with open(file_path, "wb") as buffer: 
+            with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
             filename = f"/static/uploads/{safe_name}"
         else:
-            old_data = conn.execute("SELECT file FROM deck_buttons WHERE id=?", (id,)).fetchone()
-            if old_data:
-                filename = old_data[0]
+            # Récupération de l'ancien fichier si rien n'est uploadé
+            async with get_db_connection() as conn:
+                c_old = await conn.execute("SELECT file FROM deck_buttons WHERE id=$1", (id,))
+                old_data = await c_old.fetchone()
+                if old_data:
+                    filename = old_data['file']
 
+        # Cas d'un bouton vidé
         if type == "none":
             filename = ""
             label = "Vide"
 
-        # 💾 On sauvegarde le volume avec le reste
-        conn.execute("UPDATE deck_buttons SET label=?, type=?, mode=?, file=?, volume=? WHERE id=?", 
-                     (label, type, mode, filename, volume, id))
-        conn.commit()
+        # 💾 Sauvegarde globale avec PostgreSQL
+        async with get_db_connection() as conn:
+            await conn.execute("""
+                UPDATE deck_buttons 
+                SET label=$1, type=$2, mode=$3, file=$4, volume=$5 
+                WHERE id=$6
+            """, (label, type, mode, filename, volume, id))
+            
     except Exception as e:
         logger.error(f"❌ Erreur sauvegarde bouton : {e}")
-    finally:
-        conn.close()
-        
+
     return RedirectResponse(url="/deck/3", status_code=303)
 
 @router.post("/api/trigger-effect")
 async def trigger_effect(payload: dict):
-    try: 
+    try:
         await trigger_overlay_event({"type": "play_sound", "details": payload})
     except Exception as e:
-        logger.error(f"Erreur Overlay : {e}")
+        logger.error(f"Erreur Overlay (Play) : {e}")
     return {"status": "success"}
 
 @router.post("/api/stop-effect")
 async def stop_effect(payload: dict):
-    try: 
+    try:
         await trigger_overlay_event({"type": "stop_sound", "details": payload})
     except Exception as e:
-        logger.error(f"Erreur Overlay : {e}")
+        logger.error(f"Erreur Overlay (Stop) : {e}")
     return {"status": "success"}

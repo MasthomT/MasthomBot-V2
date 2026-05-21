@@ -1,8 +1,8 @@
-import aiosqlite
 import logging
 from typing import Optional, List
 from app.models.viewer import ViewerCreate, ViewerUpdate, ViewerResponse
-from app.core.database import get_db_connection, queue_write
+from app.core.database import get_db_connection
+
 logger = logging.getLogger("masthbot.repo")
 
 # ==========================================================
@@ -10,8 +10,12 @@ logger = logging.getLogger("masthbot.repo")
 # ==========================================================
 def _inject_level(viewer_dict):
     """Fonction centrale : Calcule et greffe le niveau nativement partout."""
-    if not viewer_dict: 
+    if not viewer_dict:
         return None
+    # FIX: asyncpg renvoie des "Records" immuables, on les force en dict
+    if not isinstance(viewer_dict, dict):
+        viewer_dict = dict(viewer_dict)
+        
     xp = viewer_dict.get('points', 0)
     viewer_dict['level'] = max(1, int((xp / 100) ** (1 / 2.2))) if xp > 0 else 1
     return viewer_dict
@@ -21,13 +25,7 @@ async def init_tables() -> None:
     """S'assure que les tables d'historique existent au démarrage."""
     try:
         async with get_db_connection() as db:
-            
-            # --- 🚀 LES 3 LIGNES MAGIQUES ANTI "DATABASE IS LOCKED" ---
-            await db.execute("PRAGMA journal_mode=WAL;")
-            await db.execute("PRAGMA synchronous=NORMAL;")
-            await db.execute("PRAGMA busy_timeout=20000;")
-
-            # Table principale (Totaux)
+            # Table principale
             await db.execute('''
                 CREATE TABLE IF NOT EXISTS viewers (
                     twitch_id TEXT PRIMARY KEY,
@@ -36,39 +34,36 @@ async def init_tables() -> None:
                     messages INTEGER DEFAULT 0,
                     watchtime INTEGER DEFAULT 0,
                     points INTEGER DEFAULT 0,
-                    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    last_seen TIMESTAMP DEFAULT NOW()
                 )
             ''')
 
-            # --- 🛠️ AUTO-RÉPARATION : AJOUT DES COLONNES VIP MANQUANTES ---
             colonnes_manquantes = [
-                ("is_vip", "BOOLEAN DEFAULT 0"),
+                ("is_vip", "INTEGER DEFAULT 0"),
                 ("vip_expiry_date", "TIMESTAMP"),
                 ("roast_level", "INTEGER DEFAULT 0")
             ]
             for col_name, col_type in colonnes_manquantes:
                 try:
-                    await db.execute(f"ALTER TABLE viewers ADD COLUMN {col_name} {col_type}")
+                    await db.execute(f"ALTER TABLE viewers ADD COLUMN IF NOT EXISTS {col_name} {col_type}")
                 except Exception:
-                    pass # Si ça plante, c'est que la colonne existe déjà, on ignore silencieusement !
+                    pass
 
-            # --- 🛠️ AUTO-RÉPARATION : CRÉATION DE LA TABLE ANNONCES ---
             await db.execute('''
                 CREATE TABLE IF NOT EXISTS announcements (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     name TEXT,
                     message TEXT NOT NULL,
                     interval INTEGER DEFAULT 15,
-                    is_active BOOLEAN DEFAULT 1
+                    is_active INTEGER DEFAULT 1
                 )
             ''')
 
-            # Table Journalière (Agrégation automatique)
             await db.execute('''
                 CREATE TABLE IF NOT EXISTS viewer_daily_stats (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     twitch_id TEXT,
-                    day DATE DEFAULT (date('now', 'localtime')),
+                    day DATE DEFAULT CURRENT_DATE,
                     messages INTEGER DEFAULT 0,
                     watchtime INTEGER DEFAULT 0,
                     points_gained INTEGER DEFAULT 0,
@@ -76,216 +71,182 @@ async def init_tables() -> None:
                 )
             ''')
 
-            # Table des Événements (Logs précis : Subs, Raids, etc.)
             await db.execute('''
                 CREATE TABLE IF NOT EXISTS viewer_exp_log (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     twitch_id TEXT,
                     event_type TEXT,
                     amount INTEGER,
                     details TEXT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    timestamp TIMESTAMP DEFAULT NOW()
                 )
             ''')
-            await db.commit()
     except Exception as e:
         logger.error(f"❌ [DB ERROR] Erreur init_tables : {e}")
 
 async def ensure_viewer(twitch_id: str, username: str) -> None:
-    """Enregistre le viewer s'il n'existe pas encore (pour débloquer l'EXP)."""
     try:
         async with get_db_connection() as db:
-            # FIX : On gère le conflit sur le 'username' au lieu du 'twitch_id'
             await db.execute("""
                 INSERT INTO viewers (twitch_id, username, points, messages, watchtime)
-                VALUES (?, ?, 0, 0, 0)
-                ON CONFLICT(username) DO UPDATE SET
-                    twitch_id = excluded.twitch_id,
-                    last_seen = CURRENT_TIMESTAMP
-            """, (twitch_id, username))
-            await db.commit()
+                VALUES ($1, $2, 0, 0, 0)
+                ON CONFLICT(twitch_id) DO UPDATE SET
+                    username = EXCLUDED.username,
+                    last_seen = NOW()
+            """, (twitch_id, username)) # 👈 REGARDE BIEN ICI : J'ai ajouté ( ) autour des variables
     except Exception as e:
         logger.error(f"❌ [DB ERROR] Erreur ensure_viewer : {e}")
 
 async def get_viewer(twitch_id: str) -> Optional[ViewerResponse]:
-    """Récupère un viewer et le convertit au format Pydantic."""
     try:
         async with get_db_connection() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,)) as cursor:
-                row = await cursor.fetchone()
-                if row:
-                    data = _inject_level(dict(row))
-                    try: 
-                        return ViewerResponse(**data)
-                    except Exception as e: 
-                        logger.error(f"Erreur Pydantic get_viewer: {e}")
-                        return data
-                return None
+            row = await db.fetchrow("SELECT * FROM viewers WHERE twitch_id = $1", twitch_id)
+            if row:
+                data = _inject_level(dict(row))
+                try:
+                    return ViewerResponse(**data)
+                except Exception as e:
+                    return data
+            return None
     except Exception as e:
         logger.error(f"❌ [DB ERROR] Erreur get_viewer : {e}")
         return None
 
 async def get_viewer_by_name(username: str) -> Optional[ViewerResponse]:
-    """Récupère un viewer via son pseudo (utilisé par l'IA Félix)."""
     try:
         async with get_db_connection() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute("SELECT * FROM viewers WHERE LOWER(username) = LOWER(?)", (username,)) as cursor:
-                row = await cursor.fetchone()
-                if row:
-                    data = _inject_level(dict(row))
-                    try: 
-                        return ViewerResponse(**data)
-                    except Exception as e: 
-                        logger.error(f"Erreur Pydantic get_viewer_by_name: {e}")
-                        return data
-                return None
+            row = await db.fetchrow("SELECT * FROM viewers WHERE LOWER(username) = LOWER($1)", username)
+            if row:
+                data = _inject_level(dict(row))
+                try:
+                    return ViewerResponse(**data)
+                except Exception as e:
+                    return data
+            return None
     except Exception as e:
-        logger.error(f"❌ [DB ERROR] Erreur get_viewer_by_name : {e}")
         return None
 
 async def get_all_viewers():
-    """Récupère tous les viewers pour le dashboard et l'API JSON."""
     try:
         async with get_db_connection() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute("SELECT * FROM viewers ORDER BY points DESC, watchtime DESC") as cursor:
-                rows = await cursor.fetchall()
-                return [_inject_level(dict(row)) for row in rows]
+            rows = await db.fetch("SELECT * FROM viewers ORDER BY points DESC, watchtime DESC")
+            return [_inject_level(dict(row)) for row in rows]
     except Exception as e:
-        logger.error(f"❌ [DB ERROR] Erreur get_all_viewers : {e}")
         return []
 
 async def create_viewer(viewer: ViewerCreate) -> Optional[ViewerResponse]:
-    """Crée manuellement un viewer depuis l'API JSON."""
     try:
         async with get_db_connection() as db:
             msgs = getattr(viewer, "messages", getattr(viewer, "message_count", 0))
             await db.execute("""
                 INSERT INTO viewers (
                     twitch_id, username, nickname, watchtime, messages, points
-                ) VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                viewer.twitch_id, viewer.username, viewer.nickname, 
-                viewer.watchtime, msgs, viewer.points
-            ))
-            await db.commit()
+                ) VALUES ($1, $2, $3, $4, $5, $6)
+            """, viewer.twitch_id, viewer.username, viewer.nickname, viewer.watchtime, msgs, viewer.points)
     except Exception as e:
         logger.error(f"❌ [DB ERROR] Erreur create_viewer : {e}")
     return await get_viewer(viewer.twitch_id)
 
 async def update_viewer_stats(username: str, messages_add: int = 0, watchtime_add: int = 0, points_add: int = 0) -> bool:
-    """Moteur central d'EXP : Lecture classique, mais ÉCRITURE via le Single Writer (Mission A)."""
     try:
-        # On lit l'ID en direct car on en a besoin tout de suite
         async with get_db_connection() as db:
-            db.row_factory = aiosqlite.Row
-            cursor = await db.execute("SELECT twitch_id FROM viewers WHERE LOWER(username) = ?", (username.lower(),))
+            cursor = await db.execute("SELECT * FROM viewers WHERE username = $1", (username,))
             row = await cursor.fetchone()
 
-        if row:
-            t_id = row['twitch_id']
-            # 1. Mise à jour globale envoyée à la file d'attente
-            await queue_write("""
-                UPDATE viewers 
-                SET messages = messages + ?, watchtime = watchtime + ?, points = points + ?, last_seen = CURRENT_TIMESTAMP
-                WHERE twitch_id = ?
-            """, (messages_add, watchtime_add, points_add, t_id))
+            if row:
+                t_id = row['twitch_id']
+                
+                # ✅ CORRECTION 1 : Parenthèses autour des 4 variables
+                await db.execute("""
+                    UPDATE viewers
+                    SET messages = messages + $1, watchtime = watchtime + $2, points = points + $3, last_seen = NOW()
+                    WHERE twitch_id = $4
+                """, (messages_add, watchtime_add, points_add, t_id))
 
-            # 2. Agrégation journalière envoyée à la file d'attente
-            await queue_write("""
-                INSERT INTO viewer_daily_stats (twitch_id, day, messages, watchtime, points_gained)
-                VALUES (?, date('now', 'localtime'), ?, ?, ?)
-                ON CONFLICT(twitch_id, day) DO UPDATE SET
-                    messages = messages + excluded.messages,
-                    watchtime = watchtime + excluded.watchtime,
-                    points_gained = points_gained + excluded.points_gained
-            """, (t_id, messages_add, watchtime_add, points_add))
-
-            return True
+                # ✅ CORRECTION 2 : Parenthèses autour des 4 variables
+                await db.execute("""
+                    INSERT INTO viewer_daily_stats (twitch_id, day, messages, watchtime, points_gained)
+                    VALUES ($1, CURRENT_DATE, $2, $3, $4)
+                    ON CONFLICT(twitch_id, day) DO UPDATE SET
+                        messages = viewer_daily_stats.messages + EXCLUDED.messages,
+                        watchtime = viewer_daily_stats.watchtime + EXCLUDED.watchtime,
+                        points_gained = viewer_daily_stats.points_gained + EXCLUDED.points_gained
+                """, (t_id, messages_add, watchtime_add, points_add))
+                
+                return True
         return False
     except Exception as e:
         logger.error(f"❌ [DB ERROR] Erreur update_viewer_stats : {e}")
         return False
 
 async def add_experience(twitch_id: str, username: str, amount: int, event_type: str = "event", details: str = "") -> None:
-    """Moteur de distribution d'EXP : Utilise exclusivement la file d'attente (Single Writer)."""
     try:
-        # 1. Mise à jour ou création du viewer via la file d'attente
-        await queue_write("""
-            INSERT INTO viewers (twitch_id, username, points) VALUES (?, ?, ?)
-            ON CONFLICT(twitch_id) DO UPDATE SET 
-                points = points + excluded.points, 
-                username = excluded.username
-        """, (twitch_id, username, amount))
+        async with get_db_connection() as db:
+            await db.execute("""
+                INSERT INTO viewers (twitch_id, username, points) VALUES ($1, $2, $3)
+                ON CONFLICT(twitch_id) DO UPDATE SET
+                    points = viewers.points + EXCLUDED.points,
+                    username = EXCLUDED.username
+            """, twitch_id, username, amount)
 
-        # 2. Enregistrement dans l'historique via la file d'attente
-        await queue_write("""
-            INSERT INTO viewer_exp_log (twitch_id, event_type, amount, details)
-            VALUES (?, ?, ?, ?)
-        """, (twitch_id, event_type, amount, details))
-        
-        logger.info(f"📈 [EXP EN FILE] {username} (+{amount}) via {event_type}")
+            await db.execute("""
+                INSERT INTO viewer_exp_log (twitch_id, event_type, amount, details)
+                VALUES ($1, $2, $3, $4)
+            """, twitch_id, event_type, amount, details)
+
+            logger.info(f"📈 [EXP] {username} (+{amount}) via {event_type}")
     except Exception as e:
         logger.error(f"❌ [DB ERROR] Erreur add_experience : {e}")
 
 async def update_viewer(twitch_id: str, update_data: ViewerUpdate) -> Optional[ViewerResponse]:
-    """Mise à jour via modèle Pydantic (Frontend / API)."""
     update_dict = update_data.model_dump(exclude_unset=True)
     if not update_dict: return await get_viewer(twitch_id)
-        
+
     safe_dict = {}
     for k, v in update_dict.items():
-        if k == "message_count": safe_dict["messages"] = v # Rétrocompatibilité
+        if k == "message_count": safe_dict["messages"] = v
         elif k in ["is_vip", "vip_expiry_date", "roast_level"]: continue
         else: safe_dict[k] = v
 
     if not safe_dict: return await get_viewer(twitch_id)
 
-    set_clause = ", ".join([f"{key} = ?" for key in safe_dict.keys()])
+    set_clauses = [f"{key} = ${i+1}" for i, key in enumerate(safe_dict.keys())]
     values = list(safe_dict.values())
     values.append(twitch_id)
 
+    query = f"UPDATE viewers SET {', '.join(set_clauses)} WHERE twitch_id = ${len(values)}"
+
     try:
         async with get_db_connection() as db:
-            await db.execute(f"UPDATE viewers SET {set_clause} WHERE twitch_id = ?", values)
-            await db.commit()
+            await db.execute(query, *values)
     except Exception as e:
         logger.error(f"❌ [DB ERROR] Erreur update_viewer Pydantic : {e}")
-            
+
     return await get_viewer(twitch_id)
 
 async def update_viewer_profile(twitch_id: str, **kwargs):
-    """Mise à jour directe via paramètres (Contexte IA)."""
     if not kwargs: return
 
-    set_clauses = []
-    values = []
-    for key, value in kwargs.items():
-        set_clauses.append(f"{key} = ?")
-        values.append(value)
-        
+    set_clauses = [f"{key} = ${i+1}" for i, key in enumerate(kwargs.keys())]
+    values = list(kwargs.values())
     values.append(twitch_id)
-    query = f"UPDATE viewers SET {', '.join(set_clauses)} WHERE twitch_id = ?"
-    
+
+    query = f"UPDATE viewers SET {', '.join(set_clauses)} WHERE twitch_id = ${len(values)}"
+
     try:
         async with get_db_connection() as db:
-            await db.execute(query, tuple(values))
-            await db.commit()
+            await db.execute(query, *values)
     except Exception as e:
         logger.error(f"❌ [DB ERROR] Erreur update_viewer_profile : {e}")
 
 async def increment_stats(twitch_id: str, watchtime_add: int = 0, messages_add: int = 0) -> None:
-    """Ancienne fonction de fallback de watchtime/messages."""
     try:
         async with get_db_connection() as db:
             await db.execute("""
                 UPDATE viewers
-                SET watchtime = watchtime + ?,
-                    messages = messages + ?
-                WHERE twitch_id = ?
-            """, (watchtime_add, messages_add, twitch_id))
-            await db.commit()
+                SET watchtime = watchtime + $1,
+                    messages = messages + $2
+                WHERE twitch_id = $3
+            """, watchtime_add, messages_add, twitch_id)
     except Exception as e:
         logger.error(f"❌ [DB ERROR] Erreur increment_stats : {e}")

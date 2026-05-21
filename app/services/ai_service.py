@@ -16,13 +16,17 @@ class AIService:
         image_base64=None
     ):
         try:
-            # 1. Extraction des variables prioritaires (Celles qui modifient son comportement direct)
+            # LIGNE DE DEBUG (si ça plante ici, c'est que l'indentation est décalée)
+            print(f"DEBUG: Type de viewer_data reçu : {type(viewer_data)}")
+            print(f"DEBUG: Contenu de viewer_data : {viewer_data}")
+
+            # 1. Extraction des variables prioritaires
             nickname = viewer_data.get("nickname") or username
             bot_name = viewer_data.get("nickname_for_bot") or "Félix"
             pronouns = viewer_data.get("pronouns") or "Non précisé (utilise un ton neutre ou masculin par défaut)"
             birthday = viewer_data.get("birthday") or "Inconnu"
 
-            # 2. Construction de la fiche de profil EXHAUSTIVE pour l'inspiration
+            # 2. Construction de la fiche de profil EXHAUSTIVE
             details = []
             
             if viewer_data.get('vibe'): details.append(f"- Vibe/Humeur : {viewer_data['vibe']}")

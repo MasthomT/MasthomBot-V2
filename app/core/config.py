@@ -3,8 +3,6 @@ import sys
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 
-# Charge les variables d'environnement depuis le .env à la racine
-# On utilise le chemin absolu pour garantir la lecture sur le Raspberry Pi
 env_path = "/home/thomas/masthom/BOT_V2/.env"
 load_dotenv(dotenv_path=env_path)
 
@@ -38,7 +36,6 @@ class Settings(BaseSettings):
     """
     # --- CHEMINS ET LOGS ---
     BASE_DIR: str = BASE_DIR
-    DB_PATH: str = "/home/thomas/masthom/BOT_V2/bot_database.db"
     DATA_DIR: str = DATA_DIR
     LOG_FILE_PATH: str = os.path.join(BASE_DIR, "app_bot.log")
     TWITCH_CHAT_LOG_FILE: str = os.path.join(BASE_DIR, "twitch_chat.log")

@@ -1,4 +1,3 @@
-import sqlite3
 import logging
 from fastapi import APIRouter, Request, HTTPException, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -6,18 +5,13 @@ from fastapi.templating import Jinja2Templates
 
 from app.repositories import viewer_repo
 from app.models.viewer import ViewerResponse
+from app.core.database import get_db_connection
 
 logger = logging.getLogger("masthbot.viewers")
 router = APIRouter(tags=["viewers"])
 templates = Jinja2Templates(directory="app/templates")
-DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
 
 # --- MÉTHODES UTILITAIRES ---
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
 def format_to_hhmm(seconds):
     try:
         sec = int(seconds or 0)
@@ -42,16 +36,17 @@ def calculate_level(xp):
 @router.get("/admin/viewer_manager.html", response_class=HTMLResponse)
 async def admin_viewers_page(request: Request):
     try:
-        conn = get_db()
-        viewers_raw = conn.execute("SELECT * FROM viewers ORDER BY points DESC, watchtime DESC").fetchall()
-        s_row = conn.execute("SELECT * FROM settings WHERE id=1").fetchone()
-        conn.close()
+        async with get_db_connection() as conn:
+            c1 = await conn.execute("SELECT * FROM viewers ORDER BY points DESC, watchtime DESC")
+            viewers_raw = await c1.fetchall()
+            
+            c2 = await conn.execute("SELECT * FROM settings WHERE id=1")
+            s_row = await c2.fetchone()
 
         viewers = []
         for v in viewers_raw:
             item = dict(v)
             item['watchtime_hhmm'] = format_to_hhmm(item.get('watchtime', 0))
-            # 🧠 INTÉGRATION NATIVE DU NIVEAU
             item['level'] = calculate_level(item.get('points', 0))
             viewers.append(item)
 
@@ -67,49 +62,63 @@ async def admin_viewers_page(request: Request):
 
 @router.get("/admin/viewer/{twitch_id}/history", response_class=HTMLResponse)
 async def admin_viewer_history(request: Request, twitch_id: str):
-    conn = get_db()
-    viewer_row = conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,)).fetchone()
-    
-    if not viewer_row:
-        conn.close()
-        return RedirectResponse(url="/admin/viewer_manager.html")
+    async with get_db_connection() as conn:
+        c1 = await conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,))
+        viewer_row = await c1.fetchone()
         
-    viewer = dict(viewer_row)
-    
-    # 🧠 INTÉGRATION NATIVE DU NIVEAU
-    viewer['level'] = calculate_level(viewer.get('points', 0))
-    viewer['watchtime_readable'] = format_to_hhmm(viewer.get('watchtime', 0))
-    
-    # Historique Journalier
-    daily_stats_raw = conn.execute("SELECT * FROM viewer_daily_stats WHERE twitch_id = ? ORDER BY day DESC LIMIT 30", (twitch_id,)).fetchall()
-    daily_stats = []
-    for d in daily_stats_raw:
-        day_dict = dict(d)
-        day_dict["watchtime_readable"] = format_to_hhmm(day_dict.get("watchtime", 0))
-        daily_stats.append(day_dict)
+        if not viewer_row:
+            return RedirectResponse(url="/admin/viewer_manager.html")
+            
+        viewer = dict(viewer_row)
+        viewer['level'] = calculate_level(viewer.get('points', 0))
+        viewer['watchtime_readable'] = format_to_hhmm(viewer.get('watchtime', 0))
+        
+        c2 = await conn.execute("SELECT * FROM viewer_daily_stats WHERE twitch_id = ? ORDER BY day DESC LIMIT 30", (twitch_id,))
+        daily_stats_raw = await c2.fetchall()
+        daily_stats = []
+        for d in daily_stats_raw:
+            day_dict = dict(d)
+            day_dict["watchtime_readable"] = format_to_hhmm(day_dict.get("watchtime", 0))
+            if day_dict.get('day') and hasattr(day_dict['day'], 'isoformat'):
+                day_dict['day'] = day_dict['day'].isoformat()
+            daily_stats.append(day_dict)
 
-    # Logs d'événements
-    special_events = conn.execute("SELECT * FROM viewer_exp_log WHERE twitch_id = ? ORDER BY timestamp DESC LIMIT 50", (twitch_id,)).fetchall()
-    
-    # 🏆 NOUVEAU : RÉCUPÉRATION DES TROPHÉES DE CE VIEWER
-    # On fait une jointure (JOIN) entre ses possessions (viewer_trophies) et le catalogue (trophy_list)
-    trophies_raw = conn.execute("""
-        SELECT t.label, t.icon, t.tier, vt.earned_at
-        FROM viewer_trophies vt
-        JOIN trophy_list t ON vt.trophy_id = t.id
-        WHERE vt.twitch_id = ?
-        ORDER BY vt.earned_at DESC
-    """, (twitch_id,)).fetchall()
-    
-    conn.close()
+        c3 = await conn.execute("SELECT * FROM viewer_exp_log WHERE twitch_id = ? ORDER BY timestamp DESC LIMIT 50", (twitch_id,))
+        special_events_raw = await c3.fetchall()
+        special_events = []
+        for e in special_events_raw:
+            ed = dict(e)
+            # 🛡️ FIX : On convertit la date Postgres en Texte pour le HTML
+            if ed.get('timestamp') and hasattr(ed['timestamp'], 'isoformat'):
+                ed['timestamp'] = ed['timestamp'].isoformat()
+            elif ed.get('timestamp'):
+                ed['timestamp'] = str(ed['timestamp'])
+            special_events.append(ed)
+        
+        c4 = await conn.execute("""
+            SELECT t.label, t.icon, t.tier, vt.earned_at
+            FROM viewer_trophies vt
+            JOIN trophy_list t ON vt.trophy_id = t.id
+            WHERE vt.twitch_id = ?
+            ORDER BY vt.earned_at DESC
+        """, (twitch_id,))
+        trophies_raw = await c4.fetchall()
+        viewer_trophies = []
+        for t in trophies_raw:
+            td = dict(t)
+            # 🛡️ FIX : On convertit la date Postgres en Texte
+            if td.get('earned_at') and hasattr(td['earned_at'], 'isoformat'):
+                td['earned_at'] = td['earned_at'].isoformat()
+            elif td.get('earned_at'):
+                td['earned_at'] = str(td['earned_at'])
+            viewer_trophies.append(td)
 
-    # On envoie toutes les données à la page HTML, y compris la nouvelle variable 'viewer_trophies'
     return templates.TemplateResponse(request=request, name="admin/viewer_history.html", context={
         "request": request,
         "viewer": viewer,
         "daily_stats": daily_stats,
-        "special_events": [dict(e) for e in special_events],
-        "viewer_trophies": [dict(t) for t in trophies_raw] # 👈 La variable est envoyée ici
+        "special_events": special_events,
+        "viewer_trophies": viewer_trophies
     })
 
 # =====================================================================
@@ -127,56 +136,50 @@ async def save_viewer_profile(request: Request, twitch_id: str,
     favorite_food: str = Form(None), favorite_drink: str = Form(None), 
     free_message: str = Form(None), roast_level: int = Form(5)):
     
-    conn = get_db()
-    conn.execute("""
-        UPDATE viewers SET 
-            nickname=?, nickname_for_bot=?, birthday=?, sleep_pattern=?, 
-            pronouns=?, vibe=?, favorite_game=?, comfort_game=?, 
-            signature_emote=?, play_style=?, useless_talent=?, 
-            favorite_feature=?, favorite_food=?, favorite_drink=?, 
-            free_message=?, roast_level=?
-        WHERE twitch_id=?
-    """, (nickname, nickname_for_bot, birthday, sleep_pattern, pronouns, vibe, favorite_game, comfort_game, signature_emote, play_style, useless_talent, favorite_feature, favorite_food, favorite_drink, free_message, roast_level, twitch_id))
-    conn.commit()
-    conn.close()
-    
+    async with get_db_connection() as conn:
+        await conn.execute("""
+            UPDATE viewers SET 
+                nickname=?, nickname_for_bot=?, birthday=?, sleep_pattern=?, 
+                pronouns=?, vibe=?, favorite_game=?, comfort_game=?, 
+                signature_emote=?, play_style=?, useless_talent=?, 
+                favorite_feature=?, favorite_food=?, favorite_drink=?, 
+                free_message=?, roast_level=?
+            WHERE twitch_id=?
+        """, (nickname, nickname_for_bot, birthday, sleep_pattern, pronouns, vibe, favorite_game, comfort_game, signature_emote, play_style, useless_talent, favorite_feature, favorite_food, favorite_drink, free_message, roast_level, twitch_id))
+        
     return RedirectResponse(url=f"/admin/viewer/{twitch_id}/history?saved=1", status_code=303)
 
 @router.post("/admin/viewer/update_exp_settings")
 async def update_exp_settings(request: Request):
     form_data = await request.form()
-    conn = get_db()
-    conn.execute("""
-        UPDATE settings 
-        SET exp_sub_t1=?, exp_sub_t2=?, exp_sub_t3=?, 
-            exp_subgift_t1=?, exp_subgift_t2=?, exp_subgift_t3=?,
-            exp_raid_per_viewer=?, exp_bits_multiplier=?,
-            exp_per_message=?, exp_per_watchtime=?
-        WHERE id=1
-    """, (
-        int(form_data.get("exp_sub_t1") or 500), int(form_data.get("exp_sub_t2") or 1000), int(form_data.get("exp_sub_t3") or 2500),
-        int(form_data.get("exp_subgift_t1") or 500), int(form_data.get("exp_subgift_t2") or 1000), int(form_data.get("exp_subgift_t3") or 2500),
-        int(form_data.get("exp_raid_per_viewer") or 10), int(form_data.get("exp_bits_multiplier") or 1),
-        int(form_data.get("exp_per_message") or 2), int(form_data.get("exp_per_watchtime") or 5)
-    ))
-    conn.commit()
-    conn.close()
+    async with get_db_connection() as conn:
+        await conn.execute("""
+            UPDATE settings 
+            SET exp_sub_t1=?, exp_sub_t2=?, exp_sub_t3=?, 
+                exp_subgift_t1=?, exp_subgift_t2=?, exp_subgift_t3=?,
+                exp_raid_per_viewer=?, exp_bits_multiplier=?,
+                exp_per_message=?, exp_per_watchtime=?
+            WHERE id=1
+        """, (
+            int(form_data.get("exp_sub_t1") or 500), int(form_data.get("exp_sub_t2") or 1000), int(form_data.get("exp_sub_t3") or 2500),
+            int(form_data.get("exp_subgift_t1") or 500), int(form_data.get("exp_subgift_t2") or 1000), int(form_data.get("exp_subgift_t3") or 2500),
+            int(form_data.get("exp_raid_per_viewer") or 10), int(form_data.get("exp_bits_multiplier") or 1),
+            int(form_data.get("exp_per_message") or 2), int(form_data.get("exp_per_watchtime") or 5)
+        ))
     return RedirectResponse(url="/admin/viewer_manager.html?settings_saved=1", status_code=303)
 
 @router.post("/admin/viewer/update_exp")
 async def update_exp(request: Request, twitch_id: str = Form(...), amount: int = Form(...), action: str = Form(...)):
-    conn = get_db()
-    if action == "add":
-        conn.execute("UPDATE viewers SET points = points + ? WHERE twitch_id = ?", (amount, twitch_id))
-    elif action == "remove":
-        conn.execute("UPDATE viewers SET points = MAX(0, points - ?) WHERE twitch_id = ?", (amount, twitch_id))
-    elif action == "set":
-        conn.execute("UPDATE viewers SET points = ? WHERE twitch_id = ?", (amount, twitch_id))
+    async with get_db_connection() as conn:
+        if action == "add":
+            await conn.execute("UPDATE viewers SET points = points + ? WHERE twitch_id = ?", (amount, twitch_id))
+        elif action == "remove":
+            # GREATEST est l'équivalent Postgres de MAX dans ce contexte
+            await conn.execute("UPDATE viewers SET points = GREATEST(0, points - ?) WHERE twitch_id = ?", (amount, twitch_id))
+        elif action == "set":
+            await conn.execute("UPDATE viewers SET points = ? WHERE twitch_id = ?", (amount, twitch_id))
     
-    conn.commit()
-    conn.close()
     return RedirectResponse(url="/admin/viewer_manager.html?success=1", status_code=303)
-
 
 # =====================================================================
 # 🤖 ROUTES API JSON (FRONTEND / OUTILS EXTERNES)

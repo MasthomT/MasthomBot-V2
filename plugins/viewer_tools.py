@@ -1,11 +1,10 @@
-import sqlite3
 import aiohttp
 import logging
 from twitchio.ext import commands
 from app.repositories import viewer_repo
+from app.core.database import get_db_connection
 
 logger = logging.getLogger("masthbot.plugins.viewers")
-DB_PATH = "bot_database.db"
 
 class ViewerToolsPlugin(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -14,14 +13,17 @@ class ViewerToolsPlugin(commands.Cog):
     @commands.command(name='sondage')
     async def cmd_sondage(self, ctx: commands.Context):
         """Affiche les résultats du sondage en cours"""
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
         try:
-            poll = conn.execute("SELECT * FROM polls WHERE is_active=1 ORDER BY id DESC LIMIT 1").fetchone()
-            if not poll:
-                return await ctx.send("🐾 Aucun sondage en cours. Check ton profil sur https://fel-x.vercel.app !")
+            async with get_db_connection() as conn:
+                c1 = await conn.execute("SELECT * FROM polls WHERE is_active=1 ORDER BY id DESC LIMIT 1")
+                poll = await c1.fetchone()
+                
+                if not poll:
+                    return await ctx.send("🐾 Aucun sondage en cours. Check ton profil sur https://fel-x.vercel.app !")
 
-            votes = conn.execute("SELECT option_index, COUNT(*) as count FROM poll_votes WHERE poll_id=? GROUP BY option_index", (poll['id'],)).fetchall()
+                c2 = await conn.execute("SELECT option_index, COUNT(*) as count FROM poll_votes WHERE poll_id=$1 GROUP BY option_index", (poll['id'],))
+                votes = await c2.fetchall()
+                
             results = {1: 0, 2: 0, 3: 0, 4: 0}
             total = 0
             for v in votes:
@@ -52,8 +54,6 @@ class ViewerToolsPlugin(commands.Cog):
 
         except Exception as e:
             logger.error(f"Erreur cmd_sondage: {e}")
-        finally:
-            conn.close()
 
     @commands.command(name='level')
     async def cmd_level(self, ctx: commands.Context):
@@ -75,12 +75,14 @@ class ViewerToolsPlugin(commands.Cog):
         if username in ['masthom_', 'felixthebigblackcat']:
             return await ctx.send(f"@{ctx.author.name}, tu es hors catégorie, tu es au-dessus de tout ça ! 👑")
             
-        conn = sqlite3.connect(DB_PATH, timeout=20.0)
-        conn.row_factory = sqlite3.Row
-        
-        exclusion_list = "('masthom_', 'felixthebigblackcat', 'streamelements', 'wizebot', 'nightbot')"
-        viewers = conn.execute(f"SELECT username, points FROM viewers WHERE points > 0 AND LOWER(username) NOT IN {exclusion_list} ORDER BY points DESC, watchtime DESC").fetchall()
-        conn.close()
+        try:
+            async with get_db_connection() as conn:
+                exclusion_list = "('masthom_', 'felixthebigblackcat', 'streamelements', 'wizebot', 'nightbot')"
+                c = await conn.execute(f"SELECT username, points FROM viewers WHERE points > 0 AND LOWER(username) NOT IN {exclusion_list} ORDER BY points DESC, watchtime DESC")
+                viewers = await c.fetchall()
+        except Exception as e:
+            logger.error(f"Erreur BDD cmd_rang: {e}")
+            return
         
         if not viewers:
             return await ctx.send(f"@{ctx.author.name}, le classement est vide pour le moment !")

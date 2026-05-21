@@ -1,4 +1,3 @@
-import sqlite3
 import asyncio
 import logging
 import json
@@ -6,13 +5,12 @@ import aiohttp
 from datetime import datetime
 
 from app.repositories import viewer_repo 
-# Import du bot Twitch et de la configuration pour envoyer des messages
 from app.services.twitch_service import twitch_bot
 from app.routes.overlays import trigger_overlay_event
 from app.core.config import settings
+from app.core.database import get_db_connection
 
 logger = logging.getLogger("masthbot.trophies")
-DB_PATH = "/home/thomas/masthom/BOT_V2/bot_database.db"
 
 async def auto_trophy_routine():
     """Scanne les viewers pour décerner les trophées selon TOUTES les stats exhaustives du panel."""
@@ -22,133 +20,133 @@ async def auto_trophy_routine():
 
     while True:
         try:
-            conn = sqlite3.connect(DB_PATH, timeout=20.0)
-            conn.row_factory = sqlite3.Row
-            
-            rules = conn.execute("""
-                SELECT * FROM trophy_list 
-                WHERE condition_type != 'none' 
-                AND condition_value > 0
-            """).fetchall()
-            
-            winners = []
-            
-            # 🛡️ LISTE BLANCHE
-            valid_cols_direct = [
-                'messages', 'messages_session', 'emotes_global', 'commands_global',
-                'points', 'points_session', 'watchtime', 'watchtime_session', 'streak_days',
-                'gifts_count', 'gifts_session', 'bits_count', 'sub_months', 'rewards_claimed', 'is_vip',
-                'first_count', 'deuz_count', 'troiz_count', 'bombs_won', 'bombs_lost', 'words_guessed',
-                'roast_level', 'ai_prompts'
-            ]
-            
-            for rule in rules:
-                t_id = rule['id']
-                c_type = rule['condition_type']
-                c_val = rule['condition_value']
+            async with get_db_connection() as conn:
+                c1 = await conn.execute("""
+                    SELECT * FROM trophy_list 
+                    WHERE condition_type != 'none' 
+                    AND condition_value > 0
+                """)
+                rules_raw = await c1.fetchall()
+                rules = [dict(r) for r in rules_raw]
                 
-                target_col = c_type
-                target_val = c_val
-                custom_where = None
+                winners = []
                 
-                if c_type == 'watchtime_h':
-                    target_col = 'watchtime'
-                    target_val = c_val * 3600
-                elif c_type == 'watchtime_session_m':
-                    target_col = 'watchtime_session'
-                    target_val = c_val * 60
-                elif c_type == 'level':
-                    target_col = 'points'
-                    target_val = int(100 * (c_val ** 2.2))
-                elif c_type == 'has_context':
-                    custom_where = "(nickname IS NOT NULL OR favorite_game IS NOT NULL OR vibe IS NOT NULL OR useless_talent IS NOT NULL)"
-                elif c_type == 'is_vip':
-                    target_col = 'is_vip'
-                    target_val = 1
+                # 🛡️ LISTE BLANCHE
+                valid_cols_direct = [
+                    'messages', 'messages_session', 'emotes_global', 'commands_global',
+                    'points', 'points_session', 'watchtime', 'watchtime_session', 'streak_days',
+                    'gifts_count', 'gifts_session', 'bits_count', 'sub_months', 'rewards_claimed', 'is_vip',
+                    'first_count', 'deuz_count', 'troiz_count', 'bombs_won', 'bombs_lost', 'words_guessed',
+                    'roast_level', 'ai_prompts'
+                ]
                 
-                if not custom_where and target_col not in valid_cols_direct: 
-                    continue
-                
-                if custom_where:
-                    query = f"""
-                        SELECT twitch_id, username FROM viewers 
-                        WHERE {custom_where}
-                        AND twitch_id NOT IN (SELECT twitch_id FROM viewer_trophies WHERE trophy_id = ?)
-                    """
-                    eligible = conn.execute(query, (t_id,)).fetchall()
-                else:
-                    query = f"""
-                        SELECT twitch_id, username FROM viewers 
-                        WHERE {target_col} >= ? 
-                        AND twitch_id NOT IN (SELECT twitch_id FROM viewer_trophies WHERE trophy_id = ?)
-                    """
-                    eligible = conn.execute(query, (target_val, t_id)).fetchall()
-                
-                for v in eligible:
-                    conn.execute("INSERT INTO viewer_trophies (twitch_id, trophy_id) VALUES (?, ?)", (v['twitch_id'], t_id))
-                    winners.append({"twitch_id": v['twitch_id'], "username": v['username'], "rule": dict(rule)})
+                for rule in rules:
+                    t_id = rule['id']
+                    c_type = rule['condition_type']
+                    c_val = rule['condition_value']
+                    
+                    target_col = c_type
+                    target_val = c_val
+                    custom_where = None
+                    
+                    if c_type == 'watchtime_h':
+                        target_col = 'watchtime'
+                        target_val = c_val * 3600
+                    elif c_type == 'watchtime_session_m':
+                        target_col = 'watchtime_session'
+                        target_val = c_val * 60
+                    elif c_type == 'level':
+                        target_col = 'points'
+                        target_val = int(100 * (c_val ** 2.2))
+                    elif c_type == 'has_context':
+                        custom_where = "(nickname IS NOT NULL OR favorite_game IS NOT NULL OR vibe IS NOT NULL OR useless_talent IS NOT NULL)"
+                    elif c_type == 'is_vip':
+                        target_col = 'is_vip'
+                        target_val = 1
+                    
+                    if not custom_where and target_col not in valid_cols_direct: 
+                        continue
+                    
+                    if custom_where:
+                        query = f"""
+                            SELECT twitch_id, username FROM viewers 
+                            WHERE {custom_where}
+                            AND twitch_id NOT IN (SELECT twitch_id FROM viewer_trophies WHERE trophy_id = ?)
+                        """
+                        c_elig = await conn.execute(query, (t_id,))
+                    else:
+                        query = f"""
+                            SELECT twitch_id, username FROM viewers 
+                            WHERE {target_col} >= ? 
+                            AND twitch_id NOT IN (SELECT twitch_id FROM viewer_trophies WHERE trophy_id = ?)
+                        """
+                        c_elig = await conn.execute(query, (target_val, t_id))
+                        
+                    eligible = await c_elig.fetchall()
+                    
+                    for v in eligible:
+                        await conn.execute("INSERT INTO viewer_trophies (twitch_id, trophy_id) VALUES (?, ?)", (v['twitch_id'], t_id))
+                        winners.append({"twitch_id": v['twitch_id'], "username": v['username'], "rule": dict(rule)})
 
-            conn.commit()
-            conn.close()
+                for w in winners:
+                    r = w['rule']
+                    bonus_xp = r.get('reward_exp', 0)
+                    event_details = f"A débloqué le succès : {r['icon']} {r['label']} !"
 
-            for w in winners:
-                r = w['rule']
-                bonus_xp = r.get('reward_exp', 0)
-                event_details = f"A débloqué le succès : {r['icon']} {r['label']} !"
-                
-                if bonus_xp > 0:
-                    event_details += f" 🎁 (+{bonus_xp} EXP)"
-                    await viewer_repo.add_experience(w['twitch_id'], w['username'], bonus_xp, "TROPHY", f"Succès : {r['label']}")
-                
-                conn_log = sqlite3.connect(DB_PATH)
-                details_json = json.dumps({"reason": event_details, "source": "Félix (Haut Fait)"}, ensure_ascii=False)
-                conn_log.execute(
-                    "INSERT INTO stream_events (event_type, username, details, timestamp) VALUES (?, ?, ?, datetime('now', 'localtime'))", 
-                    ("reward", w['username'], details_json)
-                )
-                conn_log.commit()
-                conn_log.close()
-                
-                # 1. ENVOI DE L'ANIMATION OBS
-                try:
-                    payload = {
-                        "type": "trophy_unlock",
-                        "details": {
-                            "username": w['username'],
-                            "trophy_name": r['label'],
-                            "icon": r['icon'],
-                            "tier": r.get('tier', 'Standard')
+                    if bonus_xp > 0:
+                        event_details += f" 🎁 (+{bonus_xp} EXP)"
+                        # add_experience est déjà une fonction async qui gère la DB, 
+                        # pas besoin de la mettre dans le bloc conn.execute courant.
+                        await viewer_repo.add_experience(str(w['twitch_id']), w['username'], bonus_xp, "TROPHY", f"Succès : {r['label']}")
+
+                    details_json = json.dumps({"reason": event_details, "source": "Félix (Haut Fait)"}, ensure_ascii=False)
+                    
+                    # CORRECTION : Syntaxe PostgreSQL ($1, $2, $3) et tuple ( )
+                    await conn.execute(
+                        "INSERT INTO stream_events (event_type, username, details, timestamp) VALUES ($1, $2, $3, NOW())",
+                        ("reward", w['username'], details_json)
+                    )
+                    
+                    # 1. ENVOI DE L'ANIMATION OBS
+                    try:
+                        payload = {
+                            "type": "trophy_unlock",
+                            "details": {
+                                "username": w['username'],
+                                "trophy_name": r['label'],
+                                "icon": r['icon'],
+                                "tier": r.get('tier', 'Standard')
+                            }
                         }
-                    }
-                    await trigger_overlay_event(payload)
-                except Exception as e:
-                    logger.error(f"❌ Erreur Overlay Trophée : {e}")
-                
-                # 2. ENVOI DU MESSAGE DANS LE CHAT TWITCH 💬
-                try:
-                    tier = r.get('tier', 'Standard')
-                    tier_emojis = {
-                        'Standard': '🎖️',
-                        'Bronze': '🥉',
-                        'Argent': '🥈',
-                        'Or': '🥇',
-                        'Platine': '💠',
-                        'Diamant': '💎'
-                    }
-                    emoji = tier_emojis.get(tier, '🎖️')
+                        await trigger_overlay_event(payload)
+                    except Exception as e:
+                        logger.error(f"❌ Erreur Overlay Trophée : {e}")
                     
-                    channel_name = settings.TWITCH_CHANNEL.replace("#", "").lower()
-                    channel = twitch_bot.get_channel(channel_name)
+                    # 2. ENVOI DU MESSAGE DANS LE CHAT TWITCH 💬
+                    try:
+                        tier = r.get('tier', 'Standard')
+                        tier_emojis = {
+                            'Standard': '🎖️',
+                            'Bronze': '🥉',
+                            'Argent': '🥈',
+                            'Or': '🥇',
+                            'Platine': '💠',
+                            'Diamant': '💎'
+                        }
+                        emoji = tier_emojis.get(tier, '🎖️')
+                        
+                        channel_name = settings.TWITCH_CHANNEL.replace("#", "").lower()
+                        channel = twitch_bot.get_channel(channel_name)
+                        
+                        if channel:
+                            msg = f"✨ DING ! @{w['username']} vient de débloquer le Haut Fait {emoji} {r['label']} {r['icon']} ! GG ! 🎉"
+                            if bonus_xp > 0:
+                                msg += f" (+{bonus_xp} EXP)"
+                            await channel.send(msg)
+                    except Exception as e:
+                        logger.error(f"❌ Erreur annonce chat Trophée : {e}")
                     
-                    if channel:
-                        msg = f"✨ DING ! @{w['username']} vient de débloquer le Haut Fait {emoji} {r['label']} {r['icon']} ! GG ! 🎉"
-                        if bonus_xp > 0:
-                            msg += f" (+{bonus_xp} EXP)"
-                        await channel.send(msg)
-                except Exception as e:
-                    logger.error(f"❌ Erreur annonce chat Trophée : {e}")
-                
-                logger.info(f"🎉 [HAUT FAIT] {w['username']} a gagné '{r['label']}' !")
+                    logger.info(f"🎉 [HAUT FAIT] {w['username']} a gagné '{r['label']}' !")
 
         except Exception as e:
             logger.error(f"❌ [TROPHY ENGINE] Erreur dans la boucle principale : {e}")
