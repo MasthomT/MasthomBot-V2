@@ -87,32 +87,17 @@ async def init_tables() -> None:
 async def ensure_viewer(twitch_id: str, username: str) -> None:
     try:
         async with get_db_connection() as db:
+            # ✅ CORRECT : pas de parenthèses autour des variables, 
+            # elles sont envoyées séparément.
             await db.execute("""
                 INSERT INTO viewers (twitch_id, username, points, messages, watchtime)
                 VALUES ($1, $2, 0, 0, 0)
                 ON CONFLICT(twitch_id) DO UPDATE SET
                     username = EXCLUDED.username,
                     last_seen = NOW()
-            """, (twitch_id, username)) # 👈 REGARDE BIEN ICI : J'ai ajouté ( ) autour des variables
+            """, twitch_id, username) 
     except Exception as e:
         logger.error(f"❌ [DB ERROR] Erreur ensure_viewer : {e}")
-
-async def get_viewer(twitch_id: str):
-    """Récupère un viewer depuis PostgreSQL via son ID Twitch."""
-    try:
-        async with get_db_connection() as db:
-            c = await db.execute("SELECT * FROM viewers WHERE twitch_id = $1", (twitch_id,))
-            row = await c.fetchone()
-            if row:
-                data = dict(row)
-                # Si tu as une fonction _inject_level dans ce fichier, on l'applique :
-                if "_inject_level" in globals():
-                    data = _inject_level(data)
-                return data
-            return None
-    except Exception as e:
-        logger.error(f"❌ [DB ERROR] Erreur get_viewer : {e}")
-        return None
 
 async def get_viewer_by_name(username: str) -> Optional[ViewerResponse]:
     try:
@@ -254,3 +239,65 @@ async def increment_stats(twitch_id: str, watchtime_add: int = 0, messages_add: 
             """, watchtime_add, messages_add, twitch_id)
     except Exception as e:
         logger.error(f"❌ [DB ERROR] Erreur increment_stats : {e}")
+
+async def get_viewer(twitch_id: str):
+    try:
+        async with get_db_connection() as db:
+            c = await db.execute("SELECT * FROM viewers WHERE twitch_id = $1", (twitch_id,))
+            row = await c.fetchone()
+            if row:
+                return _inject_level(dict(row))
+            return None
+    except Exception as e:
+        logger.error(f"❌ [DB ERROR] Erreur get_viewer : {e}")
+        return None
+
+async def get_daily_activity(twitch_id: str):
+    try:
+        async with get_db_connection() as db:
+            c = await db.execute("""
+                SELECT day as date, messages, watchtime, points_gained as xp 
+                FROM viewer_daily_stats 
+                WHERE twitch_id = $1 
+                ORDER BY day DESC 
+                LIMIT 30
+            """, twitch_id)  # <-- La parenthèse finale est bien là !
+            rows = await c.fetchall()
+            
+            results = []
+            for r in rows:
+                d = dict(r)
+                if d.get('date') and hasattr(d['date'], 'isoformat'):
+                    d['date'] = d['date'].isoformat()
+                elif d.get('date'):
+                    d['date'] = str(d['date'])
+                results.append(d)
+            return results
+    except Exception as e:
+        logger.error(f"❌ [DB ERROR] Erreur get_daily_activity : {e}")
+        return []
+
+async def get_exp_events(twitch_id: str):
+    try:
+        async with get_db_connection() as db:
+            c = await db.execute("""
+                SELECT event_type as type, details, amount, timestamp as date 
+                FROM viewer_exp_log 
+                WHERE twitch_id = $1 
+                ORDER BY timestamp DESC 
+                LIMIT 20
+            """, twitch_id)  # <-- La parenthèse finale est bien là !
+            rows = await c.fetchall()
+            
+            results = []
+            for r in rows:
+                d = dict(r)
+                if d.get('date') and hasattr(d['date'], 'isoformat'):
+                    d['date'] = d['date'].isoformat()
+                elif d.get('date'):
+                    d['date'] = str(d['date'])
+                results.append(d)
+            return results
+    except Exception as e:
+        logger.error(f"❌ [DB ERROR] Erreur get_exp_events : {e}")
+        return []

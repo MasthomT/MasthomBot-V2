@@ -51,8 +51,8 @@
 
         .section {
             margin-bottom: 4.5rem;
-            width: 85%;
-            max-width: 1200px;
+            width: 95%; 
+            max-width: 1400px;
         }
 
         .section-title {
@@ -74,21 +74,26 @@
         }
 
         .name-item {
-    background: rgba(15, 23, 42, 0.85);
-    border: 1px solid rgba(255,255,255,0.08);
-    padding: 14px 28px;
-    border-radius: 16px;
-    display: flex;
-    justify-content: space-between; /* <--- C'EST ÇA QUI SÉPARE LES DEUX */
-    align-items: center;
-    width: 100%; /* S'assure que l'élément prend toute la largeur du container */
-    gap: 20px;
-}
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(255,255,255,0.08);
+            padding: 14px 24px;
+            border-radius: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex: 0 0 calc(33.333% - 1rem);
+            box-sizing: border-box;
+            gap: 15px;
+        }
 
         .user-name {
-            font-size: 1.6rem;
+            font-size: 1.4rem;
             font-weight: 700;
             color: #f8fafc;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-align: left;
         }
 
         .user-label {
@@ -101,19 +106,8 @@
             font-family: 'JetBrains Mono', monospace;
             display: flex;
             align-items: center;
-        }
-
-        .section.viewers .names-grid { gap: 1rem; }
-        .section.viewers .name-item {
-            padding: 8px 16px;
-            background: transparent;
-            border: none;
-            box-shadow: none;
-        }
-        .section.viewers .user-name {
-            font-size: 1.2rem;
-            font-weight: 600;
-            color: #64748b;
+            white-space: nowrap;
+            flex-shrink: 0; 
         }
     </style>
 </head>
@@ -133,13 +127,12 @@
             'viewers':     { label: '👀 Viewers', color: '#94a3b8' }
         };
 
-        // Fonction pour formater les minutes en "2h15" ou "45 min"
         function formatWatchtime(minutes) {
             if (!minutes || minutes <= 0) return '';
             let h = Math.floor(minutes / 60);
             let m = minutes % 60;
             let timeStr = h > 0 ? `${h}h${m < 10 ? '0'+m : m}` : `${m} min`;
-            return `<span class="user-label" style="font-size:0.75rem; color:#38bdf8; background:rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.2);"><i class="fas fa-clock" style="margin-right: 6px;"></i>${timeStr}</span>`;
+            return `<span class="user-label"><i class="fas fa-clock" style="margin-right: 6px;"></i>${timeStr}</span>`;
         }
 
         async function loadCredits() {
@@ -152,7 +145,6 @@
                 
                 let html = `<h1 class="main-title">${config.main_title || 'MERCI À TOUS !'}</h1>`;
 
-                // 1. TOUTES LES CATÉGORIES (Sauf Viewers)
                 for (let key of config.order) {
                     if (key === 'viewers') continue; 
                     if (!stats[key] || stats[key].length === 0) continue;
@@ -164,13 +156,16 @@
                     stats[key].forEach(user => {
                         let labelHtml = "";
 
-                        // RÈGLE STRICTE : 1 INFO PAR CATÉGORIE
-                        if (['subscribers', 'gifters', 'bits', 'raiders', 'followers'].includes(key)) {
-                            // On affiche le label brut (ex: "Tier 1", "500 Bits", "3 mois")
+                        // RÈGLE : LES ABONNÉS EN MOIS, LE RESTE EN LABEL CLASSIQUE
+                        if (key === 'subscribers') {
+                            // On cherche la valeur des mois (ou on prend le label par défaut du backend)
+                            let val = user.months || user.label || '1';
+                            labelHtml = `<span class="user-label"><i class="fas fa-star" style="margin-right: 6px; color: #fbbf24;"></i>${val} mois</span>`;
+                        }
+                        else if (['gifters', 'bits', 'raiders', 'followers'].includes(key)) {
                             labelHtml = user.label ? `<span class="user-label">${user.label}</span>` : '';
                         } 
                         else if (['moderators', 'vips', 'chatters'].includes(key)) {
-                            // On n'affiche QUE le nombre de messages
                             let msgs = user.messages || 0;
                             if (msgs > 0) {
                                 labelHtml = `<span class="user-label">${msgs} msg</span>`;
@@ -187,15 +182,12 @@
                     html += `</div></div>`;
                 }
                 
-                // 2. VIEWERS (TOUT LE MONDE SANS EXCEPTION)
                 if (stats['viewers'] && stats['viewers'].length > 0) {
-                    // ⚠️ On a supprimé le filtre qui retirait les VIPs/Subs. Tout le monde y passe !
                     html += `<div class="section viewers">`;
                     html += `<h2 class="section-title" style="color: ${MODULES['viewers'].color}">👀 Viewers</h2>`;
                     html += `<div class="names-grid">`;
                     
                     stats['viewers'].forEach(user => {
-                        // On n'affiche QUE le temps, et seulement s'il est > 0
                         let watchtimeHtml = user.watchtime > 0 ? formatWatchtime(user.watchtime) : '';
                         
                         html += `

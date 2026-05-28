@@ -62,30 +62,48 @@ async def get_credits_data():
     except Exception as e:
         logger.error(f"❌ [CREDITS API] Erreur appel Twitch : {e}")
 
-    # 3. Récupération des stats depuis la DB pour ceux qui sont connectés
-    db_data = {}
-    if all_usernames:
-        async with get_db_connection() as conn:
-            # On utilise ANY pour récupérer les infos en 1 seule requête SQL
-            rows = await conn.execute("SELECT username, watchtime FROM viewers WHERE LOWER(username) = ANY($1)", (all_usernames,))
-            db_rows = await rows.fetchall()
-            db_data = {r['username'].lower(): r['watchtime'] for r in db_rows}
-
-    # 4. Construction de la liste des 'viewers' (tous les connectés)
-    viewers_list = []
-    for username in all_usernames:
-        # On récupère les données brutes de la base pour cet utilisateur
-        user_data = db_data.get(username, {})
+    # 3. Récupération des stats de la SESSION (Table journalière)
+    session_data = {}
+    async with get_db_connection() as conn:
+        # On va chercher TOUS les viewers qui ont du temps de watchtime aujourd'hui (même s'ils ont quitté le stream)
+        rows = await conn.execute("""
+            SELECT LOWER(v.username) as lower_name, v.username as real_name, COALESCE(d.watchtime, 0) as daily_watchtime
+            FROM viewers v
+            JOIN viewer_daily_stats d ON v.twitch_id = d.twitch_id
+            WHERE d.day = CURRENT_DATE AND d.watchtime > 0
+        """)
+        db_rows = await rows.fetchall()
         
-        # SÉCURITÉ : On vérifie que user_data est bien un dictionnaire
-        # Si c'est un int (bug potentiel), on réinitialise à un dictionnaire vide
-        if not isinstance(user_data, dict):
-            user_data = {}
+        # On stocke leurs données dans le dictionnaire
+        for r in db_rows:
+            session_data[r['lower_name']] = {
+                'real_name': r['real_name'],
+                'watchtime': r['daily_watchtime']
+            }
 
+    # On rajoute les NOUVEAUX (présents dans l'API Twitch en direct mais pas encore sauvés en base car ils viennent d'arriver)
+    for username in all_usernames:
+        if username not in session_data:
+            session_data[username] = {
+                'real_name': username,
+                'watchtime': 0
+            }
+
+    # 4. Construction de la liste des 'viewers' finale
+    viewers_list = []
+    
+    # LE VIDEUR : On dégage toujours les bots
+    exclusion_list = ['masthom_', 'felixthebigblackcat', 'streamelements', 'wizebot', 'nightbot']
+
+    for lower_name, info in session_data.items():
+        # Si c'est un bot, on l'ignore
+        if lower_name in exclusion_list:
+            continue
+            
         viewers_list.append({
-            "name": username,
-            "watchtime": user_data.get('watchtime', 0),
-            "messages": user_data.get('messages', 0),
+            "name": info['real_name'], 
+            "watchtime": info['watchtime'] // 60,  # ✅ Conversion en minutes
+            "messages": 0,
             "label": ""
         })
 
@@ -109,6 +127,15 @@ async def save_credits_config(request: Request):
 async def reset_credits():
     """Bouton de vidage manuel."""
     credits_service.reset_session()
+    
+    # ✅ LE COUP DE BALAI POUR LES VIEWERS
+    try:
+        async with get_db_connection() as conn:
+            # On remet le temps de présence à 0 pour tous ceux enregistrés aujourd'hui
+            await conn.execute("UPDATE viewer_daily_stats SET watchtime = 0 WHERE day = CURRENT_DATE")
+    except Exception as e:
+        logger.error(f"❌ Erreur lors du reset du watchtime : {e}")
+
     return {"status": "success"}
 
 @router.post("/api/credits/test")
@@ -116,8 +143,8 @@ async def inject_test_data():
     """Génère des faux noms très complets pour tester l'overlay et le Studio."""
     
     # 1. Catégories à Labels (Subs, Gifts, Bits, Raids, Followers)
-    credits_service.log_event("subscribers", "Vestale7", "Tier 1")
-    credits_service.log_event("subscribers", "LAntreDeSilver", "Tier 3")
+    credits_service.log_event("subscribers", "Vestale7", "1")
+    credits_service.log_event("subscribers", "LAntreDeSilver", "15")
     credits_service.log_event("gifters", "LeGrosMecene", "5 Gifts")
     credits_service.log_event("bits", "MonkeyMaxou", "500 Bits")
     credits_service.log_event("raiders", "Siphano", "150 viewers")

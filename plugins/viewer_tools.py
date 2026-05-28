@@ -20,7 +20,7 @@ class ViewerToolsPlugin(commands.Cog):
                 poll = await c1.fetchone()
                 
                 if not poll:
-                    return await ctx.send("🐾 Aucun sondage en cours. Check ton profil sur https://fel-x.vercel.app !")
+                    return await ctx.send("🐾 Aucun sondage en cours. Check ton profil sur https://fel-x.netlify.app !")
 
                 c2 = await conn.execute("SELECT option_index, COUNT(*) as count FROM poll_votes WHERE poll_id=$1 GROUP BY option_index", (poll['id'],))
                 votes = await c2.fetchall()

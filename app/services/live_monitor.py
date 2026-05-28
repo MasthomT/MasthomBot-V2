@@ -38,7 +38,7 @@ async def check_twitch_lives_routine():
             async with get_db_connection() as conn:
                 c1 = await conn.execute("SELECT * FROM settings WHERE id=1")
                 settings_row_raw = await c1.fetchone()
-                
+
                 c2 = await conn.execute("SELECT * FROM tracked_streamers WHERE is_active=1")
                 tracked_raw = await c2.fetchall()
                 tracked = [dict(t) for t in tracked_raw]
@@ -46,7 +46,7 @@ async def check_twitch_lives_routine():
                 if not settings_row_raw:
                     await asyncio.sleep(60)
                     continue
-                    
+
                 settings_row = dict(settings_row_raw)
                 logins_to_check = [my_channel] + [s["login"] for s in tracked]
 
@@ -60,14 +60,28 @@ async def check_twitch_lives_routine():
                             online_streams = {stream["user_login"].lower(): stream for stream in data.get("data", [])}
 
                             # ==========================================================
-                            # 1. GESTION DE TON LIVE PERSONNEL (Inchangée)
+                            # 1. GESTION DE TON LIVE PERSONNEL
                             # ==========================================================
                             my_login = my_channel.lower()
                             if my_login in online_streams:
                                 stream = online_streams[my_login]
                                 live_id = stream["id"]
+                                
                                 if settings_row.get("personal_last_live_id") != live_id:
                                     logger.info("🚨 [MONITOR] Ton live commence ! Envoi notif Discord...")
+
+                                    # --- 1. MÉNAGE AUTOMATIQUE (AU DÉBUT DU LIVE) ---
+                                    try:
+                                        from app.services.credits_service import credits_service
+                                        credits_service.reset_session()
+                                        
+                                        # On réutilise directement "conn" qui est déjà ouverte plus haut !
+                                        await conn.execute("UPDATE viewer_daily_stats SET watchtime = 0 WHERE day = CURRENT_DATE")
+                                        logger.info("🧹 [CREDITS] Reset automatique du générique et du watchtime réussi !")
+                                    except Exception as e:
+                                        logger.error(f"❌ [CREDITS] Erreur lors du reset automatique : {e}")
+
+                                    # --- 2. ENVOI DE LA NOTIFICATION DISCORD ---
                                     try:
                                         msg_id = await notification_service.send_discord_live_notification(
                                             channel_id=settings_row["notif_live_channel_id"],
@@ -80,16 +94,14 @@ async def check_twitch_lives_routine():
                                             await conn.execute("UPDATE settings SET personal_last_live_id=$1, personal_last_message_id=$2 WHERE id=1", (live_id, str(msg_id)))
                                     except Exception as e:
                                         logger.error(f"❌ [DISCORD ERROR] Impossible d'envoyer ta notif : {e}")
+
                             else:
+                                # --- 3. FIN DU LIVE ---
                                 if settings_row.get("personal_last_live_id") != "":
                                     await conn.execute("UPDATE settings SET personal_last_live_id='' WHERE id=1")
-                                    try:
-                                        from app.services.credits_service import credits_service
-                                        credits_service.reset_session()
-                                    except: pass
 
                             # ==========================================================
-                            # 2. GESTION DES PARTENAIRES (SÉCURITÉ ANTI-SPAM DÉSACTIVÉE !)
+                            # 2. GESTION DES PARTENAIRES
                             # ==========================================================
                             for streamer in tracked:
                                 login = streamer["login"].lower()
@@ -97,7 +109,6 @@ async def check_twitch_lives_routine():
                                     stream = online_streams[login]
                                     live_id = stream["id"]
 
-                                    # S'il est en live et que l'ID ne correspond pas à la BDD, ON FORCE LE TIR !
                                     if streamer.get("last_live_id") != live_id:
                                         partner_msg = f"**{stream['user_name']}** est en live sur **{stream['game_name']}**, foncez lui donner de la force !"
                                         logger.info(f"🔥 [MONITOR FORCE] Nouveau live de {stream['user_name']} détecté ! Tentative d'envoi Discord...")
@@ -111,7 +122,7 @@ async def check_twitch_lives_routine():
                                                 custom_message=partner_msg
                                             )
                                             logger.info(f"✅ [DISCORD SUCCÈS] Le message pour {stream['user_name']} a bien été posté ! (ID: {msg_id})")
-                                            
+
                                             if msg_id:
                                                 await conn.execute("UPDATE tracked_streamers SET last_live_id=$1, last_message_id=$2 WHERE id=$3", (live_id, str(msg_id), streamer["id"]))
                                         except Exception as e:
@@ -135,5 +146,5 @@ async def check_twitch_lives_routine():
         except Exception as e:
             logger.error(f"❌ [MONITOR CRASH GLOBAL] : {e}")
 
-        # Pause plus courte (30 secondes au lieu de 2 minutes) pour tester vite !
+        # Pause courte pour tester vite
         await asyncio.sleep(30)

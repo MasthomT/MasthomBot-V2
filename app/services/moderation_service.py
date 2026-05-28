@@ -22,9 +22,9 @@ class ModerationService:
             async with get_db_connection() as conn:
                 details = {"reason": reason, "bot": "Félix"}
                 await conn.execute(
-                    "INSERT INTO stream_events (event_type, username, details, timestamp) VALUES (?, ?, ?, NOW())",
-                    (event_type, username, json.dumps(details))
-                )
+                "INSERT INTO stream_events (event_type, username, details, timestamp) VALUES ($1, $2, $3, NOW())",
+                (event_type, username, str(details))
+            )
         except Exception as e:
             logger.error(f"❌ Erreur log dashboard: {e}")
 

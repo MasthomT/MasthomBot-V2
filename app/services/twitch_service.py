@@ -474,7 +474,7 @@ class MasthbotTwitch(commands.Bot):
             months = tags.get('msg-param-cumulative-months', '1')
             tier = tags.get('msg-param-sub-plan', '1000')
             tier_name = "Tier 1" if tier == "1000" else "Tier 2" if tier == "2000" else "Tier 3" if tier == "3000" else "Prime"
-            credits_service.log_event("subscribers", display_name, f"{tier_name} • {months} mois")
+            credits_service.log_event("subscribers", display_name, str(months))
 
         # 🎁 CADEAUX D'ABONNEMENTS (Subgifts)
         elif msg_id == 'subgift':

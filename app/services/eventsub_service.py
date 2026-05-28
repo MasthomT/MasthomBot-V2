@@ -44,8 +44,8 @@ async def log_stream_event(event_type, username, details):
 
         async with get_db_connection() as conn:
             await conn.execute(
-                "INSERT INTO stream_events (event_type, username, details, timestamp) VALUES (?, ?, ?, NOW())",
-                (event_type, clean_username, str(formatted_details))
+                "INSERT INTO stream_events (event_type, username, details, timestamp) VALUES ($1, $2, $3, NOW())",
+                (event_type, username, str(details))
             )
         logger.info(f"🎉 [EVENT enregistré] {clean_username} -> {event_type.upper()}")
     except Exception as e:
@@ -185,10 +185,12 @@ async def eventsub_routine():
                                 xp = int(conf.get(f"exp_sub_t{tier}") or 500)
                                 await viewer_repo.add_experience(user_id, user_name, xp, "SUB", f"Abonnement Tier {tier}")
                                 await log_stream_event("sub", user_name, {"tier": tier, "xp": xp, "is_gift": False})
-                                credits_service.log_event("subscribers", user_name, f"Tier {tier}")
+                                # CORRECTION ICI :
+                                credits_service.log_event("subscribers", user_name, str(cumulative_months))
                             else:
                                 await log_stream_event("sub", user_name, {"tier": tier, "is_gift": True})
-                                credits_service.log_event("subscribers", user_name, f"Cadeau Reçu")
+                                # CORRECTION ICI :
+                                credits_service.log_event("subscribers", user_name, str(cumulative_months))
 
                         elif sub_type == "channel.subscription.gift":
                             if not event.get("is_anonymous"):

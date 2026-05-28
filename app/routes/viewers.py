@@ -191,9 +191,15 @@ async def get_all_viewers():
 
 @router.get("/api/viewers/{twitch_id}", response_model=ViewerResponse)
 async def get_viewer(twitch_id: str):
+    # 1. Va chercher le profil du viewer
     viewer = await viewer_repo.get_viewer(twitch_id)
     if not viewer:
         raise HTTPException(status_code=404, detail="Viewer non trouvé")
+    
+    # 2. Va chercher les deux historiques depuis les fonctions du repo
+    viewer["daily_activity"] = await viewer_repo.get_daily_activity(twitch_id)
+    viewer["exp_history"] = await viewer_repo.get_exp_events(twitch_id)
+
     return viewer
 
 @router.post("/api/viewers/{twitch_id}/nickname")

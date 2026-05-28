@@ -5,6 +5,7 @@ except RuntimeError:
     asyncio.set_event_loop(asyncio.new_event_loop())
 
 import subprocess
+import json
 import contextlib
 import os
 import httpx
@@ -14,14 +15,17 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from typing import List, Optional
 
 # --- IMPORT CORE ---
-# On vire db_writer_worker car PostgreSQL gère ça beaucoup mieux tout seul !
-from app.core.database import init_db
+from app.core.database import init_db, get_db_connection
 
 # --- IMPORT DES ROUTES ---
 from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes
 from app.routes.credits import router as credits_router
+
 # --- IMPORT DES SERVICES ---
 from app.services.twitch_service import twitch_bot
 from app.services.live_monitor import check_twitch_lives_routine
@@ -32,6 +36,30 @@ from app.services.trophy_engine import start_trophy_engine
 
 # --- IMPORT DES REPERTOIRES ---
 from app.repositories import viewer_repo
+
+# ==========================================
+# MODÈLES DE DONNÉES (POUR PAGE INFOS)
+# ==========================================
+class RuleItem(BaseModel):
+    emoji: str
+    text: str
+    is_danger: bool = False
+
+class ScheduleItem(BaseModel):
+    day_index: int
+    day_name: str
+    time: str
+    event: str
+
+class ChannelInfoUpdate(BaseModel):
+    about_text: str
+    social_discord: str
+    social_youtube: str
+    social_twitch: str
+    social_tiktok: str
+    social_tips: str
+    rules: List[RuleItem]
+    schedule: List[ScheduleItem]
 
 # --- CONFIGURATION DU LOGGING ---
 logger = logging.getLogger("masthbot.fastapi")
@@ -90,20 +118,24 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="MasthomBot V2", version="2.0.0", lifespan=lifespan)
 
 # =====================================================================
-# 🌐 CONFIGURATION CORS (AUTORISE VERCEL ET NGROK)
+# 🌐 CONFIGURATION CORS
 # =====================================================================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://fel-x.vercel.app",
-        "https://prime-nearby-tick.ngrok-free.app",
-        "http://localhost:3000"
-    ],
+    allow_origins=["https://fel-x.icu"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"]
 )
+
+@app.exception_handler(Exception)
+async def validation_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc)},
+        headers={"Access-Control-Allow-Origin": "*"}
+    )
 
 # ==========================================
 # MONTAGE DES DOSSIERS ET ROUTES
@@ -129,6 +161,51 @@ app.include_router(api_deck.router)
 app.include_router(labels_routes.router)
 app.include_router(clips.router)
 
+
+# ==========================================
+# ROUTES API : INFORMATIONS DE LA CHAÎNE (DASHBOARD ADMIN)
+# ==========================================
+@app.get("/api/v1/channel-info")
+async def get_channel_info():
+    async with get_db_connection() as conn:
+        cursor = await conn.execute("SELECT * FROM channel_info WHERE id=1")
+        row = await cursor.fetchone()
+        
+        if not row:
+            return {"error": "Infos introuvables"}
+            
+        return {
+            "about_text": row["about_text"],
+            "social_discord": row["social_discord"],
+            "social_youtube": row["social_youtube"],
+            "social_twitch": row["social_twitch"],
+            "social_tiktok": row["social_tiktok"],
+            "social_tips": row["social_tips"],
+            "rules": json.loads(row["rules_json"]),
+            "schedule": json.loads(row["schedule_json"])
+        }
+
+@app.post("/api/v1/channel-info")
+async def update_channel_info(info: ChannelInfoUpdate):
+    async with get_db_connection() as conn:
+        await conn.execute("""
+            UPDATE channel_info SET 
+                about_text = $1, social_discord = $2, social_youtube = $3, 
+                social_twitch = $4, social_tiktok = $5, social_tips = $6, 
+                rules_json = $7, schedule_json = $8
+            WHERE id = 1
+        """, (
+            info.about_text, info.social_discord, info.social_youtube,
+            info.social_twitch, info.social_tiktok, info.social_tips,
+            json.dumps([r.model_dump() if hasattr(r, "model_dump") else r.dict() for r in info.rules]), 
+            json.dumps([s.model_dump() if hasattr(s, "model_dump") else s.dict() for s in info.schedule])
+        ))
+    return {"status": "success", "message": "Informations de la chaîne mises à jour !"}
+
+
+# ==========================================
+# ROUTES API : AUTRES
+# ==========================================
 @app.get("/api/felix/toggle")
 async def toggle_felix():
     state_file = "/home/thomas/masthom/BOT_V2/felix_state.txt"
@@ -145,6 +222,7 @@ async def toggle_felix():
         f.write("1" if nouvel_etat else "0")
 
     return {"status": "success", "is_enabled": nouvel_etat}
+
 
 if __name__ == "__main__":
     import uvicorn
@@ -166,3 +244,8 @@ if __name__ == "__main__":
     server = uvicorn.Server(config)
     loop = asyncio.get_event_loop()
     loop.run_until_complete(server.serve())
+
+@app.get("/debug_routes")
+def debug_routes():
+    # Liste toutes les routes actives dans ton API
+    return {"routes": [route.path for route in app.routes]}

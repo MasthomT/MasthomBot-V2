@@ -1,0 +1,6 @@
+      timestamp      | event_type | amount |             details             
+---------------------+------------+--------+---------------------------------
+ 2026-05-11 16:26:16 | trophy     |    500 | Succès : Very Important Viewers
+ 2026-05-11 16:26:16 | trophy     |    100 | Succès : Noob du tchat
+(2 rows)
+

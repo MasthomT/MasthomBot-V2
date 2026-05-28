@@ -56,15 +56,20 @@ async def admin_polls_faq_page(request: Request):
                     "total_votes": total_votes
                 })
 
+            # Remplace TOUT le bloc de la partie "2. RÉCUPÉRATION DES QUESTIONS" par ceci :
+            
             # 2. RÉCUPÉRATION DES QUESTIONS
+            
+            # -> Les questions en attente (sans réponse)
             cursor_pending = await conn.execute(
-                "SELECT * FROM questions WHERE answer_text IS NULL ORDER BY created_at DESC"
+                "SELECT * FROM questions WHERE answer_text IS NULL OR answer_text = '' ORDER BY id DESC"
             )
             pending_rows = await cursor_pending.fetchall()
             pending = [dict(q) for q in pending_rows]
             
+            # -> L'historique (les questions avec réponse)
             cursor_answered = await conn.execute(
-                "SELECT * FROM questions WHERE answer_text IS NOT NULL ORDER BY answered_at DESC LIMIT 20"
+                "SELECT * FROM questions WHERE answer_text IS NOT NULL AND answer_text != '' ORDER BY answered_at DESC LIMIT 20"
             )
             answered_rows = await cursor_answered.fetchall()
             answered = [dict(q) for q in answered_rows]
@@ -120,13 +125,13 @@ async def answer_question(
     answer: str = Form(...),
     is_public: int = Form(0),
 ):
-    question_text = None
     async with get_db_connection() as conn:
+        # 1. On récupère le texte AVANT de mettre à jour
         c = await conn.execute("SELECT question_text FROM questions WHERE id = $1", (id,))
         q_row = await c.fetchone()
-        if q_row:
-            question_text = q_row["question_text"]
+        question_text = q_row["question_text"] if q_row else "Question inconnue"
             
+        # 2. UPDATE explicite avec vérification
         await conn.execute(
             """
             UPDATE questions
@@ -136,13 +141,15 @@ async def answer_question(
             (answer, is_public, id),
         )
         
-    # Notification Discord en tâche de fond (ne bloque pas la page Web)
+    # Notification Discord
     if is_public and question_text:
         background_tasks.add_task(
             notification_service.send_faq_public_answer,
             question_text,
             answer,
         )
+    
+    # Redirection propre
     return RedirectResponse(url="/admin/polls_faq?success=1", status_code=303)
 
 @router.post("/admin/polls_faq/questions/delete/{id}")

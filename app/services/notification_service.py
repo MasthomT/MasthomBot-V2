@@ -49,6 +49,8 @@ class NotificationService:
         
         if custom_message:
             msg_content = custom_message.replace("{CATEGORIE}", safe_game)
+            msg_content = msg_content.replace("{game}", safe_game)
+            msg_content = msg_content.replace("{lien}", f"https://twitch.tv/{channel_name}")
         else:
             msg_content = f"💜 **{channel_name}** est en direct, foncez lui donner de la force !"
 
@@ -168,5 +170,41 @@ class NotificationService:
                     logger.info("✅ [FAQ DISCORD] Réponse publiée avec succès.")
                 else:
                     logger.error(f"❌ [FAQ DISCORD] Erreur d'envoi : {resp.status}")
+
+    async def send_special_stream_notification(self, channel_id, title, date, time):
+        """Envoie une notification spécifique pour un Live Spécial."""
+        bot_token = self._get_fresh_bot_token()
+
+        if not bot_token or not channel_id:
+            logger.error("❌ [FEL-X] Impossible d'envoyer la notif spéciale : token ou channel manquant.")
+            return
+
+        url = f"{self.base_url}/channels/{channel_id}/messages"
+        headers = {
+            "Authorization": f"Bot {bot_token}",
+            "Content-Type": "application/json"
+        }
+
+        # Embed avec couleur ambre/or pour le côté "Spécial"
+        payload = {
+            "content": "🚨 **STREAM SPÉCIAL À VENIR !** 🚨",
+            "embeds": [
+                {
+                    "title": f"📅 {title}",
+                    "color": 16766720, 
+                    "fields": [
+                        {"name": "🗓️ Date", "value": date, "inline": True},
+                        {"name": "⏰ Heure", "value": time, "inline": True}
+                    ]
+                }
+            ]
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=payload) as resp:
+                if resp.status in (200, 201):
+                    logger.info(f"✅ [FEL-X] Notif spéciale envoyée : {title}")
+                else:
+                    logger.error(f"❌ [FEL-X] Erreur Discord spéciale ({resp.status})")
 
 notification_service = NotificationService()

@@ -76,112 +76,7 @@ async def get_leaderboard():
         return result
 
 # ==========================================================
-# 3. PROFIL INDIVIDUEL
-# ==========================================================
-@router.get("/viewer/{twitch_id}")
-async def get_viewer_profile(twitch_id: str, username: str = None):
-    async with get_db_connection() as conn:
-        c = await conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,))
-        row = await c.fetchone()
-        display_name = username if username else f"Visiteur_{twitch_id[:4]}"
-
-        if not row:
-            await conn.execute("INSERT INTO viewers (twitch_id, username, points, messages, watchtime) VALUES (?, ?, 0, 0, 0)", (twitch_id, display_name))
-            c = await conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,))
-            row = await c.fetchone()
-        else:
-            if row['username'].startswith("Visiteur_") and username:
-                await conn.execute("UPDATE viewers SET username = ? WHERE twitch_id = ?", (username, twitch_id))
-                c = await conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,))
-                row = await c.fetchone()
-        
-        viewer_data = dict(row)
-        await conn.execute("UPDATE viewers SET last_seen = NOW(), last_web_login = NOW() WHERE twitch_id = ?", (twitch_id,))
-
-        xp = viewer_data.get('points', 0)
-        viewer_data['level'] = max(1, int((xp / 100) ** (1 / 2.2))) if xp > 0 else 1
-        
-        crank = await conn.execute(f"SELECT COUNT(*) FROM viewers WHERE points > ? AND LOWER(username) NOT IN {EXCLUSION_LIST}", (xp,))
-        rank_val = await crank.fetchone()
-        viewer_data['rank'] = (rank_val[0] if rank_val else 0) + 1
-        
-        ctrophies = await conn.execute("""
-            SELECT t.label, t.icon, t.description, t.tier, vt.earned_at
-            FROM viewer_trophies vt
-            JOIN trophy_list t ON vt.trophy_id = t.id
-            WHERE vt.twitch_id = ?
-            ORDER BY vt.earned_at DESC
-        """, (twitch_id,))
-        trophies_raw = await ctrophies.fetchall()
-
-        trophies_list = []
-        tier_counts = {"Standard": 0, "Bronze": 0, "Argent": 0, "Or": 0, "Platine": 0, "Diamant": 0}
-
-        for tr in trophies_raw:
-            t_dict = dict(tr)
-            if isinstance(t_dict.get('earned_at'), datetime):
-                t_dict['earned_at'] = t_dict['earned_at'].isoformat()
-            trophies_list.append(t_dict)
-            tier_name = t_dict.get('tier', 'Standard')
-            tier_counts[tier_name] = tier_counts.get(tier_name, 0) + 1
-
-        viewer_data['trophies'] = trophies_list
-        viewer_data['tier_counts'] = tier_counts
-
-        history_list = []
-        cset = await conn.execute("SELECT exp_per_message, exp_per_watchtime FROM settings WHERE id=1")
-        settings_row = await cset.fetchone()
-        exp_msg = settings_row['exp_per_message'] if settings_row else 2
-        exp_wt = settings_row['exp_per_watchtime'] if settings_row else 5
-        
-        ctoday = await conn.execute("SELECT messages, watchtime FROM viewer_daily_stats WHERE twitch_id = ? AND day = CURRENT_DATE", (twitch_id,))
-        today_stats = await ctoday.fetchone()
-        
-        if today_stats:
-            if today_stats['watchtime'] > 0:
-                wt = today_stats['watchtime']
-                wt_str = f"{wt // 3600}h {(wt % 3600) // 60}m" if wt >= 3600 else f"{wt // 60} min"
-                history_list.append({
-                    "event_type": "PRÉSENCE (LIVE)", "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    "date": "Aujourd'hui", "details": f"Session : {wt_str}", "amount": (wt // 60) * exp_wt,
-                    "icon": "⏱️", "color": "#10b981" 
-                })
-            if today_stats['messages'] > 0:
-                history_list.append({
-                    "event_type": "ACTIVITÉ CHAT", "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    "date": "Aujourd'hui", "details": f"{today_stats['messages']} messages envoyés", "amount": today_stats['messages'] * exp_msg,
-                    "icon": "💬", "color": "#0ea5e9"
-                })
-
-        chist = await conn.execute("SELECT * FROM viewer_exp_log WHERE twitch_id = ? ORDER BY timestamp DESC LIMIT 15", (twitch_id,))
-        raw_history = await chist.fetchall()
-        for r in raw_history:
-            log = dict(r)
-            ev = log['event_type'].upper()
-            icon, color = "✨", "#00f5c3"
-            if any(x in ev for x in ["BIT", "CHEER"]): icon, color = "💎", "#ffb300"
-            elif "RAID" in ev: icon, color = "⚔️", "#a855f7"
-            elif "SUB" in ev: icon, color = "💜", "#9146ff"
-
-            ts = log['timestamp']
-            if isinstance(ts, datetime):
-                ts = ts.strftime('%Y-%m-%d %H:%M:%S')
-            elif not isinstance(ts, str):
-                ts = str(ts)
-
-            history_list.append({
-                "event_type": ev, "amount": log['amount'], "details": log['details'] or "Action standard",
-                "date": ts[:10].replace("-", "/"), "icon": icon, "color": color
-            })
-
-        viewer_data['history'] = history_list
-        for k, v in viewer_data.items():
-            if isinstance(v, datetime):
-                viewer_data[k] = v.isoformat()
-        return viewer_data
-
-# ==========================================================
-# 4. SAUVEGARDE FORMULAIRE IA
+# 3. SAUVEGARDE FORMULAIRE IA
 # ==========================================================
 @router.post("/viewer/update_context")
 async def update_viewer_context(request: Request):
@@ -215,7 +110,7 @@ async def update_viewer_context(request: Request):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 # ==========================================================
-# 5. SONDAGES
+# 4. SONDAGES
 # ==========================================================
 @router.get("/poll/active")
 async def get_active_poll_api(twitch_id: str = None):
@@ -259,16 +154,35 @@ async def submit_vote_api(request: Request):
             return JSONResponse(status_code=500, content={"error": str(e)})
 
 # ==========================================================
-# 6. FAQ
+# 5. FAQ
 # ==========================================================
 @router.post("/questions/ask")
 async def ask_question_api(request: Request):
     data = await request.json()
-    t_id, username, text = data.get("twitch_id"), data.get("username"), data.get("question")
-    if not text or len(text) < 5: return JSONResponse(status_code=400, content={"error": "Texte trop court"})
-    async with get_db_connection() as conn:
-        await conn.execute("INSERT INTO questions (twitch_id, username, question_text) VALUES (?, ?, ?)", (str(t_id), username, text))
+    t_id = data.get("twitch_id")
+    username = data.get("username")
+    text = data.get("question")
+
+    if not text or len(text) < 5:
+        return JSONResponse(status_code=400, content={"error": "Texte trop court"})
+
+    try:
+        async with get_db_connection() as conn:
+            await conn.execute("""
+                INSERT INTO questions (twitch_id, username, question_text, is_public, created_at)
+                VALUES ($1, $2, $3, 0, NOW())
+            """, str(t_id), username, text)
+            
+            try:
+                await conn.commit()
+            except AttributeError:
+                pass
+
         return {"status": "success"}
+
+    except Exception as e:
+        logger.error(f"❌ [FAQ] Erreur lors de l'insertion de la question : {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 @router.get("/questions/faq")
 async def get_faq_api():
@@ -284,7 +198,7 @@ async def get_faq_api():
         return res
 
 # ==========================================================
-# 7. STREAMERBOT (Récompenses First/Deuz/Troiz)
+# 6. STREAMERBOT (Récompenses First/Deuz/Troiz)
 # ==========================================================
 @router.post("/rewards/podium")
 async def claim_podium_reward(request: Request):
@@ -315,3 +229,33 @@ async def claim_podium_reward(request: Request):
     except Exception as e:
         logger.error(f"❌ Erreur Podium Reward : {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+# ==========================================================
+# 7. INFOS CHAÎNE
+# ==========================================================
+@router.get("/channel-info")
+async def api_get_channel_info():
+    """API publique pour le site fel-x.icu : renvoie les infos et le planning"""
+    async with get_db_connection() as conn:
+        cursor = await conn.execute("SELECT * FROM channel_info WHERE id = 1")
+        row = await cursor.fetchone()
+        
+        if not row:
+            return {"error": "Aucune donnée"}
+            
+        info = dict(row)
+        
+        try:
+            schedule = json.loads(info.get("schedule_json") or "[]")
+        except:
+            schedule = []
+            
+        return {
+            "about_text": info.get("about_text", ""),
+            "social_discord": info.get("social_discord", ""),
+            "social_youtube": info.get("social_youtube", ""),
+            "social_twitch": info.get("social_twitch", ""),
+            "social_tiktok": info.get("social_tiktok", ""),
+            "social_tips": info.get("social_tips", ""),
+            "schedule": schedule
+        }

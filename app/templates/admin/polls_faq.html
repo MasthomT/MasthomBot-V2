@@ -18,24 +18,22 @@
     </style>
 </head>
 <body class="font-sans antialiased flex min-h-screen">
-    
+   
     {% include 'admin/sidebar.html' %}
-
     <main class="flex-1 p-6 md:p-10 flex flex-col h-screen overflow-hidden">
         <header class="mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
             <div>
                 <h1 class="text-3xl font-extrabold text-white tracking-tight">Sondages & FAQ</h1>
                 <p class="text-slate-400 mt-1 text-sm uppercase font-black tracking-widest">Contrôle de l'interaction</p>
             </div>
-            
+           
             <div class="flex bg-slate-900/50 p-1 rounded-2xl border border-slate-800">
                 <button onclick="switchTab('polls')" id="btn-polls" class="tab-btn active px-6 py-2 rounded-xl text-xs font-black">SONDAGES</button>
                 <button onclick="switchTab('faq')" id="btn-faq" class="tab-btn px-6 py-2 rounded-xl text-xs font-black">
-                    QUESTIONS ({{ pending_questions|length }})
+                    QUESTIONS (<span id="pending-count">{{ pending_questions|length }}</span>)
                 </button>
             </div>
         </header>
-
         {% if request.query_params.get('success') or request.query_params.get('created') or request.query_params.get('closed') or request.query_params.get('deleted') %}
         <div id="status-toast" class="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-[10px] font-bold animate-pulse text-center uppercase tracking-widest">
             Action effectuée avec succès
@@ -44,10 +42,10 @@
         {% endif %}
 
         <!-- ================================== -->
-        <!-- SONDAGES (PLUS GRANDS & ADAPTÉS)   -->
+        <!-- SONDAGES (PLUS GRANDS & ADAPTÉS) -->
         <!-- ================================== -->
         <div id="section-polls" class="grid grid-cols-1 xl:grid-cols-2 gap-8 flex-1 overflow-hidden items-start">
-            
+           
             <!-- FORMULAIRE DE CRÉATION -->
             <div class="h-full overflow-y-auto pr-2 custom-scrollbar">
                 <form action="/admin/polls_faq/create" method="POST" class="config-card p-10 rounded-3xl shadow-2xl space-y-8 h-fit">
@@ -118,14 +116,14 @@
         <!-- FAQ / QUESTIONS (LISIBLES & ANONYMES) -->
         <!-- ================================== -->
         <div id="section-faq" class="hidden grid grid-cols-1 xl:grid-cols-12 gap-8 flex-1 overflow-hidden items-start">
-            
+           
             <!-- QUESTIONS À RÉPONDRE -->
-            <div class="xl:col-span-7 h-full overflow-y-auto pr-2 custom-scrollbar space-y-4">
+            <div class="xl:col-span-7 h-full overflow-y-auto pr-2 custom-scrollbar space-y-4" id="pending-container">
                 {% for q in pending_questions %}
                 <div class="config-card p-8 rounded-3xl border-l-4 border-amber-500 space-y-4">
                     <div class="flex justify-between items-center">
                         <span class="text-sm font-black text-white">
-                            {{ q.username }} 
+                            {{ q.username }}
                             <span class="text-[10px] text-slate-500 font-normal ml-2 italic">(Masqué sur le site public)</span>
                         </span>
                         <form action="/admin/polls_faq/questions/delete/{{ q.id }}" method="POST" onsubmit="return confirm('Supprimer définitivement cette question ?')">
@@ -170,19 +168,17 @@
                             </button>
                          </form>
                     </div>
-                    
+                   
                     <div class="mb-4">
                         <p class="text-[14px] text-slate-400 italic font-medium leading-relaxed">
                             <i class="fas fa-quote-left text-[10px] mr-2 opacity-30"></i>{{ q.question_text }}
                         </p>
                     </div>
-
                     <div class="bg-slate-800/40 p-4 rounded-2xl border-l-4 border-emerald-500/50">
                         <p class="text-[15px] text-slate-200 font-bold leading-relaxed">
                             <span class="text-emerald-400 mr-1">Félix :</span> {{ q.answer_text }}
                         </p>
                     </div>
-
                     <div class="mt-4 text-right">
                         <span class="text-[9px] font-black text-slate-700 uppercase tracking-widest">{{ q.answered_at }}</span>
                     </div>
@@ -192,15 +188,72 @@
                 {% endfor %}
             </div>
         </div>
-
     </main>
 
     <script>
+        // === CONFIGURATION API ===
+        const API_BASE = (typeof CONFIG !== 'undefined' && CONFIG.API_BASE_URL) 
+            ? CONFIG.API_BASE_URL.replace(/\/$/, '') 
+            : '';
+        const FULL_API_BASE = API_BASE + '/api/v1';
+
+        async function refreshPendingQuestions() {
+            try {
+                const res = await fetch(`${FULL_API_BASE}/questions/pending`);
+                if (!res.ok) return;
+                
+                const questions = await res.json();
+                
+                document.getElementById('pending-count').textContent = questions.length;
+
+                const container = document.getElementById('pending-container');
+                
+                if (questions.length === 0) {
+                    container.innerHTML = `
+                        <div class="h-full flex flex-col items-center justify-center opacity-30 italic text-sm text-center">
+                            <i class="fas fa-check-double text-5xl mb-4 text-emerald-500"></i>
+                            <p>Zéro question en attente !</p>
+                        </div>`;
+                } else {
+                    container.innerHTML = questions.map(q => `
+                        <div class="config-card p-8 rounded-3xl border-l-4 border-amber-500 space-y-4">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm font-black text-white">
+                                    ${q.username}
+                                    <span class="text-[10px] text-slate-500 font-normal ml-2 italic">(Masqué sur le site public)</span>
+                                </span>
+                                <form action="/admin/polls_faq/questions/delete/${q.id}" method="POST" onsubmit="return confirm('Supprimer définitivement cette question ?')">
+                                    <button type="submit" class="text-slate-600 hover:text-rose-500 transition-colors"><i class="fas fa-trash-alt"></i></button>
+                                </form>
+                            </div>
+                            <p class="text-slate-200 text-xl font-medium leading-relaxed">"${q.question_text}"</p>
+                            <form action="/admin/polls_faq/questions/answer" method="POST" class="space-y-4 pt-4 border-t border-slate-800">
+                                <input type="hidden" name="id" value="${q.id}">
+                                <textarea name="answer" required class="w-full input-dark rounded-2xl p-5 text-sm resize-none" rows="3" placeholder="Tape ta réponse ici..."></textarea>
+                                <div class="flex justify-between items-center">
+                                    <label class="flex items-center gap-3 text-[10px] font-bold text-slate-500 uppercase cursor-pointer hover:text-slate-300">
+                                        <input type="checkbox" name="is_public" value="1" checked class="w-5 h-5 rounded border-slate-700 bg-slate-800 text-indigo-600"> Publier (Anonyme)
+                                    </label>
+                                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-3 rounded-2xl text-xs font-black uppercase shadow-lg shadow-emerald-900/20 transition-all active:scale-95">Répondre & Poster</button>
+                                </div>
+                            </form>
+                        </div>
+                    `).join('');
+                }
+            } catch(e) {
+                console.error("Erreur refresh questions:", e);
+            }
+        }
+
         function switchTab(tab) {
             document.getElementById('section-polls').classList.toggle('hidden', tab !== 'polls');
             document.getElementById('section-faq').classList.toggle('hidden', tab !== 'faq');
             document.getElementById('btn-polls').classList.toggle('active', tab === 'polls');
             document.getElementById('btn-faq').classList.toggle('active', tab === 'faq');
+            
+            if (tab === 'faq') {
+                refreshPendingQuestions();
+            }
         }
 
         {% if active_poll %}
@@ -209,58 +262,56 @@
             try {
                 const res = await fetch('/api/v1/poll/active');
                 const data = await res.json();
-                
+               
                 if(data.active) {
                     for(let i=1; i<=4; i++) {
                         if(data.options && data.options[i]) {
                             const v = data.results[i] || 0;
                             const p = data.total_votes > 0 ? Math.round((v/data.total_votes)*100) : 0;
-                            
+                           
                             const bar = document.getElementById('bar-'+i);
                             const txt = document.getElementById('txt-'+i);
                             const vList = document.getElementById('voters-'+i);
-
-                            // Mise à jour de la barre et du pourcentage
+                            
                             if(bar) bar.style.width = p + '%';
                             if(txt) txt.textContent = p + '% (' + v + ' votes)';
-
-                            // 🛡️ Mise à jour en direct des votants (Version sécurisée)
+                            
                             if(vList && data.voters) {
-                                // On gère le cas où la clé est un entier (1) ou une chaîne ("1")
                                 let rawVoters = data.voters[i] || data.voters[i.toString()];
                                 let votersArray = [];
-
                                 if (rawVoters) {
-                                    // Si c'est déjà un tableau, on le garde
                                     if (Array.isArray(rawVoters)) {
                                         votersArray = rawVoters;
-                                    } 
-                                    // Si c'est du texte séparé par des virgules, on le transforme en tableau
-                                    else if (typeof rawVoters === 'string' && rawVoters.trim() !== '') {
+                                    } else if (typeof rawVoters === 'string' && rawVoters.trim() !== '') {
                                         votersArray = rawVoters.split(',');
                                     }
                                 }
-
-                                // Affichage dynamique sécurisé
                                 if (votersArray.length > 0) {
                                     vList.innerHTML = votersArray.map(name =>
                                         `<span class="text-[9px] font-black bg-slate-800 text-slate-500 px-2 py-0.5 rounded-md border border-slate-700/50 uppercase tracking-tighter">${name.trim()}</span>`
                                     ).join('');
                                 } else {
-                                    vList.innerHTML = ''; // On vide proprement si personne n'a voté
+                                    vList.innerHTML = '';
                                 }
                             }
                         }
                     }
-                } else { 
-                    // Si le sondage est terminé côté serveur, on rafraîchit la page
-                    location.reload(); 
+                } else {
+                    location.reload();
                 }
             } catch(e) {
                 console.error("Erreur lors de l'actualisation du sondage :", e);
             }
         }, 3000);
         {% endif %}
+
+        // Rafraîchissement automatique des questions
+        setInterval(refreshPendingQuestions, 4000);
+
+        // Chargement initial
+        window.onload = function() {
+            refreshPendingQuestions();
+        };
     </script>
 </body>
 </html>

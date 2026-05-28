@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 class ViewerBase(BaseModel):
@@ -77,3 +77,7 @@ class ViewerResponse(ViewerBase):
     C'est exactement ce format JSON qui sera renvoyé à ton frontend FEL-X.
     """
     level: Optional[int] = Field(1, description="Niveau calculé via l'EXP")
+    
+    # Les deux listes dont le frontend a besoin :
+    daily_activity: List[Dict[str, Any]] = []
+    exp_history: List[Dict[str, Any]] = []

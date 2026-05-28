@@ -11,12 +11,15 @@ from typing import Optional
 logger = logging.getLogger("masthbot.database")
 
 env_vars = dotenv.dotenv_values(".env")
-DATABASE_URL = env_vars.get("DATABASE_URL")
+DATABASE_URL = "postgresql://thomas:Thomas.c1992@localhost/masthbot_db"
 
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL est introuvable dans le fichier .env !")
 
 write_queue: Optional[asyncio.Queue] = None
+
+async def get_db_connection():
+    return await asyncpg.connect(DATABASE_URL)
 
 def get_write_queue() -> asyncio.Queue:
     global write_queue
@@ -37,10 +40,13 @@ class PostgresCursorWrapper:
         self._results = []
         self._iter = None
 
-    def execute(self, sql: str, params: tuple = ()):
-        # 🛑 LE CORRECTIF EST ICI : On modifie l'objet actuel au lieu d'en créer un nouveau
+    def execute(self, sql: str, *params):
+        # Si on reçoit un tuple unique (ex: (a, b, c)), on le déballe
+        if len(params) == 1 and isinstance(params[0], (tuple, list)):
+            self.params = params[0]
+        else:
+            self.params = params
         self.sql = sql
-        self.params = params
         return self
 
     async def __aenter__(self):
@@ -54,8 +60,7 @@ class PostgresCursorWrapper:
         return self._do_execute().__await__()
 
     async def _do_execute(self):
-        if not self.sql:
-            return self
+        if not self.sql: return self
             
         upper_sql = self.sql.upper()
         
@@ -86,8 +91,10 @@ class PostgresCursorWrapper:
             # Force la table devant 'points' pour lever l'ambiguïté Postgres
             fixed_sql = re.sub(r'points\s*=\s*points\s*\+\s*excluded\.points', 'points = viewers.points + excluded.points', fixed_sql, flags=re.IGNORECASE)
 
-        upper_fixed = fixed_sql.upper()
-        if any(k in upper_fixed for k in ["INSERT", "UPDATE", "DELETE", "ALTER", "CREATE", "DROP"]):
+        upper_fixed = self.sql.upper()
+        # Ici, on utilise *self.params pour envoyer les arguments proprement à asyncpg
+        first_word = upper_fixed.lstrip().split()[0] if upper_fixed.strip() else ""
+        if first_word in ["INSERT", "UPDATE", "DELETE", "ALTER", "CREATE", "DROP"]:
             await self.conn.execute(fixed_sql, *self.params)
             self._results = []
         else:
@@ -172,6 +179,23 @@ async def init_db():
             "ALTER TABLE announcements ADD COLUMN IF NOT EXISTS last_triggered TIMESTAMP",
             "ALTER TABLE viewer_exp_log ADD COLUMN IF NOT EXISTS twitch_id TEXT",
             "ALTER TABLE viewers ADD COLUMN IF NOT EXISTS vip_expiry TIMESTAMP",
+            
+            # --- NOUVELLE TABLE POUR LE DASHBOARD ADMIN (PAGE INFOS) ---
+            """
+            CREATE TABLE IF NOT EXISTS channel_info (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                about_text TEXT DEFAULT 'Bienvenue sur la chaîne !',
+                social_discord TEXT DEFAULT '',
+                social_youtube TEXT DEFAULT '',
+                social_twitch TEXT DEFAULT '',
+                social_tiktok TEXT DEFAULT '',
+                social_tips TEXT DEFAULT '',
+                rules_json TEXT DEFAULT '[]',
+                schedule_json TEXT DEFAULT '[]'
+            )
+            """,
+            # Postgres: Si la ligne 1 existe déjà, on ne fait rien
+            "INSERT INTO channel_info (id) VALUES (1) ON CONFLICT (id) DO NOTHING"
         ]
         for query in migrations:
             try:

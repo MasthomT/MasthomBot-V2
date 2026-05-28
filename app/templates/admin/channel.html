@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Infos Chaîne</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .admin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+        .input-group { margin-bottom: 1.5rem; }
+        .input-group label { display: block; margin-bottom: 0.5rem; font-weight: 700; color: var(--accent); font-size: 0.9rem; text-transform: uppercase; }
+        .input-group input, .input-group textarea, .input-group select { 
+            width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); 
+            background: rgba(0,0,0,0.3); color: #fff; font-family: inherit; font-size: 1rem;
+        }
+        .input-group textarea { resize: vertical; min-height: 100px; }
+        
+        .dynamic-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; border: 1px solid var(--border); }
+        .btn-action { padding: 10px 15px; border-radius: 8px; font-weight: bold; cursor: pointer; border: none; transition: 0.2s; }
+        .btn-add { background: rgba(0, 245, 195, 0.1); color: var(--accent); border: 1px solid var(--accent); width: 100%; margin-top: 10px; }
+        .btn-add:hover { background: var(--accent); color: #000; }
+        .btn-remove { background: rgba(255, 0, 0, 0.1); color: #ff4d4d; border: 1px solid #ff4d4d; }
+        .btn-remove:hover { background: #ff4d4d; color: #fff; }
+        .btn-save { background: var(--accent); color: #000; font-size: 1.2rem; padding: 15px; width: 100%; margin-top: 2rem; box-shadow: 0 0 20px var(--accent-glow); }
+        .btn-save:hover { transform: scale(1.02); }
+
+        @media (max-width: 900px) { .admin-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <main id="main-content">
+        <header>
+            <h1>Gestion de la Chaîne</h1>
+            <p class="page-desc">Modifie les informations affichées sur la page Infos publique.</p>
+        </header>
+
+        <div id="status-message" style="display: none; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-weight: bold; text-align: center;"></div>
+
+        <div class="admin-grid">
+            <div>
+                <h2 class="section-title">📝 À Propos & Réseaux</h2>
+                <div class="card">
+                    <div class="input-group">
+                        <label>Texte de présentation</label>
+                        <textarea id="about_text"></textarea>
+                    </div>
+                    <div class="input-group">
+                        <label>Lien Discord</label>
+                        <input type="text" id="social_discord" placeholder="https://discord.gg/...">
+                    </div>
+                    <div class="input-group">
+                        <label>Lien YouTube</label>
+                        <input type="text" id="social_youtube" placeholder="https://youtube.com/...">
+                    </div>
+                    <div class="input-group">
+                        <label>Lien Twitch</label>
+                        <input type="text" id="social_twitch" placeholder="https://twitch.tv/...">
+                    </div>
+                    <div class="input-group">
+                        <label>Lien TikTok</label>
+                        <input type="text" id="social_tiktok" placeholder="https://tiktok.com/...">
+                    </div>
+                    <div class="input-group">
+                        <label>Lien Dons (Tips)</label>
+                        <input type="text" id="social_tips" placeholder="https://streamelements.com/...">
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <h2 class="section-title">⚖️ Règles de la communauté</h2>
+                <div class="card" id="rules-container">
+                    </div>
+                <button class="btn-action btn-add" onclick="addRuleRow()">+ Ajouter une Règle</button>
+
+                <h2 class="section-title" style="margin-top: 2rem;">📅 Planning de diffusion</h2>
+                <div class="card" id="schedule-container">
+                    </div>
+                <button class="btn-action btn-add" onclick="addScheduleRow()">+ Ajouter un Jour</button>
+            </div>
+        </div>
+
+        <button class="btn-action btn-save" onclick="saveChannelInfo()">💾 SAUVEGARDER LES MODIFICATIONS</button>
+    </main>
+
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+    <script src="sidebar.js"></script> <script>
+        document.addEventListener("DOMContentLoaded", async () => {
+            await loadChannelInfo();
+        });
+
+        async function loadChannelInfo() {
+            try {
+                const res = await fetch(`${CONFIG.API_BASE_URL}/channel-info`, {
+                    headers: { "Cache-Control": "no-cache" }
+                });
+                const data = await res.json();
+
+                if(data.error) {
+                    console.log("Aucune info existante, on part de zéro.");
+                    return;
+                }
+
+                document.getElementById('about_text').value = data.about_text || '';
+                document.getElementById('social_discord').value = data.social_discord || '';
+                document.getElementById('social_youtube').value = data.social_youtube || '';
+                document.getElementById('social_twitch').value = data.social_twitch || '';
+                document.getElementById('social_tiktok').value = data.social_tiktok || '';
+                document.getElementById('social_tips').value = data.social_tips || '';
+
+                // Remplir les règles
+                const rulesContainer = document.getElementById('rules-container');
+                rulesContainer.innerHTML = '';
+                if(data.rules && data.rules.length > 0) {
+                    data.rules.forEach(rule => addRuleRow(rule.emoji, rule.text, rule.is_danger));
+                } else {
+                    addRuleRow(); // Ligne vide par défaut
+                }
+
+                // Remplir le planning
+                const scheduleContainer = document.getElementById('schedule-container');
+                scheduleContainer.innerHTML = '';
+                if(data.schedule && data.schedule.length > 0) {
+                    data.schedule.forEach(s => addScheduleRow(s.day_index, s.time, s.event));
+                } else {
+                    addScheduleRow(); // Ligne vide par défaut
+                }
+
+            } catch(e) {
+                console.error("Erreur de chargement:", e);
+                showStatus("Impossible de joindre le serveur.", "error");
+            }
+        }
+
+        function addRuleRow(emoji = '🛑', text = '', isDanger = false) {
+            const row = document.createElement('div');
+            row.className = 'dynamic-row rule-row';
+            row.innerHTML = `
+                <input type="text" class="rule-emoji" value="${emoji}" style="width: 50px; text-align: center;" title="Emoji">
+                <input type="text" class="rule-text" value="${text}" placeholder="Texte de la règle" style="flex-grow: 1;">
+                <label style="display:flex; align-items:center; gap:5px; font-size:0.8rem; color:#ff4d4d; cursor:pointer;">
+                    <input type="checkbox" class="rule-danger" ${isDanger ? 'checked' : ''}> BAN
+                </label>
+                <button class="btn-action btn-remove" onclick="this.parentElement.remove()">X</button>
+            `;
+            document.getElementById('rules-container').appendChild(row);
+        }
+
+        function addScheduleRow(dayIndex = 1, time = '18h00', event = 'Live Soirée') {
+            const row = document.createElement('div');
+            row.className = 'dynamic-row schedule-row';
+            
+            // Construction du select des jours
+            const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+            let options = '';
+            days.forEach((d, i) => {
+                options += `<option value="${i}" ${i === dayIndex ? 'selected' : ''}>${d}</option>`;
+            });
+
+            row.innerHTML = `
+                <select class="schedule-day" style="width: 120px;">${options}</select>
+                <input type="text" class="schedule-time" value="${time}" placeholder="Heure (ex: 20h00)" style="width: 100px;">
+                <input type="text" class="schedule-event" value="${event}" placeholder="Titre (ex: Tryhard)" style="flex-grow: 1;">
+                <button class="btn-action btn-remove" onclick="this.parentElement.remove()">X</button>
+            `;
+            document.getElementById('schedule-container').appendChild(row);
+        }
+
+        async function saveChannelInfo() {
+            // Récupérer les règles
+            const rules = [];
+            document.querySelectorAll('.rule-row').forEach(row => {
+                rules.push({
+                    emoji: row.querySelector('.rule-emoji').value,
+                    text: row.querySelector('.rule-text').value,
+                    is_danger: row.querySelector('.rule-danger').checked
+                });
+            });
+
+            // Récupérer le planning
+            const schedule = [];
+            const dayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+            document.querySelectorAll('.schedule-row').forEach(row => {
+                const dayIndex = parseInt(row.querySelector('.schedule-day').value);
+                schedule.push({
+                    day_index: dayIndex,
+                    day_name: dayNames[dayIndex],
+                    time: row.querySelector('.schedule-time').value,
+                    event: row.querySelector('.schedule-event').value
+                });
+            });
+
+            // Construire le payload JSON
+            const payload = {
+                about_text: document.getElementById('about_text').value,
+                social_discord: document.getElementById('social_discord').value,
+                social_youtube: document.getElementById('social_youtube').value,
+                social_twitch: document.getElementById('social_twitch').value,
+                social_tiktok: document.getElementById('social_tiktok').value,
+                social_tips: document.getElementById('social_tips').value,
+                rules: rules,
+                schedule: schedule
+            };
+
+            try {
+                const res = await fetch(`${CONFIG.API_BASE_URL}/channel-info`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                
+                if(data.status === "success") {
+                    showStatus("✅ Informations sauvegardées avec succès !", "success");
+                } else {
+                    showStatus("❌ Erreur lors de la sauvegarde.", "error");
+                }
+            } catch(e) {
+                console.error(e);
+                showStatus("❌ Impossible de joindre le serveur.", "error");
+            }
+        }
+
+        function showStatus(text, type) {
+            const box = document.getElementById('status-message');
+            box.textContent = text;
+            box.style.display = 'block';
+            box.style.backgroundColor = type === 'success' ? 'rgba(0, 245, 195, 0.2)' : 'rgba(255, 0, 0, 0.2)';
+            box.style.color = type === 'success' ? 'var(--accent)' : '#ff4d4d';
+            box.style.border = `1px solid ${type === 'success' ? 'var(--accent)' : '#ff4d4d'}`;
+            setTimeout(() => { box.style.display = 'none'; }, 5000);
+        }
+    </script>
+</body>
+</html>

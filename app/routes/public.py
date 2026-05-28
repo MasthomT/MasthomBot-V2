@@ -1,7 +1,8 @@
 import os
 import aiohttp
+from datetime import datetime
 from fastapi import APIRouter, Request, Response, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from dotenv import load_dotenv
 
@@ -13,6 +14,8 @@ load_dotenv()
 router = APIRouter(tags=["public"])
 templates = Jinja2Templates(directory="app/templates")
 
+EXCLUSION_LIST = "('masthom_', 'felixthebigblackcat', 'vestale7', 'streamelements', 'wizebot', 'nightbot')"
+
 # ==========================================
 # 1. PORTAIL D'ACCUEIL & AUTHENTIFICATION
 # ==========================================
@@ -21,7 +24,7 @@ templates = Jinja2Templates(directory="app/templates")
 async def home_page(request: Request):
     if request.cookies.get("viewer_id"):
         return RedirectResponse(url="/profile")
-    return templates.TemplateResponse("public/index.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="public/index.html")
 
 @router.get("/login")
 async def login(request: Request):
@@ -164,3 +167,136 @@ async def felix_save(request: Request):
             form.get("favorite_game"), form.get("favorite_food"), form.get("free_message"), viewer_id
         ))
     return RedirectResponse(url="/felix?saved=1", status_code=303)
+
+@router.get("/infos", response_class=HTMLResponse)
+@router.get("/infos.html", response_class=HTMLResponse)
+async def public_infos_page(request: Request):
+    """Affiche la page publique des informations avec Jinja2."""
+    async with get_db_connection() as conn:
+        cursor = await conn.execute("SELECT * FROM channel_info WHERE id = 1")
+        row = await cursor.fetchone()
+        info_data = dict(row) if row else {}
+
+    return templates.TemplateResponse(
+        request=request,
+        name="public/infos.html",
+        context={"request": request, "info": info_data}
+    )
+
+# ==========================================
+# 3. ROUTES API POUR LE FRONTEND (fel-x.icu)
+# ==========================================
+@router.get("/viewer/{twitch_id}")
+async def get_viewer_profile_api(twitch_id: str, username: str = None):
+    async with get_db_connection() as conn:
+        c = await conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,))
+        row = await c.fetchone()
+        display_name = username if username else f"Visiteur_{twitch_id[:4]}"
+
+        if not row:
+            await conn.execute("INSERT INTO viewers (twitch_id, username, points, messages, watchtime) VALUES (?, ?, 0, 0, 0)", (twitch_id, display_name))
+            c = await conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,))
+            row = await c.fetchone()
+        else:
+            if row['username'].startswith("Visiteur_") and username:
+                await conn.execute("UPDATE viewers SET username = ? WHERE twitch_id = ?", (username, twitch_id))
+                c = await conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,))
+                row = await c.fetchone()
+
+        viewer_data = dict(row)
+        await conn.execute("UPDATE viewers SET last_seen = NOW(), last_web_login = NOW() WHERE twitch_id = ?", (twitch_id,))
+
+        xp = viewer_data.get('points', 0)
+        viewer_data['level'] = max(1, int((xp / 100) ** (1 / 2.2))) if xp > 0 else 1
+
+        crank = await conn.execute(f"SELECT COUNT(*) FROM viewers WHERE points > ? AND LOWER(username) NOT IN {EXCLUSION_LIST}", (xp,))
+        rank_val = await crank.fetchone()
+        viewer_data['rank'] = (rank_val[0] if rank_val else 0) + 1
+
+        ctrophies = await conn.execute("""
+            SELECT t.label, t.icon, t.description, t.tier, vt.earned_at
+            FROM viewer_trophies vt
+            JOIN trophy_list t ON vt.trophy_id = t.id
+            WHERE vt.twitch_id = ?
+            ORDER BY vt.earned_at DESC
+        """, (twitch_id,))
+        trophies_raw = await ctrophies.fetchall()
+
+        trophies_list = []
+        tier_counts = {"Standard": 0, "Bronze": 0, "Argent": 0, "Or": 0, "Platine": 0, "Diamant": 0}
+
+        for tr in trophies_raw:
+            t_dict = dict(tr)
+            if isinstance(t_dict.get('earned_at'), datetime):
+                t_dict['earned_at'] = t_dict['earned_at'].isoformat()
+            trophies_list.append(t_dict)
+            tier_name = t_dict.get('tier', 'Standard')
+            tier_counts[tier_name] = tier_counts.get(tier_name, 0) + 1
+
+        viewer_data['trophies'] = trophies_list
+        viewer_data['tier_counts'] = tier_counts
+
+        history_list = []
+        cset = await conn.execute("SELECT exp_per_message, exp_per_watchtime FROM settings WHERE id=1")
+        settings_row = await cset.fetchone()
+        exp_msg = settings_row['exp_per_message'] if settings_row else 2
+        exp_wt = settings_row['exp_per_watchtime'] if settings_row else 5
+
+        ctoday = await conn.execute("SELECT messages, watchtime FROM viewer_daily_stats WHERE twitch_id = ? AND day = CURRENT_DATE", (twitch_id,))
+        today_stats = await ctoday.fetchone()
+
+        if today_stats:
+            if today_stats['watchtime'] > 0:
+                wt = today_stats['watchtime']
+                wt_str = f"{wt // 3600}h {(wt % 3600) // 60}m" if wt >= 3600 else f"{wt // 60} min"
+                history_list.append({
+                    "event_type": "PRÉSENCE (LIVE)", "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    "date": "Aujourd'hui", "details": f"Session : {wt_str}", "amount": (wt // 60) * exp_wt,
+                    "icon": "⏱️", "color": "#10b981"
+                })
+            if today_stats['messages'] > 0:
+                history_list.append({
+                    "event_type": "ACTIVITÉ CHAT", "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    "date": "Aujourd'hui", "details": f"{today_stats['messages']} messages envoyés", "amount": today_stats['messages'] * exp_msg,
+                    "icon": "💬", "color": "#0ea5e9"
+                })
+
+        chist = await conn.execute("SELECT * FROM viewer_exp_log WHERE twitch_id = ? ORDER BY timestamp DESC LIMIT 15", (twitch_id,))
+        raw_history = await chist.fetchall()
+        for r in raw_history:
+            log = dict(r)
+            ev = log['event_type'].upper()
+            icon, color = "✨", "#00f5c3"
+            if any(x in ev for x in ["BIT", "CHEER"]): icon, color = "💎", "#ffb300"
+            elif "RAID" in ev: icon, color = "⚔️", "#a855f7"
+            elif "SUB" in ev: icon, color = "💜", "#9146ff"
+
+            ts = log['timestamp']
+            if isinstance(ts, datetime):
+                ts = ts.strftime('%Y-%m-%d %H:%M:%S')
+            elif not isinstance(ts, str):
+                ts = str(ts)
+
+            history_list.append({
+                "event_type": ev, "amount": log['amount'], "details": log['details'] or "Action standard",
+                "date": ts[:10].replace("-", "/"), "icon": icon, "color": color
+            })
+
+        viewer_data['history'] = history_list
+        
+        for k, v in viewer_data.items():
+            if isinstance(v, datetime):
+                viewer_data[k] = v.isoformat()
+                
+        return viewer_data
+
+@router.get("/rewards/secret")
+async def get_secret_rewards():
+    """API publique pour charger la liste des trophées masqués de la table trophy_list"""
+    async with get_db_connection() as conn:
+        try:
+            cursor = await conn.execute("SELECT * FROM trophy_list WHERE is_secret = 1")
+            return [dict(t) for t in await cursor.fetchall()]
+        except Exception as e:
+            print(f"Erreur chargement trophées secrets: {e}")
+            return []

@@ -56,6 +56,7 @@ let currentScene = 'main';
 let brbLoopActive = false;
 let brbClipsPool = [];
 let brbPlayedHistory = new Set();
+let brbFirstClip = false;
 let brbTimeout = null;
 let gameCache = {};
 
@@ -72,23 +73,41 @@ async function connectOBS() {
     try {
         await obs.connect(CONFIG.OBS_ADDRESS, CONFIG.OBS_PASSWORD);
         console.log(`🎬 [OBS] Connecté ! Surveillance de la scène "${CONFIG.BRB_SCENE_NAME}".`);
+
+        // ⚡ On vérifie sur quelle scène on est au moment même de la connexion
+        const data = await obs.call('GetCurrentProgramScene');
+        if (data.currentProgramSceneName === CONFIG.BRB_SCENE_NAME) {
+            if (!brbLoopActive) {
+                currentScene = 'brb';
+                startBrbLoop();
+                broadcast({ type: 'change_scene', scene: 'brb' });
+            }
+        }
     } catch (error) {
-        setTimeout(connectOBS, 30000);
+        console.error(`❌ [OBS] Échec de connexion. Nouvel essai dans 10s...`);
+        setTimeout(connectOBS, 10000);
     }
 }
 
+// 🔄 Auto-reconnexion si OBS est fermé puis relancé
+obs.on('ConnectionClosed', () => {
+    console.log("🔌 [OBS] Connexion perdue (OBS fermé ?). Reconnexion automatique dans 5s...");
+    setTimeout(connectOBS, 5000);
+});
+
+// 🎧 L'écouteur de changement de scène en direct
 obs.on('CurrentProgramSceneChanged', data => {
     if (data.sceneName === CONFIG.BRB_SCENE_NAME) {
-        if (!brbLoopActive) { 
-            currentScene = 'brb'; 
-            startBrbLoop(); 
-            broadcast({ type: 'change_scene', scene: 'brb' }); 
+        if (!brbLoopActive) {
+            currentScene = 'brb';
+            startBrbLoop();
+            broadcast({ type: 'change_scene', scene: 'brb' });
         }
     } else {
-        if (brbLoopActive) { 
-            currentScene = 'main'; 
-            stopBrbLoop(); 
-            broadcast({ type: 'change_scene', scene: 'main' }); 
+        if (brbLoopActive) {
+            currentScene = 'main';
+            stopBrbLoop();
+            broadcast({ type: 'change_scene', scene: 'main' });
         }
     }
 });
@@ -294,6 +313,7 @@ async function processQueue() {
 async function startBrbLoop() {
     if (brbLoopActive) return;
     brbLoopActive = true;
+    brbFirstClip = true; // Marqueur : le prochain clip est le premier
     
     const user = await getUserInfo(CONFIG.CHANNEL_NAME);
     
@@ -308,29 +328,61 @@ async function startBrbLoop() {
             headers: { 'Client-ID': CONFIG.TWITCH_CLIENT_ID, 'Authorization': `Bearer ${HELIX_TOKEN}` }
         });
         brbClipsPool = resp.data.data || [];
-        if (brbClipsPool.length > 0) playNextBrbClip();
-        else brbLoopActive = false;
+        console.log(`[BRB] Clips chargés : ${brbClipsPool.length}`);
+        
+        if (brbClipsPool.length > 0) {
+            // 🚀 ON AJOUTE UN DÉLAI DE 2 SECONDES
+            // On laisse le temps à l'overlay de s'initialiser et de recevoir l'événement 'init'
+            console.log("[BRB] Préparation du premier clip dans 2 secondes...");
+            setTimeout(playNextBrbClip, 2000); 
+        } else {
+            brbLoopActive = false;
+        }
     } catch(e) {
         console.error("❌ [BRB] Échec récupération des clips :", e.message);
         brbLoopActive = false;
     }
 }
-
 async function playNextBrbClip() {
-    if (!brbLoopActive || currentScene !== 'brb') return;
+    // 🛡️ SÉCURITÉ : On ne fait rien si le BRB est désactivé, 
+    // si on est sur la mauvaise scène, ou si la liste est vide
+    if (!brbLoopActive || currentScene !== 'brb' || brbClipsPool.length === 0) {
+        console.log("[BRB] Boucle en attente : clips non chargés ou scène changée.");
+        return; 
+    }
+    
     if (brbTimeout) clearTimeout(brbTimeout);
 
     let available = brbClipsPool.filter(c => !brbPlayedHistory.has(c.id));
-    if (available.length === 0) { brbPlayedHistory.clear(); available = brbClipsPool; }
+    if (available.length === 0) { 
+        brbPlayedHistory.clear(); 
+        available = brbClipsPool; 
+    }
     
     const clip = available[Math.floor(Math.random() * available.length)];
+    
+    // 🛡️ SÉCURITÉ : Si le clip est introuvable, on réessaie dans 5 secondes
+    if (!clip || !clip.id) {
+        console.warn("[BRB] Aucun clip disponible, tentative dans 5s...");
+        brbTimeout = setTimeout(playNextBrbClip, 5000);
+        return;
+    }
+
     brbPlayedHistory.add(clip.id); 
     const mp4Url = await getDirectMp4Url(clip.id);
     
     if (mp4Url) {
+        // Au premier clip seulement : on affiche l'overlay, puis on envoie la vidéo
+        if (brbFirstClip) {
+            broadcast({ type: 'change_scene', scene: 'brb' });
+            brbFirstClip = false;
+        }
         broadcast({ type: 'brb_clip', url: mp4Url, title: clip.title, creator: clip.creator_name });
-        brbTimeout = setTimeout(playNextBrbClip, (clip.duration * 1000) + 15000);
+        // Filet de sécurité uniquement : si le client ne répond plus (OBS crashé, etc.)
+        // On attend durée + 45s avant de forcer le suivant
+        brbTimeout = setTimeout(playNextBrbClip, (clip.duration * 1000) + 45000);
     } else { 
+        // Si le lien MP4 échoue, on passe au suivant
         brbTimeout = setTimeout(playNextBrbClip, 1000); 
     }
 }
@@ -378,7 +430,21 @@ app.post('/api/shoutout', (req, res) => {
 });
 
 app.post('/api/trigger', (req, res) => {
-    broadcast(req.body);
+    const data = req.body;
+
+    if (data.type === 'change_scene') {
+        if (data.scene === 'brb') {
+            stopBrbLoop();
+            startBrbLoop();
+            // PAS de broadcast ici : c'est playNextBrbClip qui envoie
+            // le signal d'affichage + le clip en même temps, quand tout est prêt
+        } else if (data.scene === 'main') {
+            stopBrbLoop();
+            broadcast(data); // Pour main, on broadcaste immédiatement (cacher l'overlay)
+        }
+    } else {
+        broadcast(data);
+    }
     res.json({ status: "success" });
 });
 
@@ -388,23 +454,41 @@ app.get('/events', (req, res) => {
     res.setHeader('Connection', 'keep-alive');
     const id = Date.now();
     clients.push({ id, res });
-    
+
+    // On dit TOUT DE SUITE à la page web sur quelle scène on est
+    res.write(`data: ${JSON.stringify({ type: 'init', scene: currentScene })}\n\n`);
+
     // 🫀 AJOUT DU HEARTBEAT : Envoie un ping toutes les 15 secondes
     const heartbeat = setInterval(() => {
         res.write(`event: ping\ndata: {"time": "${new Date().toISOString()}"}\n\n`);
     }, 15000);
 
     req.on('close', () => {
-        clearInterval(heartbeat); // 🛑 Arrêt propre du heartbeat à la déconnexion
+        clearInterval(heartbeat);
         clients = clients.filter(c => c.id !== id);
     });
 });
 
 function broadcast(data) { clients.forEach(c => c.res.write(`data: ${JSON.stringify(data)}\n\n`)); }
 
-// =================================================================
-// 8. PAGES HTML
-// =================================================================
+app.post('/api/brb/toggle', (req, res) => {
+    if (req.body.scene === 'brb') {
+        if (!brbLoopActive) {
+            currentScene = 'brb';
+            startBrbLoop();
+            broadcast({ type: 'change_scene', scene: 'brb' });
+            console.log("🎬 [NODE] Ordre reçu de Python : Lancement du BRB !");
+        }
+    } else {
+        if (brbLoopActive) {
+            currentScene = 'main';
+            stopBrbLoop();
+            broadcast({ type: 'change_scene', scene: 'main' });
+            console.log("🛑 [NODE] Ordre reçu de Python : Arrêt du BRB !");
+        }
+    }
+    res.sendStatus(200);
+});
 
 app.get('/shoutout', (req, res) => {
     res.send(`
@@ -562,7 +646,10 @@ app.get('/brb', (req, res) => {
         let source;
         let watchdogTimer;
 
-        const triggerNextClip = () => {
+        // Le client ne décide JAMAIS de passer au clip suivant.
+        // Il se contente de jouer ce que le serveur lui envoie.
+        // Le serveur reçoit un signal quand la vidéo est finie pour enchaîner proprement.
+        const notifyEnd = () => {
             if (!v.isEnding) {
                 v.isEnding = true;
                 fetch('/api/brb/next', { method: 'POST' }).catch(e => {});
@@ -570,13 +657,12 @@ app.get('/brb', (req, res) => {
         };
 
         v.addEventListener('timeupdate', () => {
-            if(v.duration) {
+            if (v.duration) {
                 p.style.width = (v.currentTime / v.duration * 100) + '%';
-                if (v.duration - v.currentTime <= 0.5) triggerNextClip();
             }
         });
-        
-        v.addEventListener('ended', triggerNextClip);
+
+        v.addEventListener('ended', notifyEnd);
 
         // ⚡ AJOUT DE LA CONNEXION ROBUSTE (AUTO-RECONNECT)
         function connect() {

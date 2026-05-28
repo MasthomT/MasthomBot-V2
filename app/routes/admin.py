@@ -463,3 +463,43 @@ async def delete_banned_word(word_id: int):
         await conn.execute("DELETE FROM banned_words WHERE id=$1", (word_id,))
     
     return RedirectResponse(url="/admin/moderation", status_code=303)
+
+# ==========================================
+# ROUTES INFOS DE LA CHAÎNE (PAGE INFO)
+# ==========================================
+
+@router.get("/info", response_class=HTMLResponse)
+async def get_admin_info(request: Request):
+    """Affiche la page d'édition des infos de la chaîne."""
+    async with get_db_connection() as conn:
+        cursor = await conn.execute("SELECT * FROM channel_info WHERE id = 1")
+        row = await cursor.fetchone()
+        info_data = dict(row) if row else {}
+
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/info.html",
+        context={"request": request, "info": info_data}
+    )
+
+@router.post("/info/save")
+async def save_admin_info(
+    request: Request,
+    about_text: str = Form(""),
+    social_discord: str = Form(""),
+    social_youtube: str = Form(""),
+    social_twitch: str = Form(""),
+    social_tiktok: str = Form(""),
+    social_tips: str = Form(""),
+    schedule_json: str = Form("[]") # <-- Le JSON du planning arrive ici
+):
+    """Sauvegarde les réseaux, la description et le planning."""
+    async with get_db_connection() as conn:
+        await conn.execute("""
+            UPDATE channel_info 
+            SET about_text = ?, social_discord = ?, social_youtube = ?, 
+                social_twitch = ?, social_tiktok = ?, social_tips = ?, schedule_json = ?
+            WHERE id = 1
+        """, about_text, social_discord, social_youtube, social_twitch, social_tiktok, social_tips, schedule_json)
+    
+    return RedirectResponse(url="/admin/info?saved=true", status_code=303)
