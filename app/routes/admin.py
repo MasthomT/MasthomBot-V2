@@ -8,10 +8,14 @@ import json
 from fastapi import APIRouter, Request, Form, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel # Ajout pour la messagerie Discord
 
 from app.core.database import get_db_connection
 from app.core.config import settings
 from app.services.shoutout_service import shoutout_service
+
+# Ajout du service Discord
+from app.services.discord_service import CHANNELS_LIST, send_message_to_discord
 
 import logging
 logger = logging.getLogger("masthbot.admin")
@@ -48,7 +52,7 @@ async def read_admin(request: Request):
     try:
         uptime_seconds = time.time() - psutil.boot_time()
         uptime_str = f"{int(uptime_seconds // 3600)}h {int((uptime_seconds % 3600) // 60)}m"
-        
+
         stats = {
             "uptime": uptime_str,
             "cpu": psutil.cpu_percent(),
@@ -57,7 +61,7 @@ async def read_admin(request: Request):
         }
     except Exception:
         stats = {"uptime": "Inconnu", "cpu": 0, "ram": 0, "twitch_status": "Erreur"}
-        
+
     return templates.TemplateResponse(
         request=request,
         name="admin/index.html",
@@ -70,9 +74,9 @@ async def admin_stats(request: Request):
         async with get_db_connection() as conn:
             c = await conn.execute("SELECT * FROM viewers ORDER BY messages DESC LIMIT 10")
             top_viewers = await c.fetchall()
-            
+
         uptime_seconds = time.time() - psutil.boot_time()
-        
+
         return templates.TemplateResponse("admin/data_logs.html", {
             "request": request,
             "top_viewers": [dict(v) for v in top_viewers],
@@ -126,19 +130,19 @@ async def execute_tool(
                 await shoutout_service.trigger_shoutout(target=clean_target, slug=clip_link)
             except Exception as e:
                 logger.error(f"⚠️ Erreur Service SO : {e}")
-        
+
         elif action == "replay":
             try:
                 await shoutout_service.trigger_replay(slug=clip_link, query=query)
             except Exception as e:
                 logger.error(f"⚠️ Erreur Service Replay : {e}")
-            
+
         elif action == "brb_on":
             try:
                 await session.post(f"{overlay_url}/api/overlay/scene", json={"scene": "brb"})
             except Exception as e:
                 logger.error(f"❌ Erreur de connexion au serveur Node (3005) : {e}")
-            
+
         elif action == "brb_off":
             try:
                 await session.post(f"{overlay_url}/api/overlay/scene", json={"scene": "main"})
@@ -152,12 +156,12 @@ async def get_notifications(request: Request):
     async with get_db_connection() as conn:
         c1 = await conn.execute("SELECT * FROM settings WHERE id=1")
         settings_db = await c1.fetchone()
-        
+
         c2 = await conn.execute("SELECT * FROM tracked_streamers ORDER BY login ASC")
         tracked = await c2.fetchall()
 
     tracked_list = [dict(s) for s in tracked]
-    
+
     # Vérification en direct pour les points Vert/Rouge
     if tracked_list:
         try:
@@ -187,9 +191,9 @@ async def save_notifications_settings(
     notif_val = 1 if discord_notify_enabled == "on" else 0
     async with get_db_connection() as conn:
         await conn.execute("""
-            UPDATE settings 
-            SET discord_notify_enabled=$1, discord_notify_message=$2, 
-                notif_live_channel_id=$3, streamers_channel_id=$4 
+            UPDATE settings
+            SET discord_notify_enabled=$1, discord_notify_message=$2,
+                notif_live_channel_id=$3, streamers_channel_id=$4
             WHERE id=1
         """, (notif_val, discord_notify_message, notif_live_channel_id, streamers_channel_id))
     return RedirectResponse(url="/admin/notifications?saved=true", status_code=303)
@@ -218,11 +222,11 @@ async def get_felix_ai(request: Request):
         c1 = await conn.execute("SELECT * FROM personality WHERE id = 1")
         p_results = await c1.fetchone()
         p_data = dict(p_results) if p_results else {}
-        
+
         c2 = await conn.execute("SELECT * FROM settings WHERE id = 1")
         s_results = await c2.fetchone()
         s_data = dict(s_results) if s_results else {}
-        
+
     return templates.TemplateResponse(request=request, name="admin/felix_ai.html", context={
         "request": request,
         "tones": VRAIS_TONS,
@@ -247,26 +251,26 @@ async def save_felix_ai(
     youtube_link: str = Form(""),
     planning: str = Form("")
 ):
-    rate_float = float(intervention_rate) / 100.0 
+    rate_float = float(intervention_rate) / 100.0
     ai_val = 1 if ai_enabled == "on" else 0
     twitch_val = 1 if enable_twitch == "on" else 0
     final_prompt = system_prompt if tone_selector == "neutre" else VRAIS_TONS.get(tone_selector, system_prompt)
 
     async with get_db_connection() as conn:
         await conn.execute("""
-            UPDATE personality 
-            SET system_prompt=$1, base_context=$2, intervention_rate=$3, roast_level=$4, 
+            UPDATE personality
+            SET system_prompt=$1, base_context=$2, intervention_rate=$3, roast_level=$4,
                 temperature=$5, frequency_penalty=$6, presence_penalty=$7
             WHERE id=1
         """, (final_prompt, base_context, rate_float, roast_level, temperature, frequency_penalty, presence_penalty))
-        
+
         await conn.execute("""
-            UPDATE settings 
-            SET ai_enabled=$1, enable_twitch=$2, selected_tone=$3, response_length=$4, 
+            UPDATE settings
+            SET ai_enabled=$1, enable_twitch=$2, selected_tone=$3, response_length=$4,
                 discord_link=$5, youtube_link=$6, planning=$7
             WHERE id=1
         """, (ai_val, twitch_val, tone_selector, str(response_length), discord_link, youtube_link, planning))
-    
+
     return RedirectResponse(url="/admin/felix_ai?saved=true", status_code=303)
 
 # ==========================================
@@ -315,11 +319,11 @@ async def api_save_announcement(request: Request):
         trigger = data.get("trigger_type", "interval")
         interval = data.get("interval_minutes", 30)
         group = data.get("group_name", "")
-        
+
         async with get_db_connection() as conn:
             if ann_id:
                 await conn.execute("""
-                    UPDATE auto_announcements 
+                    UPDATE auto_announcements
                     SET label=$1, message_template=$2, trigger_type=$3, interval_minutes=$4, group_name=$5
                     WHERE id=$6
                 """, (label, msg_template, trigger, interval, group, ann_id))
@@ -328,7 +332,7 @@ async def api_save_announcement(request: Request):
                     INSERT INTO auto_announcements (label, message_template, trigger_type, interval_minutes, group_name, is_enabled)
                     VALUES ($1, $2, $3, $4, $5, 1)
                 """, (label, msg_template, trigger, interval, group))
-            
+
         return {"status": "success"}
     except Exception as e:
         return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
@@ -352,13 +356,13 @@ async def get_moderation_page(request: Request):
     async with get_db_connection() as conn:
         c1 = await conn.execute("SELECT * FROM moderation_settings WHERE id=1")
         settings_db = await c1.fetchone()
-        
+
         c2 = await conn.execute("SELECT * FROM banned_words ORDER BY word ASC")
         banned_words = await c2.fetchall()
-        
+
         c3 = await conn.execute("SELECT * FROM stream_events WHERE event_type = 'sanction' ORDER BY id DESC LIMIT 30")
         raw_sanctions = await c3.fetchall()
-        
+
     recent_sanctions = []
     for s in raw_sanctions:
         item = dict(s)
@@ -366,10 +370,10 @@ async def get_moderation_page(request: Request):
             parsed = json.loads(item['details'])
         except:
             parsed = {"reason": item['details'], "source": "Système"}
-            
+
         raw_reason = parsed.get("reason", "Raison non spécifiée")
         modo = parsed.get("bot", parsed.get("source", "Félix"))
-        
+
         sanction = "Modération"
         raison = raw_reason
 
@@ -377,7 +381,7 @@ async def get_moderation_page(request: Request):
             parts = raw_reason.split(" : ", 1)
             sanction = parts[0].strip()
             raison = parts[1].strip()
-            
+
         elif raw_reason.startswith("[") and "] par " in raw_reason:
             parts = raw_reason.split("] par ", 1)
             sanction = parts[0].replace("[", "").strip()
@@ -393,27 +397,27 @@ async def get_moderation_page(request: Request):
             "modo": modo.strip()
         }
         recent_sanctions.append(item)
-    
+
     return templates.TemplateResponse(
         request=request,
-        name="admin/moderation.html", 
+        name="admin/moderation.html",
         context={
-            "request": request, 
-            "settings": dict(settings_db) if settings_db else {}, 
+            "request": request,
+            "settings": dict(settings_db) if settings_db else {},
             "banned_words": [dict(w) for w in banned_words],
-            "recent_sanctions": recent_sanctions 
+            "recent_sanctions": recent_sanctions
         }
     )
 
 @router.post("/admin/moderation/settings")
 async def update_mod_settings(request: Request):
     form_data = await request.form()
-    
+
     caps = 1 if form_data.get("caps_enabled") else 0
     links = 1 if form_data.get("links_enabled") else 0
     spam = 1 if form_data.get("spam_enabled") else 0
     banned = 1 if form_data.get("banned_words_enabled") else 0
-    
+
     caps_min = int(form_data.get("caps_min_length") or 10)
     caps_pct = int(form_data.get("caps_percent") or 70)
     spam_lim = int(form_data.get("spam_limit") or 4)
@@ -428,7 +432,7 @@ async def update_mod_settings(request: Request):
         final_key = key
         if key.startswith("banned_words_"):
             final_key = key.replace("banned_words_", "words_")
-            
+
         if final_key.endswith("_act"):
             updates[final_key] = value
         elif final_key.endswith("_dur"):
@@ -440,28 +444,28 @@ async def update_mod_settings(request: Request):
 
     async with get_db_connection() as conn:
         await conn.execute(f"UPDATE moderation_settings SET {set_clause} WHERE id=1", values)
-    
+
     return RedirectResponse(url="/admin/moderation?saved=true", status_code=303)
 
 @router.post("/moderation/words/add")
 async def add_banned_word(request: Request):
     form_data = await request.form()
     word = form_data.get("word", "").strip().lower()
-    
+
     if word:
         try:
             async with get_db_connection() as conn:
                 await conn.execute("INSERT INTO banned_words (word) VALUES ($1) ON CONFLICT(word) DO NOTHING", (word,))
         except Exception:
             pass
-            
+
     return RedirectResponse(url="/admin/moderation", status_code=303)
 
 @router.post("/moderation/words/delete/{word_id}")
 async def delete_banned_word(word_id: int):
     async with get_db_connection() as conn:
         await conn.execute("DELETE FROM banned_words WHERE id=$1", (word_id,))
-    
+
     return RedirectResponse(url="/admin/moderation", status_code=303)
 
 # ==========================================
@@ -496,10 +500,39 @@ async def save_admin_info(
     """Sauvegarde les réseaux, la description et le planning."""
     async with get_db_connection() as conn:
         await conn.execute("""
-            UPDATE channel_info 
-            SET about_text = ?, social_discord = ?, social_youtube = ?, 
+            UPDATE channel_info
+            SET about_text = ?, social_discord = ?, social_youtube = ?,
                 social_twitch = ?, social_tiktok = ?, social_tips = ?, schedule_json = ?
             WHERE id = 1
         """, about_text, social_discord, social_youtube, social_twitch, social_tiktok, social_tips, schedule_json)
-    
+
     return RedirectResponse(url="/admin/info?saved=true", status_code=303)
+
+# ==========================================
+# ROUTES DISCORD (MESSAGERIE FEL-X)
+# ==========================================
+
+class DiscordMessagePayload(BaseModel):
+    channelId: str
+    message: str
+
+@router.get("/discord", response_class=HTMLResponse)
+@router.get("/discord.html", response_class=HTMLResponse)
+async def discord_panel_page(request: Request):
+    """Sert la page HTML du panneau de contrôle Discord."""
+    return templates.TemplateResponse(
+        request=request, 
+        name="admin/felx_panel.html", 
+        context={"request": request}
+    )
+
+@router.get("/discord/api/channels")
+async def get_discord_channels():
+    """Fournit la liste des salons au menu déroulant de la page web."""
+    return {"status": "success", "data": CHANNELS_LIST}
+
+@router.post("/discord/api/send")
+async def send_discord_message(payload: DiscordMessagePayload):
+    """Reçoit les données du formulaire web et demande au service de les envoyer."""
+    result = await send_message_to_discord(payload.channelId, payload.message)
+    return result
