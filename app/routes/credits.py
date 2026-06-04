@@ -90,25 +90,50 @@ async def get_credits_data():
             }
 
     # 4. Construction de la liste des 'viewers' finale
+    final_stats = credits_service.get_stats().copy()
+    
+    # Dictionnaire magique pour regrouper absolument tout le monde sans faire de doublons
+    all_viewers_dict = {}
+
+    # A. On ajoute ceux qu'on a trouvé via la Base de données ou l'API Twitch
+    for lower_name, info in session_data.items():
+        all_viewers_dict[lower_name] = {
+            "name": info['real_name'],
+            "watchtime": info['watchtime'] // 60  # Conversion en minutes
+        }
+
+    # B. L'EXIGENCE ABSOLUE : On force l'intégration de TOUTES les personnes présentes dans n'importe quelle catégorie !
+    for cat_name, users_in_cat in final_stats.items():
+        for u in users_in_cat:
+            uname = u['name'].lower()
+            wt = u.get('watchtime', 0)
+            
+            if uname not in all_viewers_dict:
+                # Le viewer a parlé mais n'est pas dans la liste de base ? On l'ajoute de force !
+                all_viewers_dict[uname] = {
+                    "name": u['name'],
+                    "watchtime": wt
+                }
+            else:
+                # S'il y était déjà, on s'assure de garder son temps de visionnage le plus élevé
+                if wt > all_viewers_dict[uname]['watchtime']:
+                    all_viewers_dict[uname]['watchtime'] = wt
+
+    # C. Filtrage des bots et création de la liste finale
+    exclusion_list = ['masthom_', 'felixthebigblackcat', 'streamelements', 'wizebot', 'nightbot']
     viewers_list = []
     
-    # LE VIDEUR : On dégage toujours les bots
-    exclusion_list = ['masthom_', 'felixthebigblackcat', 'streamelements', 'wizebot', 'nightbot']
+    for lower_name, data in all_viewers_dict.items():
+        if lower_name not in exclusion_list:
+            viewers_list.append({
+                "name": data['name'],
+                "watchtime": data['watchtime']
+            })
 
-    for lower_name, info in session_data.items():
-        # Si c'est un bot, on l'ignore
-        if lower_name in exclusion_list:
-            continue
-            
-        viewers_list.append({
-            "name": info['real_name'], 
-            "watchtime": info['watchtime'] // 60,  # ✅ Conversion en minutes
-            "messages": 0,
-            "label": ""
-        })
+    # On trie du plus grand temps de visionnage au plus petit
+    viewers_list.sort(key=lambda x: x['watchtime'], reverse=True)
 
-    # 5. Fusion avec les catégories spéciales du service (subs, vips, etc.)
-    final_stats = credits_service.get_stats().copy()
+    # On écrase l'ancienne liste par notre super-liste complète
     final_stats['viewers'] = viewers_list
 
     return {

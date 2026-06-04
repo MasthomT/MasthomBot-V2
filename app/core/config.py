@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 env_path = "/home/thomas/masthom/BOT_V2/.env"
 load_dotenv(dotenv_path=env_path)
-
+DEEPL_API_KEY: str = os.getenv("DEEPL_API_KEY", "")
 # =================================================================
 # 1. UTILITAIRE DE NETTOYAGE
 # =================================================================
@@ -39,7 +39,8 @@ class Settings(BaseSettings):
     DATA_DIR: str = DATA_DIR
     LOG_FILE_PATH: str = os.path.join(BASE_DIR, "app_bot.log")
     TWITCH_CHAT_LOG_FILE: str = os.path.join(BASE_DIR, "twitch_chat.log")
-    
+    DEEPL_API_KEY: str = "f6e4778b-fa13-449c-8c98-4c32bfff2c76:fx"
+
     # --- FICHIERS JSON ---
     OVERLAY_CONFIG_FILE: str = os.path.join(DATA_DIR, "overlay_config.json")
     STREAMERS_FILE: str = os.path.join(DATA_DIR, "streamers.json")

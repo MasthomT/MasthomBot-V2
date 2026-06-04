@@ -41,7 +41,8 @@ const CONFIG = {
     PORT: 3005,
     TWITCH_CLIENT_ID: process.env.TWITCH_CLIENT_ID,
     CHANNEL_NAME: (process.env.TWITCH_USERNAME || "masthom_").replace(/['"\s]/g, '').trim(),
-    GQL_CLIENT_ID: 'kimne78kx3ncx6brgo4mv6wki5h1ko',
+    GQL_CLIENT_ID: process.env.TWITCH_CLIENT_ID,
+    //GQL_CLIENT_ID: 'kimne78kx3ncx6brgo4mv6wki5h1ko',
     OBS_ADDRESS: `ws://${process.env.OBS_HOST || '127.0.0.1'}:${process.env.OBS_PORT || '4455'}`,
     OBS_PASSWORD: process.env.OBS_PASSWORD,
     BRB_SCENE_NAME: 'ON BREAK'
@@ -65,16 +66,39 @@ const obs = new OBSWebSocket();
 
 app.use(cors());
 app.use(express.json());
+app.use('/static/commands', express.static('/home/thomas/masthom/BOT_V2/static/commands'));
 app.use('/static/uploads', express.static('/home/thomas/masthom/BOT_V2/app/static/uploads'));
+
 // =================================================================
 // 3. CONNEXION OBS
 // =================================================================
+let sourceMap = new Map();
+let obsReconnectTimeout = null; // 🛡️ Le filet de sécurité pour éviter le crash
+
+async function refreshSourceMap() {
+    try {
+        console.log("🔄 [OBS] Mise à jour du mapping des sources...");
+        const data = await obs.call('GetSceneList');
+        for (const scene of data.scenes) {
+            const items = await obs.call('GetSceneItemList', { sceneName: scene.sceneName });
+            for (const item of items.sceneItems) {
+                // On crée une clé unique "NomScène|NomSource" pour retrouver l'ID
+                sourceMap.set(`${scene.sceneName}|${item.sourceName}`, item.sceneItemId);
+            }
+        }
+        console.log("✅ [OBS] Mapping terminé.");
+    } catch (e) {
+        console.error("❌ [OBS] Erreur lors du mapping :", e);
+    }
+}
+
 async function connectOBS() {
     try {
         await obs.connect(CONFIG.OBS_ADDRESS, CONFIG.OBS_PASSWORD);
         console.log(`🎬 [OBS] Connecté ! Surveillance de la scène "${CONFIG.BRB_SCENE_NAME}".`);
 
         // ⚡ On vérifie sur quelle scène on est au moment même de la connexion
+        await refreshSourceMap();
         const data = await obs.call('GetCurrentProgramScene');
         if (data.currentProgramSceneName === CONFIG.BRB_SCENE_NAME) {
             if (!brbLoopActive) {
@@ -85,31 +109,18 @@ async function connectOBS() {
         }
     } catch (error) {
         console.error(`❌ [OBS] Échec de connexion. Nouvel essai dans 10s...`);
-        setTimeout(connectOBS, 10000);
+        // 🛡️ SÉCURITÉ : On annule l'ancienne tentative avant d'en lancer une nouvelle
+        if (obsReconnectTimeout) clearTimeout(obsReconnectTimeout);
+        obsReconnectTimeout = setTimeout(connectOBS, 10000);
     }
 }
 
 // 🔄 Auto-reconnexion si OBS est fermé puis relancé
 obs.on('ConnectionClosed', () => {
-    console.log("🔌 [OBS] Connexion perdue (OBS fermé ?). Reconnexion automatique dans 5s...");
-    setTimeout(connectOBS, 5000);
-});
-
-// 🎧 L'écouteur de changement de scène en direct
-obs.on('CurrentProgramSceneChanged', data => {
-    if (data.sceneName === CONFIG.BRB_SCENE_NAME) {
-        if (!brbLoopActive) {
-            currentScene = 'brb';
-            startBrbLoop();
-            broadcast({ type: 'change_scene', scene: 'brb' });
-        }
-    } else {
-        if (brbLoopActive) {
-            currentScene = 'main';
-            stopBrbLoop();
-            broadcast({ type: 'change_scene', scene: 'main' });
-        }
-    }
+    console.log("🔌 [OBS] Connexion perdue. Reconnexion automatique dans 10s...");
+    // 🛡️ SÉCURITÉ : On empêche les doublons fatals
+    if (obsReconnectTimeout) clearTimeout(obsReconnectTimeout);
+    obsReconnectTimeout = setTimeout(connectOBS, 10000);
 });
 
 connectOBS();
@@ -158,21 +169,23 @@ async function getGameName(gameId) {
 
 async function getDirectMp4Url(slug) {
     try {
-        const resp = await axios.post('https://gql.twitch.tv/gql', {
-            operationName: "VideoAccessToken_Clip", variables: { slug: slug },
-            extensions: { persistedQuery: { version: 1, sha256Hash: "36b89d2507fce29e5ca551df756d27c1cfe079e2609642b4390aa4c35796eb11" } }
-        }, { headers: { 'Client-ID': CONFIG.GQL_CLIENT_ID } });
-        const clipData = resp.data?.data?.clip;
-        
-        let selected = clipData.videoQualities.find(q => q.quality === '720p') 
-                    || clipData.videoQualities.find(q => q.quality === '480p') 
-                    || clipData.videoQualities[0];
-                    
-        return `${selected.sourceURL}?sig=${clipData.playbackAccessToken.signature}&token=${encodeURIComponent(clipData.playbackAccessToken.value)}`;
-    } catch (e) { 
-        console.error("❌ [GQL] Impossible d'extraire le MP4:", e.message);
-        return null; 
+        const resp = await axios.post('https://gql.twitch.tv/gql', [{
+            operationName: 'ClipsBroadcasterPage_Clip',
+            variables: { slug },
+            query: `query ClipsBroadcasterPage_Clip($slug: ID!) { clip(slug: $slug) { playbackAccessToken(params: {platform: "web", playerBackend: "mediaplayer", playerType: "site"}) { signature value } videoQualities { frameRate quality sourceURL } } }`
+        }], { headers: { 'Client-ID': 'kimne78kx3ncx6brgo4mv6wki5h1ko' } });
+
+        const clipData = resp.data[0]?.data?.clip;
+        if (clipData?.videoQualities?.length > 0) {
+            let selected = clipData.videoQualities.find(q => q.quality === '720')
+                        || clipData.videoQualities.find(q => q.quality === '480')
+                        || clipData.videoQualities[0];
+            return `${selected.sourceURL}?sig=${clipData.playbackAccessToken.signature}&token=${encodeURIComponent(clipData.playbackAccessToken.value)}`;
+        }
+    } catch(e) {
+        console.error("❌ [GQL] Erreur:", e.message);
     }
+    return null;
 }
 
 // =================================================================
@@ -253,14 +266,19 @@ async function findSmartClip(userId, mode, extraData) {
 // =================================================================
 
 async function processQueue() {
+    console.log(`[DEBUG] processQueue appelée - isProcessing=${isProcessing} queue=${shoutoutQueue.length}`);
     if (isProcessing || shoutoutQueue.length === 0) return;
     isProcessing = true;
     const item = shoutoutQueue.shift();
+    console.log(`[DEBUG] Traitement de : ${JSON.stringify(item)}`);
 
     try {
+        console.log(`[DEBUG] getUserInfo pour : ${item.target}`);
         const targetUser = await getUserInfo(item.target);
+        console.log(`[DEBUG] targetUser : ${JSON.stringify(targetUser)}`);
         const finalClip = await findSmartClip(targetUser?.id, item.mode, item.extraData);
-        
+        console.log(`[DEBUG] finalClip : ${finalClip?.title || 'null'}`);
+
         if (finalClip) {
             console.log(`🎬 [CLIP TROUVÉ] : ${finalClip.title}`);
             const mp4Url = await getDirectMp4Url(finalClip.id);
@@ -429,23 +447,43 @@ app.post('/api/shoutout', (req, res) => {
     res.json({ status: "success" });
 });
 
-app.post('/api/trigger', (req, res) => {
+app.post('/api/trigger', async (req, res) => {
     const data = req.body;
+    
+    // Si c'est une commande OBS venant de Python
+    if (data.type === 'obs_command') {
+        const { action, scene, source } = data.details;
+        const key = `${scene}|${source}`;
+        const sourceId = sourceMap.get(key);
 
-    if (data.type === 'change_scene') {
-        if (data.scene === 'brb') {
-            stopBrbLoop();
-            startBrbLoop();
-            // PAS de broadcast ici : c'est playNextBrbClip qui envoie
-            // le signal d'affichage + le clip en même temps, quand tout est prêt
-        } else if (data.scene === 'main') {
-            stopBrbLoop();
-            broadcast(data); // Pour main, on broadcaste immédiatement (cacher l'overlay)
+        if (!sourceId) {
+            console.error(`❌ [OBS] Source non trouvée : ${key}`);
+            return res.status(404).json({ status: "error", message: "Source introuvable" });
         }
-    } else {
-        broadcast(data);
+
+        try {
+            if (action === 'source_show') {
+                await obs.call('SetSceneItemEnabled', { sceneName: scene, sceneItemId: sourceId, sceneItemEnabled: true });
+            } else if (action === 'source_hide') {
+                await obs.call('SetSceneItemEnabled', { sceneName: scene, sceneItemId: sourceId, sceneItemEnabled: false });
+            }
+            console.log(`✅ [OBS] Action ${action} exécutée sur ${source}`);
+            res.json({ status: "success" });
+        } catch (err) {
+            console.error("❌ Erreur exécution OBS :", err);
+            res.status(500).json({ status: "error" });
+        }
+    } 
+    // Si c'est une commande pour l'overlay (image, son, brb)
+    else {
+        if (data.type === 'change_scene') {
+            if (data.scene === 'brb') { stopBrbLoop(); startBrbLoop(); } 
+            else if (data.scene === 'main') { stopBrbLoop(); broadcast(data); }
+        } else {
+            broadcast(data);
+        }
+        res.json({ status: "success" });
     }
-    res.json({ status: "success" });
 });
 
 app.get('/events', (req, res) => {
@@ -469,7 +507,10 @@ app.get('/events', (req, res) => {
     });
 });
 
-function broadcast(data) { clients.forEach(c => c.res.write(`data: ${JSON.stringify(data)}\n\n`)); }
+function broadcast(data) { 
+    console.log(`[BROADCAST] Envoi à ${clients.length} client(s) : ${data.type}`);
+    clients.forEach(c => c.res.write(`data: ${JSON.stringify(data)}\n\n`)); 
+}
 
 app.post('/api/brb/toggle', (req, res) => {
     if (req.body.scene === 'brb') {
@@ -488,6 +529,77 @@ app.post('/api/brb/toggle', (req, res) => {
         }
     }
     res.sendStatus(200);
+});
+
+app.get('/alerts', (req, res) => {
+    res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Overlay Alertes</title>
+    <style>
+        body { margin:0; overflow:hidden; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; background: transparent; }
+        #media-container { opacity: 0; transition: opacity 0.5s ease-in-out; max-width: 100%; max-height: 100%; }
+    </style>
+</head>
+<body>
+    <div id="media-container"></div>
+    <script>
+        const mediaContainer = document.getElementById('media-container');
+        let imgTimeout;
+        let source;
+        let watchdogTimer;
+
+        function connect() {
+            if (source) source.close();
+            source = new EventSource('/events');
+
+            source.addEventListener('ping', (e) => {
+                clearTimeout(watchdogTimer);
+                watchdogTimer = setTimeout(() => { connect(); }, 35000);
+            });
+
+            source.onmessage = (e) => {
+                const d = JSON.parse(e.data);
+                
+                if (d.type === 'sound') {
+                    const audio = new Audio('/static/commands/sounds/' + d.details.filename);
+                    audio.volume = 1.0;
+                    audio.play().catch(err => console.error("Erreur Audio:", err));
+                }
+                
+                if (d.type === 'image') {
+                    const filename = d.details.filename;
+                    const isVideo = filename.match(/\\.(mp4|webm)$/i);
+                    
+                    if (isVideo) {
+                        mediaContainer.innerHTML = \`<video src="/static/commands/images/\${filename}" autoplay muted style="width:100%; height:100%; object-fit:contain;"></video>\`;
+                    } else {
+                        mediaContainer.innerHTML = \`<img src="/static/commands/images/\${filename}" style="width:100%; height:100%; object-fit:contain;" />\`;
+                    }
+                    
+                    mediaContainer.style.opacity = 1;
+                    
+                    if (imgTimeout) clearTimeout(imgTimeout);
+                    imgTimeout = setTimeout(() => {
+                        mediaContainer.style.opacity = 0;
+                        setTimeout(() => { mediaContainer.innerHTML = ''; }, 500);
+                    }, 8000);
+                }
+            };
+
+            source.onerror = () => {
+                clearTimeout(watchdogTimer);
+                setTimeout(connect, 5000);
+            };
+        }
+        
+        connect();
+    </script>
+</body>
+</html>
+    `);
 });
 
 app.get('/shoutout', (req, res) => {
@@ -572,9 +684,16 @@ app.get('/shoutout', (req, res) => {
             source.onmessage = (e) => {
                 const d = JSON.parse(e.data);
                 if(d.type === 'play_sound') {
-                    const audio = new Audio(d.file);
-                    audio.volume = 0.5; // Tu pourras modifier le volume ici (0.8 = 80%)
-                    audio.play().catch(err => console.error("Erreur Audio:", err));
+                    // On cherche si la balise existe déjà, sinon on la crée DANS la page HTML
+                    let audioEl = document.getElementById('so-audio');
+                    if (!audioEl) {
+                        audioEl = document.createElement('audio');
+                        audioEl.id = 'so-audio';
+                        document.body.appendChild(audioEl);
+                    }
+                    audioEl.src = d.file;
+                    audioEl.volume = 0.5;
+                    audioEl.play().catch(err => console.error("Erreur Audio:", err));
                 }
 
                 if(d.type === 'play_clip') {

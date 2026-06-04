@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Import Streamer.bot - MasthomBot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #6366f1; outline: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .type-text  { color:#60a5fa; background:rgba(96,165,250,.12); border-color:rgba(96,165,250,.35); }
+        .type-image { color:#34d399; background:rgba(52,211,153,.12); border-color:rgba(52,211,153,.35); }
+        .type-sound { color:#f59e0b; background:rgba(245,158,11,.12); border-color:rgba(245,158,11,.35); }
+        .type-obs   { color:#c084fc; background:rgba(192,132,252,.12); border-color:rgba(192,132,252,.35); }
+        .row-selected { border-color: #6366f1 !important; background: rgba(99,102,241,0.08); }
+        .status-ok    { color:#34d399; }
+        .status-warn  { color:#f59e0b; }
+        .status-error { color:#f87171; }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen">
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 md:p-10 overflow-y-auto custom-scrollbar h-screen">
+
+        <header class="mb-8 border-b border-slate-700/50 pb-6">
+            <div class="flex items-center gap-4 mb-3">
+                <a href="/admin/commands" class="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 hover:text-white border border-slate-700 transition-all">
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+                <div>
+                    <h1 class="text-3xl font-black text-white italic tracking-tight">
+                        Import <span class="text-indigo-400">Streamer.bot</span>
+                    </h1>
+                    <p class="text-slate-400 text-sm font-bold uppercase tracking-widest mt-1">Analyse · Prévisualisation · Import sélectif</p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Stats globales -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8" id="stats-grid">
+            <div class="config-card p-4 rounded-2xl text-center border-b-4 border-b-emerald-500">
+                <div class="text-2xl font-black text-emerald-400" id="stat-ready">-</div>
+                <div class="text-[10px] font-black text-slate-500 uppercase mt-1">Prêtes</div>
+            </div>
+            <div class="config-card p-4 rounded-2xl text-center border-b-4 border-b-amber-500">
+                <div class="text-2xl font-black text-amber-400" id="stat-review">-</div>
+                <div class="text-[10px] font-black text-slate-500 uppercase mt-1">À réviser</div>
+            </div>
+            <div class="config-card p-4 rounded-2xl text-center border-b-4 border-b-blue-500">
+                <div class="text-2xl font-black text-blue-400" id="stat-mod">-</div>
+                <div class="text-[10px] font-black text-slate-500 uppercase mt-1">Modération</div>
+            </div>
+            <div class="config-card p-4 rounded-2xl text-center border-b-4 border-b-teal-500">
+                <div class="text-2xl font-black text-teal-400" id="stat-translate">-</div>
+                <div class="text-[10px] font-black text-slate-500 uppercase mt-1">Traduction</div>
+            </div>
+            <div class="config-card p-4 rounded-2xl text-center border-b-4 border-b-purple-500">
+                <div class="text-2xl font-black text-purple-400" id="stat-game">-</div>
+                <div class="text-[10px] font-black text-slate-500 uppercase mt-1">Jeux C#</div>
+            </div>
+        </div>
+
+        <!-- Upload zone -->
+        <div id="upload-zone" class="config-card p-10 rounded-3xl text-center mb-8 cursor-pointer border-2 border-dashed border-slate-600 hover:border-indigo-500/50 transition-all"
+            onclick="document.getElementById('file-input').click()"
+            ondragover="event.preventDefault();this.classList.add('border-indigo-500')"
+            ondragleave="this.classList.remove('border-indigo-500')"
+            ondrop="handleDrop(event)">
+            <i class="fas fa-file-import text-4xl text-indigo-400 block mb-3"></i>
+            <p class="text-white font-black text-lg">Glisse le fichier export Streamer.bot ici</p>
+            <p class="text-slate-500 text-sm mt-1">ou clique pour sélectionner (fichier sans extension)</p>
+            <input type="file" id="file-input" class="hidden" onchange="loadFile(this.files[0])">
+        </div>
+
+        <!-- Résultats -->
+        <div id="results" class="hidden space-y-8">
+
+            <!-- Barre d'actions -->
+            <div class="flex items-center justify-between gap-4 flex-wrap">
+                <div class="flex items-center gap-3">
+                    <button onclick="selectAll(true)"  class="px-4 py-2 rounded-xl border border-slate-700 text-slate-300 hover:border-indigo-500/40 hover:text-indigo-400 font-bold text-xs transition-all">Tout sélectionner</button>
+                    <button onclick="selectAll(false)" class="px-4 py-2 rounded-xl border border-slate-700 text-slate-300 hover:border-slate-600 font-bold text-xs transition-all">Tout désélectionner</button>
+                    <span id="selected-count" class="text-xs text-slate-500 font-bold ml-2"></span>
+                </div>
+                <button onclick="importSelected()" id="import-btn"
+                    class="bg-indigo-600 hover:bg-indigo-500 text-white font-black py-2.5 px-8 rounded-xl shadow-lg transition-all active:scale-95 flex items-center gap-2">
+                    <i class="fas fa-cloud-upload-alt"></i> Importer la sélection
+                </button>
+            </div>
+
+            <!-- Section : Prêtes à importer -->
+            <section>
+                <h2 class="text-sm font-black text-emerald-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <i class="fas fa-check-circle"></i> Import automatique
+                    <span id="ready-badge" class="text-[10px] px-2 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"></span>
+                </h2>
+                <div id="list-ready" class="space-y-2"></div>
+            </section>
+
+            <!-- Section : Révision manuelle -->
+            <section>
+                <h2 class="text-sm font-black text-amber-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <i class="fas fa-exclamation-triangle"></i> À compléter manuellement
+                </h2>
+                <div id="list-review" class="space-y-2"></div>
+            </section>
+
+            <!-- Section : Modération -->
+            <section>
+                <h2 class="text-sm font-black text-blue-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <i class="fas fa-shield-alt"></i> Modération — déjà gérée par Félix
+                </h2>
+                <div id="list-mod" class="config-card p-4 rounded-2xl text-xs text-slate-400 space-y-1"></div>
+            </section>
+
+            <!-- Section : Traduction -->
+            <section>
+                <h2 class="text-sm font-black text-teal-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <i class="fas fa-language"></i> Commandes de traduction — nécessitent Google Translate API
+                </h2>
+                <div id="list-translate" class="config-card p-4 rounded-2xl text-xs text-slate-400 space-y-1"></div>
+            </section>
+
+            <!-- Section : Jeux C# -->
+            <section>
+                <h2 class="text-sm font-black text-purple-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <i class="fas fa-gamepad"></i> Jeux — logique C# complexe
+                </h2>
+                <div id="list-games" class="config-card p-4 rounded-2xl text-xs text-slate-400 space-y-1"></div>
+            </section>
+
+        </div>
+
+        <!-- Résultat import -->
+        <div id="import-result" class="hidden config-card p-6 rounded-3xl border-l-4 border-l-emerald-500 mt-6">
+            <h3 class="font-black text-emerald-400 mb-2"><i class="fas fa-check-circle mr-2"></i>Import terminé</h3>
+            <div id="import-result-text" class="text-sm text-slate-300"></div>
+            <a href="/admin/commands" class="inline-flex items-center gap-2 mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-5 rounded-xl text-sm transition-all">
+                <i class="fas fa-list"></i> Voir les commandes
+            </a>
+        </div>
+
+    </main>
+
+<script>
+let parsedData = null;
+
+const ROLE_MAP = {0:'viewer', 1:'mod', 2:'admin', 3:'vip', 4:'sub'};
+const ICONS = {text:'comment', image:'image', sound:'music', obs:'broadcast-tower'};
+const TYPE_COLORS = {text:'blue', image:'emerald', sound:'amber', obs:'purple'};
+
+function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById('upload-zone').classList.remove('border-indigo-500');
+    loadFile(e.dataTransfer.files[0]);
+}
+
+async function loadFile(file) {
+    if (!file) return;
+    const buffer = await file.arrayBuffer();
+    const bytes   = new Uint8Array(buffer);
+    // Décoder base64 si nécessaire
+    let data = bytes;
+
+    // Si c'est du texte ASCII (base64)
+    const text = new TextDecoder().decode(bytes.slice(0, 10));
+    if (/^[A-Za-z0-9+/]/.test(text)) {
+        // Envoyer directement au serveur pour parsing
+        const form = new FormData();
+        form.append('file', file);
+        const res = await fetch('/api/admin/commands/import/parse', {method:'POST', body: form});
+        if (!res.ok) { alert('Erreur parsing: ' + await res.text()); return; }
+        parsedData = await res.json();
+        renderResults(parsedData);
+    }
+}
+
+function renderResults(data) {
+    document.getElementById('upload-zone').classList.add('hidden');
+    document.getElementById('results').classList.remove('hidden');
+
+    document.getElementById('stat-ready').textContent     = data.ready.length;
+    document.getElementById('stat-review').textContent    = data.review.length;
+    document.getElementById('stat-mod').textContent       = data.moderation.length;
+    document.getElementById('stat-translate').textContent = data.translate.length;
+    document.getElementById('stat-game').textContent      = data.games.length;
+    document.getElementById('ready-badge').textContent    = data.ready.length + ' commandes';
+
+    renderReadyList(data.ready);
+    renderSimpleList('list-review',    data.review,    'amber');
+    renderSimpleList('list-mod',       data.moderation,'blue');
+    renderSimpleList('list-translate', data.translate, 'teal');
+    renderSimpleList('list-games',     data.games,     'purple');
+    updateSelectedCount();
+}
+
+function renderReadyList(cmds) {
+    const container = document.getElementById('list-ready');
+    container.innerHTML = cmds.map((cmd, i) => {
+        const tc = TYPE_COLORS[cmd.type] || 'slate';
+        const icon = ICONS[cmd.type] || 'terminal';
+        const aliases = cmd.aliases?.length ? `<span class="text-[9px] text-slate-500">[${cmd.aliases.join(', ')}]</span>` : '';
+        return `
+        <div class="config-card border rounded-2xl p-4 transition-all cursor-pointer cmd-import-row" data-index="${i}"
+            onclick="toggleRow(this, ${i})">
+            <div class="flex items-center gap-4">
+                <input type="checkbox" class="cmd-checkbox w-4 h-4 accent-indigo-500 cursor-pointer" data-index="${i}" checked
+                    onclick="event.stopPropagation();updateSelectedCount()">
+                <span class="type-${cmd.type} text-[10px] font-black uppercase px-2 py-0.5 rounded-lg border shrink-0">
+                    <i class="fas fa-${icon} mr-1"></i>${cmd.type}
+                </span>
+                <span class="text-white font-black">!${cmd.name}</span>
+                ${aliases}
+                ${cmd.note ? `<span class="text-[9px] px-2 py-0.5 rounded-lg bg-slate-700 text-slate-400 border border-slate-600">${cmd.note}</span>` : ''}
+                <span class="ml-auto text-[10px] text-slate-500">CD: ${cmd.cooldown_global}s / ${cmd.cooldown_user}s</span>
+            </div>
+            <p class="text-slate-400 text-xs mt-2 pl-10 truncate">${(cmd.response||'').slice(0,90)}</p>
+            ${cmd.chat_response ? `<p class="text-slate-500 text-[10px] mt-1 pl-10 truncate">💬 ${cmd.chat_response.slice(0,80)}</p>` : ''}
+        </div>`;
+    }).join('');
+}
+
+function renderSimpleList(containerId, cmds, color) {
+    const container = document.getElementById(containerId);
+    if (!cmds.length) { container.innerHTML = '<p class="text-slate-600 italic text-xs">Aucune</p>'; return; }
+    container.innerHTML = cmds.map(c =>
+        `<div class="flex items-center gap-2">
+            <span class="text-${color}-400 font-black">!${c.name || c}</span>
+            ${c.reason ? `<span class="text-slate-500">— ${c.reason}</span>` : ''}
+            ${c.aliases?.length ? `<span class="text-slate-600 text-[10px]">[${c.aliases.join(', ')}]</span>` : ''}
+        </div>`
+    ).join('');
+}
+
+function toggleRow(el, i) {
+    const cb = el.querySelector('.cmd-checkbox');
+    cb.checked = !cb.checked;
+    el.classList.toggle('row-selected', cb.checked);
+    updateSelectedCount();
+}
+
+function selectAll(val) {
+    document.querySelectorAll('.cmd-checkbox').forEach(cb => {
+        cb.checked = val;
+        cb.closest('.cmd-import-row').classList.toggle('row-selected', val);
+    });
+    updateSelectedCount();
+}
+
+function updateSelectedCount() {
+    const total = document.querySelectorAll('.cmd-checkbox').length;
+    const checked = document.querySelectorAll('.cmd-checkbox:checked').length;
+    document.getElementById('selected-count').textContent = `${checked} / ${total} sélectionnées`;
+}
+
+async function importSelected() {
+    if (!parsedData) return;
+    const selected = [];
+    document.querySelectorAll('.cmd-checkbox:checked').forEach(cb => {
+        const idx = parseInt(cb.dataset.index);
+        selected.push(parsedData.ready[idx]);
+    });
+    if (!selected.length) { alert('Aucune commande sélectionnée'); return; }
+    const btn = document.getElementById('import-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Import en cours…';
+
+    const res  = await fetch('/api/admin/commands/import/execute', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({commands: selected})
+    });
+    const data = await res.json();
+
+    document.getElementById('import-result').classList.remove('hidden');
+    document.getElementById('import-result-text').innerHTML =
+        `<p>✅ <strong>${data.imported}</strong> commandes importées</p>` +
+        (data.skipped ? `<p class="text-amber-400">⚠️ ${data.skipped} ignorées (déjà existantes)</p>` : '') +
+        (data.errors?.length ? `<p class="text-rose-400">❌ Erreurs: ${data.errors.join(', ')}</p>` : '');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-check mr-2"></i>Terminé !';
+}
+</script>
+</body>
+</html>

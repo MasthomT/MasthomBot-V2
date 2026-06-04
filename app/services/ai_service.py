@@ -6,6 +6,48 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+def is_birthday_today(birthday_str: str) -> bool:
+    """Détecte si aujourd'hui est l'anniversaire, peu importe le format stocké."""
+    if not birthday_str or birthday_str.strip().lower() in ("inconnu", ""):
+        return False
+
+    today = datetime.now()
+    MOIS = {
+        "janvier":1,"février":2,"fevrier":2,"mars":3,"avril":4,"mai":5,"juin":6,
+        "juillet":7,"août":8,"aout":8,"septembre":9,"octobre":10,"novembre":11,"décembre":12,"decembre":12
+    }
+
+    s = birthday_str.strip().lower()
+
+    # Formats: "5 janvier", "14 mars", "01 février"
+    for nom, num in MOIS.items():
+        if nom in s:
+            parts = s.replace(nom, "").strip().split()
+            if parts and parts[0].isdigit():
+                jour = int(parts[0])
+                return today.day == jour and today.month == num
+
+    # Formats: "10/02/94", "10/02/1994", "02/10"
+    if "/" in s:
+        parts = s.split("/")
+        try:
+            jour, mois = int(parts[0]), int(parts[1])
+            return today.day == jour and today.month == mois
+        except:
+            pass
+
+    # Formats ISO: "1992-03-03", "1992-08-06"
+    if "-" in s:
+        parts = s.split("-")
+        try:
+            mois, jour = int(parts[1]), int(parts[2])
+            return today.day == jour and today.month == mois
+        except:
+            pass
+
+    return False
+
+
 class AIService:
     def __init__(self):
         self.client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -24,7 +66,9 @@ class AIService:
             nickname = viewer_data.get("nickname") or username
             bot_name = viewer_data.get("nickname_for_bot") or "Félix"
             pronouns = viewer_data.get("pronouns") or "Non précisé (utilise un ton neutre ou masculin par défaut)"
-            birthday = viewer_data.get("birthday") or "Inconnu"
+            birthday_raw = viewer_data.get("birthday") or "Inconnu"
+            birthday_is_today = is_birthday_today(birthday_raw)
+            birthday = birthday_raw
 
             # 2. Construction de la fiche de profil EXHAUSTIVE
             details = []
@@ -105,7 +149,7 @@ DATE DU JOUR EXACTE : {datetime.now().strftime('%d %B')} (Format Jour/Mois)
 [CONTRAINTES ABSOLUES (RESPECTE-LES SOUS PEINE DE DÉSACTIVATION)]
 1. SURNOMS : Tu DOIS t'adresser à lui en utilisant SON SURNOM ({nickname}) et accepter qu'il t'appelle "{bot_name}".
 2. GRAMMAIRE ET PRONOMS : Ses pronoms sont "{pronouns}". Tu DOIS IMPÉRATIVEMENT accorder tes adjectifs et participes passés en fonction de ce pronom.
-3. ANNIVERSAIRE : Compare SA date d'anniversaire ({birthday}) avec la DATE DU JOUR. Si c'est aujourd'hui, TU DOIS LUI SOUHAITER UN JOYEUX ANNIVERSAIRE de manière mémorable !
+3. ANNIVERSAIRE : {"🎂 C'EST SON ANNIVERSAIRE AUJOURD'HUI ! TU DOIS ABSOLUMENT lui souhaiter un joyeux anniversaire de manière mémorable dès le début de ta réponse !" if birthday_is_today else f"Sa date d'anniversaire est '{birthday}'. Ce n'est PAS aujourd'hui, ne mentionne pas son anniversaire."}
 4. PERSONNALISATION : Sers-toi de ses détails pour rendre ta réponse unique.
 5. LONGUEUR : Environ {response_length} caractères maximum.
 6. Ne dis JAMAIS "{nickname} :" ou "Félix :" au début de ta phrase.

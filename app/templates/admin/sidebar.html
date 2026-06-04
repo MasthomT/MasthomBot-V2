@@ -84,6 +84,10 @@
 					<i class="fas fa-film w-5"></i>
 					Générique (Crédits)
 				</a>
+				<a href="/admin/clips_manager" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'clips' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+					<i class="fas fa-clapperboard w-5"></i>
+					Clips du Mois
+				</a>
 				<a href="/admin/announcements" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'announcement' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fas fa-bullhorn w-5"></i>
 					Annonces Auto

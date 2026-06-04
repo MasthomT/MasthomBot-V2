@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestionnaire de Commandes - MasthomBot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; transition: all 0.3s; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; transition: border-color 0.2s; }
+        .input-dark:focus { border-color: #6366f1; outline: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .cmd-row:hover { border-color: #6366f1 !important; background: rgba(99,102,241,0.04); }
+        .type-text  { color:#60a5fa; background:rgba(96,165,250,.12); border-color:rgba(96,165,250,.35); }
+        .type-image { color:#34d399; background:rgba(52,211,153,.12); border-color:rgba(52,211,153,.35); }
+        .type-sound { color:#f59e0b; background:rgba(245,158,11,.12); border-color:rgba(245,158,11,.35); }
+        .type-obs   { color:#c084fc; background:rgba(192,132,252,.12); border-color:rgba(192,132,252,.35); }
+        .type-multi { color:#f43f5e; background:rgba(244,63,94,.12); border-color:rgba(244,63,94,.35); }
+        .badge-viewer{color:#94a3b8;} .badge-sub{color:#34d399;} .badge-vip{color:#f59e0b;}
+        .badge-mod{color:#60a5fa;} .badge-admin{color:#f87171;}
+        .drop-zone { border: 2px dashed #334155; transition: all 0.2s; }
+        .drop-zone.drag-over { border-color: #6366f1; background: rgba(99,102,241,0.08); }
+        .file-thumb { transition: all 0.2s; }
+        .file-thumb:hover { border-color: #6366f1; transform: translateY(-2px); }
+        .tab-btn.active { background:rgba(99,102,241,0.15); color:#818cf8; border-color:rgba(99,102,241,0.4); }
+        .var-chip { cursor:pointer; transition:all 0.15s; user-select:none; }
+        .var-chip:hover { background:rgba(99,102,241,0.2); color:#a5b4fc; border-color:rgba(99,102,241,0.4); }
+        .var-chip:active { transform:scale(0.95); }
+        .var-cat-title { font-size:9px; font-weight:900; text-transform:uppercase; letter-spacing:.15em; color:#475569; }
+        .filter-btn.active { background:rgba(99,102,241,0.15); color:#818cf8; border-color:rgba(99,102,241,0.4); }
+        .obs-field { animation: fadeIn .15s ease; }
+        @keyframes fadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen">
+
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 md:p-10 flex flex-col h-screen overflow-y-auto custom-scrollbar">
+
+        <header class="mb-8 flex flex-col md:flex-row justify-between items-end gap-4 border-b border-slate-700/50 pb-6">
+            <div>
+                <h1 class="text-3xl font-black text-white italic tracking-tight">Gestionnaire de <span class="text-indigo-400">Commandes</span></h1>
+                <p class="text-slate-400 text-sm font-bold uppercase tracking-widest mt-1">Multi-Actions · OBS · Variables · Planification</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <div id="toast" class="hidden bg-emerald-500/10 text-emerald-400 px-5 py-2 rounded-xl font-bold border border-emerald-500/20 items-center gap-2 text-sm">
+                    <i class="fas fa-check-circle"></i> <span id="toast-msg"></span>
+                </div>
+                <div id="toast-err" class="hidden bg-rose-500/10 text-rose-400 px-5 py-2 rounded-xl font-bold border border-rose-500/20 items-center gap-2 text-sm">
+                    <i class="fas fa-exclamation-circle"></i> <span id="toast-err-msg"></span>
+                </div>
+                <button onclick="openModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 px-5 rounded-xl shadow-lg transition-all flex items-center gap-2 text-sm active:scale-95">
+                    <i class="fas fa-plus"></i> Nouvelle commande
+                </button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+
+            <div class="xl:col-span-8 space-y-4">
+                <div class="flex items-center gap-3 flex-wrap mb-1">
+                    <div class="relative">
+                        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                        <input id="search-input" oninput="filterCommands()" type="text" placeholder="Chercher…" class="input-dark rounded-xl pl-8 pr-4 py-2 text-sm w-44">
+                    </div>
+                    {% for t,label,icon in [('all','Toutes','filter'),('multi','Multi-Actions','layer-group'),('text','Texte','comment'),('image','Image/Vidéo','image'),('sound','Son','music'),('obs','OBS','broadcast-tower')] %}
+                    <button onclick="filterType('{{ t }}')" id="filter-{{ t }}"
+                        class="filter-btn {% if t=='all' %}active{% endif %} px-3.5 py-1.5 rounded-xl text-xs font-black border border-slate-700 text-slate-400 transition-all">
+                        <i class="fas fa-{{ icon }} mr-1"></i>{{ label }}
+                    </button>
+                    {% endfor %}
+                    <span id="cmd-count" class="ml-auto text-xs text-slate-500 font-bold"></span>
+                </div>
+                <div id="commands-list" class="space-y-3"></div>
+                <div id="empty-state" class="hidden config-card p-16 rounded-3xl text-center opacity-40">
+                    <i class="fas fa-terminal text-5xl mb-4 text-slate-500 block"></i>
+                    <p class="text-slate-400 font-bold">Aucune commande trouvée</p>
+                </div>
+            </div>
+
+            <div class="xl:col-span-4 space-y-6">
+
+                <section class="config-card p-6 rounded-3xl shadow-xl">
+                    <h2 class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-5">Répartition</h2>
+                    <div id="stats-panel" class="space-y-3"></div>
+                </section>
+
+                <section class="config-card p-6 rounded-3xl shadow-xl">
+                    <h2 class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">
+                        <i class="fas fa-photo-video text-emerald-400 mr-1"></i> Bibliothèque Multimédia
+                    </h2>
+                    <div id="drop-zone" class="drop-zone rounded-2xl p-5 text-center mb-4 cursor-pointer"
+                        onclick="document.getElementById('file-input').click()"
+                        ondragover="event.preventDefault();this.classList.add('drag-over')"
+                        ondragleave="this.classList.remove('drag-over')"
+                        ondrop="handleDrop(event)">
+                        <i class="fas fa-cloud-upload-alt text-2xl text-slate-500 block mb-2"></i>
+                        <p class="text-xs font-bold text-slate-400">Glisse ou <span class="text-indigo-400">clique</span></p>
+                        <p id="drop-hint" class="text-[10px] text-slate-600 mt-1">Image · Vidéo courte · Son</p>
+                        <input type="file" id="file-input" class="hidden" accept="image/*, audio/*, video/*" onchange="uploadUnifiedFile(this.files[0])">
+                    </div>
+                    <div id="upload-progress" class="hidden mb-3">
+                        <div class="bg-slate-700 rounded-full h-1.5">
+                            <div id="upload-bar" class="bg-indigo-500 h-1.5 rounded-full transition-all" style="width:0%"></div>
+                        </div>
+                        <p class="text-[10px] text-slate-500 mt-1 text-center" id="upload-label"></p>
+                    </div>
+                    <div id="media-grid" class="grid grid-cols-3 gap-2 max-h-56 overflow-y-auto custom-scrollbar"></div>
+                    <p id="media-empty" class="hidden text-center text-xs text-slate-600 italic py-4">Aucun fichier</p>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <div id="modal" class="fixed inset-0 bg-black/75 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+        <div class="config-card rounded-3xl shadow-2xl w-full max-w-6xl p-8 border border-slate-600 max-h-[95vh] overflow-y-auto custom-scrollbar">
+
+            <div class="flex items-center justify-between mb-7">
+                <div>
+                    <h2 id="modal-title" class="text-xl font-black text-white italic">Nouvelle commande</h2>
+                    <p id="modal-subtitle" class="text-xs text-slate-500 mt-0.5"></p>
+                </div>
+                <button onclick="closeModal()" class="w-9 h-9 rounded-xl bg-slate-700 text-slate-400 hover:text-white hover:bg-slate-600 transition-all flex items-center justify-center">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                
+                <div class="space-y-5">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2" title="Séparez par des virgules pour plusieurs commandes">Noms (sans !)</label>
+                            <div class="relative">
+                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-black text-sm">!</span>
+                                <input type="text" id="f-name" placeholder="reseaux, rs, socials"
+                                    class="w-full input-dark rounded-xl pl-7 pr-3 py-3 text-sm font-black"
+                                    oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9_, ]/g,'')">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Catégorie / Groupe</label>
+                            <input type="text" id="f-category" placeholder="Ex: Alertes, Fun..." class="w-full input-dark rounded-xl p-3 text-sm" list="category-list">
+                            <datalist id="category-list">
+                                <option value="Général">
+                                <option value="Modération">
+                                <option value="Jeux">
+                                <option value="Sons">
+                            </datalist>
+                        </div>
+                    </div>
+
+                    <p class="text-[10px] font-bold text-indigo-400 uppercase mb-1 border-b border-slate-700 pb-2"><i class="fas fa-layer-group"></i> Actions (Cumulables)</p>
+                    
+                    <div class="p-3 bg-slate-800/30 rounded-xl border border-slate-700/50">
+                        <label class="block text-[10px] font-bold text-blue-400 uppercase mb-2"><i class="fas fa-comment"></i> Réponse Chat</label>
+                        <textarea id="f-response-text" rows="2" class="w-full input-dark rounded-xl p-3 text-sm resize-none"
+                            placeholder="Texte envoyé dans le chat..." onfocus="activeField='f-response-text'"></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="p-3 bg-slate-800/30 rounded-xl border border-slate-700/50">
+                            <label class="block text-[10px] font-bold text-emerald-400 uppercase mb-2"><i class="fas fa-photo-video"></i> Image / Vidéo</label>
+                            <div class="flex gap-2">
+                                <input id="f-response-image" type="text" placeholder="Aucun visuel..." class="w-full input-dark rounded-xl p-2 text-sm text-slate-400" readonly>
+                                <button type="button" onclick="document.getElementById('modal-upload-visual').click()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 rounded-xl transition-all" title="Uploader"><i class="fas fa-upload"></i></button>
+                                <button type="button" onclick="document.getElementById('f-response-image').value=''" class="bg-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white px-3 rounded-xl transition-all" title="Retirer"><i class="fas fa-trash"></i></button>
+                            </div>
+                            <input type="file" id="modal-upload-visual" class="hidden" accept="image/*, video/*" onchange="uploadModalFile(this.files[0], 'image')">
+                        </div>
+
+                        <div class="p-3 bg-slate-800/30 rounded-xl border border-slate-700/50">
+                            <label class="block text-[10px] font-bold text-amber-400 uppercase mb-2"><i class="fas fa-music"></i> Son Audio</label>
+                            <div class="flex gap-2">
+                                <select id="f-response-sound" class="w-full input-dark rounded-xl p-2 text-sm text-slate-400 cursor-pointer">
+                                    <option value="">-- Aucun son --</option>
+                                    </select>
+                                <button type="button" onclick="document.getElementById('modal-upload-sound').click()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 rounded-xl transition-all" title="Uploader un nouveau"><i class="fas fa-upload"></i></button>
+                                <button type="button" onclick="document.getElementById('f-response-sound').value=''" class="bg-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white px-3 rounded-xl transition-all" title="Retirer"><i class="fas fa-trash"></i></button>
+                            </div>
+                            <input type="file" id="modal-upload-sound" class="hidden" accept="audio/*" onchange="uploadModalFile(this.files[0], 'sound')">
+                        </div>
+                    </div>
+
+                    <div class="p-3 bg-slate-800/30 rounded-xl border border-slate-700/50 space-y-3">
+                        <label class="flex justify-between items-center text-[10px] font-bold text-purple-400 uppercase mb-2">
+                            <span><i class="fas fa-broadcast-tower"></i> Actions OBS (Séquence)</span>
+                            <span id="obs-badge" class="bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-lg">0</span>
+                        </label>
+                        
+                        <div id="obs-actions-list" class="space-y-2 mb-3 empty:hidden"></div>
+
+                        <div class="p-3 bg-slate-900/50 rounded-xl border border-slate-700">
+                            <select id="obs-action" onchange="onObsActionChange()" class="w-full input-dark rounded-xl p-2 text-sm cursor-pointer mb-3">
+                                <option value="">— Ajouter une action OBS —</option>
+                                <optgroup label="🎬 Scènes"><option value="scene_switch">Changer de scène</option></optgroup>
+                                <optgroup label="👁️ Sources / Visibilité">
+                                    <option value="source_show">Afficher une source</option>
+                                    <option value="source_hide">Masquer une source</option>
+                                    <option value="source_toggle">Basculer visibilité source</option>
+                                </optgroup>
+                                <optgroup label="🎛️ Filtres">
+                                    <option value="filter_enable">Activer un filtre</option>
+                                    <option value="filter_disable">Désactiver un filtre</option>
+                                    <option value="filter_toggle">Basculer un filtre</option>
+                                </optgroup>
+                                <optgroup label="▶️ Médias OBS">
+                                    <option value="media_play">Lancer un média OBS</option>
+                                    <option value="media_stop">Arrêter un média OBS</option>
+                                    <option value="media_restart">Redémarrer un média OBS</option>
+                                </optgroup>
+                                <optgroup label="🔴 Stream / Enregistrement">
+                                    <option value="stream_start">Démarrer le stream</option>
+                                    <option value="stream_stop">Arrêter le stream</option>
+                                    <option value="record_start">Démarrer l'enregistrement</option>
+                                    <option value="record_stop">Arrêter l'enregistrement</option>
+                                    <option value="record_pause">Pause enregistrement</option>
+                                    <option value="record_resume">Reprendre enregistrement</option>
+                                </optgroup>
+                                <optgroup label="🔇 Audio">
+                                    <option value="mute_source">Muter une source audio</option>
+                                    <option value="unmute_source">Démuter une source audio</option>
+                                    <option value="toggle_mute">Basculer mute source audio</option>
+                                </optgroup>
+                                <optgroup label="✏️ Texte">
+                                    <option value="text_update">Modifier un texte GDI+</option>
+                                </optgroup>
+                            </select>
+                            
+                            <div id="obs-fields" class="space-y-3 mb-3"></div>
+                            
+                            <div id="obs-add-controls" class="hidden flex gap-2 items-end mt-3 border-t border-slate-700/50 pt-3">
+                                <div class="flex-1">
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Délai AVANT exécution (ms)</label>
+                                    <input type="number" id="obs-delay" value="0" min="0" step="100" class="w-full input-dark rounded-xl p-2 text-sm text-center font-mono">
+                                </div>
+                                <button type="button" onclick="addObsAction()" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap">
+                                    <i class="fas fa-plus"></i> Ajouter
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="space-y-5">
+                    
+                    <div class="config-card p-4 rounded-2xl border border-slate-700">
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                            <i class="fas fa-code text-indigo-400"></i> Variables — clic pour insérer
+                        </p>
+                        <div class="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+                            
+                            <div>
+                                <p class="var-cat-title mb-1.5">👤 Viewer & Input</p>
+                                <div class="flex flex-wrap gap-1.5">
+                                    {% for v,d in [
+                                        ('{input}','Texte tapé après la commande'),
+                                        ('{target}','Texte tapé après, sans le @'),
+                                        ('{username}','Pseudo Twitch'),
+                                        ('{display_name}','Nom affiché'),
+                                        ('{level}','Niveau'),
+                                        ('{points}','Points EXP'),
+                                        ('{watchtime}','Temps de watch (hh:mm)'),
+                                        ('{messages}','Nb messages total'),
+                                        ('{rank}','Rang au classement'),
+                                        ('{pronoms}','Pronoms'),
+                                        ('{badges}','Badges Twitch'),
+                                        ('{is_sub}','Est abonné (oui/non)'),
+                                        ('{is_vip}','Est VIP (oui/non)'),
+                                        ('{is_mod}','Est modo (oui/non)'),
+                                        ('{follow_date}','Date de follow'),
+                                        ('{sub_months}','Nb mois d\'abo')
+                                    ] %}
+                                    <span class="var-chip text-[11px] px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700 text-indigo-300 font-mono"
+                                        onclick="insertVar('{{ v }}')" title="{{ d }}">{{ v }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <div>
+                                <p class="var-cat-title mb-1.5">📺 Stream</p>
+                                <div class="flex flex-wrap gap-1.5">
+                                    {% for v,d in [
+                                        ('{stream_title}','Titre du stream'),
+                                        ('{game}','Jeu en cours'),
+                                        ('{viewer_count}','Nb spectateurs'),
+                                        ('{stream_duration}','Durée du stream'),
+                                        ('{uptime}','Uptime (hh:mm:ss)'),
+                                        ('{channel}','Nom de la chaîne'),
+                                        ('{last_clip}','Dernier clip créé'),
+                                        ('{last_sub}','Dernier abonné'),
+                                        ('{last_follow}','Dernier follower')
+                                    ] %}
+                                    <span class="var-chip text-[11px] px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700 text-sky-300 font-mono"
+                                        onclick="insertVar('{{ v }}')" title="{{ d }}">{{ v }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <div>
+                                <p class="var-cat-title mb-1.5">🕐 Date / Heure</p>
+                                <div class="flex flex-wrap gap-1.5">
+                                    {% for v,d in [
+                                        ('{date}','Date du jour (dd/mm/yyyy)'),
+                                        ('{time}','Heure actuelle (hh:mm)'),
+                                        ('{day}','Jour de la semaine'),
+                                        ('{month}','Mois en cours'),
+                                        ('{year}','Année'),
+                                        ('{timestamp}','Timestamp Unix')
+                                    ] %}
+                                    <span class="var-chip text-[11px] px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700 text-teal-300 font-mono"
+                                        onclick="insertVar('{{ v }}')" title="{{ d }}">{{ v }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <div>
+                                <p class="var-cat-title mb-1.5">🤖 Bot / Config</p>
+                                <div class="flex flex-wrap gap-1.5">
+                                    {% for v,d in [
+                                        ('{discord}','Lien Discord'),
+                                        ('{youtube}','Lien YouTube'),
+                                        ('{planning}','Planning des streams'),
+                                        ('{bot_name}','Nom du bot (Félix)'),
+                                        ('{cmd_count}','Nb fois utilisée'),
+                                        ('{random_viewer}','Viewer aléatoire du chat'),
+                                        ('{number:1:100}','Nombre aléatoire 1-100')
+                                    ] %}
+                                    <span class="var-chip text-[11px] px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700 text-rose-300 font-mono"
+                                        onclick="insertVar('{{ v }}')" title="{{ d }}">{{ v }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2" title="En secondes">CD Global</label>
+                            <input type="number" id="f-cg" value="10" min="0" class="w-full input-dark rounded-xl p-3 text-sm text-center font-black">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2" title="En secondes">CD User</label>
+                            <input type="number" id="f-cu" value="30" min="0" class="w-full input-dark rounded-xl p-3 text-sm text-center font-black">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Droits</label>
+                            <select id="f-role" class="w-full input-dark rounded-xl p-3 text-sm cursor-pointer">
+                                <option value="viewer">👁️ Viewer</option>
+                                <option value="sub">⭐ Sub</option>
+                                <option value="vip">💎 VIP</option>
+                                <option value="mod">🛡️ Modo</option>
+                                <option value="admin">👑 Admin</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="config-card p-4 rounded-2xl border border-slate-700">
+                        <div class="flex items-center justify-between mb-3">
+                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fas fa-clock text-indigo-400"></i> Planification horaire
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="f-schedule-toggle" onchange="toggleSchedule()" class="accent-indigo-500 w-4 h-4">
+                                <span class="text-xs text-slate-400 font-bold">Activer</span>
+                            </label>
+                        </div>
+                        <div id="schedule-fields" class="hidden grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">De</label>
+                                <input type="time" id="f-from" class="w-full input-dark rounded-xl p-2.5 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">À</label>
+                                <input type="time" id="f-until" class="w-full input-dark rounded-xl p-2.5 text-sm">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between gap-4 pt-1">
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <div class="relative inline-block w-11 h-6">
+                                <input type="checkbox" id="f-active" checked class="sr-only peer">
+                                <div class="w-11 h-6 bg-slate-700 rounded-full peer peer-checked:bg-indigo-600 transition-colors"></div>
+                                <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-5 shadow"></div>
+                            </div>
+                            <span class="text-sm font-bold text-slate-300">Active</span>
+                        </label>
+                        <div class="flex items-center gap-3">
+                            <button type="button" onclick="testCurrent()" class="px-5 py-2.5 rounded-xl border border-slate-600 text-slate-300 hover:border-indigo-500/40 hover:text-indigo-400 font-bold text-sm transition-all flex items-center gap-2">
+                                <i class="fas fa-flask"></i> Tester
+                            </button>
+                            <button type="button" onclick="saveCommand()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-black py-2.5 px-8 rounded-xl shadow-lg transition-all active:scale-95 flex items-center gap-2">
+                                <i class="fas fa-save"></i> <span id="save-label">CRÉER</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="test-result" class="hidden p-4 rounded-2xl bg-slate-900/60 border border-slate-700 text-sm space-y-2">
+                        <p class="text-[10px] font-black text-slate-500 uppercase">Résultat du test</p>
+                        <div id="test-content"></div>
+                    </div>
+
+                </div>
+                </div>
+            </div>
+    </div>
+
+<script>
+// ── État ──────────────────────────────────────────────────────────────────────
+let allCommands = [];
+let currentFilter = 'all';
+let editingName   = null;
+let activeField   = 'f-response-text';
+let currentObsActions = [];
+
+const ICONS = { text:'comment', image:'image', sound:'music', obs:'broadcast-tower', multi:'layer-group' };
+const TYPE_COLORS = { text:'blue', image:'emerald', sound:'amber', obs:'purple', multi:'rose' };
+
+// ── OBS actions config ────────────────────────────────────────────────────────
+const OBS_FIELDS = {
+    scene_switch:   [{ id:'scene',  label:'Nom de la scène',       ph:'Gaming' }],
+    source_show:    [{ id:'scene',  label:'Scène parente',          ph:'Gaming' }, { id:'source', label:'Nom de la source', ph:'Webcam' }],
+    source_hide:    [{ id:'scene',  label:'Scène parente',          ph:'Gaming' }, { id:'source', label:'Nom de la source', ph:'Webcam' }],
+    source_toggle:  [{ id:'scene',  label:'Scène parente',          ph:'Gaming' }, { id:'source', label:'Nom de la source', ph:'Webcam' }],
+    filter_enable:  [{ id:'source', label:'Source/Scène cible',     ph:'Webcam' }, { id:'filter', label:'Nom du filtre',    ph:'Flou' }],
+    filter_disable: [{ id:'source', label:'Source/Scène cible',     ph:'Webcam' }, { id:'filter', label:'Nom du filtre',    ph:'Flou' }],
+    filter_toggle:  [{ id:'source', label:'Source/Scène cible',     ph:'Webcam' }, { id:'filter', label:'Nom du filtre',    ph:'Flou' }],
+    media_play:     [{ id:'source', label:'Nom de la source média', ph:'Video_Hype' }],
+    media_stop:     [{ id:'source', label:'Nom de la source média', ph:'Video_Hype' }],
+    media_restart:  [{ id:'source', label:'Nom de la source média', ph:'Video_Hype' }],
+    mute_source:    [{ id:'source', label:'Nom de la source audio', ph:'Micro' }],
+    unmute_source:  [{ id:'source', label:'Nom de la source audio', ph:'Micro' }],
+    toggle_mute:    [{ id:'source', label:'Nom de la source audio', ph:'Micro' }],
+    stream_start:   [],
+    stream_stop:    [],
+    record_start:   [],
+    record_stop:    [],
+    record_pause:   [],
+    record_resume:  [],
+    text_update:    [{ id:'source', label:'Nom de la source texte', ph:'Texte_GDI' }, { id:'text', label:'Nouveau texte', ph:'Bonjour {username} !' }],
+};
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    loadCommands();
+    loadMedia();
+});
+
+// ── Commandes ─────────────────────────────────────────────────────────────────
+async function loadCommands() {
+    const r = await fetch('/api/admin/commands');
+    allCommands = await r.json();
+    renderCommands();
+    renderStats();
+}
+
+// --- NOUVELLE FONCTION : Remplir le menu déroulant des sons ---
+async function loadSoundDropdown() {
+    try {
+        const res = await fetch('/api/admin/commands/media/sound');
+        const data = await res.json();
+        const select = document.getElementById('f-response-sound');
+        const currentVal = select.value;
+        select.innerHTML = '<option value="">-- Aucun son --</option>';
+        (data.files || []).sort().forEach(f => {
+            select.innerHTML += `<option value="${f}">${f}</option>`;
+        });
+        select.value = currentVal; // Remet le son sélectionné s'il y en avait un
+    } catch(e) {}
+}
+
+// Appeler cette fonction au démarrage (dans DOMContentLoaded) :
+document.addEventListener('DOMContentLoaded', () => {
+    loadCommands();
+    loadMedia();
+    loadSoundDropdown(); // <-- Ajouté
+});
+
+// --- NOUVELLES FONCTIONS OBS ---
+function renderObsActionsList() {
+    const list = document.getElementById('obs-actions-list');
+    document.getElementById('obs-badge').textContent = currentObsActions.length;
+    
+    list.innerHTML = currentObsActions.map((act, index) => {
+        let details = Object.entries(act).filter(([k,v]) => k !== 'action' && k !== 'delay').map(([k,v]) => `${k}:${v}`).join(', ');
+        let delayBadge = act.delay > 0 ? `<span class="bg-slate-700 text-[9px] px-1.5 py-0.5 rounded ml-2">⏱️ ${act.delay}ms</span>` : '';
+        return `
+        <div class="flex items-center justify-between bg-slate-900 border border-slate-700 p-2 rounded-lg text-sm">
+            <div class="min-w-0">
+                <span class="font-bold text-purple-400">${act.action}</span>
+                ${delayBadge}
+                <p class="text-[10px] text-slate-500 truncate">${details}</p>
+            </div>
+            <button type="button" onclick="removeObsAction(${index})" class="text-rose-400 hover:text-rose-300 p-1"><i class="fas fa-times"></i></button>
+        </div>`;
+    }).join('');
+}
+
+function addObsAction() {
+    const action = document.getElementById('obs-action').value;
+    if (!action) return;
+    const obj = buildObsJsonObject();
+    obj.delay = parseInt(document.getElementById('obs-delay').value) || 0;
+    currentObsActions.push(obj);
+    
+    // Reset du formulaire
+    document.getElementById('obs-action').value = '';
+    onObsActionChange(); 
+    document.getElementById('obs-delay').value = '0';
+    renderObsActionsList();
+}
+
+function removeObsAction(index) {
+    currentObsActions.splice(index, 1);
+    renderObsActionsList();
+}
+
+function renderCommands() {
+    const search = (document.getElementById('search-input').value||'').toLowerCase();
+    const filtered = allCommands.filter(c =>
+        (currentFilter === 'all' || c.type === currentFilter) &&
+        (!search || c.name.includes(search) || (c.response||'').toLowerCase().includes(search))
+    );
+    document.getElementById('cmd-count').textContent = `${filtered.length} commande(s)`;
+    const list = document.getElementById('commands-list');
+    document.getElementById('empty-state').classList.toggle('hidden', filtered.length > 0);
+    list.innerHTML = filtered.map(c => {
+        const tc = TYPE_COLORS[c.type]||'slate';
+        const sched = c.active_from && c.active_until
+            ? `<span class="text-[10px] font-bold text-slate-500"><i class="fas fa-clock mr-1"></i>${c.active_from.slice(0,5)}–${c.active_until.slice(0,5)}</span>` : '';
+        
+        let previewText = c.response || '';
+        if (c.type === 'multi' || previewText.startsWith('{')) {
+            try {
+                let p = JSON.parse(previewText);
+                let parts = [];
+                if(p.text) parts.push('💬 ' + p.text);
+                if(p.image) parts.push('🖼️ ' + p.image);
+                if(p.sound) parts.push('🔊 ' + p.sound);
+                if(p.obs && p.obs.action) parts.push('📡 OBS');
+                previewText = parts.join(' | ') || 'Action silencieuse';
+            } catch(e) {}
+        }
+
+        return `
+        <div class="cmd-row config-card p-5 rounded-2xl border transition-all ${c.is_active?'':'opacity-50'}" data-type="${c.type}">
+            <div class="flex items-start justify-between gap-4">
+                <div class="flex items-center gap-4 flex-1 min-w-0">
+                    <span class="type-${c.type} text-[10px] font-black uppercase px-2.5 py-1 rounded-lg border shrink-0">
+                        <i class="fas fa-${ICONS[c.type]||'terminal'} mr-1"></i>${c.type}
+                    </span>
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="text-white font-black text-lg">!${c.name}</span>
+                            ${c.aliases ? `<span class="text-[10px] text-slate-400 font-mono ml-2 italic" title="Alias de la commande">(ou !${c.aliases.split(',').join(', !')})</span>` : ''}
+                            ${c.category && c.category !== 'Général' ? `<span class="text-[9px] px-2 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30">${c.category}</span>` : ''}
+                            ${!c.is_active?'<span class="text-[9px] px-2 py-0.5 rounded-lg bg-slate-700 text-slate-400 font-black uppercase border border-slate-600">OFF</span>':''}
+                        </div>
+                        <p class="text-slate-400 text-xs truncate mt-0.5">${previewText.slice(0,80)}${previewText.length>80?'…':''}</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <button onclick="openEditModal('${c.name}')" class="w-8 h-8 rounded-xl bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-600 hover:text-white transition-all flex items-center justify-center text-xs"><i class="fas fa-pen"></i></button>
+                    <button onclick="toggleCmd('${c.name}')" class="w-8 h-8 rounded-xl ${c.is_active?'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-600':'bg-slate-700 border-slate-600 text-slate-400 hover:bg-slate-600'} border hover:text-white transition-all flex items-center justify-center text-xs">
+                        <i class="fas fa-${c.is_active?'check':'times'}"></i>
+                    </button>
+                    <button onclick="deleteCmd('${c.name}')" class="w-8 h-8 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-600 hover:text-white transition-all flex items-center justify-center text-xs"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>
+            <div class="flex items-center gap-4 mt-3 pt-3 border-t border-slate-700/50 flex-wrap">
+                <span class="text-[10px] font-bold text-slate-500"><i class="fas fa-clock mr-1"></i>Global: ${c.cooldown_global}s · User: ${c.cooldown_user}s</span>
+                <span class="text-[10px] font-bold badge-${c.min_role}"><i class="fas fa-user-shield mr-1"></i>${c.min_role}</span>
+                ${sched}
+                <span class="text-[10px] font-bold text-slate-600 ml-auto"><i class="fas fa-chart-bar mr-1"></i>${c.use_count} util.</span>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function renderStats() {
+    const total = allCommands.reduce((s,c)=>s+(c.use_count||0), 0);
+    document.getElementById('stats-panel').innerHTML =
+        ['multi','text','image','sound','obs'].map(t => {
+            const n = allCommands.filter(c=>c.type===t).length;
+            return `<div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-400 flex items-center gap-2">
+                    <i class="fas fa-${ICONS[t]} text-${TYPE_COLORS[t]}-400"></i>${t.charAt(0).toUpperCase()+t.slice(1)}
+                </span><span class="text-sm font-black text-white">${n}</span></div>`;
+        }).join('') +
+        `<div class="border-t border-slate-700 pt-3 flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-400">Total utilisations</span>
+            <span class="text-sm font-black text-indigo-400">${total}</span></div>`;
+}
+
+function filterType(t) {
+    currentFilter = t;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('filter-'+t).classList.add('active');
+    renderCommands();
+}
+function filterCommands() { renderCommands(); }
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function openModal() {
+    editingName = null;
+    document.getElementById('modal-title').textContent = 'Nouvelle commande';
+    document.getElementById('modal-subtitle').textContent = '';
+    document.getElementById('save-label').textContent = 'CRÉER';
+    
+    document.getElementById('f-name').disabled = false;
+    document.getElementById('f-name').value = '';
+    document.getElementById('f-category').value = '';
+    document.getElementById('f-response-text').value = '';
+    document.getElementById('f-response-image').value = '';
+    document.getElementById('f-response-sound').value = '';
+    
+    document.getElementById('f-cg').value = 10;
+    document.getElementById('f-cu').value = 30;
+    document.getElementById('f-role').value = 'viewer';
+    document.getElementById('f-active').checked = true;
+    document.getElementById('f-schedule-toggle').checked = false;
+    document.getElementById('f-from').value = '';
+    document.getElementById('f-until').value = '';
+    
+    document.getElementById('obs-action').value = '';
+    document.getElementById('obs-fields').innerHTML = '';
+    currentObsActions = []; // <-- Nouveau
+    renderObsActionsList(); // <-- Nouveau
+
+    if(document.getElementById('test-result')) document.getElementById('test-result').classList.add('hidden');
+    
+    toggleSchedule();
+    showModal();
+}
+
+function openEditModal(name) {
+    const c = allCommands.find(x => x.name === name);
+    if (!c) return;
+    editingName = name;
+
+    document.getElementById('modal-title').textContent = 'Modifier !' + name;
+    document.getElementById('modal-subtitle').textContent = `${c.use_count} utilisation(s)`;
+    document.getElementById('save-label').textContent = 'SAUVEGARDER';
+
+    // 👉 C'EST ICI QUE ÇA CHANGE : On affiche le nom principal + les alias séparés par des virgules
+    const fullNames = c.aliases ? `${name}, ${c.aliases}` : name;
+    document.getElementById('f-name').value = fullNames;
+    document.getElementById('f-name').disabled = true;
+    
+    document.getElementById('f-category').value = c.category || 'Général';
+    document.getElementById('f-cg').value = c.cooldown_global;
+    document.getElementById('f-cu').value = c.cooldown_user;
+    document.getElementById('f-role').value = c.min_role;
+    document.getElementById('f-active').checked = c.is_active;
+
+    const hasSched = !!(c.active_from || c.active_until);
+    document.getElementById('f-schedule-toggle').checked = hasSched;
+    document.getElementById('f-from').value = (c.active_from||'').slice(0,5);
+    document.getElementById('f-until').value = (c.active_until||'').slice(0,5);
+
+    document.getElementById('f-response-text').value = '';
+    document.getElementById('f-response-image').value = '';
+    document.getElementById('f-response-sound').value = '';
+    document.getElementById('obs-action').value = '';
+    document.getElementById('obs-fields').innerHTML = '';
+
+    try {
+        const payload = JSON.parse(c.response || '{}');
+        if (payload.text) document.getElementById('f-response-text').value = payload.text;
+        if (payload.image) document.getElementById('f-response-image').value = payload.image;
+        if (payload.sound) document.getElementById('f-response-sound').value = payload.sound;
+
+        // 👉 NOUVELLE GESTION OBS : On convertit en liste
+        currentObsActions = Array.isArray(payload.obs) ? payload.obs : [];
+        if (payload.obs && payload.obs.action && !Array.isArray(payload.obs)) {
+            currentObsActions.push(payload.obs); // Convertit l'ancienne méthode
+        }
+        renderObsActionsList();
+
+    } catch(e) {
+        document.getElementById('f-response-text').value = c.response || '';
+    }
+
+    if(document.getElementById('test-result')) document.getElementById('test-result').classList.add('hidden');
+    toggleSchedule();
+    showModal();
+}
+
+function showModal() {
+    const m = document.getElementById('modal');
+    m.classList.remove('hidden');
+    m.classList.add('flex');
+}
+function closeModal() {
+    document.getElementById('modal').classList.add('hidden');
+    document.getElementById('modal').classList.remove('flex');
+}
+document.getElementById('modal').addEventListener('click', e => { if (e.target===e.currentTarget) closeModal(); });
+
+// ── OBS formulaire visuel ─────────────────────────────────────────────────────
+function onObsActionChange(prefill) {
+    const action = document.getElementById('obs-action').value;
+    const container = document.getElementById('obs-fields');
+    const controls = document.getElementById('obs-add-controls'); // <-- Nouveau
+    const fields = OBS_FIELDS[action] || [];
+    if (controls) controls.classList.toggle('hidden', !action);
+    if (!fields.length && action) {
+        container.innerHTML = `<p class="text-xs text-slate-500 italic">Aucun paramètre requis pour cette action.</p>`;
+    } else {
+        container.innerHTML = fields.map(f => `
+            <div class="obs-field">
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">${f.label}</label>
+                <input id="obs-f-${f.id}" type="text" placeholder="${f.ph}"
+                    value="${prefill ? (prefill[f.id]||'') : ''}"
+                    class="w-full input-dark rounded-xl p-3 text-sm">
+            </div>`).join('');
+    }
+}
+
+function buildObsJsonObject() {
+    const action = document.getElementById('obs-action').value;
+    if (!action) return {};
+    const fields = OBS_FIELDS[action] || [];
+    const obj = { action: action };
+    fields.forEach(f => {
+        const el = document.getElementById('obs-f-'+f.id);
+        if (el) obj[f.id] = el.value;
+    });
+    return obj;
+}
+
+// ── Médias Unifiés & Upload Direct ─────────────────────────────────────────────
+async function loadMedia() {
+    const [resImg, resSnd] = await Promise.all([
+        fetch('/api/admin/commands/media/image').then(r=>r.json()),
+        fetch('/api/admin/commands/media/sound').then(r=>r.json())
+    ]);
+    
+    const files = [
+        ...(resImg.files || []).map(f => ({name: f, type: 'image'})),
+        ...(resSnd.files || []).map(f => ({name: f, type: 'sound'}))
+    ].sort((a, b) => a.name.localeCompare(b.name));
+    
+    const grid = document.getElementById('media-grid');
+    document.getElementById('media-empty').classList.toggle('hidden', files.length > 0);
+    
+    grid.innerHTML = files.map(f => {
+        let isVideo = f.name.match(/\.(mp4|webm)$/i);
+        let mediaHtml = f.type === 'sound' 
+            ? `<div class="flex items-center justify-center h-12 bg-slate-900 rounded-lg"><i class="fas fa-music text-amber-400 text-xl"></i></div>`
+            : (isVideo 
+                ? `<video src="/static/commands/images/${f.name}" class="w-full h-12 object-cover rounded-lg" muted loop></video>`
+                : `<img src="/static/commands/images/${f.name}" class="w-full h-12 object-cover rounded-lg">`);
+        
+        return `
+        <div class="file-thumb border border-slate-700 rounded-xl p-2 bg-slate-800/40 group relative overflow-hidden">
+            <p class="text-[9px] font-bold text-slate-300 truncate mb-1" title="${f.name}">${f.name}</p>
+            ${mediaHtml}
+            <button type="button" onclick="selectFile('${f.name}', '${f.type}')" title="Assigner à la commande" class="absolute inset-0 w-full h-full cursor-pointer z-10 opacity-0"></button>
+            <button type="button" onclick="deleteMedia('${f.name}', '${f.type}')" title="Supprimer" class="absolute top-1 right-1 z-20 w-5 h-5 rounded-full bg-rose-500 text-white opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center text-[9px]"><i class="fas fa-times"></i></button>
+        </div>`;
+    }).join('');
+}
+
+async function uploadUnifiedFile(file) {
+    if (!file) return;
+    let type = file.type.startsWith('audio') ? 'sound' : 'image';
+    await doUpload(file, type);
+}
+
+async function uploadModalFile(file, type) {
+    if (!file) return;
+    let filename = await doUpload(file, type);
+    if(filename) {
+        if(type === 'image') document.getElementById('f-response-image').value = filename;
+        if(type === 'sound') {
+            await loadSoundDropdown(); // Recharge la liste
+            document.getElementById('f-response-sound').value = filename;
+        }
+    }
+}
+
+async function doUpload(file, type) {
+    const prog = document.getElementById('upload-progress');
+    const bar  = document.getElementById('upload-bar');
+    const lbl  = document.getElementById('upload-label');
+    prog.classList.remove('hidden'); bar.style.width='30%'; lbl.textContent=`Envoi de ${file.name}…`;
+    
+    const fd = new FormData(); fd.append('file', file);
+    const res  = await fetch('/api/admin/commands/upload/'+type, { method:'POST', body:fd });
+    const data = await res.json();
+    
+    bar.style.width = '100%';
+    if (data.status === 'ok') { 
+        lbl.textContent='✅ '+data.filename; 
+        showToast(data.filename+' uploadé !'); 
+        loadMedia(); 
+        setTimeout(() => prog.classList.add('hidden'), 2500);
+        return data.filename;
+    } else { 
+        lbl.textContent='❌ '+(data.error||'Erreur'); 
+        showToastErr(data.error||'Erreur upload'); 
+        setTimeout(() => prog.classList.add('hidden'), 2500);
+        return null;
+    }
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById('drop-zone').classList.remove('drag-over');
+    if (e.dataTransfer.files[0]) uploadUnifiedFile(e.dataTransfer.files[0]);
+}
+
+async function deleteMedia(filename, type) {
+    if (!confirm(`Supprimer ${filename} définitivement ?`)) return;
+    await fetch(`/api/admin/commands/media/${type}/${filename}`, { method:'DELETE' });
+    showToast(`${filename} supprimé`); loadMedia();
+}
+
+function selectFile(filename, type) {
+    if (type === 'image') document.getElementById('f-response-image').value = filename;
+    if (type === 'sound') document.getElementById('f-response-sound').value = filename;
+    showToast(`${filename} assigné à la commande !`);
+}
+
+// ── Variables ─────────────────────────────────────────────────────────────────
+function insertVar(v) {
+    const id = activeField;
+    if (!id) return;
+    const el = document.getElementById(id);
+    if (!el) return;
+    const s = el.selectionStart ?? el.value.length;
+    const e = el.selectionEnd   ?? el.value.length;
+    el.value = el.value.slice(0,s) + v + el.value.slice(e);
+    el.focus();
+    el.selectionStart = el.selectionEnd = s + v.length;
+}
+
+// ── Planification ─────────────────────────────────────────────────────────────
+function toggleSchedule() {
+    const on = document.getElementById('f-schedule-toggle').checked;
+    document.getElementById('schedule-fields').classList.toggle('hidden', !on);
+}
+
+// ── Sauvegarder ──────────────────────────────────────────────────────────────
+async function saveCommand() {
+    const rawNames = document.getElementById('f-name').value.split(',').map(n => n.trim().toLowerCase().replace(/^!/, '')).filter(n => n);
+    if (rawNames.length === 0) { showToastErr('Au moins un nom est requis'); return; }
+
+    const obsRaw = currentObsActions;
+
+    const payload = {
+        name: rawNames[0],           
+        aliases: rawNames.slice(1),  
+        category: document.getElementById('f-category').value.trim() || 'Général',
+        text_response: document.getElementById('f-response-text').value.trim(),
+        image_file: document.getElementById('f-response-image').value.trim(),
+        sound_file: document.getElementById('f-response-sound').value.trim(),
+        obs_data: obsRaw,
+        
+        cooldown_global: parseInt(document.getElementById('f-cg').value) || 0,
+        cooldown_user:   parseInt(document.getElementById('f-cu').value) || 0,
+        min_role:        document.getElementById('f-role').value,
+        is_active:       document.getElementById('f-active').checked,
+        active_from:     document.getElementById('f-schedule-toggle').checked ? document.getElementById('f-from').value||null : null,
+        active_until:    document.getElementById('f-schedule-toggle').checked ? document.getElementById('f-until').value||null : null,
+    };
+    
+    if (!payload.text_response && !payload.image_file && !payload.sound_file && !Object.keys(payload.obs_data).length) {
+        showToastErr('La commande doit faire au moins une action !'); return;
+    }
+
+    const res  = await fetch('/api/admin/commands', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+    const data = await res.json();
+    if (data.status === 'ok') { showToast(`Commande(s) sauvegardée(s) !`); closeModal(); loadCommands(); }
+    else showToastErr(data.error || 'Erreur');
+}
+
+// ── Supprimer / Toggle ────────────────────────────────────────────────────────
+async function deleteCmd(name) {
+    if (!confirm(`Supprimer !${name} ?`)) return;
+    await fetch(`/api/admin/commands/${name}`, { method:'DELETE' });
+    showToast(`!${name} supprimée`); loadCommands();
+}
+async function toggleCmd(name) {
+    await fetch(`/api/admin/commands/toggle/${name}`, { method:'POST' });
+    loadCommands();
+}
+
+// ── Test ──────────────────────────────────────────────────────────────────────
+async function testCurrent() {
+    const rawNames = document.getElementById('f-name').value.split(',').map(n => n.trim().toLowerCase().replace(/^!/, '')).filter(n => n);
+    const name = editingName || (rawNames.length > 0 ? rawNames[0] : '');
+    
+    if (!name) { showToastErr('Sauvegarde d\'abord la commande pour la tester'); return; }
+    const res  = await fetch(`/api/admin/commands/test/${name}`, { method:'POST' });
+    const data = await res.json();
+    const box  = document.getElementById('test-result');
+    box.classList.remove('hidden');
+    if (!res.ok) { document.getElementById('test-content').innerHTML = `<p class="text-rose-400">${data.error}</p>`; return; }
+    
+    let contentDisplay = data.response;
+    if (data.type === 'multi' || contentDisplay.startsWith('{')) {
+        try {
+            let p = JSON.parse(contentDisplay);
+            contentDisplay = `
+                ${p.text ? `<div><i class="fas fa-comment text-blue-400"></i> ${p.text}</div>` : ''}
+                ${p.image ? `<div><i class="fas fa-image text-emerald-400"></i> ${p.image}</div>` : ''}
+                ${p.sound ? `<div><i class="fas fa-music text-amber-400"></i> ${p.sound}</div>` : ''}
+                ${p.obs && p.obs.action ? `<div><i class="fas fa-broadcast-tower text-purple-400"></i> Action OBS : ${p.obs.action}</div>` : ''}
+            `;
+        } catch(e) {}
+    }
+
+    document.getElementById('test-content').innerHTML =
+        `<p class="text-slate-300"><strong>Type :</strong> ${data.type}</p>` +
+        (contentDisplay ? `<div class="text-slate-300 mt-1 break-all bg-slate-800/50 p-2 rounded">${contentDisplay}</div>` : '');
+}
+
+// ── Toasts ────────────────────────────────────────────────────────────────────
+function showToast(msg) {
+    const el = document.getElementById('toast');
+    document.getElementById('toast-msg').textContent = msg;
+    el.classList.remove('hidden'); el.classList.add('flex');
+    setTimeout(() => { el.classList.add('hidden'); el.classList.remove('flex'); }, 3000);
+}
+function showToastErr(msg) {
+    const el = document.getElementById('toast-err');
+    document.getElementById('toast-err-msg').textContent = msg;
+    el.classList.remove('hidden'); el.classList.add('flex');
+    setTimeout(() => { el.classList.add('hidden'); el.classList.remove('flex'); }, 4000);
+}
+</script>
+</body>
+</html>

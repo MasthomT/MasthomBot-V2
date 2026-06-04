@@ -23,7 +23,7 @@ from typing import List, Optional
 from app.core.database import init_db, get_db_connection
 
 # --- IMPORT DES ROUTES ---
-from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes
+from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes, admin_commands
 from app.routes.credits import router as credits_router
 # --- IMPORT DES SERVICES ---
 from app.services.twitch_service import twitch_bot
@@ -159,6 +159,7 @@ app.include_router(admin_vips.router)
 app.include_router(api_deck.router)
 app.include_router(labels_routes.router)
 app.include_router(clips.router)
+app.include_router(admin_commands.router)
 
 # ==========================================
 # ROUTES API : INFORMATIONS DE LA CHAÎNE (DASHBOARD ADMIN)

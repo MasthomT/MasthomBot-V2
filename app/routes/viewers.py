@@ -65,14 +65,20 @@ async def admin_viewer_history(request: Request, twitch_id: str):
     async with get_db_connection() as conn:
         c1 = await conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,))
         viewer_row = await c1.fetchone()
-        
         if not viewer_row:
             return RedirectResponse(url="/admin/viewer_manager.html")
-            
         viewer = dict(viewer_row)
         viewer['level'] = calculate_level(viewer.get('points', 0))
         viewer['watchtime_readable'] = format_to_hhmm(viewer.get('watchtime', 0))
-        
+        last_seen = viewer.get('last_seen')
+        if last_seen:
+            if hasattr(last_seen, 'strftime'):
+                viewer['last_seen_readable'] = last_seen.strftime('%d/%m/%Y à %H:%M')
+            else:
+                viewer['last_seen_readable'] = str(last_seen)[:16].replace('T', ' à ').replace('-', '/')
+        else:
+            viewer['last_seen_readable'] = 'Inconnu'
+
         c2 = await conn.execute("SELECT * FROM viewer_daily_stats WHERE twitch_id = ? ORDER BY day DESC LIMIT 30", (twitch_id,))
         daily_stats_raw = await c2.fetchall()
         daily_stats = []

@@ -46,7 +46,8 @@ async def clips_manager_page(request: Request, start_date: str = None, end_date:
                 async with session.get(url, headers=headers) as resp:
                     if resp.status == 200:
                         data = await resp.json()
-                        clips = data.get("data", [])
+                        clips = sorted(data.get("data", []), key=lambda c: c["created_at"])
+
         except Exception as e:
             logger.error(f"❌ Erreur critique : {e}")
 

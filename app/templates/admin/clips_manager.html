@@ -2,57 +2,80 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestionnaire de Clips</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background: #0f172a; color: white; padding-bottom: 100px; }
-        .header { padding: 20px; background: #1e293b; text-align: center; margin-bottom: 20px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; padding: 20px; }
-        .clip-card { background: #334155; border-radius: 8px; overflow: hidden; cursor: pointer; border: 4px solid transparent; transition: 0.2s; position: relative; }
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .clip-card { transition: transform 0.2s, border-color 0.2s; }
         .clip-card:hover { transform: scale(1.02); }
-        .clip-card img { width: 100%; height: auto; display: block; }
-        .clip-info { padding: 10px; font-size: 14px; }
-        .clip-info strong { display: block; margin-bottom: 5px; }
-        .clip-info span { color: #94a3b8; }
-        
-        #action-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: #0f172a; padding: 15px; text-align: center; border-top: 2px solid #334155; z-index: 100; box-shadow: 0 -10px 20px rgba(0,0,0,0.5); }
-        #btn-launch { padding: 12px 24px; font-size: 18px; font-weight: bold; border: none; border-radius: 8px; color: white; background: #475569; cursor: not-allowed; transition: 0.3s; }
-        #btn-launch.ready { background: #6366f1; cursor: pointer; box-shadow: 0 0 15px rgba(99, 102, 241, 0.5); }
+        #btn-launch { transition: all 0.3s; }
+        #btn-launch:not(:disabled) { box-shadow: 0 0 15px rgba(99, 102, 241, 0.5); }
     </style>
 </head>
-<body>
+<body class="font-sans antialiased flex min-h-screen">
 
-    <div class="header">
-        <h1>🎬 Clips du Mois</h1>
-        <form method="GET" action="/admin/clips_manager">
-            <input type="date" name="start_date" value="{{ start_date or '' }}" required style="padding: 5px;">
-            <input type="date" name="end_date" value="{{ end_date or '' }}" required style="padding: 5px;">
-            <button type="submit" style="padding: 6px 15px; background: #2dd4bf; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;">Chercher</button>
-        </form>
-    </div>
+    {% include 'admin/sidebar.html' %}
 
-    <div class="grid" id="clips-grid">
-        {% for clip in clips %}
-        <div class="clip-card" 
-             data-id="{{ clip.id }}" 
-             data-thumb="{{ clip.thumbnail_url }}" 
-             data-duration="{{ clip.duration }}" 
-             data-creator="{{ clip.creator_name }}" 
-             onclick="toggleClip(this)">
-            
-            <img src="{{ clip.thumbnail_url }}" alt="Thumbnail">
-            <div class="clip-info">
-                <strong>{{ clip.title }}</strong>
-                <span>👁️ {{ clip.view_count }} vues | ⏱️ {{ clip.duration }}s | 👤 {{ clip.creator_name }}</span>
-            </div>
+    <main class="flex-1 p-6 md:p-10 pb-32">
+        <header class="mb-8">
+            <h1 class="text-3xl font-extrabold text-white tracking-tight">🎬 Clips du Mois</h1>
+            <p class="text-slate-400 mt-1">Sélectionnez jusqu'à 4 clips pour la chorégraphie OBS.</p>
+        </header>
+
+        <!-- Formulaire de recherche -->
+        <div class="bg-slate-800/50 border border-slate-700 rounded-2xl p-5 mb-8 flex flex-wrap items-end gap-4">
+            <form method="GET" action="/admin/clips_manager" class="flex flex-wrap gap-3 items-end w-full">
+                <div class="flex flex-col gap-1">
+                    <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Date début</label>
+                    <input type="date" name="start_date" value="{{ start_date or '' }}" required
+                        class="bg-slate-900 border border-slate-600 text-slate-200 rounded-xl px-4 py-2 text-sm focus:border-indigo-500 outline-none">
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Date fin</label>
+                    <input type="date" name="end_date" value="{{ end_date or '' }}" required
+                        class="bg-slate-900 border border-slate-600 text-slate-200 rounded-xl px-4 py-2 text-sm focus:border-indigo-500 outline-none">
+                </div>
+                <button type="submit"
+                    class="bg-teal-500 hover:bg-teal-400 text-white font-black px-6 py-2 rounded-xl text-sm transition-all active:scale-95 shadow-lg">
+                    <i class="fas fa-search mr-2"></i>Chercher
+                </button>
+            </form>
         </div>
-        {% else %}
-        <p style="text-align: center; width: 100%;">Aucun clip trouvé ou lancez une recherche.</p>
-        {% endfor %}
-    </div>
 
-    <div id="action-bar">
-        <h3>Clips sélectionnés : <span id="counter">0</span> / 4 max</h3>
-        <button id="btn-launch" disabled>▶️ LANCER LA CHORÉGRAPHIE SUR OBS</button>
+        <!-- Grille de clips -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="clips-grid">
+            {% for clip in clips %}
+            <div class="clip-card bg-slate-800 border-4 border-transparent rounded-xl overflow-hidden cursor-pointer"
+                 data-id="{{ clip.id }}"
+                 data-thumb="{{ clip.thumbnail_url }}"
+                 data-duration="{{ clip.duration }}"
+                 data-creator="{{ clip.creator_name }}"
+                 onclick="toggleClip(this)">
+                <img src="{{ clip.thumbnail_url }}" alt="Thumbnail" class="w-full h-auto block">
+                <div class="p-3">
+                    <strong class="block text-sm font-bold text-white mb-1 truncate">{{ clip.title }}</strong>
+                    <span class="text-xs text-slate-400">👁️ {{ clip.view_count }} vues &nbsp;|&nbsp; ⏱️ {{ clip.duration }}s &nbsp;|&nbsp; 👤 {{ clip.creator_name }}</span>
+                </div>
+            </div>
+            {% else %}
+            <p class="col-span-full text-center text-slate-500 italic py-16">Aucun clip trouvé — lancez une recherche.</p>
+            {% endfor %}
+        </div>
+    </main>
+
+    <!-- Action bar fixée en bas -->
+    <div class="fixed bottom-0 left-0 w-full bg-slate-900/95 backdrop-blur border-t border-slate-700 px-6 py-4 flex items-center justify-between z-50 shadow-2xl">
+        <h3 class="text-sm font-bold text-slate-300">
+            Clips sélectionnés : <span id="counter" class="text-white font-black">0</span> <span class="text-slate-500">/ 4 max</span>
+        </h3>
+        <button id="btn-launch" disabled
+            class="px-6 py-3 text-base font-black rounded-xl text-white bg-slate-700 cursor-not-allowed disabled:opacity-50 enabled:bg-indigo-600 enabled:hover:bg-indigo-500 enabled:cursor-pointer transition-all">
+            ▶️ LANCER LA CHORÉGRAPHIE SUR OBS
+        </button>
     </div>
 
     <script>
@@ -63,7 +86,7 @@
                 id: card.dataset.id,
                 thumb: card.dataset.thumb,
                 duration: parseFloat(card.dataset.duration),
-                title: card.querySelector('.clip-info strong').innerText,
+                title: card.querySelector('strong').innerText,
                 creator: card.dataset.creator
             };
 
@@ -73,13 +96,12 @@
                 selectedClips.splice(index, 1);
                 card.style.borderColor = "transparent";
             } else {
-                // Limite max à 4 clips
                 if (selectedClips.length >= 4) {
                     alert("Maximum 4 clips sélectionnés !");
                     return;
                 }
                 selectedClips.push(clipData);
-                card.style.borderColor = "#2dd4bf"; 
+                card.style.borderColor = "#2dd4bf";
             }
 
             updateActionBar();
@@ -88,28 +110,21 @@
         function updateActionBar() {
             document.getElementById('counter').innerText = selectedClips.length;
             const btn = document.getElementById('btn-launch');
-            
-            // Le bouton s'active si on a entre 1 et 4 clips !
             if (selectedClips.length >= 1 && selectedClips.length <= 4) {
                 btn.disabled = false;
-                btn.classList.add('ready');
             } else {
                 btn.disabled = true;
-                btn.classList.remove('ready');
             }
         }
 
         document.getElementById('btn-launch').addEventListener('click', async () => {
-            if (selectedClips.length < 1 || selectedClips.length > 4) return; // ✅ LA BONNE CONDITION !
-
+            if (selectedClips.length < 1 || selectedClips.length > 4) return;
             try {
-                // On envoie le JSON complet avec les 5 infos par clip
                 const response = await fetch('/admin/clips/trigger_quad', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ clips: selectedClips })
                 });
-
                 if (response.ok) {
                     alert("C'est parti sur OBS !");
                 } else {

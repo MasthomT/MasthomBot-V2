@@ -22,6 +22,23 @@ from app.services.label_service import write_label, lire_fichier_label
 
 logger = logging.getLogger("masthbot.twitch")
 
+# Set pour ne souhaiter l'anniversaire qu'une seule fois par session de bot
+_birthday_wished: set = set()
+
+async def safe_send(channel, content: str):
+    """Envoie un message en sécurisant la longueur et le contenu."""
+    if not content or not content.strip():
+        return # On ne fait rien si le message est vide
+    
+    # Tronquage à 500 caractères max
+    if len(content) > 500:
+        content = content[:497] + "..."
+        
+    try:
+        await channel.send(content)
+    except Exception as e:
+        logger.error(f"❌ Erreur lors de l'envoi du message : {e}")
+
 class MasthbotTwitch(commands.Bot):
     def __init__(self):
         raw_bot_token = settings.TWITCH_BOT_OAUTH_TOKEN
@@ -96,6 +113,13 @@ class MasthbotTwitch(commands.Bot):
                 )
         except Exception as e:
             logger.error(f"❌ [LOG ERROR] : {e}")
+
+    async def event_command_error(self, ctx, error):
+        from twitchio.ext.commands.errors import CommandNotFound
+        if isinstance(error, CommandNotFound):
+            pass  # Géré par le router custom
+        else:
+            logger.error(f"🔥 [CMD ERROR] : {error}")
 
     async def event_ready(self):
         print(f"✅ [TWITCH] Connecté en tant que : {self.nick}")
@@ -315,20 +339,35 @@ class MasthbotTwitch(commands.Bot):
                         is_mentioned = True
                         break
             
-            if is_mentioned or random.randint(1, 100) <= int(config.get('intervention_rate', 20)):
+            # --- 🎂 DÉTECTION ANNIVERSAIRE (une seule fois par session) ---
+            from app.services.ai_service import ai_service, is_birthday_today
+            force_birthday = False
+            if is_birthday_today(viewer_dict.get('birthday', '')) and username.lower() not in _birthday_wished:
+                _birthday_wished.add(username.lower())
+                force_birthday = True
+                logger.info(f"🎂 Anniversaire détecté pour {username} — Félix va le souhaiter !")
+
+            if force_birthday or is_mentioned or random.randint(1, 100) <= int(config.get('intervention_rate', 20)):
                 try:
-                    from app.services.ai_service import ai_service
-                    
                     points = viewer_dict.get('points', 0)
                     viewer_level = max(1, int((points / 100) ** (1 / 2.2))) if points > 0 else 1
 
                     screenshot_base64 = await asyncio.to_thread(obs_service.take_screenshot)
 
+                    msg_for_felix = message.content
+                    if force_birthday:
+                        msg_for_felix = (
+                            f"[SYSTÈME ANNIVERSAIRE : C'EST L'ANNIVERSAIRE DE {username} AUJOURD'HUI ! "
+                            f"Tu DOIS absolument lui souhaiter un joyeux anniversaire de manière mémorable et personnalisée, "
+                            f"inviter tout le chat à le fêter avec lui, et leur rappeler d'utiliser la commande !anniversaire !] "
+                            f"{message.content}"
+                        )
+
                     reply = await ai_service.get_felix_response(
                         username=username,
                         viewer_data=viewer_dict,
                         viewer_level=viewer_level,
-                        message_content=message.content,
+                        message_content=msg_for_felix,
                         is_admin=is_mod,
                         roast_level=int(config.get('roast_level', 10)),
                         discord_link=config.get('discord_link'),
@@ -344,7 +383,7 @@ class MasthbotTwitch(commands.Bot):
                         await self._handle_helix_actions(reply, is_admin=is_mod)
                         final_text = re.sub(r"\[.*?\]", "", reply).strip()
                         if final_text:
-                            await message.channel.send(final_text)
+                            await safe_send(message.channel, final_text)
                 except Exception as e:
                     logger.error(f"🔥 [AI ERROR] : {e}")
 
@@ -355,7 +394,75 @@ class MasthbotTwitch(commands.Bot):
             # 2. Ajout pour le générique de fin
             credits_service.log_event("bits", display_name, f"{bits_amount} Bits")
 
-        # Reste de ta fonction...
+        if message.content.startswith('!'):
+            parts = message.content.split(' ', 1)
+            cmd_name = parts[0][1:].lower()
+            user_input = parts[1].strip() if len(parts) > 1 else ""
+
+            # Commandes natives twitchio — ne pas intercepter
+            NATIVE_COMMANDS = {
+                'checkcopains', 'sondage', 'testpoll',
+                'level', 'rang', 'timer', 'chrono', 'voteclips', 'addvip', 'vip',
+            }
+            if cmd_name in NATIVE_COMMANDS:
+                await self.handle_commands(message)
+                return
+
+            # --- 1. SYSTÈME DE TRADUCTION ---
+            from app.services.features_service import handle_translation, LANGUAGES
+            if cmd_name in LANGUAGES:
+                reply = await handle_translation(cmd_name, display_name, user_input)
+                return await safe_send(message.channel, reply)
+
+            # --- 2. JEU DU MOT SECRET ---
+            from app.services.features_service import handle_set_word, handle_guess_word
+            if cmd_name == "setword":
+                if is_mod or is_owner: # Réservé à l'élite
+                    reply = await handle_set_word(display_name, user_input)
+                    return await message.channel.send(reply)
+                else:
+                    return # Les viewers normaux ne peuvent pas définir le mot
+                
+            if cmd_name in ["guess", "mot"]: # Commandes pour deviner
+                reply = await handle_guess_word(display_name, user_input)
+                if reply: # On n'envoie un message que si c'est la bonne réponse !
+                    return await message.channel.send(reply)
+
+            if cmd_name in ["game", "infogame"]:
+                from app.services.features_service import handle_game_info
+                import os
+                
+                # Si l'utilisateur a tapé "!game Cyberpunk 2077", on cherche ce jeu.
+                # Sinon, on interroge Twitch pour voir à quoi tu joues en ce moment.
+                target_game = user_input
+                if not target_game:
+                    streams = await self.fetch_streams(user_logins=[self.channel_name])
+                    if streams and streams[0].game_name:
+                        target_game = streams[0].game_name
+                
+                if target_game:
+                    # On réutilise les identifiants Twitch du bot pour IGDB
+                    client_id = os.getenv("TWITCH_CLIENT_ID", getattr(self._http, 'client_id', ''))
+                    reply = await handle_game_info(target_game, client_id, self.master_token)
+                    return await safe_send(message.channel, reply)
+                else:
+                    return await safe_send(message.channel, "❌ Aucun jeu spécifié et le stream est actuellement hors ligne.")
+
+            # --- 3. COMMANDES PERSONNALISÉES (Base de données) ---
+            from app.services.command_service import handle_custom_command
+            result = await handle_custom_command(
+                command_name=cmd_name,
+                username=username,
+                viewer_data=viewer_dict,
+                user_input=user_input,
+                is_mod=is_mod,
+                is_sub=bool(message.tags and message.tags.get('subscriber') == '1'),
+                is_vip=is_vip,
+                is_admin=is_owner,
+            )
+            if result and result.get("content"):
+                await safe_send(message.channel, result["content"])
+
         await self.handle_commands(message)
 
     async def _handle_helix_actions(self, reply, is_admin=False):
@@ -1340,7 +1447,7 @@ class MasthbotTwitch(commands.Bot):
                     # 3. L'envoi officiel sur Twitch
                     logger.info(f"📢 [ANNONCE] Envoi sur le chat : '{nom_annonce}'")
                     if channel:
-                        await channel.send(msg)
+                        await safe_send(channel, msg)
 
                 # 4. On valide qu'on l'a traitée pour ne pas boucler indéfiniment
                 await conn.execute("UPDATE announcements SET last_triggered = $1 WHERE id = $2", (now, ann_to_send['id']))

@@ -18,15 +18,16 @@
     </style>
 </head>
 <body class="font-sans antialiased flex min-h-screen">
-   
+
     {% include 'admin/sidebar.html' %}
-    <main class="flex-1 p-6 md:p-10 flex flex-col h-screen overflow-hidden">
+    <main class="flex-1 p-6 md:p-10 overflow-y-auto">
+
+        <!-- HEADER -->
         <header class="mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
             <div>
                 <h1 class="text-3xl font-extrabold text-white tracking-tight">Sondages & FAQ</h1>
                 <p class="text-slate-400 mt-1 text-sm uppercase font-black tracking-widest">Contrôle de l'interaction</p>
             </div>
-           
             <div class="flex bg-slate-900/50 p-1 rounded-2xl border border-slate-800">
                 <button onclick="switchTab('polls')" id="btn-polls" class="tab-btn active px-6 py-2 rounded-xl text-xs font-black">SONDAGES</button>
                 <button onclick="switchTab('faq')" id="btn-faq" class="tab-btn px-6 py-2 rounded-xl text-xs font-black">
@@ -34,6 +35,8 @@
                 </button>
             </div>
         </header>
+
+        <!-- TOAST -->
         {% if request.query_params.get('success') or request.query_params.get('created') or request.query_params.get('closed') or request.query_params.get('deleted') %}
         <div id="status-toast" class="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-[10px] font-bold animate-pulse text-center uppercase tracking-widest">
             Action effectuée avec succès
@@ -42,13 +45,15 @@
         {% endif %}
 
         <!-- ================================== -->
-        <!-- SONDAGES (PLUS GRANDS & ADAPTÉS) -->
+        <!-- ONGLET SONDAGES                    -->
         <!-- ================================== -->
-        <div id="section-polls" class="grid grid-cols-1 xl:grid-cols-2 gap-8 flex-1 overflow-hidden items-start">
-           
-            <!-- FORMULAIRE DE CRÉATION -->
-            <div class="h-full overflow-y-auto pr-2 custom-scrollbar">
-                <form action="/admin/polls_faq/create" method="POST" class="config-card p-10 rounded-3xl shadow-2xl space-y-8 h-fit">
+        <div id="section-polls">
+
+            <!-- LIGNE DU HAUT : Création + Sondage actif côte à côte -->
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
+
+                <!-- Formulaire de création -->
+                <form action="/admin/polls_faq/create" method="POST" class="config-card p-10 rounded-3xl shadow-2xl space-y-8">
                     <h2 class="text-xl font-black text-white flex items-center gap-3">
                         <i class="fas fa-plus-circle text-indigo-400"></i> Nouveau Sondage
                     </h2>
@@ -68,57 +73,103 @@
                         PUBLIER LE VOTE
                     </button>
                 </form>
+
+                <!-- Sondage actif -->
+                <div class="config-card rounded-3xl shadow-2xl p-10 border-l-4 border-indigo-500">
+                    {% if active_poll %}
+                    <div class="flex justify-between items-start mb-8 border-b border-slate-800 pb-6">
+                        <h3 class="text-2xl font-black text-white italic leading-tight">"{{ active_poll.question }}"</h3>
+                        <form action="/admin/polls_faq/close" method="POST">
+                            <button type="submit" class="bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white px-4 py-2 rounded-xl text-xs font-black uppercase transition-colors">Clôturer</button>
+                        </form>
+                    </div>
+                    <div class="space-y-8">
+                        {% for i in range(1, 5) %}
+                            {% set opt_key = 'option' ~ i|string %}
+                            {% if active_poll[opt_key] %}
+                                {% set votes = active_poll.results[i|string] %}
+                                {% set pct = ((votes / active_poll.total_votes) * 100)|round|int if active_poll.total_votes > 0 else 0 %}
+                                <div>
+                                    <div class="flex justify-between text-xs font-black text-slate-400 mb-3 uppercase tracking-wide">
+                                        <span>{{ active_poll[opt_key] }}</span>
+                                        <span id="txt-{{i}}">{{ pct }}% ({{ votes }} votes)</span>
+                                    </div>
+                                    <div class="w-full bg-slate-900 rounded-full h-4 overflow-hidden border border-slate-800 mb-3">
+                                        <div id="bar-{{i}}" class="bg-indigo-500 h-full transition-all duration-1000 shadow-[0_0_15px_rgba(99,102,241,0.4)]" style="width: {{ pct }}%"></div>
+                                    </div>
+                                    <div id="voters-{{i}}" class="flex flex-wrap gap-1.5 min-h-[16px]">
+                                        {% for voter in active_poll.voters[i|string] %}
+                                            <span class="text-[9px] font-black bg-slate-800 text-slate-500 px-2 py-0.5 rounded-md border border-slate-700/50 uppercase tracking-tighter">{{ voter }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="h-full flex flex-col items-center justify-center opacity-30 italic text-center">
+                        <i class="fas fa-poll-h text-5xl mb-4"></i>
+                        <p>Aucun sondage actif actuellement.</p>
+                    </div>
+                    {% endif %}
+                </div>
             </div>
 
-            <!-- RÉSULTATS AVEC NOMS DES VOTANTS -->
-            <div class="config-card rounded-3xl shadow-2xl p-10 h-fit max-h-full overflow-y-auto custom-scrollbar border-l-4 border-indigo-500">
-                {% if active_poll %}
-                <div class="flex justify-between items-start mb-8 border-b border-slate-800 pb-6">
-                    <h3 class="text-2xl font-black text-white italic leading-tight">"{{ active_poll.question }}"</h3>
-                    <form action="/admin/polls_faq/close" method="POST">
-                        <button type="submit" class="bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white px-4 py-2 rounded-xl text-xs font-black uppercase transition-colors">Clôturer</button>
-                    </form>
-                </div>
-                <div class="space-y-8">
-                    {% for i in range(1, 5) %}
-                        {% set opt_key = 'option' ~ i|string %}
-                        {% if active_poll[opt_key] %}
-                            {% set votes = active_poll.results[i|string] %}
-                            {% set pct = ((votes / active_poll.total_votes) * 100)|round|int if active_poll.total_votes > 0 else 0 %}
-                            <div>
-                                <div class="flex justify-between text-xs font-black text-slate-400 mb-3 uppercase tracking-wide">
-                                    <span>{{ active_poll[opt_key] }}</span>
-                                    <span id="txt-{{i}}">{{ pct }}% ({{ votes }} votes)</span>
-                                </div>
-                                <div class="w-full bg-slate-900 rounded-full h-4 overflow-hidden border border-slate-800 mb-3">
-                                    <div id="bar-{{i}}" class="bg-indigo-500 h-full transition-all duration-1000 shadow-[0_0_15px_rgba(99,102,241,0.4)]" style="width: {{ pct }}%"></div>
-                                </div>
-                                <!-- LISTE DES VOTANTS PAR OPTION -->
-                                <div id="voters-{{i}}" class="flex flex-wrap gap-1.5 min-h-[16px]">
-                                    {% for voter in active_poll.voters[i|string] %}
-                                        <span class="text-[9px] font-black bg-slate-800 text-slate-500 px-2 py-0.5 rounded-md border border-slate-700/50 uppercase tracking-tighter">{{ voter }}</span>
-                                    {% endfor %}
-                                </div>
+            <!-- LIGNE DU BAS : Historique pleine largeur -->
+            {% if past_polls %}
+            <div class="space-y-4">
+                <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1 mb-4">
+                    <i class="fas fa-history text-indigo-400"></i> Historique des sondages
+                </h3>
+                <div class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
+                    {% for p in past_polls %}
+                    <div class="bg-slate-900/60 p-6 rounded-3xl border border-slate-800 group transition-all hover:border-slate-700">
+                        <div class="flex justify-between items-start mb-4">
+                            <p class="text-sm font-black text-white italic w-3/4">"{{ p.question }}"</p>
+                            <div class="flex items-center gap-3">
+                                <span class="text-[9px] text-slate-600 font-black uppercase tracking-widest">
+                                    {{ p.total_votes }} votes
+                                </span>
+                                <form action="/admin/polls_faq/delete/{{ p.id }}" method="POST" onsubmit="return confirm('Es-tu sûr de vouloir supprimer définitivement ce sondage ?')">
+                                    <button type="submit" class="text-slate-700 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </form>
                             </div>
-                        {% endif %}
+                        </div>
+                        <div class="space-y-2">
+                            {% for i in range(1, 5) %}
+                                {% set opt_key = 'option' ~ i|string %}
+                                {% if p[opt_key] %}
+                                    {% set votes = p.results[i|string] %}
+                                    {% set pct = ((votes / p.total_votes) * 100)|round|int if p.total_votes > 0 else 0 %}
+                                    <div>
+                                        <div class="flex justify-between text-[10px] font-black text-slate-400 mb-1 uppercase">
+                                            <span>{{ p[opt_key] }}</span>
+                                            <span>{{ pct }}% ({{ votes }} votes)</span>
+                                        </div>
+                                        <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                                            <div class="bg-indigo-500/60 h-full" style="width: {{ pct }}%"></div>
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
                     {% endfor %}
                 </div>
-                {% else %}
-                <div class="h-48 flex flex-col items-center justify-center opacity-30 italic text-center">
-                    <i class="fas fa-poll-h text-5xl mb-4"></i>
-                    <p>Aucun sondage actif actuellement.</p>
-                </div>
-                {% endif %}
             </div>
+            {% endif %}
+
         </div>
 
         <!-- ================================== -->
-        <!-- FAQ / QUESTIONS (LISIBLES & ANONYMES) -->
+        <!-- ONGLET FAQ / QUESTIONS             -->
         <!-- ================================== -->
-        <div id="section-faq" class="hidden grid grid-cols-1 xl:grid-cols-12 gap-8 flex-1 overflow-hidden items-start">
-           
+        <div id="section-faq" class="hidden grid grid-cols-1 xl:grid-cols-12 gap-8">
+
             <!-- QUESTIONS À RÉPONDRE -->
-            <div class="xl:col-span-7 h-full overflow-y-auto pr-2 custom-scrollbar space-y-4" id="pending-container">
+            <div class="xl:col-span-7 space-y-4" id="pending-container">
                 {% for q in pending_questions %}
                 <div class="config-card p-8 rounded-3xl border-l-4 border-amber-500 space-y-4">
                     <div class="flex justify-between items-center">
@@ -143,32 +194,31 @@
                     </form>
                 </div>
                 {% else %}
-                <div class="h-full flex flex-col items-center justify-center opacity-30 italic text-sm text-center">
+                <div class="flex flex-col items-center justify-center opacity-30 italic text-sm text-center py-20">
                     <i class="fas fa-check-double text-5xl mb-4 text-emerald-500"></i>
                     <p>Zéro question en attente !</p>
                 </div>
                 {% endfor %}
             </div>
 
-            <!-- RÉPONSES RÉCENTES (LISIBLES) -->
-            <div class="xl:col-span-5 h-full overflow-y-auto pr-2 custom-scrollbar space-y-4">
+            <!-- RÉPONSES RÉCENTES -->
+            <div class="xl:col-span-5 space-y-4">
                 <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest px-2 mb-2 flex items-center gap-2">
                     <i class="fas fa-history text-indigo-400"></i> Historique des réponses
                 </h2>
                 {% for q in answered_questions %}
                 <div class="bg-slate-900/60 p-6 rounded-3xl border border-slate-800 group relative transition-all hover:bg-slate-900/80 hover:border-slate-700">
                     <div class="flex justify-between items-start mb-4">
-                         <div class="flex items-center gap-2">
-                             <div class="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"></div>
-                             <span class="text-xs font-black text-indigo-400 uppercase tracking-tighter">Question Anonyme</span>
-                         </div>
-                         <form action="/admin/polls_faq/questions/delete/{{ q.id }}" method="POST" onsubmit="return confirm('Retirer cette question de l\'historique ?')">
+                        <div class="flex items-center gap-2">
+                            <div class="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"></div>
+                            <span class="text-xs font-black text-indigo-400 uppercase tracking-tighter">Question Anonyme</span>
+                        </div>
+                        <form action="/admin/polls_faq/questions/delete/{{ q.id }}" method="POST" onsubmit="return confirm('Retirer cette question de l\'historique ?')">
                             <button type="submit" class="text-slate-700 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100">
                                 <i class="fas fa-trash-alt text-xs"></i>
                             </button>
-                         </form>
+                        </form>
                     </div>
-                   
                     <div class="mb-4">
                         <p class="text-[14px] text-slate-400 italic font-medium leading-relaxed">
                             <i class="fas fa-quote-left text-[10px] mr-2 opacity-30"></i>{{ q.question_text }}
@@ -184,16 +234,16 @@
                     </div>
                 </div>
                 {% else %}
-                <div class="h-32 flex items-center justify-center opacity-20 italic text-sm">Aucun historique.</div>
+                <div class="flex items-center justify-center opacity-20 italic text-sm py-10">Aucun historique.</div>
                 {% endfor %}
             </div>
         </div>
+
     </main>
 
     <script>
-        // === CONFIGURATION API ===
-        const API_BASE = (typeof CONFIG !== 'undefined' && CONFIG.API_BASE_URL) 
-            ? CONFIG.API_BASE_URL.replace(/\/$/, '') 
+        const API_BASE = (typeof CONFIG !== 'undefined' && CONFIG.API_BASE_URL)
+            ? CONFIG.API_BASE_URL.replace(/\/$/, '')
             : '';
         const FULL_API_BASE = API_BASE + '/api/v1';
 
@@ -201,16 +251,12 @@
             try {
                 const res = await fetch(`${FULL_API_BASE}/questions/pending`);
                 if (!res.ok) return;
-                
                 const questions = await res.json();
-                
                 document.getElementById('pending-count').textContent = questions.length;
-
                 const container = document.getElementById('pending-container');
-                
                 if (questions.length === 0) {
                     container.innerHTML = `
-                        <div class="h-full flex flex-col items-center justify-center opacity-30 italic text-sm text-center">
+                        <div class="flex flex-col items-center justify-center opacity-30 italic text-sm text-center py-20">
                             <i class="fas fa-check-double text-5xl mb-4 text-emerald-500"></i>
                             <p>Zéro question en attente !</p>
                         </div>`;
@@ -250,10 +296,7 @@
             document.getElementById('section-faq').classList.toggle('hidden', tab !== 'faq');
             document.getElementById('btn-polls').classList.toggle('active', tab === 'polls');
             document.getElementById('btn-faq').classList.toggle('active', tab === 'faq');
-            
-            if (tab === 'faq') {
-                refreshPendingQuestions();
-            }
+            if (tab === 'faq') refreshPendingQuestions();
         }
 
         {% if active_poll %}
@@ -262,37 +305,26 @@
             try {
                 const res = await fetch('/api/v1/poll/active');
                 const data = await res.json();
-               
-                if(data.active) {
-                    for(let i=1; i<=4; i++) {
-                        if(data.options && data.options[i]) {
+                if (data.active) {
+                    for (let i = 1; i <= 4; i++) {
+                        if (data.options && data.options[i]) {
                             const v = data.results[i] || 0;
-                            const p = data.total_votes > 0 ? Math.round((v/data.total_votes)*100) : 0;
-                           
-                            const bar = document.getElementById('bar-'+i);
-                            const txt = document.getElementById('txt-'+i);
-                            const vList = document.getElementById('voters-'+i);
-                            
-                            if(bar) bar.style.width = p + '%';
-                            if(txt) txt.textContent = p + '% (' + v + ' votes)';
-                            
-                            if(vList && data.voters) {
+                            const p = data.total_votes > 0 ? Math.round((v / data.total_votes) * 100) : 0;
+                            const bar = document.getElementById('bar-' + i);
+                            const txt = document.getElementById('txt-' + i);
+                            const vList = document.getElementById('voters-' + i);
+                            if (bar) bar.style.width = p + '%';
+                            if (txt) txt.textContent = p + '% (' + v + ' votes)';
+                            if (vList && data.voters) {
                                 let rawVoters = data.voters[i] || data.voters[i.toString()];
                                 let votersArray = [];
                                 if (rawVoters) {
-                                    if (Array.isArray(rawVoters)) {
-                                        votersArray = rawVoters;
-                                    } else if (typeof rawVoters === 'string' && rawVoters.trim() !== '') {
-                                        votersArray = rawVoters.split(',');
-                                    }
+                                    if (Array.isArray(rawVoters)) votersArray = rawVoters;
+                                    else if (typeof rawVoters === 'string' && rawVoters.trim() !== '') votersArray = rawVoters.split(',');
                                 }
-                                if (votersArray.length > 0) {
-                                    vList.innerHTML = votersArray.map(name =>
-                                        `<span class="text-[9px] font-black bg-slate-800 text-slate-500 px-2 py-0.5 rounded-md border border-slate-700/50 uppercase tracking-tighter">${name.trim()}</span>`
-                                    ).join('');
-                                } else {
-                                    vList.innerHTML = '';
-                                }
+                                vList.innerHTML = votersArray.length > 0
+                                    ? votersArray.map(name => `<span class="text-[9px] font-black bg-slate-800 text-slate-500 px-2 py-0.5 rounded-md border border-slate-700/50 uppercase tracking-tighter">${name.trim()}</span>`).join('')
+                                    : '';
                             }
                         }
                     }
@@ -305,13 +337,8 @@
         }, 3000);
         {% endif %}
 
-        // Rafraîchissement automatique des questions
         setInterval(refreshPendingQuestions, 4000);
-
-        // Chargement initial
-        window.onload = function() {
-            refreshPendingQuestions();
-        };
+        window.onload = function() { refreshPendingQuestions(); };
     </script>
 </body>
 </html>

@@ -13,6 +13,13 @@ class ViewerBase(BaseModel):
     watchtime: int = Field(0, description="Watchtime cumulé en secondes")
     messages: int = Field(0, description="Compteur total de messages")
     points: int = Field(0, description="Points d'expérience (EXP)")
+    first_count: int = Field(0, description="Nombre de FIRST")
+    deuz_count: int = Field(0, description="Nombre de DEUZ")
+    troiz_count: int = Field(0, description="Nombre de TROIZ")
+    rank: Optional[int] = Field(None, description="Rang dans le classement")
+    is_mod: bool = Field(False, description="Statut modérateur")
+    is_artist: bool = Field(False, description="Statut artiste")
+    vip_expiry: Optional[str] = Field(None, description="Date expiration VIP texte")
 
     # Logique VIP (temporelle stricte)
     is_vip: bool = Field(False, description="Statut VIP actuel")
