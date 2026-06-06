@@ -300,3 +300,8 @@ async def get_secret_rewards():
         except Exception as e:
             print(f"Erreur chargement trophées secrets: {e}")
             return []
+
+@router.post("/viewer/update_context")
+async def update_viewer_context_public(request: Request):
+    from app.routes.api import update_viewer_context
+    return await update_viewer_context(request)

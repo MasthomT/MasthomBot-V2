@@ -24,6 +24,7 @@ logger = logging.getLogger("masthbot.twitch")
 
 # Set pour ne souhaiter l'anniversaire qu'une seule fois par session de bot
 _birthday_wished: set = set()
+_permitted_users: set = set()
 
 async def safe_send(channel, content: str):
     """Envoie un message en sécurisant la longueur et le contenu."""
@@ -403,6 +404,7 @@ class MasthbotTwitch(commands.Bot):
             NATIVE_COMMANDS = {
                 'checkcopains', 'sondage', 'testpoll',
                 'level', 'rang', 'timer', 'chrono', 'voteclips', 'addvip', 'vip',
+                'permit', 'unpermit',
             }
             if cmd_name in NATIVE_COMMANDS:
                 await self.handle_commands(message)
@@ -1063,6 +1065,30 @@ class MasthbotTwitch(commands.Bot):
             await ctx.send(f"💎 @{ctx.author.name}, il te reste {time_str} de VIP ! (Expire le {expiry.strftime('%d/%m/%Y à %H:%M')})")
         except:
             await ctx.send(f"@{ctx.author.name}, ton grade VIP est bien actif ! 💎")
+
+    @commands.command(name='permit')
+    async def cmd_permit(self, ctx, *, target: str = None):
+        if not ctx.author.is_mod and ctx.author.name.lower() != self.channel_name:
+            return
+        if not target:
+            return await ctx.send("Usage : !permit <pseudo>")
+        target_clean = target.strip().lstrip('@').lower()
+        _permitted_users.add(target_clean)
+        await ctx.send(f"✅ {target_clean} est autorisé à poster un lien pendant 60 secondes.")
+        async def revoke():
+            await asyncio.sleep(60)
+            _permitted_users.discard(target_clean)
+        asyncio.create_task(revoke())
+
+    @commands.command(name='unpermit')
+    async def cmd_unpermit(self, ctx, *, target: str = None):
+        if not ctx.author.is_mod and ctx.author.name.lower() != self.channel_name:
+            return
+        if not target:
+            return await ctx.send("Usage : !unpermit <pseudo>")
+        target_clean = target.strip().lstrip('@').lower()
+        _permitted_users.discard(target_clean)
+        await ctx.send(f"🚫 {target_clean} n'est plus autorisé à poster des liens.")
 
     @routines.routine(seconds=60)
     async def watchtime_timer(self):

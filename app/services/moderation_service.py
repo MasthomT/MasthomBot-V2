@@ -8,6 +8,10 @@ from collections import defaultdict
 from app.core.database import get_db_connection
 
 logger = logging.getLogger("masthbot.moderation")
+WHITELISTED_REWARD_IDS = {
+    "6b4dc3d4-537b-4faa-a1cf-409de3e26224",  # On matte le clip de...
+    "07ba86ad-1c62-4056-99ab-23d37a2ac231",  # Replay
+}
 
 class ModerationService:
     def __init__(self):
@@ -49,10 +53,18 @@ class ModerationService:
                         return True
 
             # 2. LIENS
-            if settings.get("links_enabled") and not is_vip:
+            from app.services.twitch_service import _permitted_users
+            if settings.get("links_enabled") and not is_vip and username.lower() not in _permitted_users:
                 if self.link_pattern.search(message):
-                    await self._apply_matrix_sanction('links', settings, message_id, username, user_id, broadcaster_id, client_id, token, "Lien non autorisé")
-                    return True
+                    # Whiteliste les clips Twitch (récompenses de chaîne)
+                    is_twitch_clip = bool(re.search(
+                        r'(clips\.twitch\.tv|twitch\.tv/\S+/clip/|twitch\.tv/clip/)',
+                        message, re.IGNORECASE
+                    ))
+                    if not is_twitch_clip:
+                        _permitted_users.discard(username.lower())
+                        await self._apply_matrix_sanction('links', settings, message_id, username, user_id, broadcaster_id, client_id, token, "Lien non autorisé")
+                        return True
 
             # 3. CAPS & SPAM (logique existante)
             return False

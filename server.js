@@ -487,9 +487,15 @@ app.post('/api/trigger', async (req, res) => {
 });
 
 app.get('/events', (req, res) => {
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
+    // 🛡️ Headers blindés pour les Server-Sent Events
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform', // no-transform empêche la compression (gzip) de casser le flux
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no' // Désactive les tampons des proxies ou box internet
+    });
+    res.flushHeaders(); // Force l'envoi immédiat pour valider la connexion
+
     const id = Date.now();
     clients.push({ id, res });
 
