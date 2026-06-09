@@ -349,13 +349,12 @@ async function startBrbLoop() {
         console.log(`[BRB] Clips chargés : ${brbClipsPool.length}`);
         
         if (brbClipsPool.length > 0) {
-            // 🚀 ON AJOUTE UN DÉLAI DE 2 SECONDES
-            // On laisse le temps à l'overlay de s'initialiser et de recevoir l'événement 'init'
-            console.log("[BRB] Préparation du premier clip dans 2 secondes...");
-            setTimeout(playNextBrbClip, 2000); 
+            console.log("🚀 [BRB] Lancement immédiat du premier clip !");
+            playNextBrbClip(); 
         } else {
             brbLoopActive = false;
         }
+
     } catch(e) {
         console.error("❌ [BRB] Échec récupération des clips :", e.message);
         brbLoopActive = false;

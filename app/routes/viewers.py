@@ -195,17 +195,22 @@ async def update_exp(request: Request, twitch_id: str = Form(...), amount: int =
 async def get_all_viewers():
     return await viewer_repo.get_all_viewers()
 
-@router.get("/api/viewers/{twitch_id}", response_model=ViewerResponse)
+@router.get("/api/viewers/{twitch_id}")
 async def get_viewer(twitch_id: str):
-    # 1. Va chercher le profil du viewer
     viewer = await viewer_repo.get_viewer(twitch_id)
     if not viewer:
         raise HTTPException(status_code=404, detail="Viewer non trouvé")
-    
-    # 2. Va chercher les deux historiques depuis les fonctions du repo
     viewer["daily_activity"] = await viewer_repo.get_daily_activity(twitch_id)
-    viewer["exp_history"] = await viewer_repo.get_exp_events(twitch_id)
+    viewer["exp_history"]    = await viewer_repo.get_exp_events(twitch_id)
+    return viewer
 
+@router.get("/api/v1/viewers/{twitch_id}")
+async def get_viewer_v1(twitch_id: str, username: str = None):
+    viewer = await viewer_repo.get_viewer(twitch_id)
+    if not viewer:
+        raise HTTPException(status_code=404, detail="Viewer non trouvé")
+    viewer["daily_activity"] = await viewer_repo.get_daily_activity(twitch_id)
+    viewer["exp_history"]    = await viewer_repo.get_exp_events(twitch_id)
     return viewer
 
 @router.post("/api/viewers/{twitch_id}/nickname")
