@@ -237,19 +237,19 @@ class MasthbotTwitch(commands.Bot):
         is_artist = ("artist-badge" in badges) or ("artist" in badges)
         is_live = bool(config.get('personal_last_live_id', ""))
 
-        if (is_vip or is_mod or is_artist) and str(message.author.id) not in self.role_checked_users:
-            try:
-                async with get_db_connection() as conn:
-                    if is_vip:
-                        await conn.execute("UPDATE viewers SET is_vip = 1 WHERE twitch_id = $1", (str(message.author.id),))
-                    if is_mod:
-                        await conn.execute("UPDATE viewers SET is_mod = 1 WHERE twitch_id = $1", (str(message.author.id),))
-                    if is_artist:
-                        await conn.execute("UPDATE viewers SET is_artist = 1 WHERE twitch_id = $1", (str(message.author.id),))
-                    
-                    self.role_checked_users.add(str(message.author.id))
-            except Exception as e:
-                logger.error(f"❌ [DB ERROR] Erreur d'enregistrement auto des badges : {e}")
+        # --- DÉBUT DE LA MODIFICATION ---
+        # 🛡️ Sécurité : on s'assure que le cache existe bien (au cas où il manquerait dans l'init)
+        if not hasattr(self, 'role_cache'):
+            self.role_cache = {}
+
+        # 🔄 SYNCHRONISATION INTELLIGENTE (Détecte les changements instantanément)
+        current_roles = (is_vip, is_mod, is_artist)
+        cached_roles = self.role_cache.get(str(message.author.id))
+
+        if cached_roles != current_roles:
+            await self.sync_user_roles(str(message.author.id), is_vip, is_mod, is_artist)
+            self.role_cache[str(message.author.id)] = current_roles
+        # --- FIN DE LA MODIFICATION ---
 
         if is_live:
             credits_service.add_watchtime(display_name, 0)
@@ -466,6 +466,22 @@ class MasthbotTwitch(commands.Bot):
                 await safe_send(message.channel, result["content"])
 
         await self.handle_commands(message)
+
+    async def sync_user_roles(self, twitch_id: str, is_vip: bool, is_mod: bool, is_artist: bool):
+        """Met à jour instantanément les rôles d'un utilisateur en base de données."""
+        try:
+            async with get_db_connection() as conn:
+                await conn.execute("""
+                    UPDATE viewers 
+                    SET is_vip = $1, is_mod = $2, is_artist = $3 
+                    WHERE twitch_id = $4
+                """, (int(is_vip), int(is_mod), int(is_artist), str(twitch_id)))
+                
+                # On l'ajoute au cache pour éviter que le chat re-vérifie juste après
+                self.role_checked_users.add(str(twitch_id))
+                logger.info(f"🔄 [API SYNC] Rôles synchronisés pour le Twitch ID {twitch_id}")
+        except Exception as e:
+            logger.error(f"❌ [DB ERROR] Erreur lors de sync_user_roles : {e}")
 
     async def _handle_helix_actions(self, reply, is_admin=False):
         if not is_admin:

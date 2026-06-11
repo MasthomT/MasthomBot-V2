@@ -6,6 +6,8 @@ from fastapi.templating import Jinja2Templates
 from app.repositories import viewer_repo
 from app.models.viewer import ViewerResponse
 from app.core.database import get_db_connection
+from app.services.twitch_service import twitch_bot
+
 
 logger = logging.getLogger("masthbot.viewers")
 router = APIRouter(tags=["viewers"])
@@ -197,9 +199,39 @@ async def get_all_viewers():
 
 @router.get("/api/viewers/{twitch_id}")
 async def get_viewer(twitch_id: str):
-    viewer = await viewer_repo.get_viewer(twitch_id)
+    # 1. On récupère d'abord le viewer en BDD (pour avoir son pseudo)
+    viewer = dict(await viewer_repo.get_viewer(twitch_id)) # On convertit en dict pour pouvoir le modifier
     if not viewer:
         raise HTTPException(status_code=404, detail="Viewer non trouvé")
+        
+    # 🔄 2. SYNCHRONISATION EN TEMPS RÉEL
+    try:
+        # On récupère le canal Twitch principal
+        channel_name = twitch_bot.initial_channels[0]
+        channel = twitch_bot.get_channel(channel_name)
+        
+        if channel:
+            # On cherche le viewer dans le t'chat en utilisant son pseudo
+            chatter = channel.get_chatter(viewer["username"].lower())
+            
+            if chatter:
+                # S'il est trouvé, on écrase la base de données avec ses badges actuels
+                is_artist = getattr(chatter, 'is_artist', False) # Sécurité pour l'attribut artist
+                await twitch_bot.sync_user_roles(
+                    twitch_id=twitch_id, 
+                    is_vip=chatter.is_vip, 
+                    is_mod=chatter.is_mod, 
+                    is_artist=is_artist
+                )
+                
+                # On met à jour l'objet qu'on va renvoyer au site web pour que le cadenas s'active tout de suite !
+                viewer["is_vip"] = int(chatter.is_vip)
+                viewer["is_mod"] = int(chatter.is_mod)
+                viewer["is_artist"] = int(is_artist)
+    except Exception as e:
+        print(f"⚠️ Erreur lors de la synchro API pour {viewer.get('username')}: {e}")
+
+    # 3. La suite de ton code d'origine...
     viewer["daily_activity"] = await viewer_repo.get_daily_activity(twitch_id)
     viewer["exp_history"]    = await viewer_repo.get_exp_events(twitch_id)
     return viewer
