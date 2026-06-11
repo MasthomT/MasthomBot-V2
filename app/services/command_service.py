@@ -229,21 +229,36 @@ async def handle_custom_command(
             follow_date_formatted = "?"
     else:
         # Utilisation de logger.warning pour signaler l'absence de donnée
-        logger.warning(f"⚠️ [DEBUG MYINFO] Aucune date de follow (None) trouvée pour {username}.")
+        #logger.warning(f"⚠️ [DEBUG MYINFO] Aucune date de follow (None) trouvée pour {username}.")
 
     # ==========================================
     # 1. TEXTE (Chat)
     # ==========================================
     chat_text = payload.get("text", "")
     if chat_text:
-        # On remplace d'abord nos nouvelles balises de temps
-        chat_text = chat_text.replace("{follow_date}", follow_date_formatted)
-        chat_text = chat_text.replace("{follow_years}", follow_years)
-        chat_text = chat_text.replace("{follow_months}", follow_months)
-        chat_text = chat_text.replace("{follow_days}", follow_days)
+        # 🎲 NOUVEAUTÉ : Tirage au sort si plusieurs phrases sont séparées par ||
+        if "||" in chat_text:
+            phrases = [p.strip() for p in chat_text.split("||") if p.strip()]
+            if phrases:
+                chat_text = random.choice(phrases)
+
+        # 🛡️ SÉCURITÉ : On s'assure que les variables sont en texte (Anti-Crash pour le Streamer)
+        fd_str = str(follow_date_formatted) if follow_date_formatted else "Inconnue"
+        fy_str = str(follow_years) if follow_years else "0"
+        fm_str = str(follow_months) if follow_months else "0"
+        fd_days = str(follow_days) if follow_days else "0"
+
+        # Remplacement sécurisé
+        chat_text = chat_text.replace("{follow_date}", fd_str)
+        chat_text = chat_text.replace("{follow_years}", fy_str)
+        chat_text = chat_text.replace("{follow_months}", fm_str)
+        chat_text = chat_text.replace("{follow_days}", fd_days)
         
-        # Puis on laisse ta fonction gérer le reste ({username}, {game}, {input}...)
+        # Et on résout le reste des variables ({username}, etc.)
         chat_text = await _resolve_variables(chat_text, username, vd, sd, user_input)
+        
+        # 🕵️‍♂️ Petit log de debug pour vérifier que le texte est bien généré
+        #logger.info(f"💬 Message texte généré : {chat_text}")
 
     # ==========================================
     # 2. IMAGE

@@ -46,6 +46,7 @@ class ViewerBase(BaseModel):
     favorite_food: Optional[str] = None
     favorite_drink: Optional[str] = None
     free_message: Optional[str] = None
+    bot_tone: Optional[str] = Field(None, description="La personnalité de Félix choisie par le viewer")
 
 class ViewerCreate(ViewerBase):
     """Schéma utilisé lors de la toute première détection d'un viewer."""

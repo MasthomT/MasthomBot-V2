@@ -85,28 +85,41 @@ async def update_viewer_context(request: Request):
         t_id = data.get("twitch_id")
         if not t_id:
             raise HTTPException(status_code=400, detail="ID Twitch manquant")
-
         async with get_db_connection() as conn:
+            c = await conn.execute("SELECT sub_months, is_vip, is_mod FROM viewers WHERE twitch_id = $1", (str(t_id),))
+            viewer_check = await c.fetchone()
+            
+            if not viewer_check:
+                raise HTTPException(status_code=404, detail="Viewer introuvable.")
+                
+            is_sub = viewer_check["sub_months"] and viewer_check["sub_months"] > 0
+            is_vip = viewer_check["is_vip"] == 1 or viewer_check["is_vip"] is True
+            is_mod = viewer_check["is_mod"] == 1 or viewer_check["is_mod"] is True
+            
+            if not (is_sub or is_vip or is_mod):
+                raise HTTPException(status_code=403, detail="Accès refusé : Fonctionnalité réservée aux abonnés, VIPs et Modérateurs.")
+
             await conn.execute("""
                 UPDATE viewers SET
                     nickname = $1, nickname_for_bot = $2, birthday = $3, sleep_pattern = $4,
                     pronouns = $5, vibe = $6, favorite_game = $7, comfort_game = $8,
                     signature_emote = $9, play_style = $10, useless_talent = $11,
                     favorite_feature = $12, favorite_food = $13, favorite_drink = $14,
-                    free_message = $15, roast_level = $16
-                WHERE twitch_id = $17
+                    free_message = $15, roast_level = $16, bot_tone = $17
+                WHERE twitch_id = $18
             """, (
                 data.get("nickname"), data.get("nickname_for_bot"), data.get("birthday"), data.get("sleep_pattern"),
                 data.get("pronouns"), data.get("vibe"), data.get("favorite_game"), data.get("comfort_game"),
                 data.get("signature_emote"), data.get("play_style"), data.get("useless_talent"),
                 data.get("favorite_feature"), data.get("favorite_food"), data.get("favorite_drink"),
-                data.get("free_message"), int(data.get("roast_level") or 5), str(t_id)
+                data.get("free_message"), int(data.get("roast_level") or 5), data.get("bot_tone"), str(t_id)
             ))
-
         return {"status": "success"}
-
     except Exception as e:
+        import logging
+        logger = logging.getLogger("masthbot")
         logger.error(f"❌ [API ERROR] Impossible de sauvegarder le contexte: {e}")
+        from fastapi.responses import JSONResponse
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 # ==========================================================

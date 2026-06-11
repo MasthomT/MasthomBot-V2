@@ -1,7 +1,7 @@
 import httpx
 
 # Remplace ceci par le vrai token de ton bot Discord
-DISCORD_BOT_TOKEN = "MTM5NDIzMjMwMjAzMjI1NzEwNg.GYbH7g.-hDgIpm8BzaDMwNRfFdFG9sDMDHXNIwgKqC3NI"
+DISCORD_BOT_TOKEN = "MTM5NDIzMjMwMjAzMjI1NzEwNg.GG6T-2.7UqHg6D9C_gQpLG48TFWtSUiXsAwMA8XWK885o"
 
 # La liste statique de tes salons
 CHANNELS_LIST = [
@@ -30,7 +30,8 @@ CHANNELS_LIST = [
     {"id": "1174249235928072202", "name": "BLABLA_STREAMERS", "category": "Streamers"},
     {"id": "1174249310246948875", "name": "ENTRAIDE", "category": "Streamers"},
     {"id": "1175022639908126770", "name": "PUB", "category": "Streamers"},
-    {"id": "1435674301490659458", "name": "COPAINS_EN_LIVE", "category": "Streamers"}
+    {"id": "1435674301490659458", "name": "COPAINS_EN_LIVE", "category": "Streamers"},
+    {"id": "1513892938600677446", "name": "FEL-X", "category": "Membres"}
 ]
 
 async def send_message_to_discord(channel_id: str, message: str) -> dict:

@@ -56,8 +56,30 @@ class CreditsService:
     def log_event(self, category, name, label=""):
         self._load_session()
         name_lower = name.lower()
+        
         if category in self.categories:
+            if name_lower in self.categories[category]:
+                # Additionner les gifts/bits/raiders au lieu d'écraser
+                existing = self.categories[category][name_lower]
+                if category in ("gifters", "bits"):
+                    try:
+                        old_val = int(str(existing.get("label", "0")).split()[0])
+                        new_val = int(str(label).split()[0])
+                        unit = " ".join(str(label).split()[1:]) if len(str(label).split()) > 1 else ""
+                        total = old_val + new_val
+                        label = f"{total} {unit}".strip()
+                    except (ValueError, IndexError):
+                        pass
+                elif category == "subscribers":
+                    try:
+                        old_months = int(str(existing.get("label", "1")))
+                        new_months = int(str(label))
+                        label = str(old_months + new_months)
+                    except (ValueError, TypeError):
+                        pass
+            
             self.categories[category][name_lower] = {"name": name, "label": label}
+            
         self.session_messages[name_lower] = self.session_messages.get(name_lower, 0) + 1
         self._save_session()
 

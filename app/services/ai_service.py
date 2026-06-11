@@ -4,6 +4,8 @@ from datetime import datetime
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 
+from app.routes.admin import VRAIS_TONS
+
 load_dotenv()
 
 def is_birthday_today(birthday_str: str) -> bool:
@@ -61,6 +63,11 @@ class AIService:
             # LIGNE DE DEBUG (si ça plante ici, c'est que l'indentation est décalée)
             print(f"DEBUG: Type de viewer_data reçu : {type(viewer_data)}")
             print(f"DEBUG: Contenu de viewer_data : {viewer_data}")
+
+            if viewer_data and viewer_data.get("bot_tone") and viewer_data["bot_tone"] in VRAIS_TONS:
+                ton_personnalise = VRAIS_TONS[viewer_data["bot_tone"]]
+                nickname_temp = viewer_data.get("nickname") or username
+                system_prompt = ton_personnalise + f"\n\nTu t'adresses à {nickname_temp}. Ignore ton ton habituel et reste STRICTEMENT dans ce personnage."
 
             # 1. Extraction des variables prioritaires
             nickname = viewer_data.get("nickname") or username

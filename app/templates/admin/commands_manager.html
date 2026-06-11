@@ -157,9 +157,14 @@
                     <p class="text-[10px] font-bold text-indigo-400 uppercase mb-1 border-b border-slate-700 pb-2"><i class="fas fa-layer-group"></i> Actions (Cumulables)</p>
                     
                     <div class="p-3 bg-slate-800/30 rounded-xl border border-slate-700/50">
-                        <label class="block text-[10px] font-bold text-blue-400 uppercase mb-2"><i class="fas fa-comment"></i> Réponse Chat</label>
-                        <textarea id="f-response-text" rows="2" class="w-full input-dark rounded-xl p-3 text-sm resize-none"
-                            placeholder="Texte envoyé dans le chat..." onfocus="activeField='f-response-text'"></textarea>
+                        <label class="flex justify-between items-center text-[10px] font-bold text-blue-400 uppercase mb-2">
+                            <span><i class="fas fa-comment"></i> Réponse Chat</span>
+                            <button type="button" onclick="addRandomPhrase()" class="bg-indigo-600/20 text-indigo-400 px-2 py-1 rounded hover:bg-indigo-600/40 transition cursor-pointer">
+                                <i class="fas fa-plus"></i> Ajouter une variante
+                            </button>
+                        </label>
+                        <textarea id="f-response-text" rows="3" class="w-full input-dark rounded-xl p-3 text-sm resize-none"
+                            placeholder="Ex: 👀 {username} part dans l'ombre..." onfocus="activeField='f-response-text'"></textarea>
                     </div>
 
                     <div class="grid grid-cols-2 gap-3">
@@ -879,6 +884,17 @@ async function saveCommand() {
     const data = await res.json();
     if (data.status === 'ok') { showToast(`Commande(s) sauvegardée(s) !`); closeModal(); loadCommands(); }
     else showToastErr(data.error || 'Erreur');
+}
+
+function addRandomPhrase() {
+    const el = document.getElementById('f-response-text');
+    // Si la case n'est pas vide et ne se termine pas déjà par le séparateur
+    if(el.value.trim().length > 0 && !el.value.endsWith(' || ')) {
+        el.value += '\n\n|| \n'; // Ajoute le séparateur proprement avec des retours à la ligne
+    } else if (el.value.trim().length === 0) {
+        el.value = '';
+    }
+    el.focus();
 }
 
 // ── Supprimer / Toggle ────────────────────────────────────────────────────────
