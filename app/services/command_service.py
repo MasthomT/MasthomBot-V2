@@ -229,7 +229,8 @@ async def handle_custom_command(
             follow_date_formatted = "?"
     else:
         # Utilisation de logger.warning pour signaler l'absence de donnée
-        #logger.warning(f"⚠️ [DEBUG MYINFO] Aucune date de follow (None) trouvée pour {username}.")
+        # logger.warning(f"⚠️ [DEBUG MYINFO] Aucune date de follow (None) trouvée pour {username}.")
+        pass # Le mot clé 'pass' permet de garder le bloc vide sans faire planter Python
 
     # ==========================================
     # 1. TEXTE (Chat)
