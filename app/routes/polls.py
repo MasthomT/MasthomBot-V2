@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from app.core.database import get_db_connection
 from app.services.notification_service import notification_service
+from app.routes.overlays import trigger_overlay_event
 
 # L'import vital pour envoyer les messages sur le salon SONDAGE
 from app.services.discord_service import send_message_to_discord 
@@ -138,6 +139,12 @@ async def create_poll(
             "INSERT INTO polls (question, option1, option2, option3, option4, is_active) VALUES ($1, $2, $3, $4, $5, 1)",
             (question, option1, option2, option3 or None, option4 or None),
         )
+
+    # 📺 DÉCLENCHEMENT DE L'OVERLAY OBS
+    try:
+        await trigger_overlay_event({"type": "show_poll"})
+    except Exception as e:
+        logger.error(f"❌ Erreur lors du lancement de l'overlay sondage : {e}")
 
     # Préparation du message Discord
     discord_msg = f"📢 **NOUVEAU SONDAGE EN DIRECT !**\n\n**Question :** {question}\n\n"

@@ -1,9 +1,9 @@
 import asyncio
+
 try:
     asyncio.get_running_loop()
 except RuntimeError:
     asyncio.set_event_loop(asyncio.new_event_loop())
-
 import subprocess
 import json
 import contextlib
@@ -25,6 +25,8 @@ from app.core.database import init_db, get_db_connection
 # --- IMPORT DES ROUTES ---
 from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes, admin_commands
 from app.routes.credits import router as credits_router
+from app.routes.premium import router as premium_router
+
 # --- IMPORT DES SERVICES ---
 from app.services.twitch_service import twitch_bot
 from app.services.live_monitor import check_twitch_lives_routine
@@ -160,6 +162,7 @@ app.include_router(api_deck.router)
 app.include_router(labels_routes.router)
 app.include_router(clips.router)
 app.include_router(admin_commands.router)
+app.include_router(premium_router)
 
 # ==========================================
 # ROUTES API : INFORMATIONS DE LA CHAÎNE (DASHBOARD ADMIN)
@@ -207,7 +210,7 @@ async def update_channel_info(info: ChannelInfoUpdate):
 # ==========================================
 @app.get("/api/felix/toggle")
 async def toggle_felix():
-    state_file = "/home/thomas/masthom/BOT_V2/felix_state.txt"
+    state_file = os.path.join(BASE_DIR, "felix_state.txt")
     actuel = False
     if os.path.exists(state_file):
         try:
@@ -243,8 +246,3 @@ if __name__ == "__main__":
     server = uvicorn.Server(config)
     loop = asyncio.get_event_loop()
     loop.run_until_complete(server.serve())
-
-@app.get("/debug_routes")
-def debug_routes():
-    # Liste toutes les routes actives dans ton API
-    return {"routes": [route.path for route in app.routes]}

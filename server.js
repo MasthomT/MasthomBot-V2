@@ -485,6 +485,16 @@ app.post('/api/trigger', async (req, res) => {
     }
 });
 
+app.post('/alerts', (req, res) => {
+    const { type, details } = req.body;
+    console.log(`[NODE] 📦 Colis reçu : ${type}`);
+    
+    // On retransmet simplement le colis à tous les clients connectés (l'overlay)
+    broadcast({ type: type, details: details });
+    
+    res.status(200).json({ status: "success" });
+});
+
 app.get('/events', (req, res) => {
     // 🛡️ Headers blindés pour les Server-Sent Events
     res.writeHead(200, {

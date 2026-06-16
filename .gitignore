@@ -41,3 +41,18 @@ npm-debug.log*
 *.log
 .DS_Store
 labels/*.txt
+
+# Dumps SQL et archives
+*.sql
+*.tar.gz
+*.tar.bz2
+
+# Fichiers d'état runtime
+felix_state.txt
+viewers.txt
+backup_log.txt
+data/
+
+# Binaires et paquets
+cloudflared
+*.deb

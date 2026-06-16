@@ -3,9 +3,14 @@ import sys
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 
-env_path = "/home/thomas/masthom/BOT_V2/.env"
+_THIS_FILE = os.path.abspath(__file__)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(_THIS_FILE)))
+env_path = os.path.join(BASE_DIR, ".env")
 load_dotenv(dotenv_path=env_path)
-DEEPL_API_KEY: str = os.getenv("DEEPL_API_KEY", "")
+
+#env_path = "/home/thomas/masthom/BOT_V2/.env"
+#load_dotenv(dotenv_path=env_path)
+#DEEPL_API_KEY: str = os.getenv("DEEPL_API_KEY", "")
 # =================================================================
 # 1. UTILITAIRE DE NETTOYAGE
 # =================================================================
@@ -22,10 +27,12 @@ def get_clean_env(key, default=None):
 # 2. CHEMINS SYSTÈME (FIX CRITIQUE)
 # =================================================================
 # Racine du projet (/home/thomas/masthom/BOT_V2)
-BASE_DIR = "/home/thomas/masthom/BOT_V2"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+#BASE_DIR = "/home/thomas/masthom/BOT_V2"
 
 # Dossiers pour les JSON
-DATA_DIR = "/home/thomas/masthom/BASE_JSON"
+DATA_DIR = os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
+#DATA_DIR = "/home/thomas/masthom/BASE_JSON"
 if not os.path.exists(DATA_DIR):
     os.makedirs(DATA_DIR, exist_ok=True)
 
@@ -39,7 +46,7 @@ class Settings(BaseSettings):
     DATA_DIR: str = DATA_DIR
     LOG_FILE_PATH: str = os.path.join(BASE_DIR, "app_bot.log")
     TWITCH_CHAT_LOG_FILE: str = os.path.join(BASE_DIR, "twitch_chat.log")
-    DEEPL_API_KEY: str = "f6e4778b-fa13-449c-8c98-4c32bfff2c76:fx"
+    DEEPL_API_KEY: str = get_clean_env("DEEPL_API_KEY", "")
 
     # --- FICHIERS JSON ---
     OVERLAY_CONFIG_FILE: str = os.path.join(DATA_DIR, "overlay_config.json")

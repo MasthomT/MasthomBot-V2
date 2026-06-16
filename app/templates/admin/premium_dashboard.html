@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Zone VIP Premium</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #6366f1; outline: none; box-shadow: 0 0 0 2px rgba(99,102,241,0.3); }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        
+        /* Toggle d'activation */
+        .toggle-checkbox:checked { right: 0; border-color: #10b981; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #10b981; }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen overflow-hidden">
+
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 md:p-10 overflow-y-auto custom-scrollbar h-screen">
+        
+        <header class="mb-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
+                    <i class="fas fa-crown text-amber-400"></i> Zone VIP Premium
+                </h1>
+                <p class="text-slate-400 mt-1">Gérez le Stream Deck et les effets de vos viewers Premium.</p>
+            </div>
+            <div id="status-toast" class="hidden px-4 py-2 rounded-lg font-bold text-sm shadow-lg transition-all"></div>
+        </header>
+
+        <div class="space-y-8">
+            
+            <div class="config-card p-6 md:p-8 rounded-3xl shadow-xl">
+                <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-6">
+                    <i class="fas fa-plus-circle text-indigo-400 text-lg"></i> Créer un nouveau bouton
+                </h2>
+                
+                <form id="addActionForm" onsubmit="submitNewAction(event)" enctype="multipart/form-data" class="grid grid-cols-1 xl:grid-cols-5 gap-6 items-end">
+                    
+                    <div class="xl:col-span-1">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-widest">Nom du bouton</label>
+                        <input type="text" name="name" required class="w-full input-dark rounded-xl p-3 text-sm" placeholder="Ex: Applaudissements">
+                    </div>
+                    
+                    <div class="xl:col-span-1">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-widest">Type d'action</label>
+                        <select name="action_type" id="addType" onchange="updateSourceField()" required class="w-full input-dark rounded-xl p-3 text-sm cursor-pointer">
+                            <option value="sound">🎵 Audio (.mp3)</option>
+                            <option value="video">🎬 Vidéo (.mp4)</option>
+                            <option value="obs_source">🎥 Source/Filtre OBS</option>
+                        </select>
+                    </div>
+
+                    <div class="xl:col-span-2" id="sourceContainer">
+                    </div>
+
+                    <div class="xl:col-span-1">
+                        <button type="submit" id="submitBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-3 rounded-xl shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 active:scale-95">
+                            <i class="fas fa-save"></i> ENREGISTRER
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div>
+                <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-6 ml-2">
+                    <i class="fas fa-grip text-indigo-400 text-lg"></i> Boutons Existants
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" id="actions-grid">
+                    <div class="text-slate-400 animate-pulse">Chargement des actions...</div>
+                </div>
+            </div>
+            
+        </div>
+    </main>
+
+    <script>
+        // 🔄 1. GESTION DYNAMIQUE DE LA ZONE SOURCE/FICHIER
+        async function updateSourceField() {
+            const type = document.getElementById('addType').value;
+            const container = document.getElementById('sourceContainer');
+            
+            if (type === 'obs_source') {
+                container.innerHTML = `
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-widest">Nom de la Source OBS</label>
+                    <input type="text" name="action_value" required class="w-full input-dark rounded-xl p-3 text-sm font-mono text-indigo-300" placeholder="Ex: Filtre_Zoom">
+                `;
+            } else {
+                container.innerHTML = `<div class="text-xs text-slate-400 mt-4"><i class="fas fa-spinner fa-spin"></i> Analyse de tes dossiers...</div>`;
+                
+                try {
+                    const res = await fetch(`/api/admin/premium/files/${type}`);
+                    const data = await res.json();
+                    
+                    let options = '<option value="">-- Ou choisis un fichier existant --</option>';
+                    if(data.status === 'success' && data.data.length > 0) {
+                        data.data.forEach(f => { options += `<option value="${f}">${f}</option>`; });
+                    }
+                    
+                    container.innerHTML = `
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-widest">Fichier ${type === 'sound' ? 'Audio' : 'Vidéo'}</label>
+                        <div class="flex flex-col sm:flex-row gap-3">
+                            <div class="flex-1 relative group">
+                                <input type="file" name="file" accept="${type === 'sound' ? '.mp3,.wav' : '.mp4,.webm'}" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onchange="document.getElementById('fileNameLabel').innerText = this.files[0].name; document.getElementById('uploadUI').classList.add('border-indigo-500', 'bg-indigo-900/20');">
+                                <div id="uploadUI" class="w-full input-dark rounded-xl p-3 text-sm flex items-center justify-center gap-2 group-hover:bg-slate-800 transition-colors border-dashed border-2 border-slate-600 h-full">
+                                    <i class="fas fa-cloud-upload-alt text-indigo-400"></i>
+                                    <span id="fileNameLabel" class="text-slate-400 truncate">Uploader du PC...</span>
+                                </div>
+                            </div>
+                            <span class="text-slate-500 flex items-center text-xs font-bold px-1 hidden sm:flex">OU</span>
+                            <select name="action_value" class="flex-1 input-dark rounded-xl p-3 text-sm cursor-pointer font-mono text-indigo-300">
+                                ${options}
+                            </select>
+                        </div>
+                    `;
+                } catch (e) {
+                    container.innerHTML = `<input type="text" name="action_value" required class="w-full input-dark rounded-xl p-3 text-sm" placeholder="Erreur de chargement...">`;
+                }
+            }
+        }
+
+        // 📤 2. ENVOI DU NOUVEAU BOUTON (AVEC FICHIER)
+        async function submitNewAction(event) {
+            event.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ENREGISTREMENT...';
+            btn.disabled = true;
+
+            const formElement = document.getElementById('addActionForm');
+            const formData = new FormData(formElement); // Capture tout : texte et fichier !
+
+            try {
+                const res = await fetch('/api/admin/premium/add', {
+                    method: 'POST',
+                    body: formData // On n'utilise pas JSON.stringify ici !
+                });
+                
+                const data = await res.json();
+                if (res.ok) {
+                    showToast(data.message, 'success');
+                    formElement.reset();
+                    updateSourceField(); // Reset de la zone dynamique
+                    loadActions(); // Rafraîchit la grille
+                } else {
+                    showToast(data.detail, 'error');
+                }
+            } catch (err) {
+                showToast('Erreur serveur', 'error');
+            } finally {
+                btn.innerHTML = '<i class="fas fa-save"></i> ENREGISTRER';
+                btn.disabled = false;
+            }
+        }
+
+        // 🔄 3. CHARGER LA GRILLE DES BOUTONS
+        async function loadActions() {
+            try {
+                const res = await fetch('/api/admin/premium/actions');
+                const data = await res.json();
+                if (data.status === 'success') { renderGrid(data.data); }
+            } catch (err) { showToast('Erreur de chargement', 'error'); }
+        }
+
+        // 🎨 4. AFFICHER LA GRILLE
+        function renderGrid(actions) {
+            const grid = document.getElementById('actions-grid');
+            grid.innerHTML = '';
+            
+            if (actions.length === 0) {
+                grid.innerHTML = '<p class="text-slate-500 italic">Aucun bouton configuré pour le moment.</p>';
+                return;
+            }
+
+            actions.forEach(action => {
+                const isChecked = action.is_active === 1 ? 'checked' : '';
+                const typeColor = action.action_type === 'sound' ? 'text-emerald-400' : (action.action_type === 'video' ? 'text-blue-400' : 'text-purple-400');
+                const typeLabel = action.action_type === 'sound' ? 'AUDIO' : (action.action_type === 'video' ? 'VIDÉO' : 'OBS');
+
+                // 🛡️ CORRECTION : On sécurise le texte pour éviter que les apostrophes ne fassent planter le Javascript
+                const safeValue = (action.action_value || '').replace(/"/g, '&quot;');
+
+                grid.innerHTML += `
+                    <div class="config-card rounded-2xl p-5 flex flex-col gap-4 shadow-lg hover:border-indigo-500/30 transition-colors">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-slate-900 flex items-center justify-center border border-slate-700">
+                                <i class="fas ${action.icon} ${typeColor} text-lg"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-slate-200 leading-tight">${action.name}</h3>
+                                <span class="text-[10px] font-black uppercase tracking-wider ${typeColor} bg-slate-900 px-2 py-0.5 rounded border border-slate-800">${typeLabel}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="text-[11px] text-slate-400 font-mono truncate bg-slate-900/50 p-2 rounded-lg border border-slate-800">
+                            Cible : <span class="text-indigo-300">${action.action_value}</span>
+                        </div>
+
+                        <div class="flex justify-between items-center mt-2 pt-4 border-t border-slate-700/50">
+                            <div class="flex items-center gap-2">
+                                <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                                    <input type="checkbox" id="toggle-${action.id}" ${isChecked} onchange="toggleStatus(${action.id}, this.checked)" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 z-10 top-0 left-0"/>
+                                    <label for="toggle-${action.id}" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-600 cursor-pointer transition-colors duration-300"></label>
+                                </div>
+                                <span class="text-xs font-bold text-slate-400">En ligne</span>
+                            </div>
+
+                            <button onclick="testAction(this.dataset.type, this.dataset.value)" data-type="${action.action_type}" data-value="${safeValue}" class="bg-indigo-600 hover:bg-indigo-500 text-white w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-lg shadow-indigo-500/30 active:scale-90" title="Tester sur OBS">
+                                <i class="fas fa-play text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // ⚡ 5. ACTIVER/DÉSACTIVER
+        async function toggleStatus(id, isChecked) {
+            const isActive = isChecked ? 1 : 0;
+            try {
+                const res = await fetch('/api/admin/premium/toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: id, is_active: isActive })
+                });
+                if (res.ok) { showToast('Disponibilité mise à jour !', 'success'); }
+            } catch (err) { showToast('Erreur serveur', 'error'); }
+        }
+
+        // 🎬 6. BOUTON PLAY (STREAMER)
+        async function testAction(type, value) {
+            try {
+                const res = await fetch('/api/admin/premium/trigger', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action_type: type, action_value: value })
+                });
+                if (res.ok) { showToast('🎬 Envoyé sur OBS !', 'success'); }
+            } catch (err) { showToast('Erreur serveur', 'error'); }
+        }
+
+        // 🔔 7. TOAST NOTIFICATIONS
+        function showToast(msg, type) {
+            const toast = document.getElementById('status-toast');
+            toast.textContent = msg;
+            toast.className = `px-4 py-2 rounded-lg font-bold text-sm text-white ${type === 'success' ? 'bg-emerald-500' : 'bg-rose-500'} shadow-lg`;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3000);
+        }
+
+        // 🚀 Lancement initial !
+        window.onload = () => {
+            loadActions();
+            updateSourceField(); // Initialise la vue de l'input selon le select
+        };
+    </script>
+</body>
+</html>

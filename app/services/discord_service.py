@@ -1,7 +1,13 @@
+import os
 import httpx
+from dotenv import load_dotenv
 
+load_dotenv()
 # Remplace ceci par le vrai token de ton bot Discord
-DISCORD_BOT_TOKEN = "MTM5NDIzMjMwMjAzMjI1NzEwNg.GG6T-2.7UqHg6D9C_gQpLG48TFWtSUiXsAwMA8XWK885o"
+DISCORD_BOT_TOKEN = os.getenv("DISCORD_TOKEN")
+
+if not DISCORD_BOT_TOKEN:
+    raise ValueError("❌ ERREUR : Le token DISCORD_TOKEN n'est pas défini dans le fichier .env !")
 
 # La liste statique de tes salons
 CHANNELS_LIST = [

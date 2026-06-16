@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # 7. On installe les librairies Node.js nécessaires pour ton server.js
-RUN npm install express cors || true
+RUN npm install express cors
 
 # 8. On indique que le bot communiquera sur les ports 8000 (Python) et 3005 (Node.js)
 EXPOSE 8000
