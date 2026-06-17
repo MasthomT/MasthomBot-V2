@@ -26,6 +26,7 @@ from app.core.database import init_db, get_db_connection
 from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes, admin_commands
 from app.routes.credits import router as credits_router
 from app.routes.premium import router as premium_router
+from app.routes.games import router as games_router, init_games_tables
 
 # --- IMPORT DES SERVICES ---
 from app.services.twitch_service import twitch_bot
@@ -34,6 +35,7 @@ from app.services.eventsub_service import eventsub_routine
 from app.services.unfollow_monitor import unfollow_monitor_routine
 from app.services.stats_service import update_time_loop, update_twitch_stats_loop
 from app.services.trophy_engine import start_trophy_engine
+from app.services.games_scheduler import games_scheduler_routine
 
 # --- IMPORT DES REPERTOIRES ---
 from app.repositories import viewer_repo
@@ -86,6 +88,7 @@ async def lifespan(app: FastAPI):
     # 1. Initialisation Database
     await init_db()
     await viewer_repo.init_tables()
+    await init_games_tables()
     logger.info("✅ [DATABASE] Tables PostgreSQL initialisées avec succès !")
 
     # 2. Lancement des services Twitch
@@ -96,6 +99,7 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(update_time_loop())
     asyncio.create_task(update_twitch_stats_loop())
     asyncio.create_task(start_trophy_engine())
+    asyncio.create_task(games_scheduler_routine())
 
     # 3. Lancement de l'overlay Node.js
     server_js_path = os.path.join(BASE_DIR, "server.js")
@@ -163,6 +167,7 @@ app.include_router(labels_routes.router)
 app.include_router(clips.router)
 app.include_router(admin_commands.router)
 app.include_router(premium_router)
+app.include_router(games_router)
 
 # ==========================================
 # ROUTES API : INFORMATIONS DE LA CHAÎNE (DASHBOARD ADMIN)
