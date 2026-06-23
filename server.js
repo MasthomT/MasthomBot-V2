@@ -135,7 +135,12 @@ obs.on('ConnectionClosed', () => {
 });
 
 app.get('/api/health', (req, res) => {
-    res.json({ obs_connected: obsConnected });
+    res.json({
+        obs_connected: obsConnected,
+        current_scene: currentScene,
+        brb_loop_active: brbLoopActive,
+        uptime_seconds: process.uptime(),
+    });
 });
 
 connectOBS();

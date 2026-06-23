@@ -780,13 +780,22 @@ class MasthbotTwitch(commands.Bot):
         """!showtiktok -> ressort la dernière vidéo TikTok connue sur l'overlay.
         !showtiktok <lien> -> affiche le TikTok du lien donné sur l'overlay.
         (Distinct de !tiktok, qui reste la commande personnalisée donnant le lien du réseau social.)"""
+        TIKTOK_REPLAY_REWARD_ID = "093cceb1-3c5e-4e8e-bc16-7f27ff6a2d2b"
+        reward_id = (ctx.message.tags or {}).get("custom-reward-id", "")
+        is_reward_redemption = reward_id == TIKTOK_REPLAY_REWARD_ID
+
         author_badges = ctx.author.badges or {}
-        is_authorized = (
-            ctx.author.is_mod
-            or ctx.author.is_broadcaster
-            or "moderator" in author_badges
+        is_owner = (
+            ctx.author.is_broadcaster
             or ctx.author.name.lower() == self.channel_name
+            or "broadcaster" in author_badges
+        )
+        is_authorized = (
+            is_owner
+            or ctx.author.is_mod
+            or "moderator" in author_badges
             or ctx.author.name.lower() == "felixthebigblackcat"
+            or is_reward_redemption  # viewer via récompense de points de chaîne TikTok Replay
         )
         if not is_authorized:
             logger.warning(f"⚠️ [TIKTOK] !showtiktok refusé pour {ctx.author.name} (is_mod={ctx.author.is_mod}, is_broadcaster={ctx.author.is_broadcaster}, badges={author_badges})")
@@ -802,16 +811,17 @@ class MasthbotTwitch(commands.Bot):
         message_template = (row["showtiktok_message"] if row else None) or "🎵 TikTok affiché à l'écran ! — {title} {url}"
         channel_tiktok_username = (row["tiktok_username"] if row else "") or ""
 
-        # Le propriétaire de la chaîne peut afficher n'importe quel TikTok ; les modérateurs
-        # (et le bot felixthebigblackcat) sont limités au compte TikTok configuré pour la chaîne.
-        is_owner = ctx.author.is_broadcaster or ctx.author.name.lower() == self.channel_name
+        logger.info(
+            f"[TIKTOK] is_owner={is_owner} is_reward={is_reward_redemption} | name={ctx.author.name!r} "
+            f"| channel_name={self.channel_name!r} | content={content!r}"
+        )
 
         from app.services.tiktok_monitor import get_last_known_tiktok, get_direct_tiktok_video
         from app.routes.overlays import register_tiktok_proxy
 
         # Si du texte suit la commande mais que ce n'est pas un lien TikTok (ex: une récompense
-        # de points de chaîne qui laisse passer le message tapé par le viewer), on ne traite
-        # pas ça comme une erreur — on affiche simplement le dernier TikTok de la chaîne.
+        # de points de chaîne qui laisse passer le message tapé par le viewer), on affiche
+        # simplement le dernier TikTok de la chaîne.
         candidate = content.strip().split()[0] if content and content.strip() else None
         source_url = candidate if candidate and "tiktok.com" in candidate.lower() else None
 
@@ -821,10 +831,15 @@ class MasthbotTwitch(commands.Bot):
                 return await ctx.send("❌ Aucune vidéo TikTok connue pour le moment.")
             source_url = last["url"]
 
+        logger.info(f"[TIKTOK] Téléchargement en cours : {source_url}")
         video = await get_direct_tiktok_video(source_url)
         if not video:
+            logger.error(f"[TIKTOK] Échec download pour {source_url}")
             return await ctx.send("❌ Impossible de récupérer cette vidéo TikTok. Vérifie le lien !")
 
+        logger.info(f"[TIKTOK] Vidéo OK : uploader={video.get('uploader')!r} filepath={video.get('filepath')!r}")
+
+        # Les mods/viewers (récompense) sont limités au compte TikTok de la chaîne.
         if not is_owner and channel_tiktok_username and video.get("uploader") != channel_tiktok_username.lower():
             try:
                 os.remove(video["filepath"])
@@ -834,6 +849,7 @@ class MasthbotTwitch(commands.Bot):
 
         token = register_tiktok_proxy(video["filepath"])
         await trigger_overlay_event({"type": "show_tiktok", "url": f"/api/v1/tiktok_proxy/{token}"})
+        logger.info(f"[TIKTOK] Overlay déclenché avec token={token}")
 
         reply = message_template.replace("{title}", video["title"]).replace("{url}", source_url)
         await safe_send(ctx.channel, reply)

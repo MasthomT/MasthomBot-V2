@@ -209,12 +209,20 @@ def _download_video(url: str) -> dict | None:
     yt-dlp seul sait satisfaire. Le fichier téléchargé est ensuite servi via /api/v1/tiktok_proxy."""
     file_id = uuid.uuid4().hex
     outtmpl = os.path.join(TIKTOK_DOWNLOAD_DIR, f"{file_id}.%(ext)s")
-    ydl_opts = {"quiet": True, "no_warnings": True, "noprogress": True, "format": "best", "outtmpl": outtmpl}
+    # OBS Browser Source (Chromium embarqué) ne supporte pas H.265/HEVC — on force H.264.
+    ydl_opts = {"quiet": True, "no_warnings": True, "noprogress": True,
+                "format": "bestvideo[vcodec^=h264]+bestaudio/bestvideo[vcodec^=avc]+bestaudio/best[vcodec^=h264]/best",
+                "outtmpl": outtmpl}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
         filepath = ydl.prepare_filename(info)
         if not os.path.exists(filepath):
-            return None
+            # yt-dlp may have remuxed to a different extension — find the file by id prefix
+            import glob
+            candidates = glob.glob(os.path.join(TIKTOK_DOWNLOAD_DIR, f"{file_id}.*"))
+            if not candidates:
+                return None
+            filepath = candidates[0]
         return {
             "filepath": filepath,
             "title": info.get("title") or "Vidéo TikTok",

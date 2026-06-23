@@ -9,6 +9,8 @@
     <style>
         body { background-color: #0f172a; color: #e2e8f0; }
         .config-card { background-color: #1e293b; border: 1px solid #334155; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
 
         .status-pill { display: inline-flex; align-items: center; gap: 8px; font-size: 0.8rem; font-weight: 800; padding: 6px 14px; border-radius: 999px; }
         .status-pill.online { background: rgba(52,211,153,0.12); color: #34d399; }
@@ -17,9 +19,21 @@
         .status-pill.online::before { animation: pulse-dot 1.5s infinite; }
         @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-        .health-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem; padding: 2rem; text-align: center; }
-        .health-icon { font-size: 2rem; opacity: 0.8; }
-        .health-label { font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; }
+        .health-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.6rem; padding: 1.75rem; text-align: center; }
+        .health-icon { font-size: 1.8rem; opacity: 0.85; }
+        .health-label { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; }
+        .health-detail { font-size: 0.7rem; color: #64748b; }
+
+        .mini-badge { font-size: 0.6rem; font-weight: 800; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .mini-badge.on { background: rgba(52,211,153,0.12); color: #34d399; }
+        .mini-badge.off { background: rgba(100,116,139,0.15); color: #64748b; }
+
+        .info-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #1e293b; font-size: 0.8rem; }
+        .info-row:last-child { border-bottom: none; }
+        .info-row .k { color: #94a3b8; }
+        .info-row .v { color: #fff; font-weight: 700; }
+
+        .section-title { font-size: 0.7rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: #818cf8; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px; }
     </style>
 </head>
 <body class="font-sans antialiased flex min-h-screen overflow-hidden">
@@ -30,47 +44,86 @@
         <header class="mb-8 flex items-center justify-between">
             <div>
                 <h1 class="text-3xl font-extrabold text-white tracking-tight">🩺 Santé du bot</h1>
-                <p class="text-slate-400 mt-1">État des connexions en temps réel, sans avoir à fouiller les logs.</p>
+                <p class="text-slate-400 mt-1">État complet des connexions et modules, en temps réel.</p>
             </div>
             <span id="lastRefresh" class="text-[10px] font-bold text-slate-600 uppercase tracking-widest"></span>
         </header>
 
+        <!-- CONNEXIONS PRINCIPALES -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <div class="config-card health-card rounded-3xl shadow-2xl">
                 <i class="fab fa-twitch health-icon text-[#9146FF]"></i>
                 <div class="health-label">Twitch</div>
                 <span id="twitch-status" class="status-pill offline">Vérification...</span>
+                <div class="health-detail" id="twitch-detail">—</div>
             </div>
             <div class="config-card health-card rounded-3xl shadow-2xl">
                 <i class="fab fa-discord health-icon text-[#5865F2]"></i>
                 <div class="health-label">Discord</div>
                 <span id="discord-status" class="status-pill offline">Vérification...</span>
+                <div class="health-detail" id="discord-detail">—</div>
             </div>
             <div class="config-card health-card rounded-3xl shadow-2xl">
                 <i class="fas fa-video health-icon text-indigo-400"></i>
                 <div class="health-label">OBS</div>
                 <span id="obs-status" class="status-pill offline">Vérification...</span>
+                <div class="health-detail" id="obs-detail">—</div>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- PROCESS / SERVEUR -->
             <div class="config-card p-6 rounded-3xl shadow-2xl">
-                <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-3">
-                    <i class="fab fa-youtube text-rose-500"></i> Dernière vérif YouTube
-                </h2>
-                <div id="youtube-last-check" class="text-sm text-slate-300">—</div>
+                <h2 class="section-title"><i class="fas fa-microchip"></i> Process & Serveur</h2>
+                <div class="info-row"><span class="k">Uptime du bot</span><span class="v" id="process-uptime">—</span></div>
+                <div class="info-row"><span class="k">Mémoire utilisée</span><span class="v" id="process-memory">—</span></div>
+                <div class="info-row"><span class="k">Overlay Node.js</span><span class="v" id="overlay-status">—</span></div>
+                <div class="info-row"><span class="k">Uptime overlay</span><span class="v" id="overlay-uptime">—</span></div>
+                <div class="info-row"><span class="k">Base de données</span><span class="v" id="db-status">—</span></div>
             </div>
+
+            <!-- BASE DE DONNÉES -->
             <div class="config-card p-6 rounded-3xl shadow-2xl">
-                <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-3">
-                    <i class="fab fa-tiktok text-slate-300"></i> Dernière vérif TikTok
-                </h2>
-                <div id="tiktok-last-check" class="text-sm text-slate-300">—</div>
+                <h2 class="section-title"><i class="fas fa-database"></i> Contenu en base</h2>
+                <div class="info-row"><span class="k">Viewers</span><span class="v" id="count-viewers">—</span></div>
+                <div class="info-row"><span class="k">Partenaires</span><span class="v" id="count-partners">—</span></div>
+                <div class="info-row"><span class="k">Roues de la fortune</span><span class="v" id="count-wheels">—</span></div>
+                <div class="info-row"><span class="k">Commandes perso</span><span class="v" id="count-custom_commands">—</span></div>
+                <div class="info-row"><span class="k">Trophées</span><span class="v" id="count-trophies">—</span></div>
+                <div class="info-row"><span class="k">Avertissements Discord</span><span class="v" id="count-discord_warnings">—</span></div>
             </div>
+
+            <!-- DERNIER CRASH -->
             <div class="config-card p-6 rounded-3xl shadow-2xl">
-                <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-3">
-                    <i class="fas fa-skull-crossbones text-rose-500"></i> Dernier crash
-                </h2>
+                <h2 class="section-title"><i class="fas fa-skull-crossbones"></i> Dernier crash</h2>
                 <div id="last-crash" class="text-sm text-slate-300">Aucun crash connu 🎉</div>
+            </div>
+
+            <!-- YOUTUBE -->
+            <div class="config-card p-6 rounded-3xl shadow-2xl">
+                <h2 class="section-title"><i class="fab fa-youtube"></i> YouTube</h2>
+                <div class="info-row"><span class="k">Activé</span><span id="yt-enabled" class="mini-badge off">—</span></div>
+                <div class="info-row"><span class="k">Chaîne configurée</span><span id="yt-configured" class="mini-badge off">—</span></div>
+                <div class="info-row"><span class="k">Dernière vérif</span><span class="v" id="youtube-last-check">—</span></div>
+            </div>
+
+            <!-- TIKTOK -->
+            <div class="config-card p-6 rounded-3xl shadow-2xl">
+                <h2 class="section-title"><i class="fab fa-tiktok"></i> TikTok</h2>
+                <div class="info-row"><span class="k">Notifications activées</span><span id="tt-enabled" class="mini-badge off">—</span></div>
+                <div class="info-row"><span class="k">Compte suivi</span><span class="v" id="tt-username">—</span></div>
+                <div class="info-row"><span class="k">!showtiktok</span><span id="tt-command-enabled" class="mini-badge off">—</span></div>
+                <div class="info-row"><span class="k">Dernière vérif</span><span class="v" id="tiktok-last-check">—</span></div>
+            </div>
+
+            <!-- MODULES DISCORD -->
+            <div class="config-card p-6 rounded-3xl shadow-2xl">
+                <h2 class="section-title"><i class="fas fa-shield-halved"></i> Modules Discord</h2>
+                <div class="info-row"><span class="k">Portail règlement</span><span id="mod-gate" class="mini-badge off">—</span></div>
+                <div class="info-row"><span class="k">Anniversaires</span><span id="mod-bday" class="mini-badge off">—</span></div>
+                <div class="info-row"><span class="k">Bienvenue (salon)</span><span id="mod-welcome-channel" class="mini-badge off">—</span></div>
+                <div class="info-row"><span class="k">Bienvenue (DM)</span><span id="mod-welcome-dm" class="mini-badge off">—</span></div>
             </div>
         </div>
     </main>
@@ -91,18 +144,62 @@
             el.textContent = isOnline ? 'Connecté' : 'Déconnecté';
         }
 
+        function setBadge(id, isOn, onLabel = 'Activé', offLabel = 'Désactivé') {
+            const el = document.getElementById(id);
+            el.className = 'mini-badge ' + (isOn ? 'on' : 'off');
+            el.textContent = isOn ? onLabel : offLabel;
+        }
+
         async function loadHealth() {
             try {
                 const res = await fetch('/admin/api/bot_health');
                 const data = await res.json();
 
+                // Connexions principales
                 setPill('twitch-status', data.twitch_connected);
+                document.getElementById('twitch-detail').textContent = data.twitch_channel ? `#${data.twitch_channel}` : '—';
+
                 setPill('discord-status', data.discord_connected);
+                document.getElementById('discord-detail').textContent = data.discord_connected
+                    ? `${data.discord_guild_name || '—'}${data.discord_member_count ? ' · ' + data.discord_member_count + ' membres' : ''}${data.discord_latency_ms ? ' · ' + data.discord_latency_ms + 'ms' : ''}`
+                    : '—';
+
                 setPill('obs-status', data.obs_connected);
+                document.getElementById('obs-detail').textContent = data.obs_connected
+                    ? `Scène : ${data.obs_scene || '—'}${data.obs_brb_active ? ' (BRB actif)' : ''}`
+                    : (data.overlay_node_reachable ? 'Overlay joignable, OBS fermé' : 'Overlay Node injoignable');
 
+                // Process / serveur
+                document.getElementById('process-uptime').textContent = data.process_uptime || '—';
+                document.getElementById('process-memory').textContent = data.process_memory_mb ? `${data.process_memory_mb} Mo` : '—';
+                document.getElementById('overlay-status').textContent = data.overlay_node_reachable ? '✅ Joignable' : '❌ Injoignable';
+                document.getElementById('overlay-uptime').textContent = data.overlay_node_uptime || '—';
+                document.getElementById('db-status').textContent = data.db_connected ? '✅ Connectée' : '❌ Erreur';
+
+                // Comptes en base
+                const counts = data.db_counts || {};
+                for (const key of ['viewers', 'partners', 'wheels', 'custom_commands', 'trophies', 'discord_warnings']) {
+                    const el = document.getElementById('count-' + key);
+                    if (el) el.textContent = (counts[key] ?? '—');
+                }
+
+                // YouTube / TikTok
                 document.getElementById('youtube-last-check').textContent = formatDate(data.last_youtube_check);
-                document.getElementById('tiktok-last-check').textContent = formatDate(data.last_tiktok_check);
+                setBadge('yt-enabled', data.youtube_enabled);
+                setBadge('yt-configured', data.youtube_channel_configured, 'Oui', 'Manquante');
 
+                document.getElementById('tiktok-last-check').textContent = formatDate(data.last_tiktok_check);
+                setBadge('tt-enabled', data.tiktok_enabled);
+                document.getElementById('tt-username').textContent = data.tiktok_username ? `@${data.tiktok_username}` : '—';
+                setBadge('tt-command-enabled', data.showtiktok_command_enabled);
+
+                // Modules Discord
+                setBadge('mod-gate', data.discord_gate_enabled);
+                setBadge('mod-bday', data.discord_birthdays_enabled);
+                setBadge('mod-welcome-channel', data.discord_welcome_channel_enabled);
+                setBadge('mod-welcome-dm', data.discord_welcome_dm_enabled);
+
+                // Crash
                 if (data.last_crash_at) {
                     document.getElementById('last-crash').innerHTML =
                         `<span class="text-rose-400 font-bold">${formatDate(data.last_crash_at)}</span><br><span class="text-xs text-slate-500">${data.last_crash_note || ''}</span>`;

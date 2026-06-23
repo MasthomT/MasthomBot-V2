@@ -78,7 +78,7 @@
                 hideCleanupTimer = null;
             }
             video.src = url;
-            video.play().catch(err => console.error(err));
+            video.play().catch(err => console.error('TikTok play error:', err));
         }
 
         // L'affichage ne dure QUE le temps réel de la vidéo : apparition une fois chargée,
