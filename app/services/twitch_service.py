@@ -277,6 +277,7 @@ class MasthbotTwitch(commands.Bot):
                 credits_service.log_event("chatters", display_name)
 
         if not is_mod:
+            reward_id = message.tags.get('custom-reward-id') if message.tags else None
             violation = await moderation_service.process_message(
                 message_id=message.id,
                 message=message.content,
@@ -285,7 +286,8 @@ class MasthbotTwitch(commands.Bot):
                 broadcaster_id=self.broadcaster_id,
                 client_id=self._http.client_id,
                 token=self.master_token,
-                is_vip=is_vip
+                is_vip=is_vip,
+                reward_id=reward_id
             )
             if violation:
                 return 
@@ -807,10 +809,13 @@ class MasthbotTwitch(commands.Bot):
         from app.services.tiktok_monitor import get_last_known_tiktok, get_direct_tiktok_video
         from app.routes.overlays import register_tiktok_proxy
 
-        source_url = None
-        if content and content.strip():
-            source_url = content.strip().split()[0]
-        else:
+        # Si du texte suit la commande mais que ce n'est pas un lien TikTok (ex: une récompense
+        # de points de chaîne qui laisse passer le message tapé par le viewer), on ne traite
+        # pas ça comme une erreur — on affiche simplement le dernier TikTok de la chaîne.
+        candidate = content.strip().split()[0] if content and content.strip() else None
+        source_url = candidate if candidate and "tiktok.com" in candidate.lower() else None
+
+        if not source_url:
             last = await get_last_known_tiktok()
             if not last:
                 return await ctx.send("❌ Aucune vidéo TikTok connue pour le moment.")

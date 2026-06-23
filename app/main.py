@@ -8,16 +8,14 @@ import subprocess
 import json
 import contextlib
 import os
-import httpx
 import logging
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
 
 # --- IMPORT CORE ---
 from app.core.config import settings
@@ -39,7 +37,7 @@ from slowapi.errors import RateLimitExceeded
 from app.core.rate_limit import limiter
 
 # --- IMPORT DES ROUTES ---
-from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes, partners, admin_commands
+from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes, partners, admin_commands, wheel
 from app.routes.credits import router as credits_router
 from app.routes.premium import router as premium_router
 from app.routes.games import router as games_router, init_games_tables
@@ -69,6 +67,7 @@ from app.services.bot_health_service import (
     check_for_previous_crash_and_alert,
     clear_crash_marker,
 )
+from app.services.wheel_service import init_wheel_tables
 
 # --- IMPORT DES REPERTOIRES ---
 from app.repositories import viewer_repo
@@ -127,6 +126,7 @@ async def lifespan(app: FastAPI):
     await init_felixdle_tables()
     await init_discord_mod_tables()
     await init_bot_health_table()
+    await init_wheel_tables()
     logger.info("✅ [DATABASE] Tables PostgreSQL initialisées avec succès !")
 
     # 1.5 Détection d'un crash précédent (alerte Discord si le process n'a pas été arrêté proprement)
@@ -237,29 +237,15 @@ app.include_router(felixdle_public_router)
 app.include_router(felixdle_admin_router)
 app.include_router(admin_discord_mod_router)
 app.include_router(partners.router)
+app.include_router(wheel.router)
 
 # ==========================================
 # ROUTES API : INFORMATIONS DE LA CHAÎNE (DASHBOARD ADMIN)
 # ==========================================
-@app.get("/api/v1/channel-info")
-async def get_channel_info():
-    async with get_db_connection() as conn:
-        cursor = await conn.execute("SELECT * FROM channel_info WHERE id=1")
-        row = await cursor.fetchone()
-        
-        if not row:
-            return {"error": "Infos introuvables"}
-            
-        return {
-            "about_text": row["about_text"],
-            "social_discord": row["social_discord"],
-            "social_youtube": row["social_youtube"],
-            "social_twitch": row["social_twitch"],
-            "social_tiktok": row["social_tiktok"],
-            "social_tips": row["social_tips"],
-            "rules": json.loads(row["rules_json"]),
-            "schedule": json.loads(row["schedule_json"])
-        }
+# NOTE : GET /api/v1/channel-info vivait ici en double avec app/routes/api.py (même route).
+# Cette version-ci était silencieusement morte (routeur api.py enregistré avant ce fichier),
+# mais c'était la SEULE des deux à renvoyer `rules` — ce que l'admin (admin/channel.html)
+# utilise pour afficher le règlement. Fusionné dans api.py, supprimé d'ici.
 
 @app.post("/api/v1/channel-info")
 async def update_channel_info(info: ChannelInfoUpdate):

@@ -7,7 +7,6 @@ chaîne (`/feeds/videos.xml?channel_id=...`) — pas de scraping fragile ici.
 
 import asyncio
 import logging
-import re
 from datetime import datetime, timezone
 import xml.etree.ElementTree as ET
 

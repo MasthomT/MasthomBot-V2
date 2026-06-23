@@ -1,11 +1,10 @@
 import logging
 
-from fastapi import APIRouter, Depends, Request, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from app.core.database import get_db_connection
 from app.services.credits_service import credits_service
-import json
 
 from app.services.twitch_service import twitch_bot
 from app.core.security import require_admin
@@ -24,15 +23,6 @@ async def admin_credits_page(request: Request):
         context={"request": request, "config": credits_service.config}
     )
 
-@router.get("/overlay/credits", response_class=HTMLResponse)
-async def overlay_credits_page(request: Request):
-    """L'overlay pour OBS."""
-    # ✅ FIX : Pareil ici pour l'overlay
-    return templates.TemplateResponse(
-        request=request,
-        name="overlays/credits.html", 
-        context={"request": request}
-    )
 
 @router.get("/api/credits/data")
 async def get_credits_data():

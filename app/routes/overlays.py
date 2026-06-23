@@ -165,6 +165,21 @@ def register_tiktok_proxy(filepath: str) -> str:
         except OSError:
             pass
 
+    # Nettoyage par âge de fichier (et pas seulement via le cache mémoire) : un redémarrage
+    # du service vide TIKTOK_PROXY_CACHE sans jamais supprimer les fichiers déjà sur disque,
+    # qui s'accumuleraient sinon indéfiniment dans /tmp.
+    try:
+        download_dir = os.path.dirname(filepath)
+        for fname in os.listdir(download_dir):
+            fpath = os.path.join(download_dir, fname)
+            if os.path.isfile(fpath) and (now - os.path.getmtime(fpath)) > TIKTOK_PROXY_TTL:
+                try:
+                    os.remove(fpath)
+                except OSError:
+                    pass
+    except OSError:
+        pass
+
     token = uuid.uuid4().hex
     TIKTOK_PROXY_CACHE[token] = {"filepath": filepath, "expires": now + TIKTOK_PROXY_TTL}
     return token

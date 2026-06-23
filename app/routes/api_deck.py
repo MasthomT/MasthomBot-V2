@@ -42,10 +42,6 @@ async def deck_page2(request: Request):
 async def deck_page3(request: Request):
     return templates.TemplateResponse(request=request, name="deck_page3.html")
 
-@router.get("/overlay_deck", response_class=HTMLResponse)
-async def deck_overlay_page(request: Request):
-    return templates.TemplateResponse(request=request, name="overlay_deck.html")
-
 # 🎵 LA ROUTE MAGIQUE POUR AUTORISER OBS À LIRE LES SONS
 @router.get("/static/uploads/{file_name}")
 async def serve_upload(file_name: str):

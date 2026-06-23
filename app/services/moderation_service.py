@@ -10,9 +10,14 @@ from app.core.config import settings
 from app.services.discord_service import send_message_to_discord
 
 logger = logging.getLogger("masthbot.moderation")
-WHITELISTED_REWARD_IDS = {
-    "6b4dc3d4-537b-4faa-a1cf-409de3e26224",  # On matte le clip de...
-    "07ba86ad-1c62-4056-99ab-23d37a2ac231",  # Replay
+
+# Récompenses de points de chaîne où poster un lien est ATTENDU (pas une infraction) — mais
+# seulement si le lien correspond bien à la plateforme prévue pour cette récompense précise.
+# Un lien d'une autre plateforme dans le message de redemption reste sanctionné normalement.
+REWARD_LINK_RULES = {
+    "6b4dc3d4-537b-4faa-a1cf-409de3e26224": ("twitch.tv",),          # On matte le clip de...
+    "07ba86ad-1c62-4056-99ab-23d37a2ac231": ("twitch.tv",),          # Replay
+    "093cceb1-3c5e-4e8e-bc16-7f27ff6a2d2b": ("tiktok.com",),         # TikTok Replay
 }
 
 class ModerationService:
@@ -47,7 +52,7 @@ class ModerationService:
         except Exception as e:
             logger.error(f"❌ [MODERATION] Échec envoi log salon modération : {e}")
 
-    async def process_message(self, message_id, message, username, user_id, broadcaster_id, client_id, token, is_vip=False):
+    async def process_message(self, message_id, message, username, user_id, broadcaster_id, client_id, token, is_vip=False, reward_id=None):
         try:
             async with get_db_connection() as conn:
                 c1 = await conn.execute("SELECT * FROM moderation_settings WHERE id=1")
@@ -71,6 +76,14 @@ class ModerationService:
             from app.services.twitch_service import _permitted_users
             if settings.get("links_enabled") and not is_vip and username.lower() not in _permitted_users:
                 if self.link_pattern.search(message):
+                    # Récompense de points de chaîne qui ATTEND un lien (ex: "TikTok Replay") :
+                    # pas de sanction si le lien correspond bien à la plateforme prévue pour
+                    # cette récompense précise — sinon (ex: lien YouTube dans "TikTok Replay"),
+                    # on retombe sur la modération normale ci-dessous.
+                    allowed_domains = REWARD_LINK_RULES.get(reward_id) if reward_id else None
+                    if allowed_domains and any(d in text_lower for d in allowed_domains):
+                        return False
+
                     # Whiteliste les clips Twitch (récompenses de chaîne)
                     is_twitch_clip = bool(re.search(
                         r'(clips\.twitch\.tv|twitch\.tv/\S+/clip/|twitch\.tv/clip/)',

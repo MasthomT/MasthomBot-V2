@@ -94,7 +94,9 @@ class PostgresCursorWrapper:
         upper_fixed = self.sql.upper()
         # Ici, on utilise *self.params pour envoyer les arguments proprement à asyncpg
         first_word = upper_fixed.lstrip().split()[0] if upper_fixed.strip() else ""
-        if first_word in ["INSERT", "UPDATE", "DELETE", "ALTER", "CREATE", "DROP"]:
+        # ⚠️ "RETURNING ..." sur un INSERT/UPDATE/DELETE doit passer par .fetch() (pas .execute())
+        # sinon les lignes renvoyées sont silencieusement perdues et fetchone()/fetchall() renvoient rien.
+        if first_word in ["INSERT", "UPDATE", "DELETE", "ALTER", "CREATE", "DROP"] and "RETURNING" not in upper_fixed:
             await self.conn.execute(fixed_sql, *self.params)
             self._results = []
         else:

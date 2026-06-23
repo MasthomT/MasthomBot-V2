@@ -65,7 +65,7 @@
 					<i class="fas fa-terminal w-5"></i>
 					Commandes
 				</a>
-				<a href="/admin/discord/" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if request.url.path.startswith('/admin/discord/') %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+				<a href="/admin/discord" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if request.url.path in ['/admin/discord', '/admin/discord.html'] %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fab fa-discord w-5"></i>
 					Messagerie Fel-X
 				</a>
@@ -95,6 +95,10 @@
 				<a href="/admin/shoutout" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'shoutout' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fas fa-broadcast-tower w-5"></i>
 					Régie & Shoutout
+				</a>
+				<a href="/admin/wheels" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'wheel' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+					<i class="fas fa-dharmachakra w-5"></i>
+					Roues de la Fortune
 				</a>
 				<a href="/admin/credits_manager" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'credit' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fas fa-film w-5"></i>

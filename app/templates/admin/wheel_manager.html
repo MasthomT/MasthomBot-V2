@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roues de la Fortune - MasthomBot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #6366f1; outline: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .item-row input[type="color"] { -webkit-appearance: none; border: none; width: 32px; height: 32px; border-radius: 8px; padding: 0; cursor: pointer; background: transparent; }
+        .item-row input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        .item-row input[type="color"]::-webkit-color-swatch { border-radius: 8px; border: 1px solid #334155; }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen overflow-hidden">
+
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 md:p-10 overflow-y-auto custom-scrollbar h-screen">
+        <header class="mb-8 flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">🎡 Roues de la Fortune</h1>
+                <p class="text-slate-400 mt-1">Crée autant de roues que tu veux, chacune avec sa propre source navigateur OBS.</p>
+            </div>
+            <button onclick="openCreateModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-black px-6 py-3 rounded-2xl shadow-xl transition-all active:scale-95 text-sm uppercase tracking-wider">
+                <i class="fas fa-plus"></i> Nouvelle roue
+            </button>
+        </header>
+
+        <div id="status-toast" class="hidden mb-6 p-3 rounded-xl text-[10px] font-bold text-center uppercase tracking-widest"></div>
+
+        <div id="wheels-grid" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6"></div>
+        <div id="empty-state" class="hidden config-card p-16 rounded-3xl text-center opacity-40 mt-6">
+            <i class="fas fa-dharmachakra text-5xl mb-4 text-slate-500 block"></i>
+            <p class="text-slate-400 font-bold">Aucune roue pour le moment — crées-en une !</p>
+        </div>
+    </main>
+
+    <!-- MODAL CRÉATION / ÉDITION -->
+    <div id="modal" class="fixed inset-0 bg-black/75 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+        <div class="config-card rounded-3xl shadow-2xl w-full max-w-2xl p-8 border border-slate-600 max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <div class="flex items-center justify-between mb-6">
+                <h2 id="modal-title" class="text-xl font-black text-white italic">Nouvelle roue</h2>
+                <button onclick="closeModal()" class="w-9 h-9 rounded-xl bg-slate-700 text-slate-400 hover:text-white hover:bg-slate-600 transition-all flex items-center justify-center">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="space-y-5">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Nom de la roue</label>
+                    <input type="text" id="wheel-name" class="w-full input-dark rounded-xl p-3 text-sm font-bold" placeholder="ex: Roue des jeux">
+                </div>
+
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase">Segments (minimum 2)</label>
+                        <div class="flex items-center gap-3">
+                            <button onclick="equalizeChances()" class="text-slate-400 hover:text-slate-200 text-xs font-bold">
+                                <i class="fas fa-balance-scale"></i> Égaliser
+                            </button>
+                            <button onclick="addItemRow()" class="text-indigo-400 hover:text-indigo-300 text-xs font-bold">
+                                <i class="fas fa-plus"></i> Ajouter un segment
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-[10px] text-slate-600 italic mb-2">La taille des parts sur la roue reste égale visuellement — le chiffre à droite de chaque ligne règle la vraie chance de tomber dessus (la roue peut être "truquée" sans que ça se voie).</p>
+                    <div id="items-list" class="space-y-2"></div>
+                </div>
+
+                <button onclick="saveWheel()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-3.5 rounded-2xl shadow-lg transition-all">
+                    <i class="fas fa-save"></i> ENREGISTRER
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const PRESET_COLORS = ['#9146ff', '#f43f5e', '#34d399', '#fbbf24', '#60a5fa', '#f472b6', '#fb923c', '#22d3ee'];
+        let editingWheelId = null;
+        let wheels = [];
+
+        function showToast(msg, isError) {
+            const t = document.getElementById('status-toast');
+            t.textContent = msg;
+            t.className = `mb-6 p-3 rounded-xl text-[10px] font-bold text-center uppercase tracking-widest ${
+                isError ? 'bg-rose-500/10 border border-rose-500/20 text-rose-400' : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+            }`;
+            t.classList.remove('hidden');
+            setTimeout(() => t.classList.add('hidden'), 3000);
+        }
+
+        function addItemRow(label = '', color = null, weight = 1) {
+            const list = document.getElementById('items-list');
+            const idx = list.children.length;
+            const c = color || PRESET_COLORS[idx % PRESET_COLORS.length];
+            const row = document.createElement('div');
+            row.className = 'item-row flex items-center gap-2';
+            row.innerHTML = `
+                <input type="color" value="${c}" class="item-color">
+                <input type="text" value="${escapeHtml(label)}" placeholder="Libellé du segment" class="item-label flex-1 input-dark rounded-lg p-2.5 text-sm">
+                <input type="number" value="${weight}" min="0.1" step="0.1" title="Chance relative de ce segment" oninput="recalcPercentages()" class="item-weight w-16 input-dark rounded-lg p-2.5 text-sm text-center">
+                <span class="item-pct w-12 text-right text-[11px] font-black text-indigo-400 shrink-0"></span>
+                <button onclick="this.parentElement.remove(); recalcPercentages();" class="text-rose-500/70 hover:text-rose-500 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-rose-500/10 transition-all">
+                    <i class="fas fa-trash text-xs"></i>
+                </button>`;
+            list.appendChild(row);
+            recalcPercentages();
+        }
+
+        function recalcPercentages() {
+            const rows = document.querySelectorAll('#items-list .item-row');
+            const weights = Array.from(rows).map(r => parseFloat(r.querySelector('.item-weight').value) || 0);
+            const total = weights.reduce((a, b) => a + b, 0);
+            rows.forEach((r, i) => {
+                const pct = total > 0 ? (weights[i] / total * 100) : 0;
+                r.querySelector('.item-pct').textContent = pct.toFixed(1) + '%';
+            });
+        }
+
+        function equalizeChances() {
+            const rows = document.querySelectorAll('#items-list .item-row');
+            rows.forEach(r => { r.querySelector('.item-weight').value = 1; });
+            recalcPercentages();
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str || '';
+            return div.innerHTML;
+        }
+
+        function openCreateModal() {
+            editingWheelId = null;
+            document.getElementById('modal-title').textContent = 'Nouvelle roue';
+            document.getElementById('wheel-name').value = '';
+            document.getElementById('items-list').innerHTML = '';
+            addItemRow(); addItemRow();
+            document.getElementById('modal').classList.remove('hidden');
+            document.getElementById('modal').classList.add('flex');
+        }
+
+        function openEditModal(wheel) {
+            editingWheelId = wheel.id;
+            document.getElementById('modal-title').textContent = `Modifier "${wheel.name}"`;
+            document.getElementById('wheel-name').value = wheel.name;
+            document.getElementById('items-list').innerHTML = '';
+            (wheel.items || []).forEach(it => addItemRow(it.label, it.color, it.weight));
+            document.getElementById('modal').classList.remove('hidden');
+            document.getElementById('modal').classList.add('flex');
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.add('hidden');
+            document.getElementById('modal').classList.remove('flex');
+        }
+
+        async function saveWheel() {
+            const name = document.getElementById('wheel-name').value.trim();
+            if (!name) { showToast('❌ Donne un nom à la roue', true); return; }
+
+            const rows = document.querySelectorAll('#items-list .item-row');
+            const items = Array.from(rows).map(r => ({
+                label: r.querySelector('.item-label').value.trim(),
+                color: r.querySelector('.item-color').value,
+                weight: parseFloat(r.querySelector('.item-weight').value) || 1
+            })).filter(it => it.label);
+
+            if (items.length < 2) { showToast('❌ Il faut au moins 2 segments remplis', true); return; }
+
+            try {
+                const url = editingWheelId ? `/admin/api/wheels/${editingWheelId}` : '/admin/api/wheels';
+                const method = editingWheelId ? 'PUT' : 'POST';
+                const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, items }) });
+                if (res.ok) {
+                    showToast('✅ Roue enregistrée !');
+                    closeModal();
+                    loadWheels();
+                } else {
+                    const data = await res.json();
+                    showToast('❌ ' + (data.detail || 'Erreur'), true);
+                }
+            } catch (e) {
+                showToast('❌ Erreur de connexion', true);
+            }
+        }
+
+        async function deleteWheel(id) {
+            if (!confirm('Supprimer cette roue définitivement ?')) return;
+            const res = await fetch(`/admin/api/wheels/${id}`, { method: 'DELETE' });
+            if (res.ok) { showToast('🗑️ Roue supprimée'); loadWheels(); }
+        }
+
+        async function spinWheel(id) {
+            try {
+                const res = await fetch(`/admin/api/wheels/${id}/spin`, { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast(`🎉 Résultat : ${data.winner.label}`);
+                } else {
+                    showToast('❌ ' + (data.detail || 'Erreur'), true);
+                }
+            } catch (e) {
+                showToast('❌ Erreur de connexion', true);
+            }
+        }
+
+        function copyOverlayUrl(id) {
+            const url = `${window.location.origin}/overlay/wheel/${id}`;
+
+            // navigator.clipboard exige un contexte sécurisé (HTTPS) — sur un accès HTTP simple
+            // au Pi (réseau local), l'API est absente/bloquée et échoue silencieusement. Repli
+            // sur la technique classique du textarea + execCommand, qui fonctionne partout.
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(url)
+                    .then(() => showToast('🔗 URL copiée — ajoute-la comme source navigateur dans OBS'))
+                    .catch(() => fallbackCopy(url));
+            } else {
+                fallbackCopy(url);
+            }
+        }
+
+        function fallbackCopy(text) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            try {
+                const ok = document.execCommand('copy');
+                showToast(ok ? '🔗 URL copiée — ajoute-la comme source navigateur dans OBS' : '❌ Copie impossible, voici le lien :', !ok);
+                if (!ok) prompt('Copie ce lien manuellement :', text);
+            } catch (e) {
+                prompt('Copie ce lien manuellement :', text);
+            }
+            document.body.removeChild(textarea);
+        }
+
+        function renderWheelCard(wheel) {
+            const colors = (wheel.items || []).map(it => it.color).join(', ');
+            const gradient = (wheel.items || []).length > 0
+                ? `conic-gradient(${(wheel.items || []).map((it, i) => `${it.color} ${i * 100 / wheel.items.length}% ${(i + 1) * 100 / wheel.items.length}%`).join(', ')})`
+                : '#334155';
+
+            return `
+                <div class="config-card p-6 rounded-3xl shadow-2xl space-y-4">
+                    <div class="flex items-center gap-4">
+                        <div class="w-16 h-16 rounded-full shrink-0 border-2 border-slate-700" style="background: ${gradient}"></div>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-black text-white text-lg truncate">${escapeHtml(wheel.name)}</div>
+                            <div class="text-xs text-slate-500">${(wheel.items || []).length} segments</div>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5">
+                        ${(() => {
+                            const items = wheel.items || [];
+                            const totalWeight = items.reduce((a, it) => a + (parseFloat(it.weight) || 1), 0);
+                            return items.slice(0, 6).map(it => {
+                                const pct = totalWeight > 0 ? ((parseFloat(it.weight) || 1) / totalWeight * 100).toFixed(0) : 0;
+                                return `<span class="text-[10px] font-bold px-2 py-1 rounded-lg" style="background:${it.color}22; color:${it.color}">${escapeHtml(it.label)} · ${pct}%</span>`;
+                            }).join('');
+                        })()}
+                        ${(wheel.items || []).length > 6 ? `<span class="text-[10px] text-slate-500 px-2 py-1">+${wheel.items.length - 6}</span>` : ''}
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="spinWheel(${wheel.id})" class="col-span-2 bg-indigo-600 hover:bg-indigo-500 text-white font-black py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all active:scale-95">
+                            <i class="fas fa-dharmachakra"></i> Lancer
+                        </button>
+                        <button onclick="copyOverlayUrl(${wheel.id})" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs transition-all">
+                            <i class="fas fa-link"></i> URL OBS
+                        </button>
+                        <button onclick='openEditModal(${JSON.stringify(wheel).replace(/'/g, "&apos;")})' class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs transition-all">
+                            <i class="fas fa-pen"></i> Modifier
+                        </button>
+                    </div>
+                    <button onclick="deleteWheel(${wheel.id})" class="w-full text-rose-500/70 hover:text-rose-500 text-[10px] font-bold uppercase tracking-wider transition-all">
+                        Supprimer la roue
+                    </button>
+                </div>`;
+        }
+
+        async function loadWheels() {
+            try {
+                const res = await fetch('/admin/api/wheels');
+                const data = await res.json();
+                wheels = data.wheels || [];
+                const grid = document.getElementById('wheels-grid');
+                const empty = document.getElementById('empty-state');
+                if (wheels.length === 0) {
+                    grid.innerHTML = '';
+                    empty.classList.remove('hidden');
+                } else {
+                    empty.classList.add('hidden');
+                    grid.innerHTML = wheels.map(renderWheelCard).join('');
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        loadWheels();
+    </script>
+</body>
+</html>

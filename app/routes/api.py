@@ -147,51 +147,11 @@ async def update_viewer_context(request: Request):
 # ==========================================================
 # 4. SONDAGES
 # ==========================================================
-@router.get("/poll/active")
-async def get_active_poll_api(twitch_id: str = None):
-    async with get_db_connection() as conn:
-        cpoll = await conn.execute("SELECT * FROM polls WHERE is_active = 1 ORDER BY id DESC LIMIT 1")
-        poll = await cpoll.fetchone()
-        if not poll:
-            return {"active": False}
-
-        poll_dict = dict(poll)
-        cvotes = await conn.execute(
-            "SELECT option_index, COUNT(*) as count FROM poll_votes WHERE poll_id = $1 GROUP BY option_index",
-            (poll_dict['id'],)
-        )
-        votes = await cvotes.fetchall()
-
-        results = {"1": 0, "2": 0, "3": 0, "4": 0}
-        total_votes = 0
-        for v in votes:
-            results[str(v['option_index'])] = v['count']
-            total_votes += v['count']
-
-        user_vote = None
-        if twitch_id:
-            cuv = await conn.execute(
-                "SELECT option_index FROM poll_votes WHERE poll_id = $1 AND twitch_id = $2",
-                (poll_dict['id'], str(twitch_id))
-            )
-            uv = await cuv.fetchone()
-            if uv:
-                user_vote = str(uv['option_index'])
-
-        return {
-            "active": True,
-            "id": poll_dict['id'],
-            "question": poll_dict['question'],
-            "options": {
-                "1": poll_dict['option1'],
-                "2": poll_dict['option2'],
-                "3": poll_dict['option3'],
-                "4": poll_dict['option4']
-            },
-            "results": results,
-            "total_votes": total_votes,
-            "user_vote": user_vote
-        }
+# NOTE : GET /poll/active vivait ici en double avec app/routes/polls.py (route identique
+# /api/v1/poll/active). Cette version-ci gagnait silencieusement (routeur enregistré plus tôt
+# dans main.py) mais ne renvoyait pas `voters`, alors que polls_faq.html et admin/polls.html
+# en ont besoin pour afficher qui a voté — ce qui cassait l'affichage des votants en direct.
+# Supprimée au profit de l'unique implémentation dans polls.py.
 
 @router.post("/poll/vote")
 async def submit_vote_api(request: Request):
@@ -343,6 +303,10 @@ async def api_get_channel_info():
             schedule = json.loads(info.get("schedule_json") or "[]")
         except Exception:
             schedule = []
+        try:
+            rules = json.loads(info.get("rules_json") or "[]")
+        except Exception:
+            rules = []
 
         return {
             "about_text": info.get("about_text", ""),
@@ -351,5 +315,6 @@ async def api_get_channel_info():
             "social_twitch": info.get("social_twitch", ""),
             "social_tiktok": info.get("social_tiktok", ""),
             "social_tips": info.get("social_tips", ""),
+            "rules": rules,
             "schedule": schedule
         }
