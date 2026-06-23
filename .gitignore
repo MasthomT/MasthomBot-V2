@@ -56,3 +56,4 @@ data/
 # Binaires et paquets
 cloudflared
 *.deb
+.github/workflows/
