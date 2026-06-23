@@ -51,8 +51,13 @@ async def log_stream_event(event_type, username, details):
     except Exception as e:
         logger.error(f"❌ [DB EVENT ERROR] : {e}")
 
+ALLOWED_STAT_COLUMNS = {"sub_months", "gifts_count", "bits_count", "rewards_claimed"}
+
 async def update_viewer_stat(user_id, username, stat_column, value, increment=True):
     if not user_id or not username: return
+    if stat_column not in ALLOWED_STAT_COLUMNS:
+        logger.error(f"❌ [DB STAT ERROR] Colonne non autorisée : {stat_column}")
+        return
     try:
         async with get_db_connection() as conn:
             if increment:
@@ -131,206 +136,223 @@ async def eventsub_routine():
                 return
             broadcaster_id = data["data"][0]["id"]
 
-        async with session.ws_connect("wss://eventsub.wss.twitch.tv/ws") as ws:
-            logger.info("📡 [WebSocket] Connexion établie. Écoute du direct lancée...")
-            async for msg in ws:
-                if msg.type == aiohttp.WSMsgType.TEXT:
-                    data = json.loads(msg.data)
-                    msg_type = data.get("metadata", {}).get("message_type")
-                    msg_id = data.get("metadata", {}).get("message_id")
+        ws_url = "wss://eventsub.wss.twitch.tv/ws"
+        already_subscribed = False  # un session_reconnect garde les abonnements existants, pas besoin de les recréer
 
-                    if msg_id:
-                        if msg_id in processed_message_ids: continue
-                        processed_message_ids.append(msg_id)
+        while True:
+            reconnect_to = None
+            async with session.ws_connect(ws_url) as ws:
+                logger.info("📡 [WebSocket] Connexion établie. Écoute du direct lancée...")
+                async for msg in ws:
+                    if msg.type == aiohttp.WSMsgType.TEXT:
+                        data = json.loads(msg.data)
+                        msg_type = data.get("metadata", {}).get("message_type")
+                        msg_id = data.get("metadata", {}).get("message_id")
 
-                    if msg_type == "session_welcome":
-                        ws_id = data["payload"]["session"]["id"]
-                        logger.info(f"🆔 Session EventSub validée : {ws_id}")
-                        c_broad = {"broadcaster_user_id": broadcaster_id}
-                        c_raid = {"to_broadcaster_user_id": broadcaster_id}
-                        c_mod = {"broadcaster_user_id": broadcaster_id, "moderator_user_id": broadcaster_id}
+                        if msg_id:
+                            if msg_id in processed_message_ids: continue
+                            processed_message_ids.append(msg_id)
 
-                        await subscribe_to_event(session, client_id, token, ws_id, "channel.subscribe", "1", c_broad)
-                        await subscribe_to_event(session, client_id, token, ws_id, "channel.subscription.message", "1", c_broad)
-                        await subscribe_to_event(session, client_id, token, ws_id, "channel.subscription.gift", "1", c_broad)
-                        await subscribe_to_event(session, client_id, token, ws_id, "channel.raid", "1", c_raid)
-                        await subscribe_to_event(session, client_id, token, ws_id, "channel.cheer", "1", c_broad)
-                        await subscribe_to_event(session, client_id, token, ws_id, "channel.follow", "2", c_mod)
-                        await subscribe_to_event(session, client_id, token, ws_id, "channel.ban", "1", c_broad)
-                        await subscribe_to_event(session, client_id, token, ws_id, "channel.channel_points_custom_reward_redemption.add", "1", c_broad)
-                        await subscribe_to_event(session, client_id, token, ws_id, "channel.poll.begin", "1", c_broad)
-                        await subscribe_to_event(session, client_id, token, ws_id, "channel.poll.progress", "1", c_broad)
-                        await subscribe_to_event(session, client_id, token, ws_id, "channel.poll.end", "1", c_broad)
-                        await subscribe_to_event(session, client_id, token, ws_id, "channel.prediction.begin", "1", c_broad)
-                        await subscribe_to_event(session, client_id, token, ws_id, "channel.prediction.progress", "1", c_broad)
-                        await subscribe_to_event(session, client_id, token, ws_id, "channel.prediction.end", "1", c_broad)
+                        if msg_type == "session_welcome":
+                            ws_id = data["payload"]["session"]["id"]
+                            logger.info(f"🆔 Session EventSub validée : {ws_id}")
 
-                    elif msg_type == "notification":
-                        sub_type = data["metadata"]["subscription_type"]
-                        event = data["payload"]["event"]
-                        conf = await get_current_xp_settings()
+                            if not already_subscribed:
+                                c_broad = {"broadcaster_user_id": broadcaster_id}
+                                c_raid = {"to_broadcaster_user_id": broadcaster_id}
+                                c_mod = {"broadcaster_user_id": broadcaster_id, "moderator_user_id": broadcaster_id}
 
-                        if sub_type in ["channel.subscribe", "channel.subscription.message"]:
-                            user_name = event.get("user_name", "Inconnu")
-                            user_id = event.get("user_id")
-                            tier = event.get("tier", "1000")[0] 
-                            
-                            cumulative_months = event.get("cumulative_months", 1)
-                            await update_viewer_stat(user_id, user_name, "sub_months", cumulative_months, increment=False)
-                            
-                            from app.services.label_service import write_label
-                            write_label("dernier_sub.txt", f"{user_name} | {cumulative_months} mois")
-                            
-                            if not event.get("is_gift"):
-                                xp = int(conf.get(f"exp_sub_t{tier}") or 500)
-                                await viewer_repo.add_experience(user_id, user_name, xp, "SUB", f"Abonnement Tier {tier}")
-                                await log_stream_event("sub", user_name, {"tier": tier, "xp": xp, "is_gift": False})
-                                # CORRECTION ICI :
-                                credits_service.log_event("subscribers", user_name, str(cumulative_months))
+                                await subscribe_to_event(session, client_id, token, ws_id, "channel.subscribe", "1", c_broad)
+                                await subscribe_to_event(session, client_id, token, ws_id, "channel.subscription.message", "1", c_broad)
+                                await subscribe_to_event(session, client_id, token, ws_id, "channel.subscription.gift", "1", c_broad)
+                                await subscribe_to_event(session, client_id, token, ws_id, "channel.raid", "1", c_raid)
+                                await subscribe_to_event(session, client_id, token, ws_id, "channel.cheer", "1", c_broad)
+                                await subscribe_to_event(session, client_id, token, ws_id, "channel.follow", "2", c_mod)
+                                await subscribe_to_event(session, client_id, token, ws_id, "channel.ban", "1", c_broad)
+                                await subscribe_to_event(session, client_id, token, ws_id, "channel.channel_points_custom_reward_redemption.add", "1", c_broad)
+                                await subscribe_to_event(session, client_id, token, ws_id, "channel.poll.begin", "1", c_broad)
+                                await subscribe_to_event(session, client_id, token, ws_id, "channel.poll.progress", "1", c_broad)
+                                await subscribe_to_event(session, client_id, token, ws_id, "channel.poll.end", "1", c_broad)
+                                await subscribe_to_event(session, client_id, token, ws_id, "channel.prediction.begin", "1", c_broad)
+                                await subscribe_to_event(session, client_id, token, ws_id, "channel.prediction.progress", "1", c_broad)
+                                await subscribe_to_event(session, client_id, token, ws_id, "channel.prediction.end", "1", c_broad)
+                                already_subscribed = True
                             else:
-                                await log_stream_event("sub", user_name, {"tier": tier, "is_gift": True})
-                                # CORRECTION ICI :
-                                credits_service.log_event("subscribers", user_name, str(cumulative_months))
+                                logger.info("🔄 Reconnexion EventSub terminée — abonnements déjà actifs, pas de resouscription.")
 
-                        elif sub_type == "channel.subscription.gift":
-                            if not event.get("is_anonymous"):
-                                user_name = event.get("user_name", "Anonyme")
+                        elif msg_type == "notification":
+                            sub_type = data["metadata"]["subscription_type"]
+                            event = data["payload"]["event"]
+                            conf = await get_current_xp_settings()
+
+                            if sub_type in ["channel.subscribe", "channel.subscription.message"]:
+                                user_name = event.get("user_name", "Inconnu")
                                 user_id = event.get("user_id")
-                                count = int(event.get("total", 1))
-                                tier = event.get("tier", "1000")[0]
-                                val_per_sub = int(conf.get(f"exp_subgift_t{tier}") or 500)
-                                total_xp = val_per_sub * count
+                                tier = event.get("tier", "1000")[0] 
+                            
+                                cumulative_months = event.get("cumulative_months", 1)
+                                await update_viewer_stat(user_id, user_name, "sub_months", cumulative_months, increment=False)
+                            
+                                from app.services.label_service import write_label
+                                write_label("dernier_sub.txt", f"{user_name} | {cumulative_months} mois")
+                            
+                                if not event.get("is_gift"):
+                                    xp = int(conf.get(f"exp_sub_t{tier}") or 500)
+                                    await viewer_repo.add_experience(user_id, user_name, xp, "SUB", f"Abonnement Tier {tier}")
+                                    await log_stream_event("sub", user_name, {"tier": tier, "xp": xp, "is_gift": False})
+                                    # CORRECTION ICI :
+                                    credits_service.log_event("subscribers", user_name, str(cumulative_months))
+                                else:
+                                    await log_stream_event("sub", user_name, {"tier": tier, "is_gift": True})
+                                    # CORRECTION ICI :
+                                    credits_service.log_event("subscribers", user_name, str(cumulative_months))
+
+                            elif sub_type == "channel.subscription.gift":
+                                if not event.get("is_anonymous"):
+                                    user_name = event.get("user_name", "Anonyme")
+                                    user_id = event.get("user_id")
+                                    count = int(event.get("total", 1))
+                                    tier = event.get("tier", "1000")[0]
+                                    val_per_sub = int(conf.get(f"exp_subgift_t{tier}") or 500)
+                                    total_xp = val_per_sub * count
+
+                                    from app.services.label_service import write_label
+                                    write_label("dernier_subgift.txt", f"{user_name} | {count} subs")
+
+                                    await update_viewer_stat(user_id, user_name, "gifts_count", count, increment=True)
+
+                                    credits_service.log_event("gifters", user_name, f"{count} Subs offerts")
+                                    await viewer_repo.add_experience(user_id, user_name, total_xp, "SUBGIFT", f"Offre {count} Subs Tier {tier}")
+                                    await log_stream_event("subgift", user_name, {"count": count, "tier": tier, "xp": total_xp})
+
+                            elif sub_type == "channel.raid":
+                                raider_name = event.get("from_broadcaster_user_name", "Inconnu")
+                                raider_id = event.get("from_broadcaster_user_id")
+                                v_count = int(event.get("viewers", 0))
+                                xp_per_head = int(conf.get("exp_raid_per_viewer") or 10)
+                                total_xp = v_count * xp_per_head
 
                                 from app.services.label_service import write_label
-                                write_label("dernier_subgift.txt", f"{user_name} | {count} subs")
+                                write_label("dernier_raid.txt", f"{raider_name} | {v_count} viewers")
 
-                                await update_viewer_stat(user_id, user_name, "gifts_count", count, increment=True)
+                                if raider_id:
+                                    await viewer_repo.add_experience(raider_id, raider_name, total_xp, "RAID", f"Raid de {v_count} personnes")
+                                await log_stream_event("raid", raider_name, {"viewers": v_count, "xp": total_xp})
+                                credits_service.log_event("raiders", raider_name, f"{v_count} Viewers")
 
-                                credits_service.log_event("gifters", user_name, f"{count} Subs offerts")
-                                await viewer_repo.add_experience(user_id, user_name, total_xp, "SUBGIFT", f"Offre {count} Subs Tier {tier}")
-                                await log_stream_event("subgift", user_name, {"count": count, "tier": tier, "xp": total_xp})
+                            elif sub_type == "channel.cheer":
+                                is_anon = event.get("is_anonymous", False)
+                                user_name = "Anonyme" if is_anon else event.get("user_name", "Anonyme")
+                                user_id = event.get("user_id")
+                                bits = int(event.get("bits", 0))
+                                total_xp = bits * 5
 
-                        elif sub_type == "channel.raid":
-                            raider_name = event.get("from_broadcaster_user_name", "Inconnu")
-                            raider_id = event.get("from_broadcaster_user_id")
-                            v_count = int(event.get("viewers", 0))
-                            xp_per_head = int(conf.get("exp_raid_per_viewer") or 10)
-                            total_xp = v_count * xp_per_head
+                                from app.services.label_service import write_label
+                                write_label("dernier_bits.txt", f"{user_name} | {bits} bits")
 
-                            from app.services.label_service import write_label
-                            write_label("dernier_raid.txt", f"{raider_name} | {v_count} viewers")
+                                if not is_anon and user_id:
+                                    await update_viewer_stat(user_id, user_name, "bits_count", bits, increment=True)
+                                    await viewer_repo.add_experience(user_id, user_name, total_xp, "CHEER", f"Don de {bits} bits")
 
-                            if raider_id:
-                                await viewer_repo.add_experience(raider_id, raider_name, total_xp, "RAID", f"Raid de {v_count} personnes")
-                            await log_stream_event("raid", raider_name, {"viewers": v_count, "xp": total_xp})
-                            credits_service.log_event("raiders", raider_name, f"{v_count} Viewers")
+                                await log_stream_event("cheer", user_name, {"bits": bits, "xp_gained": total_xp})
+                                credits_service.log_event("bits", user_name, f"{bits} Bits")
 
-                        elif sub_type == "channel.cheer":
-                            is_anon = event.get("is_anonymous", False)
-                            user_name = "Anonyme" if is_anon else event.get("user_name", "Anonyme")
-                            user_id = event.get("user_id")
-                            bits = int(event.get("bits", 0))
-                            total_xp = bits * 5
-
-                            from app.services.label_service import write_label
-                            write_label("dernier_bits.txt", f"{user_name} | {bits} bits")
-
-                            if not is_anon and user_id:
-                                await update_viewer_stat(user_id, user_name, "bits_count", bits, increment=True)
-                                await viewer_repo.add_experience(user_id, user_name, total_xp, "CHEER", f"Don de {bits} bits")
-
-                            await log_stream_event("cheer", user_name, {"bits": bits, "xp_gained": total_xp})
-                            credits_service.log_event("bits", user_name, f"{bits} Bits")
-
-                        elif sub_type == "channel.channel_points_custom_reward_redemption.add":
-                            user_name = event.get("user_name", "Inconnu")
-                            user_id = event.get("user_id")
-                            reward_title = event.get("reward", {}).get("title", "Inconnue")
+                            elif sub_type == "channel.channel_points_custom_reward_redemption.add":
+                                user_name = event.get("user_name", "Inconnu")
+                                user_id = event.get("user_id")
+                                reward_title = event.get("reward", {}).get("title", "Inconnue")
                             
-                            await update_viewer_stat(user_id, user_name, "rewards_claimed", 1, increment=True)
-                            await log_stream_event("reward", user_name, {"reward_name": reward_title})
+                                await update_viewer_stat(user_id, user_name, "rewards_claimed", 1, increment=True)
+                                await log_stream_event("reward", user_name, {"reward_name": reward_title})
 
-                        elif sub_type == "channel.follow":
-                            user_name = event.get("user_name", "Inconnu")
-                            from app.services.label_service import write_label
-                            write_label("dernier_follow.txt", f"{user_name}")
-                            await log_stream_event("follow", user_name, {"msg": "Bienvenue !"})
-                            credits_service.log_event("followers", user_name)
+                            elif sub_type == "channel.follow":
+                                user_name = event.get("user_name", "Inconnu")
+                                from app.services.label_service import write_label
+                                write_label("dernier_follow.txt", f"{user_name}")
+                                await log_stream_event("follow", user_name, {"msg": "Bienvenue !"})
+                                credits_service.log_event("followers", user_name)
 
-                        elif sub_type == "channel.ban":
-                            user_name = event.get("user_name", "Inconnu")
-                            mod = event.get("moderator_user_name", "Modo")
-                            if mod.lower() != bot_name:
-                                action = "Ban" if event.get("is_permanent") else "Timeout"
-                                reason = event.get("reason") or "Aucune raison"
-                                await log_stream_event("sanction", user_name, {"reason": f"{action} par {mod} : {reason}"})
+                            elif sub_type == "channel.ban":
+                                user_name = event.get("user_name", "Inconnu")
+                                mod = event.get("moderator_user_name", "Modo")
+                                if mod.lower() != bot_name:
+                                    action = "Ban" if event.get("is_permanent") else "Timeout"
+                                    reason = event.get("reason") or "Aucune raison"
+                                    await log_stream_event("sanction", user_name, {"reason": f"{action} par {mod} : {reason}"})
 
-                        elif sub_type in [
-                            "channel.poll.begin", "channel.poll.progress", "channel.poll.end",
-                            "channel.prediction.begin", "channel.prediction.progress", "channel.prediction.end"
-                        ]:
-                            import app.services.twitch_poll_state as poll_state
-                            from app.routes.overlays import trigger_overlay_event
+                            elif sub_type in [
+                                "channel.poll.begin", "channel.poll.progress", "channel.poll.end",
+                                "channel.prediction.begin", "channel.prediction.progress", "channel.prediction.end"
+                            ]:
+                                import app.services.twitch_poll_state as poll_state
+                                from app.routes.overlays import trigger_overlay_event
 
-                            is_prediction = "prediction" in sub_type
-                            is_end_event = "end" in sub_type
-                            is_begin_event = "begin" in sub_type 
-                            status = "end" if is_end_event else "update"
+                                is_prediction = "prediction" in sub_type
+                                is_end_event = "end" in sub_type
+                                is_begin_event = "begin" in sub_type 
+                                status = "end" if is_end_event else "update"
                             
-                            if is_begin_event:
-                                poll_state.chat_votes = {1: 0, 2: 0, 3: 0, 4: 0}
+                                if is_begin_event:
+                                    poll_state.chat_votes = {1: 0, 2: 0, 3: 0, 4: 0}
                             
-                            title = event.get("title", "")
-                            ends_at = event.get("locks_at") if is_prediction else event.get("ends_at")
-                            total_votes = 0
-                            choices = []
+                                title = event.get("title", "")
+                                ends_at = event.get("locks_at") if is_prediction else event.get("ends_at")
+                                total_votes = 0
+                                choices = []
                             
-                            raw_choices = event.get("outcomes", []) if is_prediction else event.get("choices", [])
-                            for c in raw_choices:
-                                title_choice = c.get("title", "")
-                                native_votes = c.get("channel_points", 0) if is_prediction else c.get("votes", 0) + c.get("channel_points_votes", 0)
-                                total_votes += native_votes
-                                choices.append({"title": title_choice, "votes": native_votes})
+                                raw_choices = event.get("outcomes", []) if is_prediction else event.get("choices", [])
+                                for c in raw_choices:
+                                    title_choice = c.get("title", "")
+                                    native_votes = c.get("channel_points", 0) if is_prediction else c.get("votes", 0) + c.get("channel_points_votes", 0)
+                                    total_votes += native_votes
+                                    choices.append({"title": title_choice, "votes": native_votes})
 
-                            try:
-                                from app.services.twitch_service import twitch_bot 
-                                channel = twitch_bot.get_channel(twitch_bot.channel_name)
+                                try:
+                                    from app.services.twitch_service import twitch_bot 
+                                    channel = twitch_bot.get_channel(twitch_bot.channel_name)
                                 
-                                if channel:
-                                    prefixe = "🔮 PRÉDICTION" if is_prediction else "📊 SONDAGE"
-                                    if is_begin_event:
-                                        await channel.send(f"{prefixe} EN COURS : {title} ! Participez en haut du t'chat ! ⏳")
-                                    elif is_end_event:
-                                        if poll_state.current_twitch_poll is not None:
-                                            if total_votes > 0:
-                                                winner = max(choices, key=lambda x: x["votes"])
-                                                pct = round((winner["votes"] / total_votes) * 100)
-                                                await channel.send(f"✅ {prefixe} TERMINÉ : {title} | 🏆 Gagnant : {winner['title']} avec {pct}% des votes ! GG !")
-                                            else:
-                                                await channel.send(f"✅ {prefixe} TERMINÉ : {title} | 🤷‍♂️ Aucun participant pour cette fois !")
-                            except Exception as e:
-                                print(f"⚠️ Erreur chat (Sondage) : {e}")
+                                    if channel:
+                                        prefixe = "🔮 PRÉDICTION" if is_prediction else "📊 SONDAGE"
+                                        if is_begin_event:
+                                            await channel.send(f"{prefixe} EN COURS : {title} ! Participez en haut du t'chat ! ⏳")
+                                        elif is_end_event:
+                                            if poll_state.current_twitch_poll is not None:
+                                                if total_votes > 0:
+                                                    winner = max(choices, key=lambda x: x["votes"])
+                                                    pct = round((winner["votes"] / total_votes) * 100)
+                                                    await channel.send(f"✅ {prefixe} TERMINÉ : {title} | 🏆 Gagnant : {winner['title']} avec {pct}% des votes ! GG !")
+                                                else:
+                                                    await channel.send(f"✅ {prefixe} TERMINÉ : {title} | 🤷‍♂️ Aucun participant pour cette fois !")
+                                except Exception as e:
+                                    print(f"⚠️ Erreur chat (Sondage) : {e}")
 
-                            if is_end_event:
-                                final_poll_data = {
-                                    "title": f"✅ {title} (Terminé)", "total_votes": total_votes,
-                                    "is_prediction": is_prediction, "choices": choices, "ends_at": ends_at
-                                }
-                                await trigger_overlay_event({"type": "twitch_event_end", "payload": final_poll_data})
-                                poll_state.current_twitch_poll = None
-                            else:
-                                poll_state.current_twitch_poll = {
-                                    "title": title, "total_votes": total_votes, "is_prediction": is_prediction,
-                                    "choices": choices, "ends_at": ends_at
-                                }
-                                await trigger_overlay_event({"type": f"twitch_event_{status}", "payload": poll_state.current_twitch_poll})
+                                if is_end_event:
+                                    final_poll_data = {
+                                        "title": f"✅ {title} (Terminé)", "total_votes": total_votes,
+                                        "is_prediction": is_prediction, "choices": choices, "ends_at": ends_at
+                                    }
+                                    await trigger_overlay_event({"type": "twitch_event_end", "payload": final_poll_data})
+                                    poll_state.current_twitch_poll = None
+                                else:
+                                    poll_state.current_twitch_poll = {
+                                        "title": title, "total_votes": total_votes, "is_prediction": is_prediction,
+                                        "choices": choices, "ends_at": ends_at
+                                    }
+                                    await trigger_overlay_event({"type": f"twitch_event_{status}", "payload": poll_state.current_twitch_poll})
 
-                    elif msg_type == "session_reconnect":
-                        new_url = data["payload"]["session"]["reconnect_url"]
-                        logger.info(f"🔄 Reconnexion requise : {new_url}")
+                        elif msg_type == "session_reconnect":
+                            reconnect_to = data["payload"]["session"]["reconnect_url"]
+                            logger.info(f"🔄 Reconnexion requise : {reconnect_to}")
+                            break
+                    elif msg.type in [aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR]:
                         break
-                elif msg.type in [aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR]:
-                    break
+
+            if reconnect_to:
+                # Twitch demande de basculer vers cette URL précise pour garder les abonnements
+                # existants — pas besoin de se resouscrire (cf. already_subscribed plus haut).
+                ws_url = reconnect_to
+                continue
+            break
 
 async def start_eventsub():
     while True:

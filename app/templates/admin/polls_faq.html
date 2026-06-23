@@ -224,12 +224,23 @@
                             <i class="fas fa-quote-left text-[10px] mr-2 opacity-30"></i>{{ q.question_text }}
                         </p>
                     </div>
-                    <div class="bg-slate-800/40 p-4 rounded-2xl border-l-4 border-emerald-500/50">
+                    <div class="bg-slate-800/40 p-4 rounded-2xl border-l-4 border-emerald-500/50" id="answer-view-{{ q.id }}">
                         <p class="text-[15px] text-slate-200 font-bold leading-relaxed">
                             <span class="text-emerald-400 mr-1">Félix :</span> {{ q.answer_text }}
                         </p>
                     </div>
-                    <div class="mt-4 text-right">
+                    <form action="/admin/polls_faq/questions/answer" method="POST" id="answer-edit-{{ q.id }}" class="hidden space-y-2 mt-2">
+                        <input type="hidden" name="id" value="{{ q.id }}">
+                        <input type="hidden" name="is_public" value="{{ 1 if q.is_public else 0 }}">
+                        <textarea name="answer" rows="2" class="w-full bg-slate-950/60 border border-slate-700 rounded-xl p-3 text-sm text-slate-200">{{ q.answer_text }}</textarea>
+                        <button type="submit" class="text-xs font-bold bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600 hover:text-white px-3 py-1.5 rounded-lg transition-all">
+                            <i class="fas fa-check"></i> Corriger
+                        </button>
+                    </form>
+                    <div class="mt-4 flex justify-between items-center">
+                        <button type="button" onclick="toggleAnswerEdit({{ q.id }})" class="text-[10px] font-bold text-slate-600 hover:text-indigo-400 uppercase tracking-widest transition-colors">
+                            <i class="fas fa-pen"></i> Corriger la réponse
+                        </button>
                         <span class="text-[9px] font-black text-slate-700 uppercase tracking-widest">{{ q.answered_at }}</span>
                     </div>
                 </div>
@@ -242,6 +253,11 @@
     </main>
 
     <script>
+        function toggleAnswerEdit(id) {
+            document.getElementById(`answer-view-${id}`).classList.toggle('hidden');
+            document.getElementById(`answer-edit-${id}`).classList.toggle('hidden');
+        }
+
         const API_BASE = (typeof CONFIG !== 'undefined' && CONFIG.API_BASE_URL)
             ? CONFIG.API_BASE_URL.replace(/\/$/, '')
             : '';

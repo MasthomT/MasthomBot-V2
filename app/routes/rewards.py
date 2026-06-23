@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Request, Form
+from fastapi import APIRouter, Depends, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -8,9 +8,10 @@ from app.routes.overlays import trigger_overlay_event
 from app.services.twitch_service import twitch_bot
 from app.core.config import settings
 from app.core.database import get_db_connection
+from app.core.security import require_admin
 
 logger = logging.getLogger("masthbot.rewards")
-router = APIRouter(prefix="/admin", tags=["rewards"])
+router = APIRouter(prefix="/admin", tags=["rewards"], dependencies=[Depends(require_admin)])
 templates = Jinja2Templates(directory="app/templates")
 
 # --- PAGE PRINCIPALE ---

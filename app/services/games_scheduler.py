@@ -19,8 +19,8 @@ logger = logging.getLogger("masthbot.games")
 TZ = ZoneInfo("Europe/Paris")
 
 PROMPTS = {
-    "kikece": """Tu dois choisir UN personnage fictif pour un jeu de devinette quotidien sur Twitch.
-Critères : mix jeux vidéo / animés / séries, mélange connu et un peu niche, caractéristiques visuelles distinctives.
+    "kikece": """Tu dois choisir UN personnage fictif TRÈS CÉLÈBRE de la pop-culture pour un jeu de devinette quotidien sur Twitch.
+Critères STRICTS : le personnage doit être instantanément reconnaissable par un large public (équivalent de Mario, Goku, Pikachu, Harry Potter, Batman, Naruto). INTERDICTION de choisir un personnage obscur, secondaire ou que seuls les fans hardcore connaîtraient. Mix jeux vidéo / animés / séries. Le personnage doit avoir des caractéristiques visuelles très distinctives (couleur, tenue, silhouette).
 Réponds UNIQUEMENT avec ce JSON sur une seule ligne, sans markdown :
 {"name":"Nom exact","universe":"Titre exact de l'oeuvre","category":"jeu vidéo|animé|série","extra":null}""",
 
@@ -34,7 +34,8 @@ Critères STRICTS : l'objet doit être instantanément reconnaissable par un lar
 Réponds UNIQUEMENT avec ce JSON sur une seule ligne, sans markdown :
 {"name":"Nom exact de l'objet","universe":"Titre exact de l'oeuvre","category":"jeu vidéo|animé|série|film","extra":null}""",
 
-    "kikadi": """Tu dois choisir UNE réplique culte de la pop-culture (jeu vidéo, film, animé, série) et la réécrire dans un style complètement différent (vieux françois, langage ultra-soutenu, ou style corporate/email pro).
+    "kikadi": """Tu dois choisir UNE réplique culte TRÈS CÉLÈBRE de la pop-culture (équivalent de "Que la force soit avec toi", "I'll be back", "Bazinga") prononcée par un personnage très connu, et la réécrire dans un style complètement différent (vieux françois, langage ultra-soutenu, ou style corporate/email pro).
+Critère STRICT : la réplique ET le personnage doivent être instantanément reconnaissables par un large public. INTERDICTION de choisir une réplique ou un personnage obscur que seuls les fans hardcore connaîtraient.
 La citation détournée doit rester compréhensible mais cacher suffisamment l'originale pour qu'on doive deviner.
 Réponds UNIQUEMENT avec ce JSON sur une seule ligne, sans markdown :
 {"name":"Nom du personnage qui dit la réplique originale","universe":"Titre exact de l'oeuvre","category":"jeu vidéo|animé|série|film","extra":"La réplique originale exacte|||La réplique détournée réécrite"}""",
@@ -48,21 +49,54 @@ GAME_LABELS = {
 }
 
 
-async def pick_daily_item(game_type: str) -> dict | None:
+async def get_recent_names(game_type: str, limit: int = 30) -> list[str]:
+    """Récupère les noms utilisés récemment pour ce jeu, afin d'éviter à l'IA de les reproposer."""
+    try:
+        async with get_db_connection() as db:
+            await db.execute(
+                "SELECT name FROM games_daily WHERE game_type = ? ORDER BY game_date DESC LIMIT ?",
+                game_type, limit
+            )
+            rows = await db.fetchall()
+            return [r["name"] for r in rows]
+    except Exception as e:
+        logger.error(f"❌ [GAMES] Erreur lecture historique {game_type} : {e}")
+        return []
+
+
+async def pick_daily_item(game_type: str, avoid_names: list[str] | None = None) -> dict | None:
+    avoid_names = avoid_names if avoid_names is not None else await get_recent_names(game_type)
+
+    prompt = PROMPTS[game_type]
+    if avoid_names:
+        prompt += (
+            "\n\nINTERDIT de reproposer un de ces éléments déjà utilisés récemment : "
+            + ", ".join(avoid_names)
+            + ". Choisis impérativement autre chose."
+        )
+
     try:
         client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-        response = await client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": PROMPTS[game_type]}],
-            temperature=1.1,
-            max_tokens=150,
-        )
-        raw = response.choices[0].message.content.strip()
-        raw = raw.replace("```json", "").replace("```", "").strip()
-        item = json.loads(raw)
-        if not all(k in item for k in ("name", "universe", "category")):
-            raise ValueError(f"JSON incomplet : {item}")
-        return item
+
+        for attempt in range(2):  # une seconde chance si l'IA repropose un doublon malgré la consigne
+            response = await client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=1.1,
+                max_tokens=150,
+            )
+            raw = response.choices[0].message.content.strip()
+            raw = raw.replace("```json", "").replace("```", "").strip()
+            item = json.loads(raw)
+            if not all(k in item for k in ("name", "universe", "category")):
+                raise ValueError(f"JSON incomplet : {item}")
+
+            if item["name"].strip().lower() not in [n.strip().lower() for n in avoid_names]:
+                return item
+
+            logger.warning(f"⚠️ [GAMES] Doublon détecté pour {game_type} ('{item['name']}'), nouvelle tentative...")
+
+        return item  # après 2 essais, on accepte quand même plutôt que de laisser le jeu sans item
     except Exception as e:
         logger.error(f"❌ [GAMES] Erreur choix {game_type} : {e}")
         return None

@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Felixdle — FEL-X</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+:root {
+  --accent: #00f5c3;
+  --accent-glow: rgba(0,245,195,0.25);
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --border: rgba(255,255,255,0.08);
+  --text-dim: #94a3b8;
+  --danger: #f87171;
+  --purple: #8b5cf6;
+  --purple-dim: rgba(139,92,246,0.15);
+  --purple-border: rgba(139,92,246,0.35);
+  --good: #00f5c3;
+  --close: #fbbf24;
+  --bad: #334155;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: #f8fafc; font-family: 'Inter', sans-serif; min-height: 100vh; overflow-x: hidden; }
+
+#pop-bg {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(139,92,246,0.18), transparent 70%),
+    radial-gradient(ellipse 60% 50% at 100% 100%, rgba(0,245,195,0.10), transparent 70%);
+}
+#pop-bg::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(15,23,42,0.4) 0%, rgba(15,23,42,0.75) 55%, rgba(15,23,42,0.95) 100%);
+}
+
+.btn-back {
+  position: fixed; top: 1.25rem; left: 1.25rem; z-index: 50;
+  display: flex; align-items: center; gap: 7px;
+  background: rgba(30,41,59,0.7); backdrop-filter: blur(12px);
+  border: 1px solid var(--border); border-radius: 12px;
+  padding: 9px 14px; color: var(--text-dim);
+  font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 700;
+  text-decoration: none; transition: all 0.2s;
+}
+.btn-back:hover { color: #f8fafc; border-color: rgba(255,255,255,0.2); }
+
+main { position: relative; z-index: 1; max-width: 480px; margin: 0 auto; padding: 5rem 1.25rem 3rem; display: flex; flex-direction: column; align-items: center; gap: 1.5rem; }
+
+.screen { display: none; width: 100%; flex-direction: column; align-items: center; gap: 1.5rem; }
+.screen.active { display: flex; }
+
+.title { font-size: 2rem; font-weight: 800; letter-spacing: -0.5px; text-align: center;
+  background: linear-gradient(135deg, #00f5c3 0%, #8b5cf6 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.subtitle { font-size: 0.85rem; color: var(--text-dim); text-align: center; }
+
+.card {
+  width: 100%; background: rgba(30,41,59,0.7); backdrop-filter: blur(12px);
+  border: 1px solid var(--border); border-radius: 18px; padding: 1.25rem;
+}
+
+#grid { display: grid; grid-template-rows: repeat(6, 1fr); gap: 8px; }
+.row { display: grid; grid-template-columns: repeat(var(--len, 5), 1fr); gap: 8px; }
+.tile {
+  width: 52px; height: 52px; display: flex; align-items: center; justify-content: center;
+  border: 2px solid var(--border); border-radius: 10px; font-size: 1.4rem; font-weight: 800;
+  text-transform: uppercase; background: rgba(30,41,59,0.5); transition: all 0.2s;
+}
+.tile.good { background: var(--good); border-color: var(--good); color: #0f172a; }
+.tile.close { background: var(--close); border-color: var(--close); color: #0f172a; }
+.tile.bad { background: var(--bad); border-color: var(--bad); color: #f8fafc; }
+.tile.flip { animation: flip 0.4s ease; }
+@keyframes flip { 0% { transform: rotateX(0); } 50% { transform: rotateX(90deg); } 100% { transform: rotateX(0); } }
+
+#message { min-height: 1.4rem; font-weight: 700; color: var(--accent); text-align: center; }
+
+#keyboard { display: flex; flex-direction: column; gap: 6px; width: 100%; max-width: 420px; }
+.kb-row { display: flex; gap: 5px; justify-content: center; }
+.key {
+  flex: 1; max-width: 40px; height: 46px; display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.06); border: none; border-radius: 8px; color: #f8fafc;
+  font-weight: 700; font-size: 0.85rem; cursor: pointer; text-transform: uppercase; transition: all 0.15s;
+}
+.key:hover { background: rgba(255,255,255,0.15); }
+.key.wide { max-width: 64px; font-size: 0.65rem; }
+.key.good { background: var(--good); color: #0f172a; }
+.key.close { background: var(--close); color: #0f172a; }
+.key.bad { background: var(--bad); color: var(--text-dim); }
+
+/* Résultat */
+.result-icon { font-size: 3rem; text-align: center; }
+.result-word { font-size: 1.6rem; font-weight: 800; text-align: center; letter-spacing: 2px; }
+.result-sub { font-size: 0.85rem; color: var(--text-dim); text-align: center; }
+
+/* Countdown */
+.countdown-wrap { display: flex; align-items: center; justify-content: center; gap: 6px; }
+.countdown-block { background: rgba(15,23,42,0.6); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; text-align: center; min-width: 48px; }
+.countdown-val { font-size: 1.2rem; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
+.countdown-lbl { font-size: 0.6rem; color: var(--text-dim); text-transform: uppercase; }
+.countdown-sep { font-size: 1.2rem; font-weight: 800; color: var(--text-dim); }
+
+/* Leaderboard */
+.section-label { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); text-align: center; }
+.lb-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--border); }
+.lb-row:last-child { border-bottom: none; }
+.lb-rank { width: 22px; text-align: center; font-weight: 800; color: var(--text-dim); }
+.lb-rank.r1 { color: #facc15; }
+.lb-rank.r2 { color: #cbd5e1; }
+.lb-rank.r3 { color: #d97706; }
+.lb-name { flex: 1; font-weight: 700; font-size: 0.85rem; }
+.lb-name.me { color: var(--accent); }
+.lb-score { font-size: 0.75rem; font-weight: 700; color: var(--text-dim); }
+.lb-score.found { color: var(--accent); }
+.lb-score.lost { color: var(--danger); }
+
+.btn-primary {
+  background: var(--accent); color: #0f172a; border: none; border-radius: 12px;
+  padding: 12px 24px; font-weight: 800; font-size: 0.9rem; cursor: pointer; transition: all 0.2s;
+  text-decoration: none; display: inline-block; text-align: center;
+}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 20px var(--accent-glow); }
+
+@media (max-width: 420px) {
+  .tile { width: 44px; height: 44px; font-size: 1.2rem; }
+  .key { height: 42px; max-width: 34px; font-size: 0.75rem; }
+}
+</style>
+</head>
+<body>
+<div id="pop-bg"></div>
+
+<a href="/jeux" class="btn-back">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+  Retour aux jeux
+</a>
+
+<main>
+
+  <!-- ÉCRAN CHARGEMENT -->
+  <div class="screen active" id="screen-loading">
+    <div class="title">🔤 FELIXDLE</div>
+    <div class="subtitle">Chargement...</div>
+  </div>
+
+  <!-- ÉCRAN AUCUN MOT (cas exceptionnel) -->
+  <div class="screen" id="screen-no-word">
+    <div class="title">🔤 FELIXDLE</div>
+    <div class="card" style="text-align:center;">
+      <div class="section-label" style="margin-bottom:0.5rem;">Prochain mot dans</div>
+      <div class="countdown-wrap" id="countdown-noword"></div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN JEU -->
+  <div class="screen" id="screen-game">
+    <div class="title">🔤 FELIXDLE</div>
+    <div class="subtitle">Un mot lié à la chaîne change chaque jour. 6 essais pour le trouver.</div>
+
+    <div id="grid"></div>
+    <div id="message"></div>
+    <div id="keyboard"></div>
+  </div>
+
+  <!-- ÉCRAN RÉSULTAT -->
+  <div class="screen" id="screen-result">
+    <div class="result-icon" id="res-icon">🎉</div>
+    <div class="result-word" id="res-word"></div>
+    <div class="result-sub" id="res-sub"></div>
+
+    <div class="card" style="text-align:center;">
+      <div class="section-label" style="margin-bottom:0.5rem;">Prochain mot dans</div>
+      <div class="countdown-wrap" id="countdown-result"></div>
+    </div>
+
+    <div class="card" id="lb-wrap" style="display:none;">
+      <div class="section-label" style="margin-bottom:0.75rem;">🏆 Classement du jour</div>
+      <div id="lb-list"></div>
+    </div>
+  </div>
+
+</main>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+const API_BASE = () => (typeof CONFIG !== 'undefined' ? CONFIG.API_BASE_URL : '') + '/api/v1/felixdle';
+const H = () => ({ 'Accept':'application/json','Content-Type':'application/json','ngrok-skip-browser-warning':'true' });
+
+let G = {
+  token: null, tid: null, tuname: null,
+  wordLength: 0, maxGuesses: 6, nextReset: null,
+  guesses: [], evaluations: [], finished: false, won: false,
+  current: '', busy: false,
+};
+
+const $ = id => document.getElementById(id);
+function showScreen(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); $(id).classList.add('active'); }
+
+const keyStates = {};
+
+function buildGrid() {
+  const grid = $('grid');
+  grid.innerHTML = '';
+  for (let r = 0; r < G.maxGuesses; r++) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.style.setProperty('--len', G.wordLength);
+    for (let c = 0; c < G.wordLength; c++) {
+      const tile = document.createElement('div');
+      tile.className = 'tile';
+      row.appendChild(tile);
+    }
+    grid.appendChild(row);
+  }
+}
+
+function renderGrid() {
+  buildGrid();
+  G.guesses.forEach((guess, r) => {
+    const result = G.evaluations[r];
+    const row = $('grid').children[r];
+    guess.split('').forEach((letter, c) => {
+      const tile = row.children[c];
+      tile.textContent = letter;
+      tile.classList.add(result[c]);
+      const prev = keyStates[letter];
+      if (!prev || (prev === 'bad' && result[c] !== 'bad') || (prev === 'close' && result[c] === 'good')) {
+        keyStates[letter] = result[c];
+      }
+    });
+  });
+  paintCurrentRow();
+  buildKeyboard();
+}
+
+function buildKeyboard() {
+  const rows = ["AZERTYUIOP", "QSDFGHJKLM", "WXCVBN"];
+  const keyboard = $('keyboard');
+  keyboard.innerHTML = '';
+  rows.forEach((rowLetters, i) => {
+    const row = document.createElement('div');
+    row.className = 'kb-row';
+    if (i === 2) {
+      const enter = document.createElement('button');
+      enter.className = 'key wide';
+      enter.textContent = 'VALIDER';
+      enter.onclick = submitGuess;
+      row.appendChild(enter);
+    }
+    rowLetters.split('').forEach(letter => {
+      const key = document.createElement('button');
+      key.className = 'key' + (keyStates[letter] ? ' ' + keyStates[letter] : '');
+      key.textContent = letter;
+      key.onclick = () => addLetter(letter);
+      row.appendChild(key);
+    });
+    if (i === 2) {
+      const del = document.createElement('button');
+      del.className = 'key wide';
+      del.textContent = '⌫';
+      del.onclick = deleteLetter;
+      row.appendChild(del);
+    }
+    keyboard.appendChild(row);
+  });
+}
+
+function addLetter(letter) {
+  if (G.finished || G.busy || G.current.length >= G.wordLength) return;
+  G.current += letter;
+  paintCurrentRow();
+}
+function deleteLetter() {
+  if (G.finished || G.busy) return;
+  G.current = G.current.slice(0, -1);
+  paintCurrentRow();
+}
+function paintCurrentRow() {
+  const row = $('grid').children[G.guesses.length];
+  if (!row) return;
+  for (let c = 0; c < G.wordLength; c++) {
+    row.children[c].textContent = G.current[c] || '';
+  }
+}
+function flashMessage(text) {
+  $('message').textContent = text;
+  setTimeout(() => { if (!G.finished) $('message').textContent = ''; }, 1500);
+}
+
+async function submitGuess() {
+  if (G.finished || G.busy) return;
+  if (G.current.length !== G.wordLength) { flashMessage(`Le mot fait ${G.wordLength} lettres.`); return; }
+  if (!G.tid) { flashMessage('Connecte-toi avec Twitch pour jouer.'); return; }
+
+  G.busy = true;
+  const guess = G.current;
+  try {
+    const res = await fetch(`${API_BASE()}/guess`, {
+      method: 'POST', headers: H(),
+      body: JSON.stringify({ twitch_id: G.tid, twitch_username: G.tuname || 'inconnu', guess })
+    });
+    const data = await res.json();
+    if (!res.ok) { flashMessage(data.detail || 'Erreur'); G.busy = false; return; }
+
+    G.guesses.push(guess);
+    G.evaluations.push(data.result);
+    G.current = '';
+    G.finished = data.finished;
+    G.won = data.won;
+    renderGrid();
+
+    if (data.finished) {
+      await endGame(data.won, data.word);
+    }
+  } catch (e) {
+    flashMessage('Erreur réseau');
+  }
+  G.busy = false;
+}
+
+document.addEventListener('keydown', (e) => {
+  if (!$('screen-game').classList.contains('active') || G.finished) return;
+  if (e.key === 'Enter') submitGuess();
+  else if (e.key === 'Backspace') deleteLetter();
+  else if (/^[a-zA-Z]$/.test(e.key)) addLetter(e.key.toUpperCase());
+});
+
+/* Countdown */
+let countdownTimer = null;
+function startCountdown(cid) {
+  const c = $(cid); if (!c || !G.nextReset) return;
+  if (countdownTimer) clearInterval(countdownTimer);
+  c.innerHTML = `
+    <div class="countdown-block"><div class="countdown-val" id="${cid}-h">--</div><div class="countdown-lbl">heures</div></div>
+    <div class="countdown-sep">:</div>
+    <div class="countdown-block"><div class="countdown-val" id="${cid}-m">--</div><div class="countdown-lbl">min</div></div>
+    <div class="countdown-sep">:</div>
+    <div class="countdown-block"><div class="countdown-val" id="${cid}-s">--</div><div class="countdown-lbl">sec</div></div>`;
+  const tick = () => {
+    const diff = new Date(G.nextReset) - new Date();
+    if (diff <= 0) { c.innerHTML = '<span style="color:var(--accent);font-weight:800;font-size:0.9rem;">🎉 Nouveau mot disponible !</span>'; return; }
+    const h = Math.floor(diff / 3600000), m = Math.floor((diff % 3600000) / 60000), s = Math.floor((diff % 60000) / 1000);
+    const pad = n => String(n).padStart(2, '0');
+    const hE = $(`${cid}-h`), mE = $(`${cid}-m`), sE = $(`${cid}-s`);
+    if (hE) hE.textContent = pad(h); if (mE) mE.textContent = pad(m); if (sE) sE.textContent = pad(s);
+  };
+  tick(); countdownTimer = setInterval(tick, 1000);
+}
+
+/* Leaderboard */
+async function loadLeaderboard() {
+  try {
+    const data = await (await fetch(`${API_BASE()}/leaderboard`, { headers: H() })).json();
+    const wrap = $('lb-wrap'), list = $('lb-list');
+    if (!data.leaderboard || data.leaderboard.length === 0) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+    list.innerHTML = data.leaderboard.map((row, i) => {
+      const rk = i === 0 ? 'r1' : i === 1 ? 'r2' : i === 2 ? 'r3' : '';
+      const isMe = G.tuname && row.username.toLowerCase() === G.tuname.toLowerCase();
+      return `<div class="lb-row">
+        <div class="lb-rank ${rk}">${i + 1}</div>
+        <div class="lb-name${isMe ? ' me' : ''}">${row.username}${isMe ? ' (toi)' : ''}</div>
+        ${row.won
+          ? `<span class="lb-score found">${row.attempts}/6 essais</span>`
+          : `<span class="lb-score lost">Raté</span>`}
+      </div>`;
+    }).join('');
+  } catch (e) { console.warn('LB error', e); }
+}
+
+async function endGame(won, word) {
+  $('res-icon').textContent = won ? '🎉' : '😵';
+  $('res-word').textContent = word;
+  $('res-sub').textContent = won
+    ? `Trouvé en ${G.guesses.length}/${G.maxGuesses} essai${G.guesses.length > 1 ? 's' : ''} !`
+    : `Dommage, c'était le bon mot. Prochain mot à 2h du matin.`;
+  showScreen('screen-result');
+  startCountdown('countdown-result');
+  await loadLeaderboard();
+}
+
+/* Init */
+document.addEventListener('DOMContentLoaded', async () => {
+  showScreen('screen-loading');
+  const token = typeof checkAuth === 'function' ? checkAuth() : localStorage.getItem('twitch_token');
+  if (!token) return;
+  G.token = token;
+
+  try {
+    const CID = typeof CONFIG !== 'undefined' ? CONFIG.CLIENT_ID : '';
+    const u = await (await fetch('https://api.twitch.tv/helix/users', { headers: { 'Authorization': `Bearer ${token}`, 'Client-Id': CID } })).json();
+    if (u.data?.[0]) { G.tid = u.data[0].id; G.tuname = u.data[0].login; }
+  } catch (e) {}
+
+  try {
+    const d = await (await fetch(`${API_BASE()}/daily`, { headers: H() })).json();
+    G.nextReset = d.next_reset_utc;
+
+    if (!d.is_set) {
+      showScreen('screen-no-word');
+      startCountdown('countdown-noword');
+      return;
+    }
+
+    G.wordLength = d.word_length;
+    G.maxGuesses = d.max_guesses || 6;
+
+    let revealedWord = null;
+    if (G.tid) {
+      const s = await (await fetch(`${API_BASE()}/session/${G.tid}`, { headers: H() })).json();
+      if (s.has_played) {
+        G.guesses = s.guesses;
+        G.evaluations = s.evaluations;
+        G.finished = s.finished;
+        G.won = s.won;
+        revealedWord = s.word;
+      }
+    }
+
+    showScreen('screen-game');
+    renderGrid();
+
+    if (G.finished) {
+      await endGame(G.won, revealedWord);
+    }
+  } catch (e) {
+    console.error(e);
+    showScreen('screen-no-word');
+    $('countdown-noword').innerHTML = '<span style="color:var(--danger);font-size:0.9rem;">Erreur de connexion au serveur.</span>';
+  }
+});
+</script>
+</body>
+</html>

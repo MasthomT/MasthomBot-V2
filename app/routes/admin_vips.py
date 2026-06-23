@@ -2,16 +2,17 @@ import logging
 import aiohttp
 import os
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Request, Form
+from fastapi import APIRouter, Depends, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 # --- IMPORT CORE POSTGRESQL & CONFIG ---
 from app.core.database import get_db_connection
 from app.core.config import settings
+from app.core.security import require_admin
 
 logger = logging.getLogger("masthbot.vips")
-router = APIRouter(prefix="/admin", tags=["vips_team"])
+router = APIRouter(prefix="/admin", tags=["vips_team"], dependencies=[Depends(require_admin)])
 templates = Jinja2Templates(directory="app/templates")
 
 async def init_team_columns():
@@ -164,6 +165,32 @@ async def add_vip(request: Request, username: str = Form(...), duration_days: in
             logger.error("❌ ERREUR FATALE : app.state.bot manquant !")
 
         return RedirectResponse(url="/admin/vips?success=added", status_code=303)
+
+@router.post("/vips/extend/{twitch_id}")
+async def extend_vip(twitch_id: str, extra_days: int = Form(...)):
+    """Prolonge un VIP temporaire sans avoir à le révoquer puis le réajouter."""
+    async with get_db_connection() as conn:
+        cursor = await conn.execute("SELECT vip_expiry FROM viewers WHERE twitch_id = $1", (twitch_id,))
+        row = await cursor.fetchone()
+        if not row:
+            return RedirectResponse(url="/admin/vips?error=not_found", status_code=303)
+
+        current_expiry = row["vip_expiry"]
+        base = datetime.now()
+        if current_expiry:
+            try:
+                parsed = current_expiry if isinstance(current_expiry, datetime) else datetime.fromisoformat(str(current_expiry).replace("T", " "))
+                if parsed > base:
+                    base = parsed
+            except ValueError:
+                pass
+
+        new_expiry = (base + timedelta(days=extra_days)).isoformat()
+        await conn.execute("UPDATE viewers SET is_vip = 1, vip_expiry = $1 WHERE twitch_id = $2", (new_expiry, twitch_id))
+        logger.info(f"⏳ [VIP] Prolongation de {extra_days}j pour twitch_id={twitch_id}, nouvelle expiration : {new_expiry}")
+
+    return RedirectResponse(url="/admin/vips?success=extended", status_code=303)
+
 
 @router.post("/vips/revoke/{twitch_id}")
 async def revoke_vip(request: Request, twitch_id: str):

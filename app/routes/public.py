@@ -84,6 +84,12 @@ async def logout():
 # ==========================================
 # 2. PAGES DU VIEWER (PROFIL & FÉLIX)
 # ==========================================
+@router.get("/classement", response_class=HTMLResponse)
+async def leaderboard_page(request: Request):
+    return templates.TemplateResponse(request=request, name="public/leaderboard.html", context={
+        "is_logged_in": bool(request.cookies.get("viewer_id")),
+    })
+
 @router.get("/profile", response_class=HTMLResponse)
 async def profile_page(request: Request):
     viewer_id = request.cookies.get("viewer_id")
@@ -131,8 +137,8 @@ async def profile_page(request: Request):
                 
             history.append({"label": log["event_type"], "amount": log["amount"], "date": d_str, "time": t_str, "icon": icon, "color": color})
         
-    return templates.TemplateResponse("public/profile.html", {
-        "request": request, "viewer": viewer, "level": level, "next_xp": next_xp,
+    return templates.TemplateResponse(request=request, name="public/profile.html", context={
+        "viewer": viewer, "level": level, "next_xp": next_xp,
         "progress": progress, "watchtime_str": watchtime_str, "rank": rank,
         "history": history, "avatar": request.cookies.get("viewer_avatar", "")
     })
@@ -147,7 +153,7 @@ async def felix_page(request: Request):
         row = await cursor.fetchone()
         if not row: return RedirectResponse(url="/logout")
         
-    return templates.TemplateResponse("public/felix.html", {"request": request, "viewer": dict(row)})
+    return templates.TemplateResponse(request=request, name="public/felix.html", context={"viewer": dict(row)})
 
 @router.post("/felix/save")
 async def felix_save(request: Request):

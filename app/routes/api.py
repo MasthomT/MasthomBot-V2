@@ -76,6 +76,28 @@ async def get_leaderboard():
         return result
 
 # ==========================================================
+# 2bis. CLASSEMENT TROPHÉES
+# ==========================================================
+@router.get("/leaderboard/trophies")
+async def get_trophies_leaderboard():
+    async with get_db_connection() as conn:
+        try:
+            c = await conn.execute(f"""
+                SELECT v.username, COUNT(vt.id) AS trophy_count
+                FROM viewer_trophies vt
+                JOIN viewers v ON vt.twitch_id = v.twitch_id
+                WHERE LOWER(v.username) NOT IN {EXCLUSION_LIST}
+                GROUP BY v.username
+                ORDER BY trophy_count DESC
+                LIMIT 50
+            """)
+            rows = await c.fetchall()
+            return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"❌ Erreur leaderboard/trophies : {e}")
+            return []
+
+# ==========================================================
 # 3. SAUVEGARDE FORMULAIRE IA
 # ==========================================================
 @router.post("/viewer/update_context")
@@ -179,11 +201,24 @@ async def submit_vote_api(request: Request):
         return JSONResponse(status_code=400, content={"error": "Données manquantes"})
     async with get_db_connection() as conn:
         try:
+            c = await conn.execute(
+                "SELECT 1 FROM poll_votes WHERE poll_id = $1 AND twitch_id = $2", (p_id, str(t_id))
+            )
+            is_new_vote = not await c.fetchone()
+
             await conn.execute(
                 "INSERT INTO poll_votes (poll_id, twitch_id, option_index) VALUES ($1, $2, $3) "
                 "ON CONFLICT(poll_id, twitch_id) DO UPDATE SET option_index = EXCLUDED.option_index",
                 (p_id, str(t_id), opt)
             )
+
+            # Compteur de trophée : uniquement sur un vrai NOUVEAU vote, pas un changement d'avis
+            if is_new_vote:
+                await conn.execute(
+                    "UPDATE viewers SET poll_votes_count = COALESCE(poll_votes_count, 0) + 1 WHERE twitch_id = $1",
+                    (str(t_id),)
+                )
+
             return {"status": "success"}
         except Exception as e:
             return JSONResponse(status_code=500, content={"error": str(e)})
@@ -207,6 +242,15 @@ async def ask_question_api(request: Request):
                 INSERT INTO questions (twitch_id, username, question_text, is_public, created_at)
                 VALUES ($1, $2, $3, 0, NOW())
             """, (str(t_id), username, text))
+
+            await conn.execute(
+                "INSERT INTO viewers (twitch_id, username) VALUES ($1, $2) ON CONFLICT(twitch_id) DO NOTHING",
+                (str(t_id), username)
+            )
+            await conn.execute(
+                "UPDATE viewers SET questions_asked_count = COALESCE(questions_asked_count, 0) + 1 WHERE twitch_id = $1",
+                (str(t_id),)
+            )
 
         return {"status": "success"}
 

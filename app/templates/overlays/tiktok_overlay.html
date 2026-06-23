@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { margin: 0; overflow: hidden; background: transparent; font-family: 'Inter', sans-serif; }
+
+        #tiktok-widget {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 360px;
+            transform: translate(-50%, -50%) scale(0.85);
+            opacity: 0;
+            transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.5s ease;
+            pointer-events: none;
+        }
+        #tiktok-widget.visible {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+        }
+
+        .tiktok-frame-wrap {
+            border-radius: 24px;
+            overflow: hidden;
+            border: 3px solid #fe2c55;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.8), 0 0 30px rgba(254,44,85,0.35);
+            background: #000;
+        }
+
+        .tiktok-badge {
+            display: flex; align-items: center; gap: 8px; justify-content: center;
+            background: #fe2c55; color: #fff; font-weight: 900; font-size: 0.75rem;
+            text-transform: uppercase; letter-spacing: 0.08em; padding: 8px;
+        }
+
+        video { display: block; width: 360px; max-height: 640px; background: #000; }
+    </style>
+</head>
+<body>
+
+    <div id="tiktok-widget">
+        <div class="tiktok-frame-wrap">
+            <div class="tiktok-badge">🎵 TikTok</div>
+            <video id="tiktok-video" playsinline preload="auto"></video>
+        </div>
+    </div>
+
+    <script>
+        const widget = document.getElementById('tiktok-widget');
+        const video = document.getElementById('tiktok-video');
+
+        const eventSource = new EventSource('/overlay_events');
+
+        eventSource.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            if (data.type === 'show_tiktok' && data.url) {
+                showTikTok(data.url);
+            }
+        };
+
+        // Si une nouvelle vidéo démarre pendant le délai de fondu de la précédente, le nettoyage
+        // différé de l'ancienne ne doit pas écraser le src de la nouvelle — d'où ce garde-fou.
+        let hideCleanupTimer = null;
+
+        function hideTikTok() {
+            widget.classList.remove('visible');
+            hideCleanupTimer = setTimeout(() => {
+                video.pause();
+                video.src = '';
+                hideCleanupTimer = null;
+            }, 600);
+        }
+
+        function showTikTok(url) {
+            if (hideCleanupTimer) {
+                clearTimeout(hideCleanupTimer);
+                hideCleanupTimer = null;
+            }
+            video.src = url;
+            video.play().catch(err => console.error(err));
+        }
+
+        // L'affichage ne dure QUE le temps réel de la vidéo : apparition une fois chargée,
+        // disparition automatique à la fin (ou immédiatement en cas d'erreur de lecture).
+        video.addEventListener('loadeddata', () => {
+            widget.classList.add('visible');
+        });
+        video.addEventListener('ended', hideTikTok);
+        video.addEventListener('error', hideTikTok);
+    </script>
+</body>
+</html>

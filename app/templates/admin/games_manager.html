@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jeux du Jour - MasthomBot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #6366f1; outline: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .tab-btn.active { background-color: rgb(79 70 229 / 0.1); color: #818cf8; border-color: rgb(99 102 241 / 0.3); }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen overflow-hidden">
+
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 md:p-10 overflow-y-auto custom-scrollbar h-screen">
+
+        <header class="mb-8">
+            <h1 class="text-3xl font-extrabold text-white tracking-tight">Jeux du Jour</h1>
+            <p class="text-slate-400 mt-1">Kikecé, Oukecé, Kekecé, Kikadi, Felixdle — corrige l'item/mot choisi, consulte le classement et l'historique.</p>
+        </header>
+
+        <!-- Tabs -->
+        <div class="flex flex-wrap gap-2 mb-8">
+            <button class="tab-btn px-5 py-2.5 rounded-xl text-sm font-bold border border-slate-700 text-slate-400 transition-all" data-game="kikece" onclick="selectGame('kikece')">🧑 Kikecé <span class="text-[10px] opacity-60">(personnage)</span></button>
+            <button class="tab-btn px-5 py-2.5 rounded-xl text-sm font-bold border border-slate-700 text-slate-400 transition-all" data-game="oukece" onclick="selectGame('oukece')">🗺️ Oukecé <span class="text-[10px] opacity-60">(lieu)</span></button>
+            <button class="tab-btn px-5 py-2.5 rounded-xl text-sm font-bold border border-slate-700 text-slate-400 transition-all" data-game="kekece" onclick="selectGame('kekece')">🗝️ Kekecé <span class="text-[10px] opacity-60">(objet)</span></button>
+            <button class="tab-btn px-5 py-2.5 rounded-xl text-sm font-bold border border-slate-700 text-slate-400 transition-all" data-game="kikadi" onclick="selectGame('kikadi')">💬 Kikadi <span class="text-[10px] opacity-60">(citation)</span></button>
+            <button class="tab-btn px-5 py-2.5 rounded-xl text-sm font-bold border border-slate-700 text-slate-400 transition-all" data-game="felixdle" onclick="selectGame('felixdle')">🔤 Felixdle <span class="text-[10px] opacity-60">(mot)</span></button>
+        </div>
+
+        <!-- PANNEAU CLASSIQUE : Kikecé / Oukecé / Kekecé / Kikadi -->
+        <div id="panel-classic" class="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+
+            <!-- COLONNE GAUCHE : ITEM DU JOUR -->
+            <div class="xl:col-span-5 space-y-6">
+                <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                    <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-6">
+                        <i class="fas fa-star text-indigo-400 text-lg"></i> Item du jour
+                    </h2>
+
+                    <div id="todayStatus" class="text-xs font-bold mb-4"></div>
+
+                    <div class="space-y-5">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-widest">Nom</label>
+                            <input type="text" id="nameInput" class="w-full input-dark rounded-xl p-4 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-widest">Œuvre / Univers</label>
+                            <input type="text" id="universeInput" class="w-full input-dark rounded-xl p-4 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-widest">Catégorie</label>
+                            <input type="text" id="categoryInput" class="w-full input-dark rounded-xl p-4 text-sm" placeholder="jeu vidéo | animé | série | film">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-widest">Extra (citation détournée pour Kikadi, etc.)</label>
+                            <textarea id="extraInput" rows="3" class="w-full input-dark rounded-xl p-4 text-sm"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-widest">Image (URL, optionnel)</label>
+                            <input type="text" id="imageInput" class="w-full input-dark rounded-xl p-4 text-sm">
+                        </div>
+                    </div>
+
+                    <div class="mt-8">
+                        <button onclick="saveDaily()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-3 active:scale-95">
+                            <i class="fas fa-save"></i> FORCER CET ITEM
+                        </button>
+                        <div id="statusMessage" class="text-center mt-3 text-xs font-bold h-4"></div>
+                    </div>
+                </div>
+
+                <div class="config-card p-6 rounded-3xl shadow-2xl">
+                    <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-4">
+                        <i class="fas fa-history text-indigo-400 text-lg"></i> Hier
+                    </h2>
+                    <div id="yesterdayBox" class="text-sm text-slate-300"></div>
+                </div>
+            </div>
+
+            <!-- COLONNE DROITE : CLASSEMENT + HISTORIQUE -->
+            <div class="xl:col-span-7 space-y-6">
+                <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                            <i class="fas fa-trophy text-indigo-400 text-lg"></i> Classement du jour
+                        </h2>
+                        <span id="leaderboardSummary" class="text-[10px] font-bold text-slate-500 bg-slate-900 px-3 py-1 rounded-full border border-slate-800"></span>
+                    </div>
+                    <div id="leaderboardBox" class="space-y-2 max-h-[320px] overflow-y-auto custom-scrollbar"></div>
+                </div>
+
+                <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                    <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-6">
+                        <i class="fas fa-calendar-alt text-indigo-400 text-lg"></i> Historique (10 derniers jours)
+                    </h2>
+                    <div id="historyBox" class="space-y-2 max-h-[320px] overflow-y-auto custom-scrollbar"></div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- PANNEAU FELIXDLE -->
+        <div id="panel-felixdle" class="hidden grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+
+            <!-- COLONNE GAUCHE : MOT DU JOUR -->
+            <div class="xl:col-span-5 space-y-6">
+                <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                    <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-6">
+                        <i class="fas fa-star text-indigo-400 text-lg"></i> Mot du jour
+                    </h2>
+
+                    <div id="fxTodayStatus" class="text-xs font-bold mb-4"></div>
+
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-widest">Mot (sans accent, lettres uniquement)</label>
+                        <input type="text" id="fxWordInput" class="w-full input-dark rounded-xl p-4 text-sm uppercase" placeholder="FELIX">
+                    </div>
+
+                    <div class="mt-6">
+                        <button onclick="fxSaveDaily()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-3 active:scale-95">
+                            <i class="fas fa-save"></i> FORCER CE MOT
+                        </button>
+                        <div id="fxStatusMessage" class="text-center mt-3 text-xs font-bold h-4"></div>
+                    </div>
+                </div>
+
+                <div class="config-card p-6 rounded-3xl shadow-2xl">
+                    <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-4">
+                        <i class="fas fa-history text-indigo-400 text-lg"></i> Historique (10 derniers jours)
+                    </h2>
+                    <div id="fxHistoryBox" class="space-y-2 max-h-[260px] overflow-y-auto custom-scrollbar"></div>
+                </div>
+            </div>
+
+            <!-- COLONNE DROITE : POOL DE MOTS + CLASSEMENT -->
+            <div class="xl:col-span-7 space-y-6">
+                <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                    <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-6">
+                        <i class="fas fa-list text-indigo-400 text-lg"></i> Pool de mots (tirage aléatoire automatique à 2h)
+                    </h2>
+
+                    <div class="flex gap-3 mb-6">
+                        <input type="text" id="fxNewWordInput" class="w-full input-dark rounded-xl p-3 text-sm uppercase" placeholder="Ajouter un mot au pool">
+                        <button onclick="fxAddWord()" class="shrink-0 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-3 rounded-xl font-bold text-xs transition-all">
+                            <i class="fas fa-plus"></i> AJOUTER
+                        </button>
+                    </div>
+
+                    <div id="fxWordsBox" class="flex flex-wrap gap-2 max-h-[320px] overflow-y-auto custom-scrollbar"></div>
+                </div>
+
+                <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                            <i class="fas fa-trophy text-indigo-400 text-lg"></i> Classement du jour
+                        </h2>
+                        <span id="fxLeaderboardSummary" class="text-[10px] font-bold text-slate-500 bg-slate-900 px-3 py-1 rounded-full border border-slate-800"></span>
+                    </div>
+                    <div id="fxLeaderboardBox" class="space-y-2 max-h-[280px] overflow-y-auto custom-scrollbar"></div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+<script>
+    let currentGame = 'kikece';
+
+    function selectGame(game) {
+        currentGame = game;
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-game') === game);
+        });
+
+        const isFelixdle = game === 'felixdle';
+        document.getElementById('panel-classic').classList.toggle('hidden', isFelixdle);
+        document.getElementById('panel-felixdle').classList.toggle('hidden', !isFelixdle);
+
+        if (isFelixdle) {
+            fxLoadAll();
+        } else {
+            loadAll();
+        }
+    }
+
+    function showStatus(elementId, msg, type) {
+        const status = document.getElementById(elementId);
+        if (!status) return;
+        const colorClass = type === 'success' ? 'text-emerald-400' : 'text-rose-400';
+        status.innerHTML = `<span class="${colorClass}">${msg}</span>`;
+        setTimeout(() => status.innerHTML = '', 3000);
+    }
+
+    async function loadAll() {
+        await Promise.all([loadDaily(), loadLeaderboard(), loadHistory()]);
+    }
+
+    async function loadDaily() {
+        try {
+            const res = await fetch(`/api/v1/games/${currentGame}/daily`);
+            const data = await res.json();
+            const t = data.today || {};
+            const statusEl = document.getElementById('todayStatus');
+            statusEl.innerHTML = t.is_set
+                ? '<span class="text-emerald-400"><i class="fas fa-check-circle"></i> Item défini pour aujourd\'hui</span>'
+                : '<span class="text-amber-400"><i class="fas fa-exclamation-triangle"></i> Aucun item pour aujourd\'hui — le scheduler le générera à 2h, ou force-le ci-dessous</span>';
+
+            document.getElementById('nameInput').value = t.name || '';
+            document.getElementById('universeInput').value = t.universe || '';
+            document.getElementById('categoryInput').value = t.category || '';
+            document.getElementById('extraInput').value = t.extra || '';
+            document.getElementById('imageInput').value = t.image_url || '';
+
+            const y = data.yesterday || {};
+            const yBox = document.getElementById('yesterdayBox');
+            yBox.innerHTML = y.name
+                ? `<strong class="text-white">${y.name}</strong> <span class="text-slate-500">(${y.universe || ''})</span>`
+                : '<span class="text-slate-600 italic">Aucune donnée pour hier.</span>';
+        } catch (e) { console.error('Erreur chargement daily:', e); }
+    }
+
+    async function saveDaily() {
+        const payload = {
+            name: document.getElementById('nameInput').value,
+            universe: document.getElementById('universeInput').value,
+            category: document.getElementById('categoryInput').value,
+            extra: document.getElementById('extraInput').value || null,
+            image_url: document.getElementById('imageInput').value || null,
+        };
+        if (!payload.name || !payload.universe || !payload.category) {
+            showStatus('statusMessage', '❌ Nom, œuvre et catégorie sont obligatoires', 'error');
+            return;
+        }
+        try {
+            const res = await fetch(`/api/v1/games/${currentGame}/daily`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                showStatus('statusMessage', '✅ Item forcé pour aujourd\'hui !', 'success');
+                loadDaily();
+            } else {
+                showStatus('statusMessage', '❌ Erreur lors de la sauvegarde', 'error');
+            }
+        } catch (e) { showStatus('statusMessage', '❌ Erreur réseau', 'error'); }
+    }
+
+    async function loadLeaderboard() {
+        try {
+            const res = await fetch(`/api/v1/games/${currentGame}/leaderboard`);
+            const data = await res.json();
+            document.getElementById('leaderboardSummary').textContent =
+                `${data.total_found || 0} / ${data.total_played || 0} ont trouvé`;
+
+            const box = document.getElementById('leaderboardBox');
+            const rows = data.leaderboard || [];
+            if (rows.length === 0) {
+                box.innerHTML = '<div class="text-slate-600 italic text-xs py-4 text-center">Personne n\'a encore joué aujourd\'hui.</div>';
+                return;
+            }
+            box.innerHTML = rows.map(r => `
+                <div class="flex justify-between items-center py-2.5 px-4 bg-slate-900/50 rounded-xl border border-slate-800">
+                    <div class="flex items-center gap-3">
+                        <span class="w-6 text-center font-black text-xs ${r.rank === 1 ? 'text-amber-400' : 'text-slate-500'}">#${r.rank}</span>
+                        <span class="font-bold text-sm text-slate-200">${r.username}</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs">
+                        ${r.found ? '<span class="text-emerald-400"><i class="fas fa-check"></i></span>' : '<span class="text-rose-400"><i class="fas fa-times"></i></span>'}
+                        <span class="text-slate-500">${r.questions} questions · ${r.penalties} pénalités</span>
+                    </div>
+                </div>
+            `).join('');
+        } catch (e) { console.error('Erreur chargement leaderboard:', e); }
+    }
+
+    async function loadHistory() {
+        try {
+            const res = await fetch(`/api/v1/games/${currentGame}/history?limit=10`);
+            const data = await res.json();
+            const box = document.getElementById('historyBox');
+            const rows = data.history || [];
+            if (rows.length === 0) {
+                box.innerHTML = '<div class="text-slate-600 italic text-xs py-4 text-center">Pas encore d\'historique.</div>';
+                return;
+            }
+            box.innerHTML = rows.map(h => `
+                <div class="flex justify-between items-center py-2.5 px-4 bg-slate-900/50 rounded-xl border border-slate-800">
+                    <div>
+                        <span class="font-bold text-sm text-slate-200">${h.name}</span>
+                        <span class="text-xs text-slate-500 ml-2">${h.universe || ''} · ${h.game_date}</span>
+                    </div>
+                    <button onclick="deleteHistoryEntry('${h.game_date}')" title="Supprimer cette entrée (erreur IA, doublon...)"
+                        class="text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 w-7 h-7 rounded-lg flex items-center justify-center transition-all">
+                        <i class="fas fa-trash text-xs"></i>
+                    </button>
+                </div>
+            `).join('');
+        } catch (e) { console.error('Erreur chargement historique:', e); }
+    }
+
+    async function deleteHistoryEntry(gameDate) {
+        if (!confirm(`Supprimer l'item du ${gameDate} ? Les scores déjà enregistrés ce jour-là ne sont pas affectés.`)) return;
+        try {
+            const res = await fetch(`/api/v1/games/${currentGame}/history/${gameDate}`, { method: 'DELETE' });
+            if (res.ok) {
+                showStatus('statusMessage', '✅ Entrée supprimée', 'success');
+                loadHistory();
+            } else {
+                showStatus('statusMessage', '❌ Erreur lors de la suppression', 'error');
+            }
+        } catch (e) { showStatus('statusMessage', '❌ Erreur réseau', 'error'); }
+    }
+
+    // ============ FELIXDLE (mot du jour) ============
+    async function fxLoadAll() {
+        await Promise.all([fxLoadDaily(), fxLoadWords(), fxLoadLeaderboard(), fxLoadHistory()]);
+    }
+
+    async function fxLoadDaily() {
+        try {
+            const res = await fetch('/admin/api/felixdle/daily');
+            const data = await res.json();
+            const statusEl = document.getElementById('fxTodayStatus');
+            statusEl.innerHTML = data.is_set
+                ? `<span class="text-emerald-400"><i class="fas fa-check-circle"></i> Mot défini : ${data.word}</span>`
+                : '<span class="text-amber-400"><i class="fas fa-exclamation-triangle"></i> Aucun mot pour aujourd\'hui — le scheduler le générera à 2h, ou force-le ci-dessous</span>';
+            document.getElementById('fxWordInput').value = data.word || '';
+        } catch (e) { console.error('Erreur chargement daily felixdle:', e); }
+    }
+
+    async function fxSaveDaily() {
+        const word = document.getElementById('fxWordInput').value.trim().toUpperCase();
+        if (!word) { showStatus('fxStatusMessage', '❌ Entre un mot', 'error'); return; }
+        try {
+            const res = await fetch('/admin/api/felixdle/daily', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ word })
+            });
+            if (res.ok) {
+                showStatus('fxStatusMessage', '✅ Mot forcé pour aujourd\'hui !', 'success');
+                fxLoadDaily();
+            } else {
+                const err = await res.json();
+                showStatus('fxStatusMessage', `❌ ${err.detail || 'Erreur'}`, 'error');
+            }
+        } catch (e) { showStatus('fxStatusMessage', '❌ Erreur réseau', 'error'); }
+    }
+
+    async function fxLoadWords() {
+        try {
+            const res = await fetch('/admin/api/felixdle/words');
+            const data = await res.json();
+            const box = document.getElementById('fxWordsBox');
+            if (!data.words || data.words.length === 0) {
+                box.innerHTML = '<div class="text-slate-600 italic text-xs py-4 text-center">Pool vide.</div>';
+                return;
+            }
+            box.innerHTML = data.words.map(w => `
+                <div class="flex items-center gap-2 bg-slate-900/50 border ${w.is_active ? 'border-slate-800' : 'border-rose-900/50 opacity-50'} rounded-xl px-3 py-2">
+                    <span class="text-xs font-bold text-slate-200">${w.word}</span>
+                    <button onclick="fxToggleWord(${w.id})" title="${w.is_active ? 'Désactiver' : 'Activer'}" class="text-slate-500 hover:text-amber-400 text-xs">
+                        <i class="fas fa-${w.is_active ? 'eye' : 'eye-slash'}"></i>
+                    </button>
+                    <button onclick="fxDeleteWord(${w.id})" title="Supprimer" class="text-slate-500 hover:text-rose-400 text-xs">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `).join('');
+        } catch (e) { console.error('Erreur chargement pool felixdle:', e); }
+    }
+
+    async function fxAddWord() {
+        const input = document.getElementById('fxNewWordInput');
+        const word = input.value.trim().toUpperCase();
+        if (!word) return;
+        try {
+            const res = await fetch('/admin/api/felixdle/words', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ word })
+            });
+            if (res.ok) {
+                input.value = '';
+                fxLoadWords();
+            } else {
+                const err = await res.json();
+                showStatus('fxStatusMessage', `❌ ${err.detail || 'Erreur'}`, 'error');
+            }
+        } catch (e) { showStatus('fxStatusMessage', '❌ Erreur réseau', 'error'); }
+    }
+
+    async function fxToggleWord(id) {
+        await fetch(`/admin/api/felixdle/words/${id}/toggle`, { method: 'POST' });
+        fxLoadWords();
+    }
+
+    async function fxDeleteWord(id) {
+        if (!confirm('Supprimer ce mot du pool ?')) return;
+        await fetch(`/admin/api/felixdle/words/${id}`, { method: 'DELETE' });
+        fxLoadWords();
+    }
+
+    async function fxLoadLeaderboard() {
+        try {
+            const res = await fetch('/api/v1/felixdle/leaderboard');
+            const data = await res.json();
+            document.getElementById('fxLeaderboardSummary').textContent =
+                `${data.total_won || 0} / ${data.total_played || 0} ont trouvé`;
+
+            const box = document.getElementById('fxLeaderboardBox');
+            const rows = data.leaderboard || [];
+            if (rows.length === 0) {
+                box.innerHTML = '<div class="text-slate-600 italic text-xs py-4 text-center">Personne n\'a encore joué aujourd\'hui.</div>';
+                return;
+            }
+            box.innerHTML = rows.map(r => `
+                <div class="flex justify-between items-center py-2.5 px-4 bg-slate-900/50 rounded-xl border border-slate-800">
+                    <div class="flex items-center gap-3">
+                        <span class="w-6 text-center font-black text-xs ${r.rank === 1 ? 'text-amber-400' : 'text-slate-500'}">#${r.rank}</span>
+                        <span class="font-bold text-sm text-slate-200">${r.username}</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs">
+                        ${r.won ? '<span class="text-emerald-400"><i class="fas fa-check"></i></span>' : '<span class="text-rose-400"><i class="fas fa-times"></i></span>'}
+                        <span class="text-slate-500">${r.attempts}/6 essais</span>
+                    </div>
+                </div>
+            `).join('');
+        } catch (e) { console.error('Erreur chargement leaderboard felixdle:', e); }
+    }
+
+    async function fxLoadHistory() {
+        try {
+            const res = await fetch('/api/v1/felixdle/history?limit=10');
+            const data = await res.json();
+            const box = document.getElementById('fxHistoryBox');
+            const rows = data.history || [];
+            if (rows.length === 0) {
+                box.innerHTML = '<div class="text-slate-600 italic text-xs py-4 text-center">Pas encore d\'historique.</div>';
+                return;
+            }
+            box.innerHTML = rows.map(h => `
+                <div class="flex justify-between items-center py-2.5 px-4 bg-slate-900/50 rounded-xl border border-slate-800">
+                    <span class="font-bold text-sm text-slate-200">${h.word}</span>
+                    <span class="text-xs text-slate-500">${h.game_date}</span>
+                </div>
+            `).join('');
+        } catch (e) { console.error('Erreur chargement historique felixdle:', e); }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => selectGame('kikece'));
+</script>
+</body>
+</html>

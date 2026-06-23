@@ -2,7 +2,7 @@ import logging
 import asyncio
 import json
 from datetime import datetime
-from fastapi import APIRouter, Request, Form, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, Request, Form, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from app.core.database import get_db_connection
@@ -10,7 +10,9 @@ from app.services.notification_service import notification_service
 from app.routes.overlays import trigger_overlay_event
 
 # L'import vital pour envoyer les messages sur le salon SONDAGE
-from app.services.discord_service import send_message_to_discord 
+from app.services.discord_service import send_message_to_discord
+from app.core.security import require_admin
+from app.core.config import settings
 
 logger = logging.getLogger("masthbot.polls")
 router = APIRouter(tags=["polls_faq"])
@@ -20,7 +22,7 @@ templates = Jinja2Templates(directory="app/templates")
 # 🖥️ PAGE PRINCIPALE : SONDAGES & FAQ (ADMIN)
 # ==========================================================
 
-@router.get("/admin/polls_faq", response_class=HTMLResponse)
+@router.get("/admin/polls_faq", response_class=HTMLResponse, dependencies=[Depends(require_admin)])
 async def admin_polls_faq_page(request: Request):
     """
     Affiche l'interface fusionnée sur le Raspberry Pi.
@@ -121,7 +123,7 @@ async def admin_polls_faq_page(request: Request):
 # 🗳️ ACTIONS : SONDAGES (CRÉATION ET CLÔTURE)
 # ==========================================================
 
-@router.post("/admin/polls_faq/create")
+@router.post("/admin/polls_faq/create", dependencies=[Depends(require_admin)])
 async def create_poll(
     question: str = Form(...),
     option1: str = Form(...),
@@ -156,14 +158,14 @@ async def create_poll(
 
     # Envoi Discord
     try:
-        await send_message_to_discord("1509812594662183035", discord_msg)
+        await send_message_to_discord(settings.POLLS_DISCORD_CHANNEL_ID, discord_msg)
     except Exception as e:
         logger.error(f"❌ Erreur Discord : {e}")
 
     return RedirectResponse(url="/admin/polls_faq?created=1", status_code=303)
 
 
-@router.post("/admin/polls_faq/close")
+@router.post("/admin/polls_faq/close", dependencies=[Depends(require_admin)])
 async def close_poll():
     """Clôture le sondage et expédie les résultats calculés sur Discord."""
     async with get_db_connection() as conn:
@@ -203,7 +205,7 @@ async def close_poll():
 
             # Envoi via le service Discord
             try:
-                await send_message_to_discord("1509812594662183035", discord_msg)
+                await send_message_to_discord(settings.POLLS_DISCORD_CHANNEL_ID, discord_msg)
             except Exception as e:
                 logger.error(f"❌ Erreur d'envoi Discord pour le sondage : {e}")
         else:
@@ -216,7 +218,7 @@ async def close_poll():
 # ❓ ACTIONS : QUESTIONS / FAQ
 # ==========================================================
 
-@router.post("/admin/polls_faq/questions/answer")
+@router.post("/admin/polls_faq/questions/answer", dependencies=[Depends(require_admin)])
 async def answer_question(
     background_tasks: BackgroundTasks,
     id: int = Form(...),
@@ -224,9 +226,10 @@ async def answer_question(
     is_public: int = Form(0),
 ):
     async with get_db_connection() as conn:
-        c = await conn.execute("SELECT question_text FROM questions WHERE id = $1", (id,))
+        c = await conn.execute("SELECT question_text, answer_text FROM questions WHERE id = $1", (id,))
         q_row = await c.fetchone()
         question_text = q_row["question_text"] if q_row else "Question inconnue"
+        is_first_answer = not (q_row and q_row["answer_text"])
 
         await conn.execute(
             """
@@ -237,7 +240,8 @@ async def answer_question(
             (answer, is_public, id),
         )
 
-    if is_public and question_text:
+    # On ne notifie que lors de la toute première réponse, jamais lors d'une simple correction de typo
+    if is_public and question_text and is_first_answer:
         background_tasks.add_task(
             notification_service.send_faq_public_answer,
             question_text,
@@ -246,7 +250,7 @@ async def answer_question(
 
     return RedirectResponse(url="/admin/polls_faq?success=1", status_code=303)
 
-@router.post("/admin/polls_faq/questions/delete/{id}")
+@router.post("/admin/polls_faq/questions/delete/{id}", dependencies=[Depends(require_admin)])
 async def delete_question(id: int):
     async with get_db_connection() as conn:
         await conn.execute("DELETE FROM questions WHERE id = $1", (id,))
@@ -320,7 +324,7 @@ async def api_get_active_poll():
         logger.error(f"Erreur API sondage actif : {e}")
         return {"active": False}
 
-@router.post("/admin/polls_faq/delete/{poll_id}")
+@router.post("/admin/polls_faq/delete/{poll_id}", dependencies=[Depends(require_admin)])
 async def delete_poll(poll_id: int):
     """Supprime définitivement un sondage de l'historique et ses votes associés."""
     async with get_db_connection() as conn:

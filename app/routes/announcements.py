@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -7,6 +7,7 @@ from typing import Optional
 
 # 👇 L'IMPORT MAGIQUE POUR POSTGRESQL (Le même que le bot)
 from app.core.database import get_db_connection
+from app.core.security import require_admin
 
 logger = logging.getLogger("masthbot.announcements")
 
@@ -27,7 +28,7 @@ class Announcement(BaseModel):
 # ==========================================
 # PAGE HTML DU GESTIONNAIRE
 # ==========================================
-@router.get("/admin/announcements", response_class=HTMLResponse)
+@router.get("/admin/announcements", response_class=HTMLResponse, dependencies=[Depends(require_admin)])
 async def admin_announcements_page(request: Request):
     """Affiche la page Web d'administration des annonces."""
     return templates.TemplateResponse(request=request, name="admin/announcements.html", context={"request": request})
@@ -50,7 +51,7 @@ async def get_announcements():
 # ==========================================
 # API : SAUVEGARDE / CRÉATION
 # ==========================================
-@router.post("/api/announcements/save")
+@router.post("/api/announcements/save", dependencies=[Depends(require_admin)])
 async def save_announcement(ann: Announcement):
     """Enregistre une nouvelle annonce ou met à jour une annonce existante."""
     try:
@@ -76,7 +77,7 @@ async def save_announcement(ann: Announcement):
 # ==========================================
 # API : SUPPRESSION
 # ==========================================
-@router.delete("/api/announcements/delete/{ann_id}")
+@router.delete("/api/announcements/delete/{ann_id}", dependencies=[Depends(require_admin)])
 async def delete_announcement(ann_id: int):
     """Supprime définitivement une annonce de la base de données."""
     try:

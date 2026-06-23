@@ -5,7 +5,7 @@ import os
 import shutil
 import aiohttp
 
-from fastapi import APIRouter, HTTPException, Request, Form, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, File, UploadFile
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -13,6 +13,7 @@ from app.services.premium_service import premium_service
 from app.repositories import viewer_repo
 from app.routes.overlays import trigger_overlay_event
 from app.services.obs_service import obs_service
+from app.core.security import require_admin
 logger = logging.getLogger("masthbot.premium_routes")
 router = APIRouter(tags=["premium"])
 
@@ -47,13 +48,13 @@ async def send_to_external_overlay(action_type: str, action_value: str, username
     except Exception as e:
         logger.error(f"❌ Erreur de communication avec l'overlay 3005 : {e}")
 
-@router.get("/api/admin/premium/actions")
+@router.get("/api/admin/premium/actions", dependencies=[Depends(require_admin)])
 async def get_all_actions():
     """Renvoie TOUTES les actions pour ton interface mini PC."""
     actions = await premium_service.get_all_actions()
     return {"status": "success", "data": actions}
 
-@router.post("/api/admin/premium/toggle")
+@router.post("/api/admin/premium/toggle", dependencies=[Depends(require_admin)])
 async def toggle_action(payload: dict):
     """Active ou désactive un bouton depuis ton mini PC."""
     action_id = payload.get("id")
@@ -67,7 +68,7 @@ async def toggle_action(payload: dict):
         return {"status": "success", "message": "Statut mis à jour !"}
     raise HTTPException(status_code=500, detail="Erreur lors de la mise à jour.")
 
-@router.get("/admin/premium", response_class=HTMLResponse)
+@router.get("/admin/premium", response_class=HTMLResponse, dependencies=[Depends(require_admin)])
 async def admin_premium_page(request: Request):
     """Affiche la page web d'administration sur le mini PC."""
     return templates.TemplateResponse(
@@ -80,7 +81,7 @@ async def admin_premium_page(request: Request):
 SOUNDS_DIR = "static/commands/sounds" 
 VIDEOS_DIR = "static/commands/images"
 
-@router.get("/api/admin/premium/files/{action_type}")
+@router.get("/api/admin/premium/files/{action_type}", dependencies=[Depends(require_admin)])
 async def get_existing_files(action_type: str):
     """Renvoie la liste des fichiers existants sur le serveur (sans l'extension)."""
     target_dir = SOUNDS_DIR if action_type == "sound" else VIDEOS_DIR
@@ -96,7 +97,7 @@ async def get_existing_files(action_type: str):
     return {"status": "success", "data": sorted(files)}
 
 
-@router.post("/api/admin/premium/add")
+@router.post("/api/admin/premium/add", dependencies=[Depends(require_admin)])
 async def admin_add_action(
     name: str = Form(...),
     action_type: str = Form(...),
@@ -135,7 +136,7 @@ async def admin_add_action(
         return {"status": "success", "message": f"Bouton ajouté avec succès !"}
     return JSONResponse(status_code=500, content={"detail": "Erreur serveur."})
 
-@router.post("/api/admin/premium/trigger")
+@router.post("/api/admin/premium/trigger", dependencies=[Depends(require_admin)])
 async def admin_force_trigger(payload: dict):
     """Déclenchement direct depuis le mini PC (Pas de vérification, pas de cooldown)."""
     action_type = payload.get("action_type")

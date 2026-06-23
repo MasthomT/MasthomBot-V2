@@ -5,7 +5,7 @@ app/routes/games.py — Routes FastAPI génériques pour tous les jeux quotidien
 Remplace app/routes/kikece.py. Le proxy Felix (/felix) reste partagé.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
@@ -13,6 +13,8 @@ import json
 
 from app.core.database import get_db_connection
 from app.core.config import settings
+from app.core.rate_limit import limiter
+from app.core.security import require_admin
 
 router = APIRouter(prefix="/api/v1/games", tags=["games"])
 
@@ -98,6 +100,28 @@ async def init_games_tables():
         await db.execute("CREATE INDEX IF NOT EXISTS idx_games_sessions_type_date ON games_sessions (game_type, game_date)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_games_sessions_type_twitch_date ON games_sessions (game_type, twitch_id, game_date)")
 
+        # Compteurs cumulés par rang (S/A/B/C), pour les conditions de trophées "Obtenir un rang X".
+        for col in ("games_rank_s_count", "games_rank_a_count", "games_rank_b_count", "games_rank_c_count"):
+            await db.execute(f"ALTER TABLE viewers ADD COLUMN IF NOT EXISTS {col} INTEGER DEFAULT 0")
+
+
+def compute_game_rank(questions_count: int, penalties_count: int, found: bool) -> str | None:
+    """Calcule le rang de performance d'une partie (S = parfait, C = laborieux).
+    Seuils alignés EXACTEMENT sur la fonction rankInfo() du frontend fel-x.icu
+    (kikece.html, oukece.html, kekece.html, kikadi.html) pour que le rang affiché
+    au joueur corresponde toujours au trophée comptabilisé.
+    None si la partie n'a pas été trouvée (pas de rang attribué)."""
+    if not found:
+        return None
+    total = (questions_count or 0) + (penalties_count or 0)
+    if total <= 10:
+        return "S"
+    if total <= 20:
+        return "A"
+    if total <= 30:
+        return "B"
+    return "C"
+
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
@@ -141,7 +165,7 @@ async def get_daily(game_type: str):
     }
 
 
-@router.post("/{game_type}/daily")
+@router.post("/{game_type}/daily", dependencies=[Depends(require_admin)])
 async def set_daily(game_type: str, payload: DailyItemSet):
     check_game_type(game_type)
     today = today_paris()
@@ -236,7 +260,20 @@ async def submit_session(game_type: str, payload: GameResultSubmit):
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """, game_type, payload.twitch_id, payload.twitch_username, today,
             payload.questions_count, payload.penalties_count, payload.found)
-    return {"status": "ok"}
+
+        rank = compute_game_rank(payload.questions_count, payload.penalties_count, payload.found)
+        if rank:
+            col = f"games_rank_{rank.lower()}_count"
+            await db.execute(
+                "INSERT INTO viewers (twitch_id, username) VALUES (?, ?) ON CONFLICT(twitch_id) DO NOTHING",
+                payload.twitch_id, payload.twitch_username
+            )
+            await db.execute(
+                f"UPDATE viewers SET {col} = COALESCE({col}, 0) + 1 WHERE twitch_id = ?",
+                payload.twitch_id
+            )
+
+    return {"status": "ok", "rank": rank}
 
 
 @router.get("/{game_type}/history")
@@ -267,10 +304,28 @@ async def get_history(game_type: str, limit: int = 10):
     }
 
 
+@router.delete("/{game_type}/history/{game_date}", dependencies=[Depends(require_admin)])
+async def delete_history_entry(game_type: str, game_date: str):
+    """Supprime un item passé (erreur de l'IA, doublon...). N'affecte pas les scores déjà enregistrés."""
+    check_game_type(game_type)
+    try:
+        parsed_date = date.fromisoformat(game_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Format de date invalide (attendu : AAAA-MM-JJ)")
+
+    async with get_db_connection() as db:
+        await db.execute(
+            "DELETE FROM games_daily WHERE game_type = ? AND game_date = ?",
+            game_type, parsed_date
+        )
+    return {"status": "ok", "game_type": game_type, "game_date": game_date}
+
+
 # ── Proxy Felix (partagé par tous les jeux) ──────────────────────────────────
 
 @router.post("/felix")
-async def felix_proxy(payload: FelixMessage):
+@limiter.limit("10/minute")
+async def felix_proxy(request: Request, payload: FelixMessage):
     import httpx
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(

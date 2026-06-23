@@ -67,6 +67,45 @@
             </div>
         </div>
 
+        <!-- RÉTENTION COMMUNAUTÉ -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="config-card p-6 rounded-3xl shadow-lg flex items-center gap-5">
+                <div class="w-14 h-14 bg-amber-500/10 rounded-2xl flex items-center justify-center border border-amber-500/20">
+                    <i class="fas fa-fire text-amber-400 text-2xl"></i>
+                </div>
+                <div>
+                    <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Actifs sur 7 jours</div>
+                    <div class="text-3xl font-black text-white">{{ general_stats.active_viewers_7d }}</div>
+                </div>
+            </div>
+            <div class="config-card p-6 rounded-3xl shadow-lg flex items-center gap-5">
+                <div class="w-14 h-14 bg-rose-500/10 rounded-2xl flex items-center justify-center border border-rose-500/20">
+                    <i class="fas fa-heart-pulse text-rose-400 text-2xl"></i>
+                </div>
+                <div>
+                    <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Taux de rétention (7j)</div>
+                    <div class="text-3xl font-black text-white">{{ general_stats.retention_rate }}%</div>
+                </div>
+            </div>
+            <div class="config-card p-6 rounded-3xl shadow-lg flex items-center gap-5">
+                <div class="w-14 h-14 bg-cyan-500/10 rounded-2xl flex items-center justify-center border border-cyan-500/20">
+                    <i class="fas fa-comments text-cyan-400 text-2xl"></i>
+                </div>
+                <div>
+                    <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Msg / Actif (7j)</div>
+                    <div class="text-3xl font-black text-white">{{ general_stats.avg_messages_per_active }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GRAPHIQUE D'ACTIVITÉ -->
+        <div class="config-card p-6 md:p-8 rounded-3xl shadow-xl mb-12">
+            <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-6">
+                <i class="fas fa-chart-line text-indigo-400 text-lg"></i> Activité communauté (14 derniers jours)
+            </h2>
+            <canvas id="activityChart" height="80"></canvas>
+        </div>
+
         <!-- SECTION: FIL D'ACTUALITÉ ET UNFOLLOWS -->
         <h2 class="text-xs font-black text-slate-500 uppercase mb-6 tracking-[0.2em] flex items-center gap-2 mt-12">
             <i class="fas fa-satellite-dish text-indigo-400 animate-pulse"></i> Activité en direct
@@ -267,5 +306,46 @@
         </div>
 
     </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <script>
+        const activityData = {{ activity_trend | tojson }};
+        new Chart(document.getElementById('activityChart'), {
+            type: 'line',
+            data: {
+                labels: activityData.map(d => d.date),
+                datasets: [
+                    {
+                        label: 'Messages',
+                        data: activityData.map(d => d.messages),
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99,102,241,0.1)',
+                        tension: 0.3,
+                        fill: true,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Watchtime (min)',
+                        data: activityData.map(d => d.watchtime_minutes),
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16,185,129,0.1)',
+                        tension: 0.3,
+                        fill: true,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+                    y: { type: 'linear', position: 'left', ticks: { color: '#6366f1' }, grid: { color: '#1e293b' } },
+                    y1: { type: 'linear', position: 'right', ticks: { color: '#10b981' }, grid: { drawOnChartArea: false } }
+                },
+                plugins: { legend: { labels: { color: '#e2e8f0' } } }
+            }
+        });
+    </script>
 </body>
 </html>

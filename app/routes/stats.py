@@ -1,18 +1,19 @@
 import logging
 import json
-from datetime import datetime
-from fastapi import APIRouter, Request, HTTPException, Form
+from datetime import datetime, timedelta
+from fastapi import APIRouter, Depends, Request, HTTPException, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 # --- IMPORT CORE POSTGRESQL ---
 from app.core.database import get_db_connection
+from app.core.security import require_admin
 
 # --- CONFIGURATION DU LOGGING ---
 logger = logging.getLogger("masthbot.stats")
 
 # --- INITIALISATION DU ROUTER ---
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
 # --- CONFIGURATION DES TEMPLATES ---
 templates = Jinja2Templates(directory="app/templates")
@@ -223,6 +224,45 @@ async def admin_stats_page(request: Request):
                     "timestamp": format_date(row["last_web_login"])
                 })
 
+            # 6. ACTIVITÉ COMMUNAUTÉ SUR 14 JOURS (messages + watchtime agrégés par jour)
+            cursor = await conn.execute(f"""
+                SELECT ds.day, SUM(ds.messages) AS messages, SUM(ds.watchtime) AS watchtime
+                FROM viewer_daily_stats ds
+                JOIN viewers v ON v.twitch_id = ds.twitch_id
+                WHERE ds.day >= CURRENT_DATE - INTERVAL '13 days'
+                AND LOWER(v.username) NOT IN {EXCLUSION_LIST}
+                GROUP BY ds.day
+                ORDER BY ds.day ASC
+            """)
+            raw_activity = await cursor.fetchall()
+            activity_by_day = {str(r["day"]): {"messages": r["messages"] or 0, "watchtime": r["watchtime"] or 0} for r in raw_activity}
+
+            today = datetime.now().date()
+            activity_trend = []
+            for i in range(13, -1, -1):
+                day = today - timedelta(days=i)
+                day_str = str(day)
+                entry = activity_by_day.get(day_str, {"messages": 0, "watchtime": 0})
+                activity_trend.append({
+                    "date": day.strftime("%d/%m"),
+                    "messages": entry["messages"],
+                    "watchtime_minutes": round(entry["watchtime"] / 60)
+                })
+
+            # 7. RÉTENTION : VIEWERS ACTIFS SUR 7 JOURS
+            cursor = await conn.execute(f"""
+                SELECT COUNT(DISTINCT ds.twitch_id) FROM viewer_daily_stats ds
+                JOIN viewers v ON v.twitch_id = ds.twitch_id
+                WHERE ds.day >= CURRENT_DATE - INTERVAL '6 days'
+                AND LOWER(v.username) NOT IN {EXCLUSION_LIST}
+                AND (ds.messages > 0 OR ds.watchtime > 0)
+            """)
+            res_active7 = await cursor.fetchone()
+            active_viewers_7d = res_active7[0] if res_active7 else 0
+
+            retention_rate = round((active_viewers_7d / total_viewers) * 100, 1) if total_viewers > 0 else 0
+            avg_messages_per_active = round(total_messages / active_viewers_7d, 1) if active_viewers_7d > 0 else 0
+
         # 6. ENVOI AU TEMPLATE HTML
         return templates.TemplateResponse(
             request,
@@ -231,14 +271,18 @@ async def admin_stats_page(request: Request):
                 "general_stats": {
                     "total_viewers": total_viewers,
                     "total_messages": total_messages,
-                    "watchtime_display": format_to_hhmm(total_seconds)
+                    "watchtime_display": format_to_hhmm(total_seconds),
+                    "active_viewers_7d": active_viewers_7d,
+                    "retention_rate": retention_rate,
+                    "avg_messages_per_active": avg_messages_per_active
                 },
                 "top_messages": [dict(r) for r in top_messages],
                 "top_watchtime": top_watchtime,
                 "top_points": top_points,
                 "recent_events": recent_events,
                 "recent_unfollows": recent_unfollows,
-                "recent_logins": recent_logins
+                "recent_logins": recent_logins,
+                "activity_trend": activity_trend
             }
         )
 

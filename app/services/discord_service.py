@@ -40,9 +40,9 @@ CHANNELS_LIST = [
     {"id": "1513892938600677446", "name": "FEL-X", "category": "Membres"}
 ]
 
-async def send_message_to_discord(channel_id: str, message: str) -> dict:
+async def send_message_to_discord(channel_id: str, message: str = "", embed: dict | None = None) -> dict:
     """
-    Envoie un message texte sur un salon Discord précis.
+    Envoie un message sur un salon Discord précis, texte et/ou embed.
     """
     url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
     headers = {
@@ -50,6 +50,8 @@ async def send_message_to_discord(channel_id: str, message: str) -> dict:
         "Content-Type": "application/json"
     }
     data = {"content": message}
+    if embed:
+        data["embeds"] = [embed]
 
     # Utilisation d'un client HTTP asynchrone pour ne pas bloquer le serveur web
     async with httpx.AsyncClient() as client:

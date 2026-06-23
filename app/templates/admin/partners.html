@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Partenaires - MasthomBot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #6366f1; outline: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+
+        .live-dot { display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 800; }
+        .live-dot.online { color: #34d399; }
+        .live-dot.offline { color: #64748b; }
+        .live-dot::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+        .source-badge { font-size: 0.65rem; font-weight: 800; padding: 3px 8px; border-radius: 6px; text-transform: uppercase; }
+        .source-badge.manual { background: rgba(139,92,246,0.15); color: #a78bfa; }
+        .source-badge.guest_star { background: rgba(99,102,241,0.15); color: #818cf8; }
+
+        .category-badge { font-size: 0.65rem; font-weight: 800; padding: 3px 8px; border-radius: 6px; text-transform: uppercase; }
+        .category-badge.moderator { background: rgba(244,63,94,0.15); color: #fb7185; }
+        .category-badge.recommended { background: rgba(52,211,153,0.15); color: #34d399; }
+        .category-badge.collab { background: rgba(99,102,241,0.15); color: #818cf8; }
+        .category-badge.manual { background: rgba(148,163,184,0.15); color: #94a3b8; }
+
+        .category-section-title { font-size: 0.7rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; padding: 14px 24px 8px; }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen">
+
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 md:p-10 flex flex-col h-screen overflow-hidden">
+        <header class="mb-6">
+            <h1 class="text-3xl font-extrabold text-white tracking-tight">🤝 Partenaires</h1>
+            <p class="text-slate-400 mt-1 text-sm uppercase font-black tracking-widest">Collabs, Guest Star & recommandations</p>
+        </header>
+
+        <div id="status-toast" class="hidden mb-4 p-3 rounded-xl text-[10px] font-bold text-center uppercase tracking-widest"></div>
+
+        <!-- FORMULAIRE D'AJOUT -->
+        <form id="addForm" class="config-card p-6 rounded-3xl shadow-2xl mb-4 flex flex-wrap gap-4 items-end">
+            <div class="flex-1 min-w-[180px]">
+                <label class="block text-xs font-black text-slate-500 uppercase mb-2">Login Twitch</label>
+                <input type="text" id="newLogin" required class="w-full input-dark rounded-xl p-3 text-sm font-bold" placeholder="ex: nom_du_streamer">
+            </div>
+            <div class="flex-1 min-w-[160px]">
+                <label class="block text-xs font-black text-slate-500 uppercase mb-2">Catégorie</label>
+                <select id="newCategory" class="w-full input-dark rounded-xl p-3 text-sm font-bold">
+                    <option value="moderator">🛡️ Modérateur/rice</option>
+                    <option value="recommended">⭐ Recommandation</option>
+                    <option value="collab" selected>🤝 Collab</option>
+                    <option value="manual">➕ Manuel</option>
+                </select>
+            </div>
+            <div class="flex-1 min-w-[180px]">
+                <label class="block text-xs font-black text-slate-500 uppercase mb-2">Type de partenariat</label>
+                <select id="newType" class="w-full input-dark rounded-xl p-3 text-sm font-bold">
+                    <option value="Collab">Collab</option>
+                    <option value="Guest Star">Guest Star</option>
+                    <option value="Ami du stream">Ami du stream</option>
+                    <option value="Partenaire récurrent">Partenaire récurrent</option>
+                </select>
+            </div>
+            <div class="flex-[2] min-w-[220px]">
+                <label class="block text-xs font-black text-slate-500 uppercase mb-2">Description</label>
+                <input type="text" id="newDescription" class="w-full input-dark rounded-xl p-3 text-sm font-bold" placeholder="Petite phrase de présentation...">
+            </div>
+            <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-black px-6 py-3 rounded-xl shadow-xl transition-all active:scale-95 text-sm uppercase tracking-wider">
+                + Ajouter
+            </button>
+        </form>
+
+        <div class="mb-8 flex flex-wrap justify-end gap-3">
+            <button onclick="importModerators()" class="bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 font-black px-5 py-2.5 rounded-xl border border-rose-600/30 transition-all active:scale-95 text-xs uppercase tracking-wider">
+                <i class="fas fa-shield"></i> Importer les modérateurs/rices Twitch
+            </button>
+            <button onclick="importTrackedStreamers()" class="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 font-black px-5 py-2.5 rounded-xl border border-emerald-600/30 transition-all active:scale-95 text-xs uppercase tracking-wider">
+                <i class="fas fa-rotate"></i> Importer les streamers suivis (notifications live) en "Recommandation"
+            </button>
+        </div>
+
+        <!-- TABLEAU -->
+        <div class="config-card rounded-3xl shadow-2xl flex-1 overflow-y-auto custom-scrollbar">
+            <table class="w-full">
+                <thead class="sticky top-0 bg-slate-800/95">
+                    <tr>
+                        <th class="text-left text-[10px] font-black text-slate-500 uppercase px-6 py-4">Partenaire</th>
+                        <th class="text-left text-[10px] font-black text-slate-500 uppercase px-4 py-4">Statut</th>
+                        <th class="text-left text-[10px] font-black text-slate-500 uppercase px-4 py-4">Catégorie</th>
+                        <th class="text-left text-[10px] font-black text-slate-500 uppercase px-4 py-4">Type</th>
+                        <th class="text-left text-[10px] font-black text-slate-500 uppercase px-4 py-4">Source</th>
+                        <th class="text-left text-[10px] font-black text-slate-500 uppercase px-4 py-4">Collabs</th>
+                        <th class="text-left text-[10px] font-black text-slate-500 uppercase px-4 py-4">Dernière collab</th>
+                        <th class="px-4 py-4"></th>
+                    </tr>
+                </thead>
+                <tbody id="partnersBody">
+                    {% set category_labels = {'moderator': '🛡️ Modérateur/rice', 'recommended': '⭐ Recommandation', 'collab': '🤝 Collab', 'manual': '➕ Manuel'} %}
+                    {% for p in partners %}
+                    <tr data-id="{{ p.id }}" class="border-t border-slate-800 {{ '' if p.is_active else 'opacity-40' }}">
+                        <td class="px-6 py-4">
+                            <div class="flex items-center gap-3">
+                                <img src="{{ p.avatar_url }}" class="w-9 h-9 rounded-full" onerror="this.style.display='none'">
+                                <div>
+                                    <div class="font-bold text-white text-sm">{{ p.display_name }}</div>
+                                    <div class="text-xs text-slate-500">@{{ p.twitch_login }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4"><span class="live-dot offline" data-login="{{ p.twitch_login }}">Hors ligne</span></td>
+                        <td class="px-4 py-4">
+                            <select onchange="changeCategory({{ p.id }}, this.value)" class="category-badge {{ p.category }} bg-transparent border-0 cursor-pointer">
+                                {% for cat_value, cat_label in category_labels.items() %}
+                                <option value="{{ cat_value }}" {{ 'selected' if p.category == cat_value else '' }}>{{ cat_label }}</option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td class="px-4 py-4 text-sm text-slate-300">{{ p.partnership_type }}</td>
+                        <td class="px-4 py-4"><span class="source-badge {{ p.source }}">{{ 'Manuel' if p.source == 'manual' else 'Guest Star' }}</span></td>
+                        <td class="px-4 py-4 text-sm text-slate-300">{{ p.collab_count }}</td>
+                        <td class="px-4 py-4 text-xs text-slate-500">{{ p.last_collab_at if p.last_collab_at else '—' }}</td>
+                        <td class="px-4 py-4">
+                            <div class="flex gap-2">
+                                <button onclick="toggleActive({{ p.id }}, {{ p.is_active|lower }})" class="text-slate-500 hover:text-white text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-700 hover:border-slate-500 transition-colors">
+                                    {{ 'Masquer' if p.is_active else 'Réactiver' }}
+                                </button>
+                                <button onclick="deletePartner({{ p.id }})" class="text-rose-500/70 hover:text-rose-500 text-xs font-bold px-3 py-1.5 rounded-lg border border-rose-500/20 hover:border-rose-500/50 transition-colors">
+                                    Supprimer
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center py-16 text-slate-500 italic">
+                            <i class="fas fa-handshake-slash text-4xl mb-3 block opacity-30"></i>
+                            Aucun partenaire pour le moment.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <script>
+        function showToast(msg, isError) {
+            const t = document.getElementById('status-toast');
+            t.textContent = msg;
+            t.className = `mb-4 p-3 rounded-xl text-[10px] font-bold text-center uppercase tracking-widest ${
+                isError
+                    ? 'bg-rose-500/10 border border-rose-500/20 text-rose-400'
+                    : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+            }`;
+            setTimeout(() => t.classList.add('hidden'), 3000);
+        }
+
+        document.getElementById('addForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const login = document.getElementById('newLogin').value.trim();
+            const type = document.getElementById('newType').value;
+            const category = document.getElementById('newCategory').value;
+            const description = document.getElementById('newDescription').value.trim();
+
+            try {
+                const res = await fetch('/api/v1/partners/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ twitch_login: login, partnership_type: type, category, description })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast('✅ Partenaire ajouté : ' + (data.partner?.display_name || login));
+                    setTimeout(() => location.reload(), 800);
+                } else {
+                    showToast('❌ ' + (data.message || 'Erreur'), true);
+                }
+            } catch (err) {
+                showToast('❌ Erreur de connexion', true);
+            }
+        });
+
+        async function deletePartner(id) {
+            if (!confirm('Supprimer définitivement ce partenaire (perd son historique de collabs) ?')) return;
+            try {
+                const res = await fetch(`/api/v1/partners/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    document.querySelector(`tr[data-id="${id}"]`).remove();
+                    showToast('🗑️ Partenaire supprimé');
+                } else {
+                    showToast('❌ Erreur lors de la suppression', true);
+                }
+            } catch (err) {
+                showToast('❌ Erreur de connexion', true);
+            }
+        }
+
+        async function changeCategory(id, category) {
+            try {
+                const res = await fetch(`/api/v1/partners/${id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category })
+                });
+                if (res.ok) {
+                    const select = document.querySelector(`tr[data-id="${id}"] select`);
+                    select.className = 'category-badge ' + category + ' bg-transparent border-0 cursor-pointer';
+                    showToast('✅ Catégorie mise à jour');
+                } else {
+                    showToast('❌ Erreur lors de la mise à jour', true);
+                }
+            } catch (err) {
+                showToast('❌ Erreur de connexion', true);
+            }
+        }
+
+        async function importModerators() {
+            if (!confirm('Importer tous les modérateurs/rices Twitch comme partenaires "Modérateur/rice" ?')) return;
+            try {
+                const res = await fetch('/api/v1/partners/import_moderators', { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast(`✅ ${data.imported.length} importé(s), ${data.skipped.length} déjà présent(s)`);
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showToast('❌ ' + (data.message || 'Erreur'), true);
+                }
+            } catch (err) {
+                showToast('❌ Erreur de connexion', true);
+            }
+        }
+
+        async function importTrackedStreamers() {
+            if (!confirm('Importer tous les streamers suivis dans les notifications de live comme partenaires "Recommandation" ?')) return;
+            try {
+                const res = await fetch('/api/v1/partners/import_tracked', { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast(`✅ ${data.imported.length} importé(s), ${data.skipped.length} déjà présent(s)`);
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showToast('❌ ' + (data.message || 'Erreur'), true);
+                }
+            } catch (err) {
+                showToast('❌ Erreur de connexion', true);
+            }
+        }
+
+        async function toggleActive(id, currentlyActive) {
+            try {
+                if (currentlyActive) {
+                    await fetch(`/api/v1/partners/${id}/deactivate`, { method: 'POST' });
+                    showToast('👁️ Partenaire masqué (historique conservé)');
+                    setTimeout(() => location.reload(), 800);
+                } else {
+                    showToast('ℹ️ Réajoute-le via le formulaire pour le réactiver');
+                }
+            } catch (err) {
+                showToast('❌ Erreur de connexion', true);
+            }
+        }
+
+        async function refreshLiveStatus() {
+            try {
+                const res = await fetch('/api/v1/partners');
+                const data = await res.json();
+                const liveMap = {};
+                (data.partners || []).forEach(p => { liveMap[p.twitch_login.toLowerCase()] = p.is_live; });
+
+                document.querySelectorAll('.live-dot').forEach(el => {
+                    const login = el.dataset.login.toLowerCase();
+                    const isLive = liveMap[login] || false;
+                    el.textContent = isLive ? 'En direct' : 'Hors ligne';
+                    el.className = 'live-dot ' + (isLive ? 'online' : 'offline');
+                });
+            } catch (e) {
+                console.error('Erreur refresh statut live:', e);
+            }
+        }
+
+        refreshLiveStatus();
+        setInterval(refreshLiveStatus, 30000);
+    </script>
+</body>
+</html>

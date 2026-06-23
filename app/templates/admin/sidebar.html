@@ -30,6 +30,10 @@
 					<i class="fas fa-database w-5"></i>
 					Data & Logs
 				</a>
+				<a href="/admin/bot_health" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'bot_health' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+					<i class="fas fa-heart-pulse w-5"></i>
+					Santé du bot
+				</a>
 			</div>
 		</div>
 
@@ -45,9 +49,13 @@
 					<i class="fas fa-bell w-5"></i>
 					Notifications
 				</a>
-				<a href="/admin/moderation" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'moderation' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+				<a href="/admin/moderation" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if request.url.path == '/admin/moderation' or request.url.path == '/admin/moderation.html' %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fas fa-shield-alt w-5"></i>
-					Modération
+					Modération Twitch
+				</a>
+				<a href="/admin/discord_moderation" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'discord_moderation' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+					<i class="fab fa-discord w-5"></i>
+					Modération Discord
 				</a>
 				<a href="/admin/polls_faq" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'poll' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fas fa-poll w-5"></i>
@@ -57,7 +65,7 @@
 					<i class="fas fa-terminal w-5"></i>
 					Commandes
 				</a>
-				<a href="/admin/discord/" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'discord' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+				<a href="/admin/discord/" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if request.url.path.startswith('/admin/discord/') %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fab fa-discord w-5"></i>
 					Messagerie Fel-X
 				</a>
@@ -80,6 +88,10 @@
 					<i class="fas fa-medal w-5"></i>
 					Panthéon Trophées
 				</a>
+				<a href="/admin/games_manager" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'games_manager' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+					<i class="fas fa-dice w-5"></i>
+					Jeux du Jour
+				</a>
 				<a href="/admin/shoutout" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'shoutout' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fas fa-broadcast-tower w-5"></i>
 					Régie & Shoutout
@@ -95,6 +107,10 @@
 				<a href="/admin/announcements" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'announcement' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fas fa-bullhorn w-5"></i>
 					Annonces Auto
+				</a>
+				<a href="/admin/partners" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'partners' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+					<i class="fas fa-handshake w-5"></i>
+					Partenaires
 				</a>
 				<a href="/admin/info" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if request.url.path == '/admin/info' %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 				        <i class="fas fa-info-circle w-5"></i>

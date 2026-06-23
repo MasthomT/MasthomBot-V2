@@ -14,6 +14,12 @@
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
         .cmd-row:hover { border-color: #6366f1 !important; background: rgba(99,102,241,0.04); }
+        .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; inset: 0; background-color: #334155; border-radius: 24px; transition: .2s; }
+        .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: .2s; }
+        input:checked + .toggle-slider { background-color: #6366f1; }
+        input:checked + .toggle-slider:before { transform: translateX(20px); }
         .type-text  { color:#60a5fa; background:rgba(96,165,250,.12); border-color:rgba(96,165,250,.35); }
         .type-image { color:#34d399; background:rgba(52,211,153,.12); border-color:rgba(52,211,153,.35); }
         .type-sound { color:#f59e0b; background:rgba(245,158,11,.12); border-color:rgba(245,158,11,.35); }
@@ -111,6 +117,30 @@
                     </div>
                     <div id="media-grid" class="grid grid-cols-3 gap-2 max-h-56 overflow-y-auto custom-scrollbar"></div>
                     <p id="media-empty" class="hidden text-center text-xs text-slate-600 italic py-4">Aucun fichier</p>
+                </section>
+
+                <section class="config-card p-6 rounded-3xl shadow-xl">
+                    <h2 class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">
+                        <i class="fas fa-code text-amber-400 mr-1"></i> Commandes natives (codées en dur)
+                    </h2>
+                    <div class="space-y-4">
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-bold text-slate-200 flex items-center gap-2">
+                                    <i class="fab fa-tiktok text-slate-300"></i> !showtiktok
+                                </span>
+                                <label class="toggle-switch"><input type="checkbox" id="native-showtiktok-enabled"><span class="toggle-slider"></span></label>
+                            </div>
+                            <p class="text-xs text-slate-500 mb-3">Affiche un TikTok sur l'overlay (dernière vidéo connue, ou lien donné). Réservée aux modérateurs.</p>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Message envoyé dans le chat</label>
+                            <input type="text" id="native-showtiktok-message" class="w-full input-dark rounded-xl p-3 text-sm" placeholder="🎵 TikTok affiché à l'écran ! — {title} {url}">
+                            <p class="text-[10px] text-slate-600 mt-2 italic">Utilise <code>{title}</code> et <code>{url}</code> pour insérer le titre et le lien de la vidéo.</p>
+                        </div>
+                        <button onclick="saveNativeCommands()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-3 rounded-xl shadow-lg transition-all text-xs">
+                            <i class="fas fa-save"></i> SAUVEGARDER
+                        </button>
+                        <div id="native-cmd-status" class="text-center text-xs font-bold h-4"></div>
+                    </div>
                 </section>
             </div>
         </div>
@@ -484,7 +514,44 @@ document.addEventListener('DOMContentLoaded', () => {
     loadCommands();
     loadMedia();
     loadSoundDropdown(); // <-- Ajouté
+    loadNativeCommands();
 });
+
+// ── Commandes natives (codées en dur, ex: !showtiktok) ─────────────────────────
+// Les réglages vivent dans la table discord_features_settings (même backend que
+// l'onglet Commandes de /admin/discord_moderation), mais !showtiktok est une
+// commande Twitch normale, pas Discord — son réglage est donc géré ici à la place.
+async function loadNativeCommands() {
+    try {
+        const res = await fetch('/admin/api/discord_mod/features');
+        const f = await res.json();
+        document.getElementById('native-showtiktok-enabled').checked = f.showtiktok_enabled !== false;
+        document.getElementById('native-showtiktok-message').value = f.showtiktok_message || '';
+    } catch (e) { console.error(e); }
+}
+
+async function saveNativeCommands() {
+    const statusEl = document.getElementById('native-cmd-status');
+    try {
+        // L'API attend l'objet complet des réglages : on récupère l'existant et on ne
+        // modifie que les deux champs de cette carte avant de tout renvoyer.
+        const current = await (await fetch('/admin/api/discord_mod/features')).json();
+        const payload = {
+            ...current,
+            showtiktok_enabled: document.getElementById('native-showtiktok-enabled').checked,
+            showtiktok_message: document.getElementById('native-showtiktok-message').value.trim(),
+        };
+        const res = await fetch('/admin/api/discord_mod/features', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        });
+        statusEl.innerHTML = res.ok
+            ? '<span class="text-emerald-400">✅ Enregistré !</span>'
+            : '<span class="text-rose-400">❌ Erreur</span>';
+    } catch (e) {
+        statusEl.innerHTML = '<span class="text-rose-400">❌ Erreur réseau</span>';
+    }
+    setTimeout(() => statusEl.innerHTML = '', 3000);
+}
 
 // --- NOUVELLES FONCTIONS OBS ---
 function renderObsActionsList() {

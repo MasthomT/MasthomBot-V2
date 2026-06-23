@@ -2,18 +2,19 @@ import logging
 import aiohttp
 import asyncio
 import yt_dlp
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from app.routes.overlays import trigger_overlay_event
 from app.core.config import settings
+from app.core.security import require_admin
 
 logger = logging.getLogger("masthbot.clips")
 router = APIRouter(prefix="/admin", tags=["clips"])
 templates = Jinja2Templates(directory="app/templates")
 
-BROADCASTER_ID = "439356462"  # Ton vrai ID Twitch
+BROADCASTER_ID = settings.TWITCH_BROADCASTER_ID
 LAST_PLAYED_CLIPS = []
 
 # Fonction magique qui extrait le vrai .mp4 (contourne toutes les sécurités Twitch)
@@ -28,7 +29,7 @@ def extract_mp4_url(clip_id: str):
         logger.error(f"Erreur yt-dlp pour {clip_id}: {e}")
         return None
 
-@router.get("/clips_manager", response_class=HTMLResponse)
+@router.get("/clips_manager", response_class=HTMLResponse, dependencies=[Depends(require_admin)])
 async def clips_manager_page(request: Request, start_date: str = None, end_date: str = None):
     clips = []
     if start_date and end_date:
@@ -37,16 +38,28 @@ async def clips_manager_page(request: Request, start_date: str = None, end_date:
         
         headers = {
             "Client-Id": settings.TWITCH_CLIENT_ID,
-            "Authorization": f"Bearer {settings.TWITCH_OAUTH_TOKEN}" 
+            "Authorization": f"Bearer {settings.TWITCH_OAUTH_TOKEN}"
         }
-        url = f"https://api.twitch.tv/helix/clips?broadcaster_id={BROADCASTER_ID}&started_at={started_at}&ended_at={ended_at}&first=50"
-        
+
         try:
+            raw_clips = []
+            cursor = ""
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=headers) as resp:
-                    if resp.status == 200:
+                # Twitch limite à 100 clips par page : on suit la pagination pour ne pas
+                # silencieusement perdre des clips au-delà de la première page.
+                while True:
+                    url = f"https://api.twitch.tv/helix/clips?broadcaster_id={BROADCASTER_ID}&started_at={started_at}&ended_at={ended_at}&first=100"
+                    if cursor:
+                        url += f"&after={cursor}"
+                    async with session.get(url, headers=headers) as resp:
+                        if resp.status != 200:
+                            break
                         data = await resp.json()
-                        clips = sorted(data.get("data", []), key=lambda c: c["created_at"])
+                        raw_clips.extend(data.get("data", []))
+                        cursor = data.get("pagination", {}).get("cursor")
+                        if not cursor:
+                            break
+            clips = sorted(raw_clips, key=lambda c: c["created_at"])
 
         except Exception as e:
             logger.error(f"❌ Erreur critique : {e}")
@@ -66,7 +79,7 @@ class ClipData(BaseModel):
 class QuadClipsPayload(BaseModel):
     clips: list[ClipData] # Doit accepter une liste (peu importe le nombre d'éléments)
 
-@router.post("/clips/trigger_quad")
+@router.post("/clips/trigger_quad", dependencies=[Depends(require_admin)])
 async def trigger_quad_clips(payload: QuadClipsPayload):
     global LAST_PLAYED_CLIPS # On signale qu'on utilise la variable globale
 
@@ -105,7 +118,7 @@ async def overlay_clips_quad(request: Request):
         request=request, name="clips_quad_overlay.html", context={"request": request}
     )
 
-@router.post("/clips/start_poll")
+@router.post("/clips/start_poll", dependencies=[Depends(require_admin)])
 async def start_clips_poll():
     global LAST_PLAYED_CLIPS
     

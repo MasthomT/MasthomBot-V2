@@ -105,8 +105,15 @@
                         </ul>
                     </div>
                 </div>
+
+                <div class="config-card rounded-3xl shadow-2xl p-8 mt-8">
+                    <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-4">
+                        <i class="fas fa-history text-indigo-400"></i> Historique des envois
+                    </h2>
+                    <div id="historyBox" class="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar"></div>
+                </div>
             </div>
-            
+
         </div>
     </main>
 
@@ -134,11 +141,16 @@
 
         document.getElementById('messageForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
             const btn = document.getElementById('submitBtn');
             const status = document.getElementById('statusMessage');
             const channelId = document.getElementById('channelSelect').value;
             const message = document.getElementById('messageInput').value;
+            const channelLabel = document.getElementById('channelSelect').selectedOptions[0]?.textContent || 'ce salon';
+
+            if (!confirm(`Envoyer ce message sur ${channelLabel} ? C'est irréversible, le bot ne peut pas le supprimer depuis ce panel.`)) {
+                return;
+            }
 
             // Mode chargement
             btn.disabled = true;
@@ -160,7 +172,8 @@
                 if (result.status === 'success') {
                     status.innerHTML = '<i class="fas fa-check-circle mr-2"></i> Message expédié avec succès !';
                     status.classList.add('border-emerald-500/30', 'bg-emerald-500/10', 'text-emerald-400');
-                    document.getElementById('messageInput').value = ''; 
+                    document.getElementById('messageInput').value = '';
+                    loadHistory();
                 } else {
                     throw new Error(result.message);
                 }
@@ -177,7 +190,29 @@
             }
         });
 
+        async function loadHistory() {
+            try {
+                const res = await fetch('/admin/discord/api/history');
+                const data = await res.json();
+                const box = document.getElementById('historyBox');
+                if (!data.history || data.history.length === 0) {
+                    box.innerHTML = '<div class="text-slate-600 italic text-xs py-4 text-center">Aucun envoi pour l\'instant.</div>';
+                    return;
+                }
+                box.innerHTML = data.history.map(h => `
+                    <div class="bg-slate-900/50 rounded-xl border border-slate-800 p-3">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-[10px] font-black text-indigo-400 uppercase"># ${h.channel_name}</span>
+                            <span class="text-[10px] text-slate-600">${h.sent_at}</span>
+                        </div>
+                        <div class="text-xs text-slate-300 truncate">${h.message_excerpt}</div>
+                    </div>
+                `).join('');
+            } catch (e) { console.error('Erreur chargement historique:', e); }
+        }
+
         loadChannels();
+        loadHistory();
     </script>
 </body>
 </html>

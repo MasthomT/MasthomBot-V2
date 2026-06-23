@@ -11,7 +11,7 @@ from typing import Optional
 logger = logging.getLogger("masthbot.database")
 
 env_vars = dotenv.dotenv_values(".env")
-DATABASE_URL = "postgresql://thomas:Thomas.c1992@localhost/masthbot_db"
+DATABASE_URL = env_vars.get("DATABASE_URL") or os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL est introuvable dans le fichier .env !")
@@ -179,7 +179,9 @@ async def init_db():
             "ALTER TABLE announcements ADD COLUMN IF NOT EXISTS last_triggered TIMESTAMP",
             "ALTER TABLE viewer_exp_log ADD COLUMN IF NOT EXISTS twitch_id TEXT",
             "ALTER TABLE viewers ADD COLUMN IF NOT EXISTS vip_expiry TIMESTAMP",
-            
+            "ALTER TABLE viewers ADD COLUMN IF NOT EXISTS poll_votes_count INTEGER DEFAULT 0",
+            "ALTER TABLE viewers ADD COLUMN IF NOT EXISTS questions_asked_count INTEGER DEFAULT 0",
+
             # --- NOUVELLE TABLE POUR LE DASHBOARD ADMIN (PAGE INFOS) ---
             """
             CREATE TABLE IF NOT EXISTS channel_info (

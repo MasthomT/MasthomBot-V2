@@ -1,8 +1,11 @@
 import json
 import asyncio
 import logging
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+import os
+import time
+import uuid
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Request, HTTPException
+from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 
 logger = logging.getLogger("masthbot.overlays")
@@ -133,6 +136,43 @@ async def overlay_clips_quad(request: Request):
     # Modifie le chemin si tu l'as mis dans un sous-dossier !
     return templates.TemplateResponse(
         request=request,
-        name="clips_quad_overlay.html", 
+        name="clips_quad_overlay.html",
         context={"request": request}
     )
+
+@router.get("/overlay/tiktok", response_class=HTMLResponse)
+async def overlay_tiktok(request: Request):
+    return templates.TemplateResponse(request=request, name="overlays/tiktok_overlay.html")
+
+# ==========================================
+# 3. PROXY VIDÉO TIKTOK
+# ==========================================
+# Rejouer l'URL CDN directe de TikTok (même avec les bons en-têtes capturés) renvoie un 403 —
+# le CDN fait visiblement une vérification d'empreinte de requête que seul yt-dlp satisfait.
+# La vidéo est donc téléchargée localement (voir tiktok_monitor.get_direct_tiktok_video) puis
+# servie depuis le disque ici, derrière un token à usage limité dans le temps.
+
+TIKTOK_PROXY_CACHE: dict[str, dict] = {}
+TIKTOK_PROXY_TTL = 300  # 5 minutes : largement assez pour charger/jouer une vidéo
+
+
+def register_tiktok_proxy(filepath: str) -> str:
+    now = time.time()
+    for k in [k for k, v in TIKTOK_PROXY_CACHE.items() if v["expires"] < now]:
+        old_path = TIKTOK_PROXY_CACHE.pop(k)["filepath"]
+        try:
+            os.remove(old_path)
+        except OSError:
+            pass
+
+    token = uuid.uuid4().hex
+    TIKTOK_PROXY_CACHE[token] = {"filepath": filepath, "expires": now + TIKTOK_PROXY_TTL}
+    return token
+
+
+@router.get("/api/v1/tiktok_proxy/{token}")
+async def tiktok_proxy(token: str):
+    entry = TIKTOK_PROXY_CACHE.get(token)
+    if not entry or not os.path.exists(entry["filepath"]):
+        raise HTTPException(status_code=404, detail="Lien TikTok expiré ou introuvable.")
+    return FileResponse(entry["filepath"], media_type="video/mp4")

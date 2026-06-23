@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Santé du bot - MasthomBot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; }
+
+        .status-pill { display: inline-flex; align-items: center; gap: 8px; font-size: 0.8rem; font-weight: 800; padding: 6px 14px; border-radius: 999px; }
+        .status-pill.online { background: rgba(52,211,153,0.12); color: #34d399; }
+        .status-pill.offline { background: rgba(244,63,94,0.12); color: #fb7185; }
+        .status-pill::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+        .status-pill.online::before { animation: pulse-dot 1.5s infinite; }
+        @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        .health-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem; padding: 2rem; text-align: center; }
+        .health-icon { font-size: 2rem; opacity: 0.8; }
+        .health-label { font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen overflow-hidden">
+
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 md:p-10 overflow-y-auto custom-scrollbar h-screen">
+        <header class="mb-8 flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">🩺 Santé du bot</h1>
+                <p class="text-slate-400 mt-1">État des connexions en temps réel, sans avoir à fouiller les logs.</p>
+            </div>
+            <span id="lastRefresh" class="text-[10px] font-bold text-slate-600 uppercase tracking-widest"></span>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="config-card health-card rounded-3xl shadow-2xl">
+                <i class="fab fa-twitch health-icon text-[#9146FF]"></i>
+                <div class="health-label">Twitch</div>
+                <span id="twitch-status" class="status-pill offline">Vérification...</span>
+            </div>
+            <div class="config-card health-card rounded-3xl shadow-2xl">
+                <i class="fab fa-discord health-icon text-[#5865F2]"></i>
+                <div class="health-label">Discord</div>
+                <span id="discord-status" class="status-pill offline">Vérification...</span>
+            </div>
+            <div class="config-card health-card rounded-3xl shadow-2xl">
+                <i class="fas fa-video health-icon text-indigo-400"></i>
+                <div class="health-label">OBS</div>
+                <span id="obs-status" class="status-pill offline">Vérification...</span>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="config-card p-6 rounded-3xl shadow-2xl">
+                <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-3">
+                    <i class="fab fa-youtube text-rose-500"></i> Dernière vérif YouTube
+                </h2>
+                <div id="youtube-last-check" class="text-sm text-slate-300">—</div>
+            </div>
+            <div class="config-card p-6 rounded-3xl shadow-2xl">
+                <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-3">
+                    <i class="fab fa-tiktok text-slate-300"></i> Dernière vérif TikTok
+                </h2>
+                <div id="tiktok-last-check" class="text-sm text-slate-300">—</div>
+            </div>
+            <div class="config-card p-6 rounded-3xl shadow-2xl">
+                <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-3">
+                    <i class="fas fa-skull-crossbones text-rose-500"></i> Dernier crash
+                </h2>
+                <div id="last-crash" class="text-sm text-slate-300">Aucun crash connu 🎉</div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function formatDate(isoString) {
+            if (!isoString) return '—';
+            try {
+                return new Date(isoString).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+            } catch (e) {
+                return '—';
+            }
+        }
+
+        function setPill(id, isOnline) {
+            const el = document.getElementById(id);
+            el.className = 'status-pill ' + (isOnline ? 'online' : 'offline');
+            el.textContent = isOnline ? 'Connecté' : 'Déconnecté';
+        }
+
+        async function loadHealth() {
+            try {
+                const res = await fetch('/admin/api/bot_health');
+                const data = await res.json();
+
+                setPill('twitch-status', data.twitch_connected);
+                setPill('discord-status', data.discord_connected);
+                setPill('obs-status', data.obs_connected);
+
+                document.getElementById('youtube-last-check').textContent = formatDate(data.last_youtube_check);
+                document.getElementById('tiktok-last-check').textContent = formatDate(data.last_tiktok_check);
+
+                if (data.last_crash_at) {
+                    document.getElementById('last-crash').innerHTML =
+                        `<span class="text-rose-400 font-bold">${formatDate(data.last_crash_at)}</span><br><span class="text-xs text-slate-500">${data.last_crash_note || ''}</span>`;
+                } else {
+                    document.getElementById('last-crash').textContent = 'Aucun crash connu 🎉';
+                }
+
+                document.getElementById('lastRefresh').textContent = 'Actualisé à ' + new Date().toLocaleTimeString('fr-FR');
+            } catch (e) {
+                console.error('Erreur chargement santé du bot:', e);
+            }
+        }
+
+        loadHealth();
+        setInterval(loadHealth, 15000);
+    </script>
+</body>
+</html>

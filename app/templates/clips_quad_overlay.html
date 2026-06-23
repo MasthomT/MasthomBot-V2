@@ -147,6 +147,14 @@
                     }
                 };
 
+                // Clip cassé/introuvable : on ne montre jamais la case, on passe directement au suivant.
+                video.addEventListener('error', function() {
+                    if (box.classList.contains('active')) {
+                        box.classList.remove('active');
+                        setTimeout(() => playNextClip(i + 1), 300);
+                    }
+                });
+
                 video.src = urls[i];
                 video.volume = 1.0;
                 video.currentTime = 0;

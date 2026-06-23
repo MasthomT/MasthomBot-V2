@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     TWITCH_OAUTH_TOKEN: str = get_clean_env("TWITCH_OAUTH_TOKEN", "")
     TWITCH_BOT_USERNAME: str = get_clean_env("TWITCH_BOT_USERNAME", "Felix")
     TWITCH_BOT_OAUTH_TOKEN: str = get_clean_env("TWITCH_BOT_OAUTH_TOKEN", "")
+    TWITCH_BROADCASTER_ID: str = get_clean_env("TWITCH_BROADCASTER_ID", "")
     
     # --- CONFIGURATION DISCORD ---
     DISCORD_TOKEN: str = get_clean_env("DISCORD_TOKEN", "")
@@ -70,9 +71,21 @@ class Settings(BaseSettings):
     CLIP_CHANNEL_ID: str = get_clean_env("CLIP_CHANNEL_ID", "")
     ANNONCE_CHANNEL_ID: str = get_clean_env("ANNONCE_CHANNEL_ID", "")
     FAQ_CHANNEL_ID: str = get_clean_env("FAQ_CHANNEL_ID", "")
+    PLANNING_CHANNEL_ID: str = get_clean_env("PLANNING_CHANNEL_ID", "1137293575026126898")
+    POLLS_DISCORD_CHANNEL_ID: str = get_clean_env("POLLS_DISCORD_CHANNEL_ID", "1509812594662183035")
+    TROPHY_DISCORD_CHANNEL_ID: str = get_clean_env("TROPHY_DISCORD_CHANNEL_ID", "")
+    MODERATION_LOG_CHANNEL_ID: str = get_clean_env("MODERATION_LOG_CHANNEL_ID", "1399730073183191090")
 
     # --- SERVICES EXTERNES ---
     OPENAI_API_KEY: str = get_clean_env("OPENAI_API_KEY", "")
+
+    # --- AUTHENTIFICATION PANEL ADMIN ---
+    ADMIN_PASSWORD: str = get_clean_env("ADMIN_PASSWORD", "")
+    ADMIN_SESSION_SECRET: str = get_clean_env("ADMIN_SESSION_SECRET", "")
+
+    # --- MONITORING ERREURS (SENTRY) ---
+    SENTRY_DSN: str = get_clean_env("SENTRY_DSN", "")
+    ENVIRONMENT: str = get_clean_env("ENVIRONMENT", "production")
     
     # --- OVERLAY NODE.JS (OBS local, port 3005) ---
     OVERLAY_NODE_URL: str = get_clean_env("OVERLAY_NODE_URL", "http://192.168.1.32:3005").rstrip("/")

@@ -130,6 +130,21 @@
                         </div>
                     </section>
 
+                    <!-- Bloc Test en direct (sans sauvegarder) -->
+                    <section class="config-card p-8 rounded-3xl shadow-2xl">
+                        <h2 class="text-xs font-black text-slate-500 uppercase mb-4 tracking-widest flex items-center gap-2">
+                            <i class="fas fa-flask text-amber-400"></i> Tester Félix (sans sauvegarder)
+                        </h2>
+                        <p class="text-xs text-slate-500 mb-4">Envoie le réglage actuel du formulaire (prompt, température...) à l'IA pour voir sa réponse, avant de cliquer sur "SYNCHRONISER FÉLIX".</p>
+                        <div class="flex gap-3">
+                            <input type="text" id="felixTestMessage" class="w-full input-dark rounded-xl p-3 text-sm" placeholder="Message à envoyer à Félix (ex: salut Félix !)">
+                            <button type="button" onclick="testFelix()" class="shrink-0 bg-amber-500/10 text-amber-400 hover:bg-amber-500 hover:text-white px-5 py-3 rounded-xl font-bold text-xs border border-amber-500/20 transition-all">
+                                <i class="fas fa-paper-plane"></i> TESTER
+                            </button>
+                        </div>
+                        <div id="felixTestResult" class="mt-4 text-sm text-slate-300 italic"></div>
+                    </section>
+
                     <!-- Bloc Paramètres Avancés (Sliders) -->
                     <section class="config-card p-8 rounded-3xl shadow-2xl">
                         <h2 class="text-xs font-black text-slate-500 uppercase mb-8 tracking-widest flex items-center gap-2">
@@ -210,6 +225,40 @@
             promptArea.value = tones[selectedKey];
         }
     });
+
+    async function testFelix() {
+        const resultBox = document.getElementById('felixTestResult');
+        const message = document.getElementById('felixTestMessage').value.trim();
+        if (!message) {
+            resultBox.innerHTML = '<span class="text-rose-400">Écris un message à tester d\'abord.</span>';
+            return;
+        }
+        resultBox.innerHTML = '<span class="text-slate-500">Félix réfléchit...</span>';
+
+        const payload = {
+            message: message,
+            system_prompt: document.querySelector('textarea[name="system_prompt"]').value,
+            temperature: parseFloat(document.querySelector('input[name="temperature"]').value),
+            frequency_penalty: parseFloat(document.querySelector('input[name="frequency_penalty"]').value),
+            presence_penalty: 0.3
+        };
+
+        try {
+            const res = await fetch('/admin/felix_ai/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (res.ok) {
+                resultBox.innerHTML = `<span class="text-amber-400 not-italic font-bold">🐱 Félix :</span> "${data.reply}"`;
+            } else {
+                resultBox.innerHTML = `<span class="text-rose-400">❌ ${data.detail || 'Erreur'}</span>`;
+            }
+        } catch (e) {
+            resultBox.innerHTML = '<span class="text-rose-400">❌ Erreur réseau</span>';
+        }
+    }
 </script>
 </body>
 </html>

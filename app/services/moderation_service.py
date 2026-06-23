@@ -6,6 +6,8 @@ import json
 from datetime import datetime
 from collections import defaultdict
 from app.core.database import get_db_connection
+from app.core.config import settings
+from app.services.discord_service import send_message_to_discord
 
 logger = logging.getLogger("masthbot.moderation")
 WHITELISTED_REWARD_IDS = {
@@ -31,6 +33,19 @@ class ModerationService:
             )
         except Exception as e:
             logger.error(f"❌ Erreur log dashboard: {e}")
+
+    async def _log_to_discord_channel(self, username, action, reason):
+        channel_id = settings.MODERATION_LOG_CHANNEL_ID
+        if not channel_id:
+            return
+        action_label = {"delete": "Suppression", "timeout": "Timeout", "ban": "Bannissement"}.get(action, action)
+        try:
+            await send_message_to_discord(
+                channel_id,
+                f"🟣 **[TWITCH]** `{action_label}` — **{username}**\n↳ Raison : {reason}"
+            )
+        except Exception as e:
+            logger.error(f"❌ [MODERATION] Échec envoi log salon modération : {e}")
 
     async def process_message(self, message_id, message, username, user_id, broadcaster_id, client_id, token, is_vip=False):
         try:
@@ -80,6 +95,7 @@ class ModerationService:
 
         if action in ['delete', 'timeout', 'ban']:
             await self._log_to_dashboard(username, "sanction", f"{action} : {reason}")
+            await self._log_to_discord_channel(username, action, reason)
             await self._execute_sanction(action, message_id, username, user_id, broadcaster_id, client_id, token, duration)
 
     async def _check_follower(self, user_id, broadcaster_id, client_id, token):
@@ -91,7 +107,8 @@ class ModerationService:
                     if resp.status == 200:
                         data = await resp.json()
                         return len(data.get("data", [])) > 0
-        except: pass
+        except Exception as e:
+            logger.error(f"❌ [MODERATION] Échec vérification follower pour user_id={user_id} : {e}")
         return False
 
     async def _execute_sanction(self, action_type, message_id, username, user_id, broadcaster_id, client_id, token, duration):

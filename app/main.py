@@ -10,23 +10,48 @@ import contextlib
 import os
 import httpx
 import logging
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from typing import List, Optional
 
 # --- IMPORT CORE ---
+from app.core.config import settings
 from app.core.database import init_db, get_db_connection
 
+# --- MONITORING ERREURS (SENTRY) ---
+import sentry_sdk
+
+if settings.SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.ENVIRONMENT,
+        traces_sample_rate=0.1,
+    )
+
+# --- RATE LIMITING ---
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from app.core.rate_limit import limiter
+
 # --- IMPORT DES ROUTES ---
-from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes, admin_commands
+from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes, partners, admin_commands
 from app.routes.credits import router as credits_router
 from app.routes.premium import router as premium_router
 from app.routes.games import router as games_router, init_games_tables
+from app.routes.admin_auth import router as admin_auth_router
+from app.routes.admin_games import router as admin_games_router
+from app.routes.admin_discord_mod import router as admin_discord_mod_router
+from app.routes.felixdle import (
+    public_router as felixdle_public_router,
+    admin_router as felixdle_admin_router,
+    init_felixdle_tables,
+    felixdle_scheduler_routine,
+)
 
 # --- IMPORT DES SERVICES ---
 from app.services.twitch_service import twitch_bot
@@ -36,6 +61,14 @@ from app.services.unfollow_monitor import unfollow_monitor_routine
 from app.services.stats_service import update_time_loop, update_twitch_stats_loop
 from app.services.trophy_engine import start_trophy_engine
 from app.services.games_scheduler import games_scheduler_routine
+from app.services.discord_mod_service import discord_mod_bot, start_discord_mod_bot, init_discord_mod_tables, birthday_check_routine
+from app.services.tiktok_monitor import tiktok_monitor_routine
+from app.services.youtube_monitor import youtube_monitor_routine
+from app.services.bot_health_service import (
+    init_bot_health_table,
+    check_for_previous_crash_and_alert,
+    clear_crash_marker,
+)
 
 # --- IMPORT DES REPERTOIRES ---
 from app.repositories import viewer_repo
@@ -87,9 +120,17 @@ async def lifespan(app: FastAPI):
 
     # 1. Initialisation Database
     await init_db()
+    from app.services import partners_service
+    await partners_service.run_partners_migrations()
     await viewer_repo.init_tables()
     await init_games_tables()
+    await init_felixdle_tables()
+    await init_discord_mod_tables()
+    await init_bot_health_table()
     logger.info("✅ [DATABASE] Tables PostgreSQL initialisées avec succès !")
+
+    # 1.5 Détection d'un crash précédent (alerte Discord si le process n'a pas été arrêté proprement)
+    await check_for_previous_crash_and_alert()
 
     # 2. Lancement des services Twitch
     asyncio.create_task(twitch_bot.start())
@@ -100,6 +141,11 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(update_twitch_stats_loop())
     asyncio.create_task(start_trophy_engine())
     asyncio.create_task(games_scheduler_routine())
+    asyncio.create_task(felixdle_scheduler_routine())
+    asyncio.create_task(start_discord_mod_bot())
+    asyncio.create_task(tiktok_monitor_routine())
+    asyncio.create_task(youtube_monitor_routine())
+    asyncio.create_task(birthday_check_routine())
 
     # 3. Lancement de l'overlay Node.js
     server_js_path = os.path.join(BASE_DIR, "server.js")
@@ -113,14 +159,20 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         logger.info("🛑 [SHUTDOWN] Arrêt des services...")
+        clear_crash_marker()
         if node_process:
             node_process.terminate()
         with contextlib.suppress(Exception):
             if hasattr(twitch_bot, '_connection') and twitch_bot._connection:
                 await twitch_bot.close()
+        with contextlib.suppress(Exception):
+            if not discord_mod_bot.is_closed():
+                await discord_mod_bot.close()
 
 # --- INITIALISATION APP ---
 app = FastAPI(title="MasthomBot V2", version="2.0.0", lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # =====================================================================
 # 🌐 CONFIGURATION CORS
@@ -136,11 +188,22 @@ app.add_middleware(
 
 @app.exception_handler(Exception)
 async def validation_exception_handler(request, exc):
+    logger.error(f"❌ [UNHANDLED] {request.method} {request.url.path} : {exc}", exc_info=exc)
+    if settings.SENTRY_DSN:
+        sentry_sdk.capture_exception(exc)
+    detail = str(exc) if settings.ENVIRONMENT != "production" else "Erreur interne du serveur."
     return JSONResponse(
         status_code=500,
-        content={"detail": str(exc)},
+        content={"detail": detail},
         headers={"Access-Control-Allow-Origin": "*"}
     )
+
+@app.exception_handler(HTTPException)
+async def admin_auth_exception_handler(request: Request, exc: HTTPException):
+    if exc.status_code == 401 and request.url.path.startswith("/admin"):
+        if request.headers.get("accept", "").find("text/html") != -1:
+            return RedirectResponse(url="/admin/login", status_code=303)
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 # ==========================================
 # MONTAGE DES DOSSIERS ET ROUTES
@@ -168,6 +231,12 @@ app.include_router(clips.router)
 app.include_router(admin_commands.router)
 app.include_router(premium_router)
 app.include_router(games_router)
+app.include_router(admin_auth_router)
+app.include_router(admin_games_router)
+app.include_router(felixdle_public_router)
+app.include_router(felixdle_admin_router)
+app.include_router(admin_discord_mod_router)
+app.include_router(partners.router)
 
 # ==========================================
 # ROUTES API : INFORMATIONS DE LA CHAÎNE (DASHBOARD ADMIN)

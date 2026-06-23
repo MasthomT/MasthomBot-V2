@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<!-- VERSION_PARTENAIRES_DYNAMIQUE_V2_CATEGORIES -->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Partenaires - FEL-X</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .section-title {
+            font-size: 0.85rem; font-weight: 800; text-transform: uppercase;
+            color: var(--accent); letter-spacing: 2px; margin: 2.5rem 0 1.5rem 0.5rem;
+            display: flex; align-items: center; gap: 12px;
+        }
+        .section-title:first-of-type { margin-top: 0; }
+
+        .partner-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.25rem; }
+
+        .partner-card {
+            background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 20px;
+            padding: 1.75rem; text-align: center; text-decoration: none; color: inherit;
+            transition: all 0.3s; display: flex; flex-direction: column; align-items: center; gap: 0.6rem;
+            position: relative;
+        }
+        .partner-card:hover { transform: translateY(-4px); border-color: var(--accent); box-shadow: 0 15px 30px -10px var(--accent-glow); }
+        .partner-card.is-live { border-color: rgba(52, 211, 153, 0.4); box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.15); }
+
+        .partner-avatar-wrap { position: relative; }
+        .partner-avatar {
+            width: 64px; height: 64px; border-radius: 50%; object-fit: cover;
+            background: linear-gradient(135deg, var(--accent), #8b5cf6);
+        }
+        .partner-avatar-fallback {
+            width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), #8b5cf6);
+            display: flex; align-items: center; justify-content: center; font-size: 1.6rem; font-weight: 900; color: #0b0f1a;
+        }
+
+        .live-badge {
+            position: absolute; bottom: -2px; right: -2px;
+            background: #34d399; color: #0b0f1a; font-size: 0.55rem; font-weight: 900;
+            padding: 3px 7px; border-radius: 8px; text-transform: uppercase; letter-spacing: 0.5px;
+            border: 2px solid var(--bg); display: flex; align-items: center; gap: 3px;
+        }
+        .live-badge::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: #0b0f1a; animation: pulse-dot 1.5s infinite; }
+        @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        .partner-name { font-weight: 800; font-size: 1.05rem; }
+        .partner-role { font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+        .partner-desc { font-size: 0.85rem; color: var(--text-dim); line-height: 1.4; margin-top: 0.2rem; }
+        .partner-meta { font-size: 0.7rem; color: var(--text-dim); opacity: 0.7; margin-top: 0.3rem; }
+
+        .credits-list { display: flex; flex-direction: column; gap: 0.75rem; }
+        .credit-row {
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 14px; padding: 1rem 1.25rem;
+        }
+        .credit-role { color: var(--text-dim); font-size: 0.85rem; }
+        .credit-name { font-weight: 700; }
+
+        .empty-state { grid-column: 1/-1; text-align:center; color:var(--text-dim); padding: 2rem; }
+        .skeleton-card { background: rgba(255,255,255,0.02); border-radius: 20px; height: 180px; animation: pulse-skel 1.5s infinite; }
+        @keyframes pulse-skel { 0%, 100% { opacity: 0.5; } 50% { opacity: 0.8; } }
+    </style>
+</head>
+<body>
+    <main id="main-content">
+        <header>
+            <h1>Partenaires & Crédits</h1>
+            <p class="page-desc">Les chaînes, créateurs et membres qui font vivre la communauté FEL-X.</p>
+        </header>
+
+        <div class="card">
+            <div id="partners-container">
+                <div class="partner-grid">
+                    <div class="skeleton-card"></div>
+                    <div class="skeleton-card"></div>
+                    <div class="skeleton-card"></div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+    <script src="sidebar.js"></script>
+
+    <script>
+        const API_BASE = (typeof CONFIG !== 'undefined' && CONFIG.API_BASE_URL)
+            ? CONFIG.API_BASE_URL.replace(/\/$/, '')
+            : '';
+
+        // Ordre d'affichage des catégories sur la page, et titre/icône associés.
+        // La catégorie est définie côté admin (page /admin/partners) : moderator, recommended, collab, manual.
+        const CATEGORY_SECTIONS = [
+            {
+                key: 'moderator',
+                title: 'Modérateurs & Modératrices',
+                icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>'
+            },
+            {
+                key: 'recommended',
+                title: 'Streameurs recommandés',
+                icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>'
+            },
+            {
+                key: 'collab',
+                title: 'Collabs récentes',
+                icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>'
+            },
+            {
+                key: 'manual',
+                title: 'Autres partenaires',
+                icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v8M8 12h8"></path></svg>'
+            }
+        ];
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str || '';
+            return div.innerHTML;
+        }
+
+        function formatDate(isoString) {
+            if (!isoString) return '';
+            try {
+                return new Date(isoString).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+            } catch (e) {
+                return '';
+            }
+        }
+
+        function renderPartnerCard(p) {
+            const initials = (p.display_name || p.twitch_login || '?').substring(0, 2).toUpperCase();
+            const avatarHtml = p.avatar_url
+                ? `<img src="${escapeHtml(p.avatar_url)}" class="partner-avatar" alt="${escapeHtml(p.display_name)}" onerror="this.replaceWith(Object.assign(document.createElement('div'), {className:'partner-avatar-fallback', textContent:'${initials}'}))">`
+                : `<div class="partner-avatar-fallback">${initials}</div>`;
+
+            const liveBadgeHtml = p.is_live ? `<span class="live-badge">Live</span>` : '';
+            const descHtml = p.description ? `<div class="partner-desc">${escapeHtml(p.description)}</div>` : '';
+            const lastCollabStr = formatDate(p.last_collab_at);
+            const metaHtml = lastCollabStr
+                ? `<div class="partner-meta">Dernière collab : ${lastCollabStr} ${p.collab_count > 1 ? `· ${p.collab_count} collabs` : ''}</div>`
+                : '';
+
+            return `
+                <a href="https://twitch.tv/${escapeHtml(p.twitch_login)}" target="_blank" class="partner-card ${p.is_live ? 'is-live' : ''}">
+                    <div class="partner-avatar-wrap">
+                        ${avatarHtml}
+                        ${liveBadgeHtml}
+                    </div>
+                    <div class="partner-name">${escapeHtml(p.display_name)}</div>
+                    <div class="partner-role">${escapeHtml(p.partnership_type || 'Collab')}</div>
+                    ${descHtml}
+                    ${metaHtml}
+                </a>`;
+        }
+
+        function renderSection(section, partners) {
+            if (!partners || partners.length === 0) return '';
+            // Dans chaque catégorie : ceux en live d'abord, puis les plus récemment actifs.
+            partners.sort((a, b) => {
+                const liveDiff = (b.is_live ? 1 : 0) - (a.is_live ? 1 : 0);
+                if (liveDiff !== 0) return liveDiff;
+                return new Date(b.last_collab_at || 0) - new Date(a.last_collab_at || 0);
+            });
+
+            return `
+                <h2 class="section-title">${section.icon}${escapeHtml(section.title)}</h2>
+                <div class="card">
+                    <div class="partner-grid">
+                        ${partners.map(renderPartnerCard).join('')}
+                    </div>
+                </div>`;
+        }
+
+        async function loadPartners() {
+            const container = document.getElementById('partners-container');
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/partners`, {
+                    headers: { "ngrok-skip-browser-warning": "true", "Accept": "application/json" }
+                });
+
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+                const data = await res.json();
+                const partners = data.partners || [];
+
+                if (partners.length === 0) {
+                    container.innerHTML = `<div class="partner-grid"><div class="empty-state">Aucun partenariat annoncé pour le moment — la liste se remplit avec les collabs du stream.</div></div>`;
+                    return;
+                }
+
+                // Regroupe par catégorie (moderator / recommended / collab / manual), dans l'ordre défini ci-dessus.
+                const byCategory = {};
+                for (const p of partners) {
+                    const cat = CATEGORY_SECTIONS.some(s => s.key === p.category) ? p.category : 'manual';
+                    if (!byCategory[cat]) byCategory[cat] = [];
+                    byCategory[cat].push(p);
+                }
+
+                const html = CATEGORY_SECTIONS.map(section => renderSection(section, byCategory[section.key])).join('');
+                container.innerHTML = html || `<div class="partner-grid"><div class="empty-state">Aucun partenariat annoncé pour le moment.</div></div>`;
+
+            } catch (e) {
+                console.error('Erreur chargement partenaires:', e);
+                container.innerHTML = `<div class="partner-grid"><div class="empty-state">Impossible de charger les partenaires pour le moment.</div></div>`;
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            if (typeof checkAuth === 'function') checkAuth();
+            loadPartners();
+            // Rafraîchit le statut live toutes les 30s sans recharger toute la page
+            setInterval(loadPartners, 30000);
+        });
+    </script>
+</body>
+</html>

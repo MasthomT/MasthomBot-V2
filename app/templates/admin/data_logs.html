@@ -65,21 +65,61 @@
                 </div>
                 <div class="flex gap-4">
                     <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-black px-8 py-4 rounded-2xl shadow-2xl transition-all active:scale-95 flex items-center gap-3">
-                        <i class="fas fa-save text-xl"></i> SAUVEGARDER & REDÉMARRER
+                        <i class="fas fa-save text-xl"></i> SAUVEGARDER LE .ENV
                     </button>
                 </div>
             </header>
 
             {% if request.query_params.get('saved') %}
             <div id="toast" class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-5 rounded-2xl font-bold mb-10 flex items-center gap-4 animate-bounce">
-                <i class="fas fa-check-circle text-2xl"></i> 
+                <i class="fas fa-check-circle text-2xl"></i>
                 <div>
                     <p>Fichier .env mis à jour avec succès !</p>
-                    <p class="text-[10px] opacity-70 uppercase tracking-widest">Le bot recharge les nouveaux paramètres...</p>
+                    <p class="text-[10px] opacity-70 uppercase tracking-widest">⚠️ Redémarre le bot manuellement pour appliquer ces nouveaux paramètres (ils ne sont chargés qu'au démarrage).</p>
                 </div>
             </div>
-            <script>setTimeout(() => document.getElementById('toast').style.display='none', 5000)</script>
+            <script>setTimeout(() => document.getElementById('toast').style.display='none', 8000)</script>
             {% endif %}
+
+            <!-- SANTÉ SYSTÈME -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+                <div class="config-card !p-5 flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl flex items-center justify-center {{ 'bg-emerald-500/10' if system_health.bot_connected else 'bg-rose-500/10' }}">
+                        <i class="fab fa-twitch text-xl {{ 'text-emerald-400' if system_health.bot_connected else 'text-rose-400' }}"></i>
+                    </div>
+                    <div>
+                        <div class="label-tech mb-1">Bot Twitch</div>
+                        <div class="font-black {{ 'text-emerald-400' if system_health.bot_connected else 'text-rose-400' }}">{{ 'Connecté' if system_health.bot_connected else 'Déconnecté' }}</div>
+                    </div>
+                </div>
+                <div class="config-card !p-5 flex items-center gap-4">
+                    <div class="w-12 h-12 bg-indigo-500/10 rounded-xl flex items-center justify-center">
+                        <i class="fas fa-clock text-indigo-400 text-xl"></i>
+                    </div>
+                    <div>
+                        <div class="label-tech mb-1">Uptime Serveur</div>
+                        <div class="font-black text-white">{{ system_health.uptime }}</div>
+                    </div>
+                </div>
+                <div class="config-card !p-5 flex items-center gap-4">
+                    <div class="w-12 h-12 bg-amber-500/10 rounded-xl flex items-center justify-center">
+                        <i class="fas fa-microchip text-amber-400 text-xl"></i>
+                    </div>
+                    <div>
+                        <div class="label-tech mb-1">CPU</div>
+                        <div class="font-black text-white">{{ system_health.cpu }}%</div>
+                    </div>
+                </div>
+                <div class="config-card !p-5 flex items-center gap-4">
+                    <div class="w-12 h-12 bg-sky-500/10 rounded-xl flex items-center justify-center">
+                        <i class="fas fa-memory text-sky-400 text-xl"></i>
+                    </div>
+                    <div>
+                        <div class="label-tech mb-1">RAM</div>
+                        <div class="font-black text-white">{{ system_health.ram }}%</div>
+                    </div>
+                </div>
+            </div>
 
             <div class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-10">
                 

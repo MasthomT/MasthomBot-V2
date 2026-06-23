@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from app.services.shoutout_service import shoutout_service
 from app.services.twitch_service import twitch_bot
 from app.services.obs_service import obs_service
-from app.routes.overlays import trigger_overlay_event 
+from app.routes.overlays import trigger_overlay_event
 
 logging.getLogger("obsws_python").setLevel(logging.CRITICAL)
 
@@ -50,7 +50,10 @@ async def deck_overlay_page(request: Request):
 @router.get("/static/uploads/{file_name}")
 async def serve_upload(file_name: str):
     """Sert les fichiers audio/image pour l'Overlay OBS"""
-    file_path = os.path.join(UPLOAD_DIR, file_name)
+    upload_dir_real = os.path.realpath(UPLOAD_DIR)
+    file_path = os.path.realpath(os.path.join(upload_dir_real, file_name))
+    if not file_path.startswith(upload_dir_real + os.sep):
+        return HTMLResponse(status_code=404)
     if os.path.exists(file_path):
         return FileResponse(file_path)
     return HTMLResponse(status_code=404)

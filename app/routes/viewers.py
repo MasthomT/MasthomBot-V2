@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Request, HTTPException, Form
+from fastapi import APIRouter, Depends, Request, HTTPException, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -7,6 +7,7 @@ from app.repositories import viewer_repo
 from app.models.viewer import ViewerResponse
 from app.core.database import get_db_connection
 from app.services.twitch_service import twitch_bot
+from app.core.security import require_admin
 
 
 logger = logging.getLogger("masthbot.viewers")
@@ -35,7 +36,7 @@ def calculate_level(xp):
 # 🖥️ INTERFACES HTML (ADMIN DASHBOARD)
 # =====================================================================
 
-@router.get("/admin/viewer_manager.html", response_class=HTMLResponse)
+@router.get("/admin/viewer_manager.html", response_class=HTMLResponse, dependencies=[Depends(require_admin)])
 async def admin_viewers_page(request: Request):
     try:
         async with get_db_connection() as conn:
@@ -62,7 +63,7 @@ async def admin_viewers_page(request: Request):
         logger.error(f"❌ Erreur viewer manager : {e}")
         return HTMLResponse(content=f"<h1>Erreur Serveur</h1><p>{e}</p>", status_code=500)
 
-@router.get("/admin/viewer/{twitch_id}/history", response_class=HTMLResponse)
+@router.get("/admin/viewer/{twitch_id}/history", response_class=HTMLResponse, dependencies=[Depends(require_admin)])
 async def admin_viewer_history(request: Request, twitch_id: str):
     async with get_db_connection() as conn:
         c1 = await conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,))
@@ -133,7 +134,7 @@ async def admin_viewer_history(request: Request, twitch_id: str):
 # ⚙️ ACTIONS DE GESTION (FORMULAIRES)
 # =====================================================================
 
-@router.post("/admin/viewer/{twitch_id}/save")
+@router.post("/admin/viewer/{twitch_id}/save", dependencies=[Depends(require_admin)])
 async def save_viewer_profile(request: Request, twitch_id: str,
     nickname: str = Form(None), nickname_for_bot: str = Form(None), 
     birthday: str = Form(None), sleep_pattern: str = Form(None), 
@@ -157,7 +158,7 @@ async def save_viewer_profile(request: Request, twitch_id: str,
         
     return RedirectResponse(url=f"/admin/viewer/{twitch_id}/history?saved=1", status_code=303)
 
-@router.post("/admin/viewer/update_exp_settings")
+@router.post("/admin/viewer/update_exp_settings", dependencies=[Depends(require_admin)])
 async def update_exp_settings(request: Request):
     form_data = await request.form()
     async with get_db_connection() as conn:
@@ -176,17 +177,37 @@ async def update_exp_settings(request: Request):
         ))
     return RedirectResponse(url="/admin/viewer_manager.html?settings_saved=1", status_code=303)
 
-@router.post("/admin/viewer/update_exp")
+@router.post("/admin/viewer/update_exp", dependencies=[Depends(require_admin)])
 async def update_exp(request: Request, twitch_id: str = Form(...), amount: int = Form(...), action: str = Form(...)):
     async with get_db_connection() as conn:
+        c = await conn.execute("SELECT username, points FROM viewers WHERE twitch_id = ?", (twitch_id,))
+        viewer_row = await c.fetchone()
+        if not viewer_row:
+            return RedirectResponse(url="/admin/viewer_manager.html?error=viewer_not_found", status_code=303)
+
+        username = viewer_row["username"]
+        current_points = viewer_row["points"] or 0
+
         if action == "add":
             await conn.execute("UPDATE viewers SET points = points + ? WHERE twitch_id = ?", (amount, twitch_id))
+            log_amount, log_detail = amount, f"Ajustement manuel admin : +{amount} EXP"
         elif action == "remove":
             # GREATEST est l'équivalent Postgres de MAX dans ce contexte
             await conn.execute("UPDATE viewers SET points = GREATEST(0, points - ?) WHERE twitch_id = ?", (amount, twitch_id))
+            log_amount, log_detail = -amount, f"Ajustement manuel admin : -{amount} EXP"
         elif action == "set":
             await conn.execute("UPDATE viewers SET points = ? WHERE twitch_id = ?", (amount, twitch_id))
-    
+            log_amount, log_detail = amount - current_points, f"Ajustement manuel admin : EXP fixée à {amount}"
+        else:
+            return RedirectResponse(url="/admin/viewer_manager.html?error=invalid_action", status_code=303)
+
+        # Traçabilité : sans ça, l'ajustement manuel était invisible dans l'historique du viewer
+        await conn.execute(
+            "INSERT INTO viewer_exp_log (twitch_id, event_type, amount, details) VALUES (?, ?, ?, ?)",
+            twitch_id, "ADMIN_ADJUST", log_amount, log_detail
+        )
+        logger.info(f"📈 [EXP ADMIN] {username} : {log_detail}")
+
     return RedirectResponse(url="/admin/viewer_manager.html?success=1", status_code=303)
 
 # =====================================================================

@@ -12,7 +12,9 @@ from pydantic import BaseModel # Ajout pour la messagerie Discord
 
 from app.core.database import get_db_connection
 from app.core.config import settings
+from app.core.security import require_admin
 from app.services.shoutout_service import shoutout_service
+from app.services.twitch_service import twitch_bot
 
 # Ajout du service Discord
 from app.services.discord_service import CHANNELS_LIST, send_message_to_discord
@@ -20,7 +22,7 @@ from app.services.discord_service import CHANNELS_LIST, send_message_to_discord
 import logging
 logger = logging.getLogger("masthbot.admin")
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
 # --- CONFIGURATION DES TONS ---
 VRAIS_TONS = {
@@ -44,6 +46,17 @@ templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 # --- ROUTES DE NAVIGATION (GET) ---
 
+@router.get("/bot_health", response_class=HTMLResponse)
+async def bot_health_page(request: Request):
+    return templates.TemplateResponse(request=request, name="admin/bot_health.html", context={})
+
+
+@router.get("/api/bot_health")
+async def bot_health_api():
+    from app.services.bot_health_service import get_bot_health_status
+    return await get_bot_health_status()
+
+
 @router.get("/")
 @router.get("/index")
 @router.get("/index.html")
@@ -57,45 +70,29 @@ async def read_admin(request: Request):
             "uptime": uptime_str,
             "cpu": psutil.cpu_percent(),
             "ram": psutil.virtual_memory().percent,
-            "twitch_status": "En ligne"
         }
     except Exception:
-        stats = {"uptime": "Inconnu", "cpu": 0, "ram": 0, "twitch_status": "Erreur"}
+        stats = {"uptime": "Inconnu", "cpu": 0, "ram": 0}
+
+    # 🔌 Statut réel : bot Twitch connecté ? Stream actuellement en live ?
+    bot_connected = bool(getattr(twitch_bot, "_connection", None))
+    is_live = False
+    try:
+        async with get_db_connection() as conn:
+            cursor = await conn.execute("SELECT personal_last_live_id FROM settings WHERE id = 1")
+            row = await cursor.fetchone()
+            is_live = bool(row and row["personal_last_live_id"])
+    except Exception as e:
+        logger.error(f"❌ [DASHBOARD] Impossible de vérifier le statut live : {e}")
+
+    stats["bot_connected"] = bot_connected
+    stats["is_live"] = is_live
 
     return templates.TemplateResponse(
         request=request,
         name="admin/index.html",
         context={"stats": stats}
     )
-
-@router.get("/data_logs.html")
-async def admin_stats(request: Request):
-    try:
-        async with get_db_connection() as conn:
-            c = await conn.execute("SELECT * FROM viewers ORDER BY messages DESC LIMIT 10")
-            top_viewers = await c.fetchall()
-
-        uptime_seconds = time.time() - psutil.boot_time()
-
-        return templates.TemplateResponse("admin/data_logs.html", {
-            "request": request,
-            "top_viewers": [dict(v) for v in top_viewers],
-            "twitch_stats": {"username": settings.TWITCH_CHANNEL.replace("#", ""), "status": "En ligne"},
-            "discord_stats": {"server_name": os.getenv("GUILD_ID", "Serveur Masthom"), "member_count": "N/A"},
-            "process_stats": {
-                "uptime": f"{int(uptime_seconds // 3600)}h {int((uptime_seconds % 3600) // 60)}m",
-                "cpu": psutil.cpu_percent(),
-                "ram": psutil.virtual_memory().percent
-            },
-            "bot_status": {"ping": "24", "status": "Connecté"},
-            "tasks_status": {"own_channel": "Actif", "external_channels": "Actif"},
-            "event_counts": {
-                "follow": 0, "sub": 0, "subgift": 0, "resub": 0, "bits": 0, "raid": 0
-            }
-        })
-    except Exception as e:
-        logger.error(f"Erreur data_logs: {e}")
-        return HTMLResponse("Erreur interne", status_code=500)
 
 @router.get("/giveaway.html")
 async def admin_giveaway(request: Request):
@@ -122,6 +119,7 @@ async def execute_tool(
 ):
     """Déclenche les actions de stream via les services ou l'overlay Node.js."""
     overlay_url = settings.OVERLAY_NODE_URL
+    ok = True
 
     async with aiohttp.ClientSession() as session:
         if action == "shoutout" and target:
@@ -130,26 +128,33 @@ async def execute_tool(
                 await shoutout_service.trigger_shoutout(target=clean_target, slug=clip_link)
             except Exception as e:
                 logger.error(f"⚠️ Erreur Service SO : {e}")
+                ok = False
 
         elif action == "replay":
             try:
                 await shoutout_service.trigger_replay(slug=clip_link, query=query)
             except Exception as e:
                 logger.error(f"⚠️ Erreur Service Replay : {e}")
+                ok = False
 
         elif action == "brb_on":
             try:
-                await session.post(f"{overlay_url}/api/overlay/scene", json={"scene": "brb"})
+                resp = await session.post(f"{overlay_url}/api/trigger", json={"type": "change_scene", "scene": "brb"})
+                ok = resp.status < 400
             except Exception as e:
                 logger.error(f"❌ Erreur de connexion au serveur Node (3005) : {e}")
+                ok = False
 
         elif action == "brb_off":
             try:
-                await session.post(f"{overlay_url}/api/overlay/scene", json={"scene": "main"})
+                resp = await session.post(f"{overlay_url}/api/trigger", json={"type": "change_scene", "scene": "main"})
+                ok = resp.status < 400
             except Exception as e:
                 logger.error(f"❌ Erreur de connexion au serveur Node (3005) : {e}")
+                ok = False
 
-    return RedirectResponse(url="/admin/shoutout", status_code=303)
+    status = "success" if ok else "error"
+    return RedirectResponse(url=f"/admin/shoutout?action={action}&status={status}", status_code=303)
 
 @router.get("/notifications")
 async def get_notifications(request: Request):
@@ -177,9 +182,15 @@ async def get_notifications(request: Request):
                         online_logins = [s['user_login'].lower() for s in (await resp.json()).get('data', [])]
                         for s in tracked_list:
                             s['is_online'] = s['login'].lower() in online_logins
-        except: pass
+        except Exception as e:
+            logger.error(f"❌ [NOTIFICATIONS] Échec vérification statut live des streamers suivis : {e}")
 
-    return templates.TemplateResponse(request=request, name="admin/notifications.html", context={"request": request, "settings": dict(settings_db) if settings_db else {}, "tracked_streamers": tracked_list})
+    return templates.TemplateResponse(request=request, name="admin/notifications.html", context={
+        "request": request,
+        "settings": dict(settings_db) if settings_db else {},
+        "tracked_streamers": tracked_list,
+        "error": request.query_params.get("error"),
+    })
 
 @router.post("/notifications/settings")
 async def save_notifications_settings(
@@ -201,11 +212,30 @@ async def save_notifications_settings(
 @router.post("/notifications/streamer/add")
 async def add_tracked_streamer(login: str = Form(...)):
     login = login.lower().strip()
-    if login:
-        try:
-            async with get_db_connection() as conn:
-                await conn.execute("INSERT INTO tracked_streamers (login) VALUES ($1)", (login,))
-        except: pass
+    if not login:
+        return RedirectResponse(url="/admin/notifications?error=empty", status_code=303)
+
+    # Vérifie que le pseudo correspond bien à un vrai compte Twitch avant de l'ajouter
+    try:
+        async with aiohttp.ClientSession() as session:
+            headers = {
+                "Client-ID": settings.TWITCH_CLIENT_ID,
+                "Authorization": f"Bearer {settings.TWITCH_OAUTH_TOKEN.replace('oauth:', '')}"
+            }
+            async with session.get(f"https://api.twitch.tv/helix/users?login={login}", headers=headers) as resp:
+                if resp.status != 200 or not (await resp.json()).get("data"):
+                    return RedirectResponse(url="/admin/notifications?error=not_found", status_code=303)
+    except Exception as e:
+        logger.error(f"❌ [NOTIFICATIONS] Échec vérification du pseudo Twitch '{login}' : {e}")
+        return RedirectResponse(url="/admin/notifications?error=api", status_code=303)
+
+    try:
+        async with get_db_connection() as conn:
+            await conn.execute("INSERT INTO tracked_streamers (login) VALUES ($1)", (login,))
+    except Exception as e:
+        logger.error(f"❌ [NOTIFICATIONS] Échec ajout streamer '{login}' (probablement déjà suivi) : {e}")
+        return RedirectResponse(url="/admin/notifications?error=duplicate", status_code=303)
+
     return RedirectResponse(url="/admin/notifications", status_code=303)
 
 @router.post("/notifications/streamer/delete/{streamer_id}")
@@ -273,6 +303,48 @@ async def save_felix_ai(
 
     return RedirectResponse(url="/admin/felix_ai?saved=true", status_code=303)
 
+
+class FelixTestPayload(BaseModel):
+    message: str
+    system_prompt: str = ""
+    temperature: float = 0.7
+    frequency_penalty: float = 0.3
+    presence_penalty: float = 0.3
+
+
+@router.post("/felix_ai/test")
+async def test_felix_ai(payload: FelixTestPayload):
+    """Permet de tester en direct le réglage en cours (non sauvegardé) avant de SYNCHRONISER FÉLIX."""
+    if not settings.OPENAI_API_KEY:
+        raise HTTPException(status_code=400, detail="OPENAI_API_KEY non configurée.")
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "gpt-4o",
+                "max_tokens": 150,
+                "messages": [
+                    {"role": "system", "content": payload.system_prompt or "Tu es Félix, un chat assistant Twitch."},
+                    {"role": "user", "content": payload.message},
+                ],
+                "temperature": payload.temperature,
+                "frequency_penalty": payload.frequency_penalty,
+                "presence_penalty": payload.presence_penalty,
+            },
+        ) as resp:
+            if resp.status != 200:
+                error_text = await resp.text()
+                logger.error(f"❌ [FELIX TEST] Erreur OpenAI ({resp.status}) : {error_text}")
+                raise HTTPException(status_code=502, detail="Erreur lors de l'appel à OpenAI.")
+            data = await resp.json()
+            reply = data["choices"][0]["message"]["content"].strip()
+            return {"reply": reply}
+
 # ==========================================
 # ROUTES DATA & LOGS (Gestion du .env)
 # ==========================================
@@ -281,7 +353,18 @@ async def save_felix_ai(
 @router.get("/data_logs.html")
 async def get_data_logs(request: Request):
     import dotenv
-    return templates.TemplateResponse(request=request, name="admin/data_logs.html", context={"request": request, "env": dotenv.dotenv_values(".env")})
+    uptime_seconds = time.time() - psutil.boot_time()
+    system_health = {
+        "bot_connected": bool(getattr(twitch_bot, "_connection", None)),
+        "uptime": f"{int(uptime_seconds // 3600)}h {int((uptime_seconds % 3600) // 60)}m",
+        "cpu": psutil.cpu_percent(),
+        "ram": psutil.virtual_memory().percent,
+    }
+    return templates.TemplateResponse(request=request, name="admin/data_logs.html", context={
+        "request": request,
+        "env": dotenv.dotenv_values(".env"),
+        "system_health": system_health,
+    })
 
 @router.post("/data_logs/save")
 async def save_env_config(request: Request):
@@ -291,60 +374,6 @@ async def save_env_config(request: Request):
         if value: dotenv.set_key(".env", key, str(value))
     return RedirectResponse(url="/admin/data_logs?saved=true", status_code=303)
 
-# ==========================================
-# ROUTES ANNONCES (Doublons potentiels de l'API)
-# ==========================================
-
-@router.get("/admin/announcements", response_class=HTMLResponse)
-async def admin_announcements_page_alt(request: Request):
-    return templates.TemplateResponse(request=request, name="admin/announcements.html", context={"request": request})
-
-@router.get("/api/announcements")
-async def api_get_announcements():
-    try:
-        async with get_db_connection() as conn:
-            c = await conn.execute("SELECT * FROM auto_announcements ORDER BY id DESC")
-            announcements = await c.fetchall()
-            return [dict(ann) for ann in announcements]
-    except Exception as e:
-        return []
-
-@router.post("/api/announcements/save")
-async def api_save_announcement(request: Request):
-    try:
-        data = await request.json()
-        ann_id = data.get("id")
-        label = data.get("label", "Annonce")
-        msg_template = data.get("message_template", "")
-        trigger = data.get("trigger_type", "interval")
-        interval = data.get("interval_minutes", 30)
-        group = data.get("group_name", "")
-
-        async with get_db_connection() as conn:
-            if ann_id:
-                await conn.execute("""
-                    UPDATE auto_announcements
-                    SET label=$1, message_template=$2, trigger_type=$3, interval_minutes=$4, group_name=$5
-                    WHERE id=$6
-                """, (label, msg_template, trigger, interval, group, ann_id))
-            else:
-                await conn.execute("""
-                    INSERT INTO auto_announcements (label, message_template, trigger_type, interval_minutes, group_name, is_enabled)
-                    VALUES ($1, $2, $3, $4, $5, 1)
-                """, (label, msg_template, trigger, interval, group))
-
-        return {"status": "success"}
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
-
-@router.delete("/api/announcements/delete/{ann_id}")
-async def api_delete_announcement(ann_id: int):
-    try:
-        async with get_db_connection() as conn:
-            await conn.execute("DELETE FROM auto_announcements WHERE id=$1", (ann_id,))
-        return {"status": "success"}
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
 # ==========================================
 # ROUTES MODÉRATION
@@ -409,7 +438,7 @@ async def get_moderation_page(request: Request):
         }
     )
 
-@router.post("/admin/moderation/settings")
+@router.post("/moderation/settings")
 async def update_mod_settings(request: Request):
     form_data = await request.form()
 
@@ -456,8 +485,8 @@ async def add_banned_word(request: Request):
         try:
             async with get_db_connection() as conn:
                 await conn.execute("INSERT INTO banned_words (word) VALUES ($1) ON CONFLICT(word) DO NOTHING", (word,))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"❌ [ADMIN] Échec ajout mot banni '{word}' : {e}")
 
     return RedirectResponse(url="/admin/moderation", status_code=303)
 
@@ -497,7 +526,10 @@ async def save_admin_info(
     social_tips: str = Form(""),
     schedule_json: str = Form("[]") # <-- Le JSON du planning arrive ici
 ):
-    """Sauvegarde les réseaux, la description et le planning."""
+    """Sauvegarde les réseaux, la description et le planning.
+    Envoie aussi une alerte dans le salon Discord #PLANNING pour chaque
+    Live Spécial nouvellement coché "Alerte Discord" (la case existait déjà
+    côté front mais n'était jamais lue côté serveur)."""
     async with get_db_connection() as conn:
         await conn.execute("""
             UPDATE channel_info
@@ -505,6 +537,46 @@ async def save_admin_info(
                 social_twitch = ?, social_tiktok = ?, social_tips = ?, schedule_json = ?
             WHERE id = 1
         """, about_text, social_discord, social_youtube, social_twitch, social_tiktok, social_tips, schedule_json)
+
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS special_live_discord_notifs (
+                schedule_key TEXT PRIMARY KEY,
+                notified_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+
+        try:
+            schedule_items = json.loads(schedule_json)
+        except (json.JSONDecodeError, TypeError):
+            schedule_items = []
+
+        for item in schedule_items:
+            if not item.get("is_special") or not item.get("discord_notify"):
+                continue
+
+            schedule_key = f"{item.get('date')}|{item.get('title')}"
+            cursor = await conn.execute(
+                "SELECT 1 FROM special_live_discord_notifs WHERE schedule_key = ?", schedule_key
+            )
+            if await cursor.fetchone():
+                continue  # déjà annoncé, on ne spam pas Discord à chaque sauvegarde
+
+            if not settings.PLANNING_CHANNEL_ID:
+                logger.warning("⚠️ [INFO] PLANNING_CHANNEL_ID non configuré, alerte Live Spécial ignorée.")
+                continue
+
+            date_str = item.get("date", "")
+            time_str = item.get("time", "")
+            title = item.get("title") or "Live spécial"
+            msg = f"📅 **Live Spécial annoncé !**\n🗓️ {date_str} à {time_str}\n🎬 {title}\n\nOn compte sur vous, ça va être énorme ! 🔥"
+
+            try:
+                await send_message_to_discord(settings.PLANNING_CHANNEL_ID, msg)
+                await conn.execute(
+                    "INSERT INTO special_live_discord_notifs (schedule_key) VALUES (?)", schedule_key
+                )
+            except Exception as e:
+                logger.error(f"❌ [INFO] Échec alerte Discord Live Spécial '{title}' : {e}")
 
     return RedirectResponse(url="/admin/info?saved=true", status_code=303)
 
@@ -535,4 +607,50 @@ async def get_discord_channels():
 async def send_discord_message(payload: DiscordMessagePayload):
     """Reçoit les données du formulaire web et demande au service de les envoyer."""
     result = await send_message_to_discord(payload.channelId, payload.message)
+
+    if result.get("status") == "success":
+        channel_name = next((c["name"] for c in CHANNELS_LIST if c["id"] == payload.channelId), payload.channelId)
+        excerpt = payload.message[:140] + ("…" if len(payload.message) > 140 else "")
+        try:
+            async with get_db_connection() as conn:
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS discord_panel_log (
+                        id SERIAL PRIMARY KEY,
+                        channel_name TEXT NOT NULL,
+                        message_excerpt TEXT NOT NULL,
+                        sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                """)
+                await conn.execute(
+                    "INSERT INTO discord_panel_log (channel_name, message_excerpt) VALUES (?, ?)",
+                    channel_name, excerpt
+                )
+        except Exception as e:
+            logger.error(f"❌ [DISCORD PANEL] Échec écriture historique : {e}")
+
     return result
+
+
+@router.get("/discord/api/history")
+async def get_discord_panel_history():
+    try:
+        async with get_db_connection() as conn:
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS discord_panel_log (
+                    id SERIAL PRIMARY KEY,
+                    channel_name TEXT NOT NULL,
+                    message_excerpt TEXT NOT NULL,
+                    sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """)
+            cursor = await conn.execute("SELECT * FROM discord_panel_log ORDER BY id DESC LIMIT 15")
+            rows = await cursor.fetchall()
+            history = [{
+                "channel_name": r["channel_name"],
+                "message_excerpt": r["message_excerpt"],
+                "sent_at": r["sent_at"].strftime("%d/%m %H:%M") if hasattr(r["sent_at"], "strftime") else str(r["sent_at"]),
+            } for r in rows]
+            return {"history": history}
+    except Exception as e:
+        logger.error(f"❌ [DISCORD PANEL] Échec lecture historique : {e}")
+        return {"history": []}

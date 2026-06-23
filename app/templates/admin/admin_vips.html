@@ -44,6 +44,10 @@
                 <div class="alert-box bg-emerald-500/10 text-emerald-400 px-6 py-2.5 rounded-xl font-bold border border-emerald-500/20 flex items-center gap-2 animate-fade-in-down">
                     <i class="fas fa-trash"></i> VIP Temporaire retiré !
                 </div>
+                {% elif request.query_params.get('success') == 'extended' %}
+                <div class="alert-box bg-emerald-500/10 text-emerald-400 px-6 py-2.5 rounded-xl font-bold border border-emerald-500/20 flex items-center gap-2 animate-fade-in-down">
+                    <i class="fas fa-clock-rotate-left"></i> VIP prolongé de 7 jours !
+                </div>
                 {% endif %}
 
                 <!-- LE BOUTON MAGIQUE D'ASPIRATION -->
@@ -185,13 +189,21 @@
                                 </div>
                             </div>
                             
-                            <!-- On ne peut retirer MANUELLEMENT que les VIP temporaires (les permanents se gèrent sur Twitch) -->
+                            <!-- On ne peut retirer/prolonger MANUELLEMENT que les VIP temporaires (les permanents se gèrent sur Twitch) -->
                             {% if v.vip_expiry %}
-                            <form action="/admin/vips/revoke/{{ v.twitch_id }}" method="POST" onsubmit="return confirm('Retirer le VIP temporaire de {{ v.username }} ?');">
-                                <button type="submit" class="text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all p-3" title="Révoquer">
-                                    <i class="fas fa-user-minus text-sm"></i>
-                                </button>
-                            </form>
+                            <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                <form action="/admin/vips/extend/{{ v.twitch_id }}" method="POST">
+                                    <input type="hidden" name="extra_days" value="7">
+                                    <button type="submit" class="text-slate-600 hover:text-emerald-500 transition-all p-3" title="Prolonger de 7 jours">
+                                        <i class="fas fa-clock-rotate-left text-sm"></i>
+                                    </button>
+                                </form>
+                                <form action="/admin/vips/revoke/{{ v.twitch_id }}" method="POST" onsubmit="return confirm('Retirer le VIP temporaire de {{ v.username }} ?');">
+                                    <button type="submit" class="text-slate-600 hover:text-rose-500 transition-all p-3" title="Révoquer">
+                                        <i class="fas fa-user-minus text-sm"></i>
+                                    </button>
+                                </form>
+                            </div>
                             {% endif %}
                         </div>
                         {% else %}

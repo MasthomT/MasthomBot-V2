@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discord - MasthomBot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #6366f1; outline: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; inset: 0; background-color: #334155; border-radius: 24px; transition: .2s; }
+        .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: .2s; }
+        input:checked + .toggle-slider { background-color: #6366f1; }
+        input:checked + .toggle-slider:before { transform: translateX(20px); }
+        .tab-btn { padding: 10px 18px; border-radius: 12px; font-size: 0.8rem; font-weight: 800; color: #94a3b8; border: 1px solid #334155; transition: all .15s; cursor: pointer; white-space: nowrap; }
+        .tab-btn.active { background: #6366f1; color: white; border-color: #6366f1; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen overflow-hidden">
+
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 md:p-10 overflow-y-auto custom-scrollbar h-screen">
+
+        <header class="mb-6">
+            <h1 class="text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
+                <i class="fab fa-discord text-[#5865F2]"></i> Discord
+            </h1>
+            <p class="text-slate-400 mt-1">Tout ce que faisaient tes bots tiers (rôles, anniversaires, bienvenue, YouTube) + modération, géré ici.</p>
+        </header>
+
+        <div class="flex flex-wrap gap-2 mb-8">
+            <button class="tab-btn active" onclick="switchTab('moderation')">🛡️ Modération</button>
+            <button class="tab-btn" onclick="switchTab('welcome')">👋 Bienvenue & Portail</button>
+            <button class="tab-btn" onclick="switchTab('selfroles')">🎭 Rôles Auto</button>
+            <button class="tab-btn" onclick="switchTab('media')">📺 YouTube & TikTok</button>
+            <button class="tab-btn" onclick="switchTab('birthdays')">🎂 Anniversaires</button>
+            <button class="tab-btn" onclick="switchTab('commands')">⚙️ Commandes</button>
+        </div>
+
+        <!-- ============ ONGLET MODÉRATION ============ -->
+        <div id="tab-moderation" class="tab-panel active">
+            <div class="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+                <div class="xl:col-span-6 space-y-6">
+                    <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fas fa-ban text-rose-400 text-lg"></i> Mots interdits
+                            </h2>
+                            <label class="toggle-switch"><input type="checkbox" id="bw-enabled"><span class="toggle-slider"></span></label>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mb-6">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Action</label>
+                                <select id="bw-action" class="w-full input-dark rounded-xl p-3 text-sm">
+                                    <option value="delete">Supprimer le message</option>
+                                    <option value="timeout">Supprimer + Timeout</option>
+                                    <option value="ban">Supprimer + Bannir</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Durée timeout (sec)</label>
+                                <input type="number" id="bw-duration" class="w-full input-dark rounded-xl p-3 text-sm" value="600">
+                            </div>
+                        </div>
+                        <div class="flex gap-3 mb-4">
+                            <input type="text" id="newWordInput" class="w-full input-dark rounded-xl p-3 text-sm" placeholder="Ajouter un mot interdit">
+                            <button onclick="addWord()" class="shrink-0 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-3 rounded-xl font-bold text-xs transition-all"><i class="fas fa-plus"></i></button>
+                        </div>
+                        <div id="wordsBox" class="flex flex-wrap gap-2 max-h-[200px] overflow-y-auto custom-scrollbar"></div>
+                    </div>
+
+                    <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fas fa-comments text-amber-400 text-lg"></i> Anti-Spam
+                            </h2>
+                            <label class="toggle-switch"><input type="checkbox" id="spam-enabled"><span class="toggle-slider"></span></label>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Messages max</label>
+                                <input type="number" id="spam-limit" class="w-full input-dark rounded-xl p-3 text-sm" value="5">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Sur une période de (sec)</label>
+                                <input type="number" id="spam-timeframe" class="w-full input-dark rounded-xl p-3 text-sm" value="10">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Action</label>
+                                <select id="spam-action" class="w-full input-dark rounded-xl p-3 text-sm">
+                                    <option value="delete">Supprimer le message</option>
+                                    <option value="timeout">Supprimer + Timeout</option>
+                                    <option value="ban">Supprimer + Bannir</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Durée timeout (sec)</label>
+                                <input type="number" id="spam-duration" class="w-full input-dark rounded-xl p-3 text-sm" value="300">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button onclick="saveSettings()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-3 active:scale-95">
+                        <i class="fas fa-save"></i> SAUVEGARDER LES RÉGLAGES
+                    </button>
+                    <div id="statusMessage" class="text-center text-xs font-bold h-4"></div>
+                </div>
+
+                <div class="xl:col-span-6 space-y-6">
+                    <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                        <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-2">
+                            <i class="fas fa-user-shield text-emerald-400 text-lg"></i> Rôles exemptés de modération
+                        </h2>
+                        <p class="text-xs text-slate-500 mb-6">Les membres ayant un de ces rôles ne seront jamais sanctionnés automatiquement. Les modérateurs/admins ("Gérer les messages") sont déjà exemptés d'office.</p>
+                        <div id="rolesGuildName" class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-3"></div>
+                        <div id="rolesBox" class="space-y-2 max-h-[500px] overflow-y-auto custom-scrollbar"></div>
+                    </div>
+
+                    <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                        <div class="flex items-center justify-between mb-2">
+                            <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fas fa-door-open text-rose-400 text-lg"></i> Annonce des départs
+                            </h2>
+                            <label class="toggle-switch"><input type="checkbox" id="leave-enabled"><span class="toggle-slider"></span></label>
+                        </div>
+                        <p class="text-xs text-slate-500 mb-6">Annonce dans un salon privé (modérateurs) quand un membre quitte le serveur.</p>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Salon de destination (privé)</label>
+                            <select id="leave-channel" class="w-full input-dark rounded-xl p-3 text-sm"></select>
+                        </div>
+                        <button onclick="saveFeatures()" class="w-full mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black py-3 rounded-2xl shadow-lg transition-all text-xs">
+                            <i class="fas fa-save"></i> SAUVEGARDER
+                        </button>
+                        <div id="featuresStatusMessage" class="text-center mt-2 text-xs font-bold h-4"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ ONGLET BIENVENUE & PORTAIL ============ -->
+        <div id="tab-welcome" class="tab-panel">
+            <div class="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+                <div class="xl:col-span-6 space-y-6">
+                    <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                        <div class="flex items-center justify-between mb-2">
+                            <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fas fa-bullhorn text-emerald-400 text-lg"></i> Message dans un salon public
+                            </h2>
+                            <label class="toggle-switch"><input type="checkbox" id="welcome-channel-enabled"><span class="toggle-slider"></span></label>
+                        </div>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Salon</label>
+                                <select id="welcome-channel" class="w-full input-dark rounded-xl p-3 text-sm"></select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Message (utilise {member} pour mentionner le nouveau)</label>
+                                <textarea id="welcome-channel-message" rows="3" class="w-full input-dark rounded-xl p-3 text-sm"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                        <div class="flex items-center justify-between mb-2">
+                            <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fas fa-image text-violet-400 text-lg"></i> Embed (en dessous du message)
+                            </h2>
+                            <label class="toggle-switch"><input type="checkbox" id="welcome-embed-enabled"><span class="toggle-slider"></span></label>
+                        </div>
+                        <p class="text-xs text-slate-500 mb-4">S'affiche juste sous le message du salon ci-dessus, avec l'avatar du nouveau membre.</p>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Titre</label>
+                                <input type="text" id="welcome-embed-title" class="w-full input-dark rounded-xl p-3 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Description ({member} pour mentionner)</label>
+                                <textarea id="welcome-embed-description" rows="3" class="w-full input-dark rounded-xl p-3 text-sm"></textarea>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Couleur</label>
+                                <input type="color" id="welcome-embed-color" class="w-full input-dark rounded-xl p-1 h-11">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                        <div class="flex items-center justify-between mb-2">
+                            <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fas fa-envelope text-sky-400 text-lg"></i> Message privé (DM)
+                            </h2>
+                            <label class="toggle-switch"><input type="checkbox" id="welcome-dm-enabled"><span class="toggle-slider"></span></label>
+                        </div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Message ({member} = pseudo)</label>
+                        <textarea id="welcome-dm-message" rows="3" class="w-full input-dark rounded-xl p-3 text-sm"></textarea>
+                        <p class="text-[10px] text-slate-600 mt-2">Si le membre a fermé ses DM, le message est juste ignoré (pas d'erreur).</p>
+                    </div>
+
+                    <button onclick="saveWelcome()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-4 rounded-2xl shadow-lg transition-all">
+                        <i class="fas fa-save"></i> SAUVEGARDER LA BIENVENUE
+                    </button>
+                    <div id="welcomeStatusMessage" class="text-center text-xs font-bold h-4"></div>
+                </div>
+
+                <div class="xl:col-span-6 space-y-6">
+                    <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                        <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-2">
+                            <i class="fas fa-door-closed text-amber-400 text-lg"></i> Portail Règlement
+                        </h2>
+                        <p class="text-xs text-slate-500 mb-6">Les membres doivent réagir au message du règlement pour recevoir le rôle général et débloquer le reste du serveur. Pense à configurer les permissions du salon @everyone côté Discord pour qu'il ne voie que ce salon avant de réagir.</p>
+
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Salon du règlement</label>
+                                <select id="gate-channel" class="w-full input-dark rounded-xl p-3 text-sm"></select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Texte du règlement</label>
+                                <textarea id="gate-rules-text" rows="6" class="w-full input-dark rounded-xl p-3 text-sm"></textarea>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Emoji de réaction</label>
+                                    <input type="text" id="gate-emoji" class="w-full input-dark rounded-xl p-3 text-sm" value="✅">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Rôle général à attribuer</label>
+                                    <select id="gate-role" class="w-full input-dark rounded-xl p-3 text-sm"></select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-3 mt-6">
+                            <button onclick="saveGate()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl text-xs">
+                                <i class="fas fa-save"></i> SAUVEGARDER
+                            </button>
+                            <button onclick="publishGate()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl text-xs">
+                                <i class="fas fa-paper-plane"></i> PUBLIER / REPUBLIER
+                            </button>
+                        </div>
+                        <div id="gateStatusMessage" class="text-center mt-3 text-xs font-bold h-4"></div>
+                        <div id="gateStatusInfo" class="text-center mt-1 text-[10px] text-slate-500"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ ONGLET RÔLES AUTO ============ -->
+        <div id="tab-selfroles" class="tab-panel">
+            <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl max-w-3xl">
+                <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-2">
+                    <i class="fas fa-magic text-indigo-400 text-lg"></i> Rôles auto-attribuables (réactions)
+                </h2>
+                <p class="text-xs text-slate-500 mb-6">Ajoute des rôles que les membres pourront cliquer pour s'auto-attribuer (jeux, notifications...). Une fois ajoutés, publie le panneau dans le salon choisi — le bot poste un message récapitulatif avec toutes les réactions.</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+                    <select id="sr-channel" class="input-dark rounded-xl p-3 text-sm md:col-span-1"></select>
+                    <input type="text" id="sr-emoji" placeholder="Emoji" class="input-dark rounded-xl p-3 text-sm">
+                    <select id="sr-role" class="input-dark rounded-xl p-3 text-sm"></select>
+                    <input type="text" id="sr-label" placeholder="Libellé (ex: 🎮 Valorant)" class="input-dark rounded-xl p-3 text-sm">
+                </div>
+                <button onclick="addSelfRole()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl text-xs mb-6">
+                    <i class="fas fa-plus"></i> AJOUTER CE RÔLE
+                </button>
+
+                <div id="selfRolesBox" class="space-y-2 mb-6 max-h-[400px] overflow-y-auto custom-scrollbar"></div>
+
+                <div class="flex gap-3">
+                    <select id="sr-publish-channel" class="input-dark rounded-xl p-3 text-sm flex-1"></select>
+                    <button onclick="publishSelfRoles()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-5 rounded-xl text-xs whitespace-nowrap">
+                        <i class="fas fa-paper-plane"></i> PUBLIER LE PANNEAU
+                    </button>
+                </div>
+                <div id="selfRolesStatusMessage" class="text-center mt-3 text-xs font-bold h-4"></div>
+            </div>
+        </div>
+
+        <!-- ============ ONGLET YOUTUBE & TIKTOK ============ -->
+        <div id="tab-media" class="tab-panel">
+            <div class="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start max-w-5xl">
+                <div class="xl:col-span-6 space-y-6">
+                    <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                        <div class="flex items-center justify-between mb-2">
+                            <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fab fa-youtube text-rose-500 text-lg"></i> Notifications YouTube
+                            </h2>
+                            <label class="toggle-switch"><input type="checkbox" id="youtube-enabled"><span class="toggle-slider"></span></label>
+                        </div>
+                        <p class="text-xs text-slate-500 mb-6">Annonce chaque nouvelle vidéo (flux RSS officiel, vérifié toutes les 10 minutes).</p>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">ID de chaîne YouTube (UC...)</label>
+                                <input type="text" id="youtube-channel-id" class="w-full input-dark rounded-xl p-3 text-sm" placeholder="UCB9NFQoBcfPZHVN_8F6e7sw">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Salon de destination</label>
+                                <select id="youtube-channel" class="w-full input-dark rounded-xl p-3 text-sm"></select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Message au-dessus de l'embed</label>
+                                <input type="text" id="youtube-announce-message" class="w-full input-dark rounded-xl p-3 text-sm" placeholder="📺 Nouvelle vidéo YouTube !">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="xl:col-span-6 space-y-6">
+                    <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                        <div class="flex items-center justify-between mb-2">
+                            <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fab fa-tiktok text-slate-300 text-lg"></i> Notifications TikTok
+                            </h2>
+                            <label class="toggle-switch"><input type="checkbox" id="tiktok-enabled"><span class="toggle-slider"></span></label>
+                        </div>
+                        <p class="text-xs text-slate-500 mb-6">Annonce chaque nouvelle vidéo TikTok (vérifié toutes les 20 minutes).</p>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Pseudo TikTok (sans @)</label>
+                                <input type="text" id="tiktok-username" class="w-full input-dark rounded-xl p-3 text-sm" placeholder="masthomt_">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Salon de destination</label>
+                                <select id="tiktok-channel" class="w-full input-dark rounded-xl p-3 text-sm"></select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Message au-dessus de l'embed</label>
+                                <input type="text" id="tiktok-announce-message" class="w-full input-dark rounded-xl p-3 text-sm" placeholder="🎵 Nouvelle vidéo TikTok !">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="xl:col-span-12">
+                    <button onclick="saveFeatures()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-4 rounded-2xl shadow-lg transition-all">
+                        <i class="fas fa-save"></i> SAUVEGARDER YOUTUBE & TIKTOK
+                    </button>
+                    <div id="mediaStatusMessage" class="text-center mt-2 text-xs font-bold h-4"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ ONGLET ANNIVERSAIRES ============ -->
+        <div id="tab-birthdays" class="tab-panel">
+            <div class="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start max-w-5xl">
+                <div class="xl:col-span-5 space-y-6">
+                    <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                        <div class="flex items-center justify-between mb-2">
+                            <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fas fa-birthday-cake text-pink-400 text-lg"></i> Réglages
+                            </h2>
+                            <label class="toggle-switch"><input type="checkbox" id="bday-enabled"><span class="toggle-slider"></span></label>
+                        </div>
+                        <p class="text-xs text-slate-500 mb-6">Les membres enregistrent leur date eux-mêmes avec la commande <code class="text-indigo-400">/anniversaire</code> (réponse visible seulement par eux). L'année est optionnelle (JJ/MM ou JJ/MM/AAAA).</p>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Salon d'annonce</label>
+                                <select id="bday-channel" class="w-full input-dark rounded-xl p-3 text-sm"></select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Message ({member} = mention)</label>
+                                <textarea id="bday-message" rows="3" class="w-full input-dark rounded-xl p-3 text-sm"></textarea>
+                            </div>
+                        </div>
+                        <button onclick="saveBirthdaySettings()" class="w-full mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black py-3 rounded-2xl shadow-lg transition-all text-xs">
+                            <i class="fas fa-save"></i> SAUVEGARDER
+                        </button>
+                        <div id="bdayStatusMessage" class="text-center mt-2 text-xs font-bold h-4"></div>
+                    </div>
+                </div>
+
+                <div class="xl:col-span-7 space-y-6">
+                    <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                        <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-6">
+                            <i class="fas fa-list text-indigo-400 text-lg"></i> Anniversaires enregistrés
+                        </h2>
+                        <div id="bdayListBox" class="space-y-2 max-h-[500px] overflow-y-auto custom-scrollbar"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ ONGLET COMMANDES ============ -->
+        <div id="tab-commands" class="tab-panel">
+            <div class="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start max-w-5xl">
+                <div class="xl:col-span-6 space-y-6">
+                    <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                        <div class="flex items-center justify-between mb-2">
+                            <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fas fa-broom text-amber-400 text-lg"></i> /clear
+                            </h2>
+                            <label class="toggle-switch"><input type="checkbox" id="cmd-clear-enabled"><span class="toggle-slider"></span></label>
+                        </div>
+                        <p class="text-xs text-slate-500">Supprime les X derniers messages d'un salon (1 à 100). Réservée aux modérateurs et au propriétaire du serveur — invisible pour les autres membres.</p>
+                    </div>
+                </div>
+
+                <div class="xl:col-span-6 space-y-6">
+                    <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                        <div class="flex items-center justify-between mb-2">
+                            <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fas fa-poll text-indigo-400 text-lg"></i> /sondage
+                            </h2>
+                            <label class="toggle-switch"><input type="checkbox" id="cmd-sondage-enabled"><span class="toggle-slider"></span></label>
+                        </div>
+                        <p class="text-xs text-slate-500">Crée un sondage avec 2 à 5 options et réactions automatiques. Réservée aux modérateurs et au propriétaire du serveur.</p>
+                    </div>
+                </div>
+
+                <div class="xl:col-span-6 space-y-6">
+                    <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                        <div class="flex items-center justify-between mb-2">
+                            <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fas fa-triangle-exclamation text-amber-400 text-lg"></i> /warn
+                            </h2>
+                            <label class="toggle-switch"><input type="checkbox" id="cmd-warn-enabled"><span class="toggle-slider"></span></label>
+                        </div>
+                        <p class="text-xs text-slate-500">Avertit un membre (DM + log dans Logs_Moderation), avec compteur d'avertissements cumulés. Réservée aux modérateurs.</p>
+                    </div>
+                </div>
+
+                <div class="xl:col-span-6 space-y-6">
+                    <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                        <div class="flex items-center justify-between mb-2">
+                            <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fas fa-hourglass-half text-rose-400 text-lg"></i> /slowmode
+                            </h2>
+                            <label class="toggle-switch"><input type="checkbox" id="cmd-slowmode-enabled"><span class="toggle-slider"></span></label>
+                        </div>
+                        <p class="text-xs text-slate-500">Active le mode lent sur le salon courant (0 à 21600 secondes). Réservée aux modérateurs.</p>
+                    </div>
+                </div>
+
+                <div class="xl:col-span-6 space-y-6">
+                    <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                        <div class="flex items-center justify-between mb-2">
+                            <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fas fa-lock text-rose-400 text-lg"></i> /lock & /unlock
+                            </h2>
+                            <label class="toggle-switch"><input type="checkbox" id="cmd-lock-enabled"><span class="toggle-slider"></span></label>
+                        </div>
+                        <p class="text-xs text-slate-500">Verrouille/déverrouille un salon (retire la permission d'écrire à @everyone). Réservée aux modérateurs.</p>
+                    </div>
+                </div>
+
+                <div class="xl:col-span-6 space-y-6">
+                    <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                        <div class="flex items-center justify-between mb-2">
+                            <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fas fa-id-card text-indigo-400 text-lg"></i> /userinfo
+                            </h2>
+                            <label class="toggle-switch"><input type="checkbox" id="cmd-userinfo-enabled"><span class="toggle-slider"></span></label>
+                        </div>
+                        <p class="text-xs text-slate-500">Affiche la fiche d'un membre (rôles, avertissements, anniversaire...), visible seulement par toi. Réservée aux modérateurs.</p>
+                    </div>
+                </div>
+
+                <div class="xl:col-span-6 space-y-6">
+                    <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                        <div class="flex items-center justify-between mb-2">
+                            <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fas fa-gift text-emerald-400 text-lg"></i> /giveaway
+                            </h2>
+                            <label class="toggle-switch"><input type="checkbox" id="cmd-giveaway-enabled"><span class="toggle-slider"></span></label>
+                        </div>
+                        <p class="text-xs text-slate-500">Lance un tirage au sort avec réaction 🎉 et durée configurable, tirage automatique à la fin. Réservée aux modérateurs.</p>
+                    </div>
+                </div>
+
+                <div class="xl:col-span-6 space-y-6">
+                    <div class="config-card p-6 md:p-8 rounded-3xl shadow-2xl">
+                        <div class="flex items-center justify-between mb-2">
+                            <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fas fa-bullhorn text-indigo-400 text-lg"></i> /annonce
+                            </h2>
+                            <label class="toggle-switch"><input type="checkbox" id="cmd-annonce-enabled"><span class="toggle-slider"></span></label>
+                        </div>
+                        <p class="text-xs text-slate-500">Poste un message formaté en embed dans le salon choisi. Réservée aux modérateurs.</p>
+                    </div>
+                </div>
+
+                <div class="xl:col-span-12">
+                    <button onclick="saveFeatures()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-4 rounded-2xl shadow-lg transition-all">
+                        <i class="fas fa-save"></i> SAUVEGARDER LES COMMANDES
+                    </button>
+                    <div id="commandsStatusMessage" class="text-center mt-2 text-xs font-bold h-4"></div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+<script>
+    function switchTab(name) {
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(`tab-${name}`).classList.add('active');
+        event.target.classList.add('active');
+    }
+
+    // ============ MODÉRATION ============
+    async function loadSettings() {
+        try {
+            const res = await fetch('/admin/api/discord_mod/settings');
+            const s = await res.json();
+            document.getElementById('bw-enabled').checked = !!s.banned_words_enabled;
+            document.getElementById('bw-action').value = s.banned_words_action || 'delete';
+            document.getElementById('bw-duration').value = s.banned_words_duration || 600;
+            document.getElementById('spam-enabled').checked = !!s.spam_enabled;
+            document.getElementById('spam-limit').value = s.spam_limit || 5;
+            document.getElementById('spam-timeframe').value = s.spam_timeframe || 10;
+            document.getElementById('spam-action').value = s.spam_action || 'delete';
+            document.getElementById('spam-duration').value = s.spam_duration || 300;
+        } catch (e) { console.error(e); }
+    }
+
+    async function saveSettings() {
+        const payload = {
+            banned_words_enabled: document.getElementById('bw-enabled').checked,
+            banned_words_action: document.getElementById('bw-action').value,
+            banned_words_duration: parseInt(document.getElementById('bw-duration').value) || 0,
+            spam_enabled: document.getElementById('spam-enabled').checked,
+            spam_limit: parseInt(document.getElementById('spam-limit').value) || 5,
+            spam_timeframe: parseInt(document.getElementById('spam-timeframe').value) || 10,
+            spam_action: document.getElementById('spam-action').value,
+            spam_duration: parseInt(document.getElementById('spam-duration').value) || 0,
+        };
+        const res = await fetch('/admin/api/discord_mod/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        flash('statusMessage', res.ok ? '✅ Réglages enregistrés !' : '❌ Erreur', res.ok);
+    }
+
+    async function loadWords() {
+        try {
+            const res = await fetch('/admin/api/discord_mod/words');
+            const data = await res.json();
+            const box = document.getElementById('wordsBox');
+            if (!data.words || data.words.length === 0) { box.innerHTML = '<div class="text-slate-600 italic text-xs py-2">Aucun mot interdit configuré.</div>'; return; }
+            box.innerHTML = data.words.map(w => `
+                <div class="flex items-center gap-2 bg-slate-900/50 border border-slate-800 rounded-xl px-3 py-2">
+                    <span class="text-xs font-bold text-slate-200">${w.word}</span>
+                    <button onclick="deleteWord(${w.id})" class="text-slate-500 hover:text-rose-400 text-xs"><i class="fas fa-trash"></i></button>
+                </div>`).join('');
+        } catch (e) { console.error(e); }
+    }
+
+    async function addWord() {
+        const input = document.getElementById('newWordInput');
+        const word = input.value.trim();
+        if (!word) return;
+        await fetch('/admin/api/discord_mod/words', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ word }) });
+        input.value = '';
+        loadWords();
+    }
+
+    async function deleteWord(id) {
+        await fetch(`/admin/api/discord_mod/words/${id}`, { method: 'DELETE' });
+        loadWords();
+    }
+
+    async function loadRoles() {
+        const box = document.getElementById('rolesBox');
+        box.innerHTML = '<div class="text-slate-600 italic text-xs py-4 text-center">Chargement...</div>';
+        try {
+            const res = await fetch('/admin/api/discord_mod/roles');
+            if (!res.ok) { const err = await res.json(); box.innerHTML = `<div class="text-amber-400 italic text-xs py-4 text-center">${err.detail || 'Erreur'}</div>`; return; }
+            const data = await res.json();
+            document.getElementById('rolesGuildName').textContent = `Serveur : ${data.guild_name}`;
+            box.innerHTML = data.roles.map(r => `
+                <div class="flex items-center justify-between py-2.5 px-4 bg-slate-900/50 rounded-xl border ${r.is_exempt ? 'border-emerald-500/30' : 'border-slate-800'}">
+                    <span class="font-bold text-sm text-slate-200">${r.name}</span>
+                    <label class="toggle-switch"><input type="checkbox" ${r.is_exempt ? 'checked' : ''} onchange="toggleRole('${r.id}')"><span class="toggle-slider"></span></label>
+                </div>`).join('');
+        } catch (e) { box.innerHTML = '<div class="text-rose-400 italic text-xs py-4 text-center">Erreur réseau.</div>'; }
+    }
+
+    async function toggleRole(roleId) {
+        await fetch(`/admin/api/discord_mod/roles/${roleId}/toggle`, { method: 'POST' });
+    }
+
+    // ============ SALONS & RÔLES (cache partagé) ============
+    let cachedChannels = [];
+    let cachedRoles = [];
+
+    // Le bot Discord peut mettre quelques secondes à se connecter après un redémarrage —
+    // si l'API renvoie 503 (pas encore prêt), on réessaie plutôt que de laisser les menus vides.
+    async function loadChannelsIntoSelects(attempt = 1) {
+        try {
+            const res = await fetch('/admin/api/discord_mod/channels');
+            if (!res.ok) {
+                if (res.status === 503 && attempt <= 5) {
+                    await new Promise(r => setTimeout(r, 2000));
+                    return loadChannelsIntoSelects(attempt + 1);
+                }
+                return;
+            }
+            const data = await res.json();
+            cachedChannels = data.channels || [];
+            const optionsHtml = '<option value="">-- Choisir un salon --</option>' + cachedChannels.map(c => `<option value="${c.id}"># ${c.name}</option>`).join('');
+            ['tiktok-channel', 'leave-channel', 'youtube-channel', 'welcome-channel', 'gate-channel', 'sr-channel', 'sr-publish-channel', 'bday-channel'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = optionsHtml;
+            });
+        } catch (e) { console.error(e); }
+    }
+
+    async function loadRolesIntoSelects(attempt = 1) {
+        try {
+            const res = await fetch('/admin/api/discord_mod/roles');
+            if (!res.ok) {
+                if (res.status === 503 && attempt <= 5) {
+                    await new Promise(r => setTimeout(r, 2000));
+                    return loadRolesIntoSelects(attempt + 1);
+                }
+                return;
+            }
+            const data = await res.json();
+            cachedRoles = data.roles || [];
+            const optionsHtml = '<option value="">-- Choisir un rôle --</option>' + cachedRoles.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+            ['gate-role', 'sr-role'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = optionsHtml;
+            });
+        } catch (e) { console.error(e); }
+    }
+
+    // ============ FONCTIONNALITÉS (TikTok/YouTube/Départs) ============
+    async function loadFeatures() {
+        try {
+            const res = await fetch('/admin/api/discord_mod/features');
+            const f = await res.json();
+            document.getElementById('tiktok-enabled').checked = !!f.tiktok_enabled;
+            document.getElementById('tiktok-username').value = f.tiktok_username || '';
+            document.getElementById('leave-enabled').checked = !!f.leave_enabled;
+            document.getElementById('youtube-enabled').checked = !!f.youtube_enabled;
+            document.getElementById('youtube-channel-id').value = f.youtube_channel_id || '';
+            document.getElementById('youtube-announce-message').value = f.youtube_announce_message || '';
+            document.getElementById('tiktok-announce-message').value = f.tiktok_announce_message || '';
+            document.getElementById('cmd-clear-enabled').checked = f.clear_enabled !== false;
+            document.getElementById('cmd-sondage-enabled').checked = f.sondage_enabled !== false;
+            document.getElementById('cmd-warn-enabled').checked = f.warn_enabled !== false;
+            document.getElementById('cmd-slowmode-enabled').checked = f.slowmode_enabled !== false;
+            document.getElementById('cmd-lock-enabled').checked = f.lock_enabled !== false;
+            document.getElementById('cmd-userinfo-enabled').checked = f.userinfo_enabled !== false;
+            document.getElementById('cmd-giveaway-enabled').checked = f.giveaway_enabled !== false;
+            document.getElementById('cmd-annonce-enabled').checked = f.annonce_enabled !== false;
+            // Les salons sont déjà chargés une fois au démarrage de la page (voir DOMContentLoaded) —
+            // pas besoin de les recharger ici : ça créait une course qui effaçait la sélection
+            // d'autres menus (Bienvenue, Portail...) en cours de chargement en parallèle.
+            document.getElementById('tiktok-channel').value = f.tiktok_channel_id || '';
+            document.getElementById('leave-channel').value = f.leave_channel_id || '';
+            document.getElementById('youtube-channel').value = f.youtube_discord_channel_id || '';
+        } catch (e) { console.error(e); }
+    }
+
+    async function saveFeatures() {
+        // On part des valeurs actuelles en base (et pas d'un objet vide) pour ne pas écraser
+        // les réglages gérés ailleurs (ex: !showtiktok, configuré depuis /admin/commands).
+        const current = await (await fetch('/admin/api/discord_mod/features')).json();
+        const payload = {
+            ...current,
+            tiktok_enabled: document.getElementById('tiktok-enabled').checked,
+            tiktok_username: document.getElementById('tiktok-username').value.trim(),
+            tiktok_channel_id: document.getElementById('tiktok-channel').value,
+            leave_enabled: document.getElementById('leave-enabled').checked,
+            leave_channel_id: document.getElementById('leave-channel').value,
+            youtube_enabled: document.getElementById('youtube-enabled').checked,
+            youtube_channel_id: document.getElementById('youtube-channel-id').value.trim(),
+            youtube_discord_channel_id: document.getElementById('youtube-channel').value,
+            youtube_announce_message: document.getElementById('youtube-announce-message').value.trim(),
+            tiktok_announce_message: document.getElementById('tiktok-announce-message').value.trim(),
+            clear_enabled: document.getElementById('cmd-clear-enabled').checked,
+            sondage_enabled: document.getElementById('cmd-sondage-enabled').checked,
+            warn_enabled: document.getElementById('cmd-warn-enabled').checked,
+            slowmode_enabled: document.getElementById('cmd-slowmode-enabled').checked,
+            lock_enabled: document.getElementById('cmd-lock-enabled').checked,
+            userinfo_enabled: document.getElementById('cmd-userinfo-enabled').checked,
+            giveaway_enabled: document.getElementById('cmd-giveaway-enabled').checked,
+            annonce_enabled: document.getElementById('cmd-annonce-enabled').checked,
+        };
+        const res = await fetch('/admin/api/discord_mod/features', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        flash('featuresStatusMessage', res.ok ? '✅ Enregistré !' : '❌ Erreur', res.ok);
+        flash('mediaStatusMessage', res.ok ? '✅ Enregistré !' : '❌ Erreur', res.ok);
+        flash('commandsStatusMessage', res.ok ? '✅ Enregistré !' : '❌ Erreur', res.ok);
+    }
+
+    // ============ BIENVENUE ============
+    async function loadWelcome() {
+        try {
+            const res = await fetch('/admin/api/discord_mod/welcome');
+            const w = await res.json();
+            document.getElementById('welcome-channel-enabled').checked = !!w.channel_enabled;
+            document.getElementById('welcome-channel-message').value = w.channel_message || '';
+            document.getElementById('welcome-dm-enabled').checked = !!w.dm_enabled;
+            document.getElementById('welcome-dm-message').value = w.dm_message || '';
+            document.getElementById('welcome-channel').value = w.channel_id || '';
+            document.getElementById('welcome-embed-enabled').checked = w.embed_enabled !== false;
+            document.getElementById('welcome-embed-title').value = w.embed_title || '';
+            document.getElementById('welcome-embed-description').value = w.embed_description || '';
+            document.getElementById('welcome-embed-color').value = w.embed_color || '#00f5c3';
+        } catch (e) { console.error(e); }
+    }
+
+    async function saveWelcome() {
+        const payload = {
+            channel_enabled: document.getElementById('welcome-channel-enabled').checked,
+            channel_id: document.getElementById('welcome-channel').value,
+            channel_message: document.getElementById('welcome-channel-message').value,
+            dm_enabled: document.getElementById('welcome-dm-enabled').checked,
+            dm_message: document.getElementById('welcome-dm-message').value,
+            embed_enabled: document.getElementById('welcome-embed-enabled').checked,
+            embed_title: document.getElementById('welcome-embed-title').value,
+            embed_description: document.getElementById('welcome-embed-description').value,
+            embed_color: document.getElementById('welcome-embed-color').value,
+        };
+        const res = await fetch('/admin/api/discord_mod/welcome', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        flash('welcomeStatusMessage', res.ok ? '✅ Enregistré !' : '❌ Erreur', res.ok);
+    }
+
+    // ============ PORTAIL RÈGLEMENT ============
+    async function loadGate() {
+        try {
+            const res = await fetch('/admin/api/discord_mod/gate');
+            const g = await res.json();
+            document.getElementById('gate-rules-text').value = g.rules_text || '';
+            document.getElementById('gate-emoji').value = g.emoji || '✅';
+            document.getElementById('gate-channel').value = g.channel_id || '';
+            document.getElementById('gate-role').value = g.general_role_id || '';
+            document.getElementById('gateStatusInfo').textContent = g.enabled && g.message_id
+                ? `✅ Portail actif (message publié)`
+                : '⚠️ Portail pas encore publié';
+        } catch (e) { console.error(e); }
+    }
+
+    async function saveGate() {
+        const payload = {
+            channel_id: document.getElementById('gate-channel').value,
+            rules_text: document.getElementById('gate-rules-text').value,
+            emoji: document.getElementById('gate-emoji').value.trim() || '✅',
+            general_role_id: document.getElementById('gate-role').value,
+        };
+        const res = await fetch('/admin/api/discord_mod/gate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        flash('gateStatusMessage', res.ok ? '✅ Enregistré !' : '❌ Erreur', res.ok);
+    }
+
+    async function publishGate() {
+        await saveGate();
+        if (!confirm("Publier (ou republier) le message de règlement maintenant dans le salon choisi ?")) return;
+        const res = await fetch('/admin/api/discord_mod/gate/publish', { method: 'POST' });
+        const data = await res.json();
+        flash('gateStatusMessage', res.ok ? '✅ Règlement publié !' : `❌ ${data.detail || 'Erreur'}`, res.ok);
+        if (res.ok) loadGate();
+    }
+
+    // ============ RÔLES AUTO ============
+let lastSelfRoles = [];
+
+    async function loadSelfRoles() {
+        try {
+            const res = await fetch('/admin/api/discord_mod/self_roles');
+            const data = await res.json();
+            lastSelfRoles = data.self_roles || [];
+            const box = document.getElementById('selfRolesBox');
+            if (lastSelfRoles.length === 0) { box.innerHTML = '<div class="text-slate-600 italic text-xs py-4 text-center">Aucun rôle configuré.</div>'; return; }
+
+            const channelOptions = cachedChannels.map(c => `<option value="${c.id}">#${c.name}</option>`).join('');
+
+            box.innerHTML = lastSelfRoles.map(r => `
+                <div class="flex items-center gap-2 py-2 px-3 bg-slate-900/50 rounded-xl border border-slate-800">
+                    <input type="text" value="${r.emoji}" id="sr-emoji-${r.id}" class="input-dark rounded-lg p-2 text-sm w-14 text-center">
+                    <input type="text" value="${r.label || r.role_name}" id="sr-label-${r.id}" class="input-dark rounded-lg p-2 text-sm flex-1" placeholder="Libellé">
+                    <span class="text-[10px] text-slate-500 px-2 whitespace-nowrap">${r.role_name}</span>
+                    <select id="sr-channel-${r.id}" class="input-dark rounded-lg p-2 text-xs">${channelOptions}</select>
+                    <button onclick="saveSelfRole(${r.id}, '${r.role_id}')" class="text-slate-500 hover:text-emerald-400 text-xs px-2" title="Enregistrer"><i class="fas fa-check"></i></button>
+                    <button onclick="deleteSelfRole(${r.id})" class="text-slate-500 hover:text-rose-400 text-xs px-2" title="Supprimer"><i class="fas fa-trash"></i></button>
+                </div>`).join('');
+
+            // Pré-sélectionne le bon salon pour chaque ligne (impossible à faire via l'attribut value du <select> généré par template string)
+            lastSelfRoles.forEach(r => {
+                const sel = document.getElementById(`sr-channel-${r.id}`);
+                if (sel) sel.value = r.channel_id;
+            });
+        } catch (e) { console.error(e); }
+    }
+
+    async function saveSelfRole(id, roleId) {
+        const payload = {
+            channel_id: document.getElementById(`sr-channel-${id}`).value,
+            emoji: document.getElementById(`sr-emoji-${id}`).value.trim(),
+            role_id: roleId,
+            label: document.getElementById(`sr-label-${id}`).value.trim(),
+        };
+        const res = await fetch(`/admin/api/discord_mod/self_roles/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        flash('selfRolesStatusMessage', res.ok ? '✅ Modifié !' : '❌ Erreur', res.ok);
+        if (res.ok) loadSelfRoles();
+    }
+
+    async function addSelfRole() {
+        const payload = {
+            channel_id: document.getElementById('sr-channel').value,
+            emoji: document.getElementById('sr-emoji').value.trim(),
+            role_id: document.getElementById('sr-role').value,
+            label: document.getElementById('sr-label').value.trim(),
+        };
+        if (!payload.channel_id || !payload.emoji || !payload.role_id) { flash('selfRolesStatusMessage', '❌ Salon, emoji et rôle sont obligatoires', false); return; }
+        const res = await fetch('/admin/api/discord_mod/self_roles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        if (res.ok) {
+            document.getElementById('sr-emoji').value = '';
+            document.getElementById('sr-label').value = '';
+            loadSelfRoles();
+        }
+        flash('selfRolesStatusMessage', res.ok ? '✅ Ajouté !' : '❌ Erreur', res.ok);
+    }
+
+    async function deleteSelfRole(id) {
+        await fetch(`/admin/api/discord_mod/self_roles/${id}`, { method: 'DELETE' });
+        loadSelfRoles();
+    }
+
+    async function publishSelfRoles() {
+        const channelId = document.getElementById('sr-publish-channel').value;
+        if (!channelId) { flash('selfRolesStatusMessage', '❌ Choisis un salon où publier', false); return; }
+        if (!confirm("Publier (ou republier) le panneau de rôles dans ce salon ?")) return;
+        const res = await fetch(`/admin/api/discord_mod/self_roles/publish/${channelId}`, { method: 'POST' });
+        const data = await res.json();
+        flash('selfRolesStatusMessage', res.ok ? '✅ Panneau publié !' : `❌ ${data.detail || 'Erreur'}`, res.ok);
+    }
+
+    // ============ ANNIVERSAIRES ============
+    async function loadBirthdays() {
+        try {
+            const res = await fetch('/admin/api/discord_mod/birthdays');
+            const data = await res.json();
+            const s = data.settings || {};
+            document.getElementById('bday-enabled').checked = !!s.enabled;
+            document.getElementById('bday-message').value = s.message_template || '';
+            document.getElementById('bday-channel').value = s.channel_id || '';
+
+            const box = document.getElementById('bdayListBox');
+            const people = data.birthdays || [];
+            if (people.length === 0) { box.innerHTML = '<div class="text-slate-600 italic text-xs py-4 text-center">Aucun anniversaire enregistré pour l\'instant. Les membres utilisent la commande <code class="text-indigo-400">/anniversaire</code>.</div>'; return; }
+            box.innerHTML = people.map(p => `
+                <div class="flex items-center justify-between py-2.5 px-4 bg-slate-900/50 rounded-xl border border-slate-800">
+                    <span class="font-bold text-sm text-slate-200">${p.username}</span>
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs text-indigo-400 font-mono">${String(p.day).padStart(2,'0')}/${String(p.month).padStart(2,'0')}${p.year ? '/' + p.year : ''}</span>
+                        <button onclick="deleteBirthday(${p.id})" class="text-slate-500 hover:text-rose-400 text-xs"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>`).join('');
+        } catch (e) { console.error(e); }
+    }
+
+    async function saveBirthdaySettings() {
+        const payload = {
+            enabled: document.getElementById('bday-enabled').checked,
+            channel_id: document.getElementById('bday-channel').value,
+            message_template: document.getElementById('bday-message').value,
+        };
+        const res = await fetch('/admin/api/discord_mod/birthdays/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        flash('bdayStatusMessage', res.ok ? '✅ Enregistré !' : '❌ Erreur', res.ok);
+    }
+
+    async function deleteBirthday(id) {
+        await fetch(`/admin/api/discord_mod/birthdays/${id}`, { method: 'DELETE' });
+        loadBirthdays();
+    }
+
+    // ============ UTILITAIRE ============
+    function flash(elId, msg, ok) {
+        const el = document.getElementById(elId);
+        if (!el) return;
+        el.innerHTML = `<span class="${ok ? 'text-emerald-400' : 'text-rose-400'}">${msg}</span>`;
+        setTimeout(() => el.innerHTML = '', 3000);
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        loadSettings();
+        loadWords();
+        loadRoles();
+        // Les salons/rôles doivent être chargés en premier ET en entier avant que quoi que
+        // ce soit n'essaie de sélectionner une valeur dedans — sinon une repopulation tardive
+        // (ex: retry après 503) écrase la sélection déjà posée par un autre chargement.
+        await loadChannelsIntoSelects();
+        await loadRolesIntoSelects();
+        await loadFeatures();
+        await loadWelcome();
+        await loadGate();
+        await loadSelfRoles();
+        await loadBirthdays();
+    });
+</script>
+</body>
+</html>

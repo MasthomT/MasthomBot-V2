@@ -4,11 +4,14 @@ import json
 import aiohttp
 from datetime import datetime
 
-from app.repositories import viewer_repo 
+from app.repositories import viewer_repo
 from app.services.twitch_service import twitch_bot
 from app.routes.overlays import trigger_overlay_event
+from app.services.discord_service import send_message_to_discord
 from app.core.config import settings
 from app.core.database import get_db_connection
+
+RARE_TIERS = {"Or", "Platine", "Diamant"}
 
 logger = logging.getLogger("masthbot.trophies")
 
@@ -37,7 +40,9 @@ async def auto_trophy_routine():
                     'points', 'points_session', 'watchtime', 'watchtime_session', 'streak_days',
                     'gifts_count', 'gifts_session', 'bits_count', 'sub_months', 'rewards_claimed', 'is_vip',
                     'first_count', 'deuz_count', 'troiz_count', 'bombs_won', 'bombs_lost', 'words_guessed',
-                    'roast_level', 'ai_prompts'
+                    'roast_level', 'ai_prompts', 'is_mod', 'is_artist',
+                    'games_rank_s_count', 'games_rank_a_count', 'games_rank_b_count', 'games_rank_c_count',
+                    'poll_votes_count', 'questions_asked_count'
                 ]
                 
                 for rule in rules:
@@ -60,8 +65,16 @@ async def auto_trophy_routine():
                         target_val = int(100 * (c_val ** 2.2))
                     elif c_type == 'has_context':
                         custom_where = "(nickname IS NOT NULL OR favorite_game IS NOT NULL OR vibe IS NOT NULL OR useless_talent IS NOT NULL)"
+                    elif c_type == 'has_web_login':
+                        custom_where = "last_web_login IS NOT NULL"
                     elif c_type == 'is_vip':
                         target_col = 'is_vip'
+                        target_val = 1
+                    elif c_type == 'is_mod':
+                        target_col = 'is_mod'
+                        target_val = 1
+                    elif c_type == 'is_artist':
+                        target_col = 'is_artist'
                         target_val = 1
                     
                     if not custom_where and target_col not in valid_cols_direct: 
@@ -145,7 +158,20 @@ async def auto_trophy_routine():
                             await channel.send(msg)
                     except Exception as e:
                         logger.error(f"❌ Erreur annonce chat Trophée : {e}")
-                    
+
+                    # 3. ANNONCE DISCORD POUR LES TROPHÉES RARES 💎
+                    try:
+                        tier = r.get('tier', 'Standard')
+                        if tier in RARE_TIERS and settings.TROPHY_DISCORD_CHANNEL_ID:
+                            tier_emojis = {'Or': '🥇', 'Platine': '💠', 'Diamant': '💎'}
+                            emoji = tier_emojis.get(tier, '🏆')
+                            discord_msg = f"{emoji} **{w['username']}** vient de débloquer le succès **{tier}** : {r['icon']} {r['label']} !"
+                            if bonus_xp > 0:
+                                discord_msg += f" (+{bonus_xp} EXP)"
+                            await send_message_to_discord(settings.TROPHY_DISCORD_CHANNEL_ID, discord_msg)
+                    except Exception as e:
+                        logger.error(f"❌ Erreur annonce Discord Trophée : {e}")
+
                     logger.info(f"🎉 [HAUT FAIT] {w['username']} a gagné '{r['label']}' !")
 
         except Exception as e:

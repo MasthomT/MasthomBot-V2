@@ -32,6 +32,16 @@
             </div>
             <script>setTimeout(() => document.getElementById('toast').style.display='none', 3000)</script>
             {% endif %}
+            {% if error %}
+            <div id="errorToast" class="bg-rose-600 text-white px-6 py-3 rounded-2xl font-bold shadow-xl flex items-center gap-3">
+                <i class="fas fa-exclamation-triangle"></i>
+                {% if error == 'not_found' %}Ce pseudo Twitch n'existe pas.
+                {% elif error == 'duplicate' %}Ce streamer est déjà suivi.
+                {% elif error == 'empty' %}Le pseudo ne peut pas être vide.
+                {% else %}Erreur lors de la vérification du pseudo (API Twitch indisponible).{% endif %}
+            </div>
+            <script>setTimeout(() => document.getElementById('errorToast').style.display='none', 5000)</script>
+            {% endif %}
         </header>
 
         <form action="/admin/notifications/settings" method="POST">

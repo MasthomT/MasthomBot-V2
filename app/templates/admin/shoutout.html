@@ -32,6 +32,18 @@
             </div>
         </header>
 
+        {% if request.query_params.get('status') %}
+        <div id="actionToast" class="mb-8 px-6 py-3 rounded-2xl font-bold flex items-center gap-3 border
+            {% if request.query_params.get('status') == 'success' %}bg-emerald-500/10 text-emerald-400 border-emerald-500/20{% else %}bg-rose-500/10 text-rose-400 border-rose-500/20{% endif %}">
+            {% if request.query_params.get('status') == 'success' %}
+            <i class="fas fa-check-circle"></i> Action exécutée avec succès !
+            {% else %}
+            <i class="fas fa-exclamation-triangle"></i> Échec de l'action — vérifie que le serveur overlay (Node.js, port 3005) est bien démarré.
+            {% endif %}
+        </div>
+        <script>setTimeout(() => { const t = document.getElementById('actionToast'); if (t) t.style.display='none'; }, 6000)</script>
+        {% endif %}
+
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
     
     <!-- SECTION SHOUTOUT -->

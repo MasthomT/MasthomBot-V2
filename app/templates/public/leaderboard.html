@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Classement - FEL-X</title>
+    <style>
+        :root { --bg: #18181b; --surface: #27272a; --border: #3f3f46; --text: #f4f4f5; --text-dim: #a1a1aa; --accent: #00f5c3; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; }
+        main { padding: 2rem; margin-left: 240px; min-height: 100vh; }
+
+        .sidebar { position: fixed; top: 0; left: 0; width: 240px; height: 100vh; background: var(--surface); border-right: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; }
+        .sidebar .logo-link { display: flex; align-items: center; gap: 10px; text-decoration: none; color: white; font-size: 1.5rem; font-weight: bold; margin-bottom: 30px; }
+        .sidebar .nav-link { color: var(--text-dim); text-decoration: none; padding: 10px 0; font-weight: 600; transition: 0.2s; }
+        .sidebar .nav-link.active { color: var(--accent); }
+        .sidebar .nav-link:hover { color: white; }
+        .sidebar .logout { color: #f87171; margin-top: auto; padding-bottom: 20px; }
+
+        h1 { font-size: 2rem; margin: 0 0 0.5rem 0; }
+        .subtitle { color: var(--text-dim); margin-bottom: 2rem; }
+
+        .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+        .tab-btn { background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); padding: 0.7rem 1.4rem; border-radius: 10px; font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: 0.2s; }
+        .tab-btn.active { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+
+        .board { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+        .board-row { display: flex; align-items: center; justify-content: space-between; padding: 0.9rem 1.5rem; border-bottom: 1px solid var(--border); }
+        .board-row:last-child { border-bottom: none; }
+        .board-row.top1 { background: rgba(0,245,195,0.08); }
+        .rank { width: 2.2rem; font-weight: 900; color: var(--text-dim); }
+        .rank.top1 { color: #facc15; }
+        .rank.top2 { color: #cbd5e1; }
+        .rank.top3 { color: #d97706; }
+        .uname { font-weight: 700; flex-grow: 1; padding-left: 0.5rem; }
+        .value { font-family: monospace; font-weight: 900; color: var(--accent); font-size: 1rem; }
+        .empty { padding: 2rem; text-align: center; color: var(--text-dim); font-style: italic; }
+
+        @media (max-width: 800px) {
+            main { margin-left: 0 !important; padding: 1.5rem 1rem 100px 1rem !important; }
+            .sidebar { position: fixed; bottom: 0; top: auto; left: 0; width: 100%; height: 60px; flex-direction: row; justify-content: space-around; padding: 10px; border-right: none; border-top: 1px solid var(--border); z-index: 100; }
+            .sidebar .logo-link, .sidebar .logout { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="sidebar">
+        <a href="/profile" class="logo-link">
+            <img src="/static/logo-felix.png" style="width:40px; border-radius:50%;" onerror="this.style.display='none'"> FEL-X
+        </a>
+        {% if is_logged_in %}
+        <a href="/profile" class="nav-link">👤 Profil</a>
+        <a href="/felix" class="nav-link">🧠 Félix et moi</a>
+        {% else %}
+        <a href="/login" class="nav-link">🔑 Se connecter</a>
+        {% endif %}
+        <a href="/classement" class="nav-link active">🏆 Classement</a>
+        {% if is_logged_in %}
+        <a href="/logout" class="nav-link logout">Déconnexion</a>
+        {% endif %}
+    </nav>
+
+    <main>
+        <h1>🏆 Classement de la communauté</h1>
+        <p class="subtitle">Le hall of fame de FEL-X : XP, trophées et podiums.</p>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="xp" onclick="selectTab('xp')">⭐ Niveau & XP</button>
+            <button class="tab-btn" data-tab="trophies" onclick="selectTab('trophies')">🏅 Trophées</button>
+            <button class="tab-btn" data-tab="podium" onclick="selectTab('podium')">🥇 Podiums</button>
+        </div>
+
+        <div id="board" class="board"></div>
+    </main>
+
+<script>
+    let currentTab = 'xp';
+
+    function selectTab(tab) {
+        currentTab = tab;
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
+        loadBoard();
+    }
+
+    function rankClass(i) {
+        if (i === 0) return 'top1';
+        if (i === 1) return 'top2';
+        if (i === 2) return 'top3';
+        return '';
+    }
+
+    async function loadBoard() {
+        const board = document.getElementById('board');
+        board.innerHTML = '<div class="empty">Chargement...</div>';
+
+        try {
+            if (currentTab === 'xp') {
+                const res = await fetch('/api/v1/leaderboard');
+                const rows = (await res.json()).slice(0, 50);
+                renderBoard(rows, r => r.username, r => `Niv. ${r.level} · ${r.points.toLocaleString('fr-FR')} XP`);
+            } else if (currentTab === 'trophies') {
+                const res = await fetch('/api/v1/leaderboard/trophies');
+                const rows = await res.json();
+                renderBoard(rows, r => r.username, r => `${r.trophy_count} 🏅`);
+            } else if (currentTab === 'podium') {
+                const res = await fetch('/api/v1/global_stats');
+                const data = await res.json();
+                const rows = (data.podium_top || []);
+                renderBoard(rows, r => r.username, r => `🥇${r.first_count || 0} · 🥈${r.deuz_count || 0} · 🥉${r.troiz_count || 0}`);
+            }
+        } catch (e) {
+            board.innerHTML = '<div class="empty">Erreur de chargement.</div>';
+            console.error(e);
+        }
+    }
+
+    function renderBoard(rows, getName, getValue) {
+        const board = document.getElementById('board');
+        if (!rows || rows.length === 0) {
+            board.innerHTML = '<div class="empty">Personne dans ce classement pour l\'instant.</div>';
+            return;
+        }
+        board.innerHTML = rows.map((r, i) => `
+            <div class="board-row ${i === 0 ? 'top1' : ''}">
+                <div style="display:flex; align-items:center;">
+                    <span class="rank ${rankClass(i)}">#${i + 1}</span>
+                    <span class="uname">${getName(r)}</span>
+                </div>
+                <span class="value">${getValue(r)}</span>
+            </div>
+        `).join('');
+    }
+
+    document.addEventListener('DOMContentLoaded', loadBoard);
+</script>
+</body>
+</html>

@@ -74,6 +74,7 @@ app.use('/static/uploads', express.static('/home/thomas/masthom/BOT_V2/app/stati
 // =================================================================
 let sourceMap = new Map();
 let obsReconnectTimeout = null; // 🛡️ Le filet de sécurité pour éviter le crash
+let obsConnected = false; // exposé via /api/health pour le dashboard de santé du bot
 
 async function refreshSourceMap() {
     try {
@@ -92,9 +93,23 @@ async function refreshSourceMap() {
     }
 }
 
+// 🛡️ La lib obs-websocket-js émet 'ConnectionClosed' à la fois sur une tentative de
+// connexion ratée ET sur une vraie coupure : on centralise donc la planification de
+// reconnexion ici pour n'avoir qu'un seul timer et un seul log par coupure (au lieu
+// de deux messages dupliqués pour le même événement).
+function scheduleObsReconnect(reason) {
+    if (obsReconnectTimeout) return; // déjà programmé, on ignore les doublons
+    console.log(`🔌 [OBS] ${reason}. Reconnexion automatique dans 10s...`);
+    obsReconnectTimeout = setTimeout(() => {
+        obsReconnectTimeout = null;
+        connectOBS();
+    }, 10000);
+}
+
 async function connectOBS() {
     try {
         await obs.connect(CONFIG.OBS_ADDRESS, CONFIG.OBS_PASSWORD);
+        obsConnected = true;
         console.log(`🎬 [OBS] Connecté ! Surveillance de la scène "${CONFIG.BRB_SCENE_NAME}".`);
 
         // ⚡ On vérifie sur quelle scène on est au moment même de la connexion
@@ -108,19 +123,19 @@ async function connectOBS() {
             }
         }
     } catch (error) {
-        console.error(`❌ [OBS] Échec de connexion. Nouvel essai dans 10s...`);
-        // 🛡️ SÉCURITÉ : On annule l'ancienne tentative avant d'en lancer une nouvelle
-        if (obsReconnectTimeout) clearTimeout(obsReconnectTimeout);
-        obsReconnectTimeout = setTimeout(connectOBS, 10000);
+        obsConnected = false;
+        scheduleObsReconnect('Échec de connexion');
     }
 }
 
 // 🔄 Auto-reconnexion si OBS est fermé puis relancé
 obs.on('ConnectionClosed', () => {
-    console.log("🔌 [OBS] Connexion perdue. Reconnexion automatique dans 10s...");
-    // 🛡️ SÉCURITÉ : On empêche les doublons fatals
-    if (obsReconnectTimeout) clearTimeout(obsReconnectTimeout);
-    obsReconnectTimeout = setTimeout(connectOBS, 10000);
+    obsConnected = false;
+    scheduleObsReconnect('Connexion perdue');
+});
+
+app.get('/api/health', (req, res) => {
+    res.json({ obs_connected: obsConnected });
 });
 
 connectOBS();
@@ -683,8 +698,22 @@ app.get('/shoutout', (req, res) => {
                 if (v.duration - v.currentTime <= 0.5) finishClip();
             }
         });
-        
+
         v.addEventListener('ended', finishClip);
+
+        // Clip cassé/introuvable : on ne montre jamais l'embed, on passe directement au suivant.
+        v.addEventListener('error', () => {
+            if (!v.isEnding) {
+                v.isEnding = true;
+                wrapper.classList.remove('visible');
+                p.style.width = '0%';
+                fetch('/api/queue/next', { method: 'POST' }).catch(e => {});
+            }
+        });
+
+        v.addEventListener('loadeddata', () => {
+            wrapper.classList.add('visible');
+        });
 
         // ⚡ AJOUT DE LA CONNEXION ROBUSTE (AUTO-RECONNECT)
         function connect() {
@@ -721,8 +750,8 @@ app.get('/shoutout', (req, res) => {
                     p.style.width = '0%';
                     v.isEnding = false;
                     v.src = d.url;
-                    
-                    wrapper.classList.add('visible');
+
+                    // L'embed n'apparaît qu'une fois le clip réellement chargé (voir listener 'error' plus haut pour le cas où ça échoue).
                     v.play().catch(err => console.error(err));
                 }
             };
@@ -797,6 +826,13 @@ app.get('/brb', (req, res) => {
         });
 
         v.addEventListener('ended', notifyEnd);
+
+        // Clip cassé/introuvable : on cache la vidéo et on demande directement le clip suivant.
+        v.addEventListener('error', () => {
+            t.textContent = '';
+            a.textContent = '';
+            notifyEnd();
+        });
 
         // ⚡ AJOUT DE LA CONNEXION ROBUSTE (AUTO-RECONNECT)
         function connect() {

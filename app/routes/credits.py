@@ -1,21 +1,20 @@
 import logging
 
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from app.services import credits_service
 from app.core.database import get_db_connection
-
 from app.services.credits_service import credits_service
 import json
 
 from app.services.twitch_service import twitch_bot
+from app.core.security import require_admin
 
 logger = logging.getLogger("masthbot.credits")
 router = APIRouter(tags=["credits"])
 templates = Jinja2Templates(directory="app/templates")
 
-@router.get("/admin/credits_manager", response_class=HTMLResponse)
+@router.get("/admin/credits_manager", response_class=HTMLResponse, dependencies=[Depends(require_admin)])
 async def admin_credits_page(request: Request):
     """Affiche le gestionnaire de générique sur le Pi."""
     # ✅ FIX : On nomme explicitement les paramètres pour FastAPI
@@ -141,14 +140,15 @@ async def get_credits_data():
         "config": credits_service.config
     }
 
-@router.post("/api/credits/config")
+@router.post("/api/credits/config", dependencies=[Depends(require_admin)])
 async def save_credits_config(request: Request):
-    """Sauvegarde les réglages (titre, durée, ordre)."""
+    """Sauvegarde les réglages (titre, durée, ordre) — persistés sur disque,
+    survivent désormais à un redémarrage du bot."""
     new_config = await request.json()
-    credits_service.config.update(new_config)
+    credits_service.save_config(new_config)
     return {"status": "success"}
 
-@router.post("/api/credits/reset")
+@router.post("/api/credits/reset", dependencies=[Depends(require_admin)])
 async def reset_credits():
     """Bouton de vidage manuel."""
     credits_service.reset_session()
@@ -163,7 +163,7 @@ async def reset_credits():
 
     return {"status": "success"}
 
-@router.post("/api/credits/test")
+@router.post("/api/credits/test", dependencies=[Depends(require_admin)])
 async def inject_test_data():
     """Génère des faux noms très complets pour tester l'overlay et le Studio."""
     

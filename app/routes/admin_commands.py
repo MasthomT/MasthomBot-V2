@@ -1,18 +1,17 @@
 import json
 import re
-import json
-import re
 import os
 import shutil
 import base64
 from datetime import datetime
-from fastapi import APIRouter, Request, Form, UploadFile, File
+from fastapi import APIRouter, Depends, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from app.core.database import get_db_connection
+from app.core.security import require_admin
 
-router = APIRouter(tags=["admin_commands"])
+router = APIRouter(tags=["admin_commands"], dependencies=[Depends(require_admin)])
 templates = Jinja2Templates(directory="app/templates")
 
 IMAGES_DIR = "static/commands/images"
@@ -174,17 +173,20 @@ async def api_test_command(name: str):
 
 @router.post("/api/admin/commands/upload/{media_type}")
 async def api_upload_media(media_type: str, file: UploadFile = File(...)):
-    ext = os.path.splitext(file.filename)[1].lower()
+    safe_filename = os.path.basename(file.filename or "")
+    if not safe_filename:
+        return JSONResponse(status_code=400, content={"error": "Nom de fichier invalide"})
+    ext = os.path.splitext(safe_filename)[1].lower()
     if media_type == "image" and ext not in ALLOWED_IMAGES:
         return JSONResponse(status_code=400, content={"error": f"Format non supporté : {ext}"})
     if media_type == "sound" and ext not in ALLOWED_SOUNDS:
         return JSONResponse(status_code=400, content={"error": f"Format non supporté : {ext}"})
     folder = IMAGES_DIR if media_type == "image" else SOUNDS_DIR
     os.makedirs(folder, exist_ok=True)
-    dest = os.path.join(folder, file.filename)
+    dest = os.path.join(folder, safe_filename)
     with open(dest, "wb") as f:
         shutil.copyfileobj(file.file, f)
-    return {"status": "ok", "filename": file.filename}
+    return {"status": "ok", "filename": safe_filename}
 
 
 @router.get("/api/admin/commands/media/{media_type}")
@@ -197,7 +199,10 @@ async def api_list_media(media_type: str):
 @router.delete("/api/admin/commands/media/{media_type}/{filename}")
 async def api_delete_media(media_type: str, filename: str):
     folder = IMAGES_DIR if media_type == "image" else SOUNDS_DIR
-    path   = os.path.join(folder, filename)
+    folder_real = os.path.realpath(folder)
+    path = os.path.realpath(os.path.join(folder_real, os.path.basename(filename)))
+    if not path.startswith(folder_real + os.sep):
+        return JSONResponse(status_code=400, content={"error": "Chemin invalide"})
     if os.path.exists(path):
         os.remove(path)
         return {"status": "ok"}

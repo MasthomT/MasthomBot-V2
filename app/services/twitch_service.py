@@ -26,19 +26,28 @@ logger = logging.getLogger("masthbot.twitch")
 _birthday_wished: set = set()
 _permitted_users: set = set()
 
-async def safe_send(channel, content: str):
-    """Envoie un message en sécurisant la longueur et le contenu."""
+async def safe_send(channel, content: str) -> bool:
+    """Envoie un message en sécurisant la longueur et le contenu.
+    Retourne False en cas d'échec, pour permettre à l'appelant de retenter
+    plutôt que de considérer le message comme envoyé à tort."""
     if not content or not content.strip():
-        return # On ne fait rien si le message est vide
-    
+        return False # On ne fait rien si le message est vide
+
     # Tronquage à 500 caractères max
     if len(content) > 500:
         content = content[:497] + "..."
-        
+
     try:
         await channel.send(content)
+        return True
     except Exception as e:
-        logger.error(f"❌ Erreur lors de l'envoi du message : {e}")
+        # "closing transport" : Twitch IRC force une reconnexion périodique, c'est
+        # transitoire et attendu — pas la peine de polluer les logs en ERROR pour ça.
+        if "closing transport" in str(e):
+            logger.warning(f"⚠️ Envoi différé (reconnexion IRC en cours) : {e}")
+        else:
+            logger.error(f"❌ Erreur lors de l'envoi du message : {e}")
+        return False
 
 class MasthbotTwitch(commands.Bot):
     def __init__(self):
@@ -53,6 +62,7 @@ class MasthbotTwitch(commands.Bot):
         self.role_checked_users = set()
 
         self.web_session = None
+        self.is_ready_flag = False
 
         super().__init__(
             token=clean_bot_token,
@@ -124,7 +134,8 @@ class MasthbotTwitch(commands.Bot):
 
     async def event_ready(self):
         print(f"✅ [TWITCH] Connecté en tant que : {self.nick}")
-        
+        self.is_ready_flag = True
+
         try:
             await init_db()
         except Exception as e:
@@ -170,6 +181,11 @@ class MasthbotTwitch(commands.Bot):
                 print("💙 [ROUTINE] Lancement du détecteur de Followers (Temps Réel)...")
                 self.followers_detector_timer.start()
                 self._followers_detector_started = True
+
+            if not hasattr(self, "_special_announcements_started"):
+                print("🎉 [ROUTINE] Lancement des annonces Début de Stream / Une seule fois...")
+                self.special_announcements_timer.start()
+                self._special_announcements_started = True
 
         except Exception as e:
             print(f"❌ [READY ERROR] : {e}")
@@ -634,7 +650,16 @@ class MasthbotTwitch(commands.Bot):
 
     @commands.command(name='so')
     async def shoutout_command(self, ctx, *, content: str = None):
-        if not (ctx.author.is_mod or ctx.author.is_broadcaster or ctx.author.name.lower() == "felixthebigblackcat"):
+        author_badges = ctx.author.badges or {}
+        is_authorized = (
+            ctx.author.is_mod
+            or ctx.author.is_broadcaster
+            or "moderator" in author_badges
+            or ctx.author.name.lower() == self.channel_name
+            or ctx.author.name.lower() == "felixthebigblackcat"
+        )
+        if not is_authorized:
+            logger.warning(f"⚠️ [SHOUTOUT] !so refusé pour {ctx.author.name} (is_mod={ctx.author.is_mod}, is_broadcaster={ctx.author.is_broadcaster}, badges={author_badges})")
             return
         if not content:
             return await ctx.send("Miaou ! Pseudo ou lien requis : !so pseudo")
@@ -699,8 +724,9 @@ class MasthbotTwitch(commands.Bot):
                             await ctx.send(f"🎬 Allez donner de la force à @{s_display} qui jouait récemment à {last_game} ! https://twitch.tv/{target_name_clean} 💜")
                     else:
                         await ctx.send(f"Foncez voir @{target_name} ! https://twitch.tv/{target_name_clean}")
-        except:
-            pass
+        except Exception as e:
+            logger.error(f"❌ [SHOUTOUT] Échec récupération infos pour {target_name_clean} : {e}")
+            await ctx.send(f"Foncez voir @{target_name} ! https://twitch.tv/{target_name_clean}")
 
         try:
             async with session.post(f"{settings.OVERLAY_NODE_URL}/api/shoutout", json={"target": target_name_clean, "slug": slug_for_node}) as _:
@@ -710,7 +736,16 @@ class MasthbotTwitch(commands.Bot):
 
     @commands.command(name='replay')
     async def cmd_replay(self, ctx, *, content: str = None):
-        if not (ctx.author.is_mod or ctx.author.is_broadcaster or ctx.author.name.lower() == 'felixthebigblackcat'):
+        author_badges = ctx.author.badges or {}
+        is_authorized = (
+            ctx.author.is_mod
+            or ctx.author.is_broadcaster
+            or "moderator" in author_badges
+            or ctx.author.name.lower() == self.channel_name
+            or ctx.author.name.lower() == "felixthebigblackcat"
+        )
+        if not is_authorized:
+            logger.warning(f"⚠️ [REPLAY] !replay refusé pour {ctx.author.name} (is_mod={ctx.author.is_mod}, is_broadcaster={ctx.author.is_broadcaster}, badges={author_badges})")
             return
 
         slug, query = None, None
@@ -737,6 +772,66 @@ class MasthbotTwitch(commands.Bot):
 
         except Exception as e:
              logger.error(f"❌ [REPLAY ERROR] : {e}")
+
+    @commands.command(name='showtiktok')
+    async def cmd_show_tiktok(self, ctx, *, content: str = None):
+        """!showtiktok -> ressort la dernière vidéo TikTok connue sur l'overlay.
+        !showtiktok <lien> -> affiche le TikTok du lien donné sur l'overlay.
+        (Distinct de !tiktok, qui reste la commande personnalisée donnant le lien du réseau social.)"""
+        author_badges = ctx.author.badges or {}
+        is_authorized = (
+            ctx.author.is_mod
+            or ctx.author.is_broadcaster
+            or "moderator" in author_badges
+            or ctx.author.name.lower() == self.channel_name
+            or ctx.author.name.lower() == "felixthebigblackcat"
+        )
+        if not is_authorized:
+            logger.warning(f"⚠️ [TIKTOK] !showtiktok refusé pour {ctx.author.name} (is_mod={ctx.author.is_mod}, is_broadcaster={ctx.author.is_broadcaster}, badges={author_badges})")
+            return
+
+        async with get_db_connection() as conn:
+            c = await conn.execute(
+                "SELECT showtiktok_enabled, showtiktok_message, tiktok_username FROM discord_features_settings WHERE id = 1"
+            )
+            row = await c.fetchone()
+        if row and not row["showtiktok_enabled"]:
+            return
+        message_template = (row["showtiktok_message"] if row else None) or "🎵 TikTok affiché à l'écran ! — {title} {url}"
+        channel_tiktok_username = (row["tiktok_username"] if row else "") or ""
+
+        # Le propriétaire de la chaîne peut afficher n'importe quel TikTok ; les modérateurs
+        # (et le bot felixthebigblackcat) sont limités au compte TikTok configuré pour la chaîne.
+        is_owner = ctx.author.is_broadcaster or ctx.author.name.lower() == self.channel_name
+
+        from app.services.tiktok_monitor import get_last_known_tiktok, get_direct_tiktok_video
+        from app.routes.overlays import register_tiktok_proxy
+
+        source_url = None
+        if content and content.strip():
+            source_url = content.strip().split()[0]
+        else:
+            last = await get_last_known_tiktok()
+            if not last:
+                return await ctx.send("❌ Aucune vidéo TikTok connue pour le moment.")
+            source_url = last["url"]
+
+        video = await get_direct_tiktok_video(source_url)
+        if not video:
+            return await ctx.send("❌ Impossible de récupérer cette vidéo TikTok. Vérifie le lien !")
+
+        if not is_owner and channel_tiktok_username and video.get("uploader") != channel_tiktok_username.lower():
+            try:
+                os.remove(video["filepath"])
+            except OSError:
+                pass
+            return await ctx.send(f"❌ Seul @{self.channel_name} peut afficher un TikTok d'un autre compte. Les modérateurs sont limités au TikTok de la chaîne (@{channel_tiktok_username}).")
+
+        token = register_tiktok_proxy(video["filepath"])
+        await trigger_overlay_event({"type": "show_tiktok", "url": f"/api/v1/tiktok_proxy/{token}"})
+
+        reply = message_template.replace("{title}", video["title"]).replace("{url}", source_url)
+        await safe_send(ctx.channel, reply)
 
     @commands.command(name='renotif')
     async def cmd_renotif(self, ctx):
@@ -1499,24 +1594,90 @@ class MasthbotTwitch(commands.Bot):
                 if not msg or not msg.strip():
                     logger.error(f"❌ ÉCHEC : Le texte de '{nom_annonce}' est vide ! Twitch refuse de l'envoyer.")
                     logger.error(f"🔍 Voici les VRAIES colonnes de ta base de données : {list(ann_to_send.keys())}")
+                    # Message vide = problème de config, pas de retry utile : on marque comme traité.
+                    await conn.execute("UPDATE announcements SET last_triggered = $1 WHERE id = $2", (now, ann_to_send['id']))
                 else:
                     # 3. L'envoi officiel sur Twitch
                     logger.info(f"📢 [ANNONCE] Envoi sur le chat : '{nom_annonce}'")
-                    if channel:
-                        await safe_send(channel, msg)
+                    sent = await safe_send(channel, msg) if channel else False
 
-                # 4. On valide qu'on l'a traitée pour ne pas boucler indéfiniment
-                await conn.execute("UPDATE announcements SET last_triggered = $1 WHERE id = $2", (now, ann_to_send['id']))
+                    # 4. On ne marque comme traité QUE si l'envoi a réussi : un échec transitoire
+                    # (ex: reconnexion IRC) déclenche une nouvelle tentative au prochain cycle
+                    # plutôt que de perdre l'annonce jusqu'au prochain intervalle complet.
+                    if sent:
+                        await conn.execute("UPDATE announcements SET last_triggered = $1 WHERE id = $2", (now, ann_to_send['id']))
+                    else:
+                        logger.warning(f"⚠️ [ANNONCE] '{nom_annonce}' non envoyée, nouvelle tentative au prochain cycle.")
 
         except Exception as e:
             if "closing transport" not in str(e):
                 logger.error(f"❌ [ROUTINE ERROR] Announcements Timer : {e}")
+
+    @routines.routine(seconds=90)
+    async def special_announcements_timer(self):
+        """Gère les annonces 'Début de Stream' (une fois par session live) et
+        'Une seule fois' (une fois pour toujours), qui étaient configurables dans
+        le panel admin mais jamais lues par aucune routine jusqu'ici."""
+        try:
+            streams = await self.fetch_streams(user_logins=[self.channel_name])
+            if not streams:
+                return
+
+            channel = self.get_channel(self.channel_name)
+            if not channel:
+                return
+
+            stream_started_at = streams[0].started_at.replace(tzinfo=None)
+            now = datetime.now()
+
+            async with get_db_connection() as conn:
+                c = await conn.execute(
+                    "SELECT * FROM announcements WHERE is_enabled = 1 AND trigger_type IN ('stream_start', 'once')"
+                )
+                anns = await c.fetchall()
+
+                for ann in anns:
+                    ann = dict(ann)
+                    last_trig_raw = ann.get("last_triggered")
+                    last_trig = None
+                    if last_trig_raw:
+                        last_trig = last_trig_raw if isinstance(last_trig_raw, datetime) else datetime.strptime(str(last_trig_raw), '%Y-%m-%d %H:%M:%S')
+
+                    should_send = False
+                    if ann["trigger_type"] == "once":
+                        should_send = last_trig is None
+                    elif ann["trigger_type"] == "stream_start":
+                        should_send = last_trig is None or last_trig < stream_started_at
+
+                    if not should_send:
+                        continue
+
+                    msg = str(ann.get("message_template") or "")
+                    if not msg.strip():
+                        continue
+
+                    msg = msg.replace("{game}", streams[0].game_name).replace("{title}", streams[0].title)
+                    sent = await safe_send(channel, msg)
+                    if not sent:
+                        logger.warning(f"⚠️ [ANNONCE {ann['trigger_type'].upper()}] '{ann.get('label', 'Sans titre')}' non envoyée, nouvelle tentative au prochain cycle.")
+                        continue
+
+                    logger.info(f"📢 [ANNONCE {ann['trigger_type'].upper()}] Envoi : '{ann.get('label', 'Sans titre')}'")
+
+                    if ann["trigger_type"] == "once":
+                        await conn.execute("UPDATE announcements SET last_triggered = $1, is_enabled = 0 WHERE id = $2", (now, ann["id"]))
+                    else:
+                        await conn.execute("UPDATE announcements SET last_triggered = $1 WHERE id = $2", (now, ann["id"]))
+        except Exception as e:
+            if "closing transport" not in str(e):
+                logger.error(f"❌ [ROUTINE ERROR] Special Announcements Timer : {e}")
 
     @routines.routine(minutes=5)
     async def watchdog_timer(self):
         routines_to_check = {
             "Watchtime": self.watchtime_timer,
             "Annonces": self.announcements_timer,
+            "Annonces Spéciales": self.special_announcements_timer,
             "Aspirateur de Rôles": self.sync_roles_timer,
             "Compteur Subs": self.sync_subs_timer,
             "Compteur Viewers": self.sync_viewers_timer,

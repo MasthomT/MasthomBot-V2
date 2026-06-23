@@ -31,6 +31,9 @@ class CreditsService:
                     self.session_watchtime = data.get("session_watchtime", {})
                     self.session_messages = data.get("session_messages", {})
                     self.categories = data.get("categories", self.categories)
+                    # Le config (titre/sous-titre/durée/ordre) était auparavant en mémoire
+                    # uniquement et se réinitialisait à chaque redémarrage du bot.
+                    self.config.update(data.get("config", {}))
             except Exception as e:
                 # FINI DE CACHER LES ERREURS
                 logger.error(f"❌ [CREDITS FATAL] Impossible de lire le fichier JSON : {e}")
@@ -38,9 +41,10 @@ class CreditsService:
     def _save_session(self):
         try:
             data = {
-                "session_watchtime": self.session_watchtime, 
-                "session_messages": self.session_messages, 
-                "categories": self.categories
+                "session_watchtime": self.session_watchtime,
+                "session_messages": self.session_messages,
+                "categories": self.categories,
+                "config": self.config
             }
             with open(SESSION_FILE, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=4)
@@ -109,5 +113,12 @@ class CreditsService:
         for cat in self.categories: self.categories[cat] = {}
         self._save_session()
         logger.info("♻️ [CREDITS] Session réinitialisée !")
+
+    def save_config(self, new_config: dict):
+        """Met à jour ET persiste la config (titre/sous-titre/durée/ordre), pour qu'elle
+        survive à un redémarrage du bot."""
+        self._load_session()  # Pour ne pas écraser une session modifiée ailleurs entre-temps
+        self.config.update(new_config)
+        self._save_session()
 
 credits_service = CreditsService()

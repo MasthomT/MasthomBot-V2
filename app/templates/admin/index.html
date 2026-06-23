@@ -48,11 +48,21 @@
                 <div class="text-slate-500 text-[10px] font-black uppercase mb-4 tracking-widest flex items-center gap-2">
                     <i class="fab fa-twitch text-purple-400"></i> Connexion Twitch
                 </div>
+                {% if stats.bot_connected %}
                 <div class="text-3xl font-black text-purple-400 mb-3 flex items-center gap-3">
                     <i class="fas fa-link text-xl opacity-50"></i> Connecté
                 </div>
+                {% else %}
+                <div class="text-3xl font-black text-rose-400 mb-3 flex items-center gap-3">
+                    <i class="fas fa-unlink text-xl opacity-50"></i> Déconnecté
+                </div>
+                {% endif %}
                 <div class="text-xs font-bold text-slate-400 border-t border-slate-800 pt-3 italic">
-                    Écoute active sur le salon : <span class="text-white">#masthom_</span>
+                    {% if stats.is_live %}
+                    <span class="text-emerald-400"><i class="fas fa-circle text-[8px] animate-pulse"></i> EN LIVE actuellement</span>
+                    {% else %}
+                    Hors-ligne pour l'instant
+                    {% endif %}
                 </div>
             </div>
 
@@ -99,13 +109,13 @@
             </a>
 
             <!-- 3. Sondages -->
-            <a href="/admin/polls" class="quick-card p-6 rounded-3xl shadow-lg group flex items-start gap-5">
+            <a href="/admin/polls_faq" class="quick-card p-6 rounded-3xl shadow-lg group flex items-start gap-5">
                 <div class="w-14 h-14 shrink-0 bg-sky-600/10 rounded-2xl flex items-center justify-center group-hover:bg-sky-600 transition-colors">
                     <i class="fas fa-poll text-sky-500 text-xl group-hover:text-white"></i>
                 </div>
                 <div>
-                    <h3 class="font-black text-white text-lg mb-1 group-hover:text-sky-400 transition-colors">Sondages en direct</h3>
-                    <p class="text-xs text-slate-400 leading-relaxed">Lancez des votes interactifs sur le profil web des viewers.</p>
+                    <h3 class="font-black text-white text-lg mb-1 group-hover:text-sky-400 transition-colors">Sondages & FAQ</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Lancez des votes interactifs et répondez aux questions des viewers.</p>
                 </div>
             </a>
 
@@ -194,6 +204,83 @@
                 <div>
                     <h3 class="font-black text-white text-lg mb-1 group-hover:text-slate-300 transition-colors">Data & Configuration</h3>
                     <p class="text-xs text-slate-400 leading-relaxed">Gérez les jetons API sensibles, les bases de données et les clés secrètes.</p>
+                </div>
+            </a>
+
+            <!-- 12. Gestion VIP -->
+            <a href="/admin/vips" class="quick-card p-6 rounded-3xl shadow-lg group flex items-start gap-5">
+                <div class="w-14 h-14 shrink-0 bg-fuchsia-600/10 rounded-2xl flex items-center justify-center group-hover:bg-fuchsia-600 transition-colors">
+                    <i class="fas fa-gem text-fuchsia-500 text-xl group-hover:text-white"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-white text-lg mb-1 group-hover:text-fuchsia-400 transition-colors">Gestion VIP</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Attribuez ou révoquez les statuts VIP, modos et artistes.</p>
+                </div>
+            </a>
+
+            <!-- 13. Panthéon Trophées -->
+            <a href="/admin/trophy_manager.html" class="quick-card p-6 rounded-3xl shadow-lg group flex items-start gap-5">
+                <div class="w-14 h-14 shrink-0 bg-yellow-600/10 rounded-2xl flex items-center justify-center group-hover:bg-yellow-600 transition-colors">
+                    <i class="fas fa-medal text-yellow-500 text-xl group-hover:text-white"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-white text-lg mb-1 group-hover:text-yellow-400 transition-colors">Panthéon Trophées</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Créez des hauts faits et suivez les déblocages de la communauté.</p>
+                </div>
+            </a>
+
+            <!-- 14. Jeux du Jour -->
+            <a href="/admin/games_manager" class="quick-card p-6 rounded-3xl shadow-lg group flex items-start gap-5">
+                <div class="w-14 h-14 shrink-0 bg-violet-600/10 rounded-2xl flex items-center justify-center group-hover:bg-violet-600 transition-colors">
+                    <i class="fas fa-dice text-violet-500 text-xl group-hover:text-white"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-white text-lg mb-1 group-hover:text-violet-400 transition-colors">Jeux du Jour</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Kikecé, Oukecé, Kekecé, Kikadi : corrigez l'item du jour et suivez les scores.</p>
+                </div>
+            </a>
+
+            <!-- 15. Clips du Mois -->
+            <a href="/admin/clips_manager" class="quick-card p-6 rounded-3xl shadow-lg group flex items-start gap-5">
+                <div class="w-14 h-14 shrink-0 bg-lime-600/10 rounded-2xl flex items-center justify-center group-hover:bg-lime-600 transition-colors">
+                    <i class="fas fa-clapperboard text-lime-500 text-xl group-hover:text-white"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-white text-lg mb-1 group-hover:text-lime-400 transition-colors">Clips du Mois</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Récupérez et diffusez les meilleurs clips Twitch en overlay.</p>
+                </div>
+            </a>
+
+            <!-- 16. Infos Stream -->
+            <a href="/admin/info" class="quick-card p-6 rounded-3xl shadow-lg group flex items-start gap-5">
+                <div class="w-14 h-14 shrink-0 bg-blue-600/10 rounded-2xl flex items-center justify-center group-hover:bg-blue-600 transition-colors">
+                    <i class="fas fa-info-circle text-blue-500 text-xl group-hover:text-white"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-white text-lg mb-1 group-hover:text-blue-400 transition-colors">Infos Stream</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Description, réseaux sociaux et planning affichés sur fel-x.icu.</p>
+                </div>
+            </a>
+
+            <!-- 17. Commandes -->
+            <a href="/admin/commands" class="quick-card p-6 rounded-3xl shadow-lg group flex items-start gap-5">
+                <div class="w-14 h-14 shrink-0 bg-cyan-600/10 rounded-2xl flex items-center justify-center group-hover:bg-cyan-600 transition-colors">
+                    <i class="fas fa-terminal text-cyan-500 text-xl group-hover:text-white"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-white text-lg mb-1 group-hover:text-cyan-400 transition-colors">Commandes</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Créez et gérez les commandes chat personnalisées de Félix.</p>
+                </div>
+            </a>
+
+            <!-- 18. Messagerie Fel-X -->
+            <a href="/admin/discord/" class="quick-card p-6 rounded-3xl shadow-lg group flex items-start gap-5">
+                <div class="w-14 h-14 shrink-0 bg-indigo-600/10 rounded-2xl flex items-center justify-center group-hover:bg-indigo-600 transition-colors">
+                    <i class="fab fa-discord text-indigo-500 text-xl group-hover:text-white"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-white text-lg mb-1 group-hover:text-indigo-400 transition-colors">Messagerie Fel-X</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">Envoyez un message dans n'importe quel salon Discord depuis le panel.</p>
                 </div>
             </a>
 
