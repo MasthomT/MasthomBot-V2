@@ -1,5 +1,6 @@
 import logging
 import threading
+import time
 import json
 import urllib.request
 import obsws_python as obs
@@ -18,17 +19,37 @@ class OBSService:
         threading.Thread(target=self.start_listener, daemon=True).start()
 
     def start_listener(self):
-        """Se connecte à OBS pour écouter les événements en direct"""
+        """Boucle de connexion permanente à OBS. Se reconnecte automatiquement si OBS
+        redémarre ou si la connexion est perdue (coupure réseau, crash OBS, etc.)."""
         if not self.host or not self.password:
             return
-            
-        try:
-            self.event_client = obs.EventClient(host=self.host, port=self.port, password=self.password)
-            # On branche la fonction qui sera appelée au changement de scène
-            self.event_client.callback.register(self.on_current_program_scene_changed)
-            logger.info("🎧 [OBS] Écouteur activé ! Le bot détecte les changements de scènes.")
-        except Exception as e:
-            logger.debug(f"👀 [OBS] Non démarré, écoute automatique désactivée.")
+
+        first_attempt = True
+        while True:
+            try:
+                self.event_client = obs.EventClient(host=self.host, port=self.port, password=self.password)
+                self.event_client.callback.register(self.on_current_program_scene_changed)
+                if first_attempt:
+                    logger.info("🎧 [OBS] Écouteur activé — détection des changements de scène.")
+                else:
+                    logger.info("🔄 [OBS] Reconnecté après déconnexion.")
+                first_attempt = False
+
+                # obsws_python maintient la connexion en interne — on vérifie toutes les 30s
+                # qu'OBS répond encore via une requête légère.
+                req_client = obs.ReqClient(host=self.host, port=self.port, password=self.password)
+                while True:
+                    time.sleep(30)
+                    try:
+                        req_client.get_version()
+                    except Exception:
+                        logger.warning("⚠️ [OBS] Connexion perdue, tentative de reconnexion...")
+                        break
+
+            except Exception:
+                if first_attempt:
+                    logger.debug("👀 [OBS] Non joignable au démarrage, nouvelle tentative dans 30s.")
+                time.sleep(30)
 
     def on_current_program_scene_changed(self, data):
         """Méthode appelée automatiquement par OBS quand la scène change"""

@@ -1,6 +1,8 @@
 import re
 import random
 import os
+import socket as _socket
+import time
 import aiohttp
 import json
 import logging
@@ -132,9 +134,31 @@ class MasthbotTwitch(commands.Bot):
         else:
             logger.error(f"🔥 [CMD ERROR] : {error}")
 
+    async def _enable_irc_keepalive(self):
+        """Active les TCP keepalives sur la socket IRC pour détecter les coupures silencieuses.
+        L'OS envoie des sondes toutes les 10s après 30s d'inactivité ; 3 échecs = fermeture
+        immédiate → twitchio détecte l'erreur et reconnecte automatiquement."""
+        try:
+            ws = getattr(self._connection, '_websocket', None)
+            if ws is None:
+                return
+            transport = ws._writer.transport
+            sock = transport.get_extra_info('socket')
+            if sock is None:
+                return
+            sock.setsockopt(_socket.SOL_SOCKET, _socket.SO_KEEPALIVE, 1)
+            sock.setsockopt(_socket.IPPROTO_TCP, _socket.TCP_KEEPIDLE, 30)
+            sock.setsockopt(_socket.IPPROTO_TCP, _socket.TCP_KEEPINTVL, 10)
+            sock.setsockopt(_socket.IPPROTO_TCP, _socket.TCP_KEEPCNT, 3)
+            logger.info("✅ [IRC] TCP keepalives activés (idle=30s, interval=10s, count=3)")
+        except Exception as e:
+            logger.warning(f"⚠️ [IRC] TCP keepalives indisponibles : {e}")
+
     async def event_ready(self):
         print(f"✅ [TWITCH] Connecté en tant que : {self.nick}")
         self.is_ready_flag = True
+        self._last_irc_at = time.time()
+        await self._enable_irc_keepalive()
 
         try:
             await init_db()
@@ -214,6 +238,7 @@ class MasthbotTwitch(commands.Bot):
     async def event_message(self, message):
         if message.echo or not message.author:
             return
+        self._last_irc_at = time.time()
 
         content = message.content
         content_clean = content.strip()
@@ -1723,6 +1748,17 @@ class MasthbotTwitch(commands.Bot):
                 pass
         except Exception:
             logger.error("🚨 [WATCHDOG FATAL] Impossible de contacter Node.js (Port 3005) ! L'overlay est probablement éteint ou planté.")
+
+        # Filet IRC : déclenche uniquement si le bot est censé être connecté (is_ready_flag)
+        # et qu'aucun message n'a été reçu depuis 2h. Le seuil est élevé car le chat peut
+        # être parfaitement silencieux pendant de longues périodes (nuit, hors stream).
+        # Les TCP keepalives OS détectent les vraies coupures réseau en ~60s.
+        if getattr(self, 'is_ready_flag', False):
+            irc_silence = time.time() - getattr(self, '_last_irc_at', time.time())
+            if irc_silence > 7200:
+                logger.error(f"🚨 [IRC WATCHDOG] Aucun message IRC depuis {int(irc_silence//60)}min — reconnexion forcée.")
+                import signal as _signal
+                os.kill(os.getpid(), _signal.SIGTERM)
 
     @routines.routine(seconds=3)
     async def followers_detector_timer(self):

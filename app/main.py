@@ -54,7 +54,7 @@ from app.routes.felixdle import (
 # --- IMPORT DES SERVICES ---
 from app.services.twitch_service import twitch_bot
 from app.services.live_monitor import check_twitch_lives_routine
-from app.services.eventsub_service import eventsub_routine
+from app.services.eventsub_service import start_eventsub
 from app.services.unfollow_monitor import unfollow_monitor_routine
 from app.services.stats_service import update_time_loop, update_twitch_stats_loop
 from app.services.trophy_engine import start_trophy_engine
@@ -135,7 +135,7 @@ async def lifespan(app: FastAPI):
     # 2. Lancement des services Twitch
     asyncio.create_task(twitch_bot.start())
     asyncio.create_task(check_twitch_lives_routine())
-    asyncio.create_task(eventsub_routine())
+    asyncio.create_task(start_eventsub())
     asyncio.create_task(unfollow_monitor_routine())
     asyncio.create_task(update_time_loop())
     asyncio.create_task(update_twitch_stats_loop())

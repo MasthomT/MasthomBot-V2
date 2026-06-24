@@ -3,9 +3,14 @@ import aiohttp
 import json
 import logging
 import os
+import time
 import collections
 from datetime import datetime
 import dotenv
+
+# État global consultable par le dashboard de santé
+eventsub_connected: bool = False
+eventsub_last_event_at: float = 0.0
 
 from app.core.database import get_db_connection
 from app.repositories import viewer_repo
@@ -141,9 +146,12 @@ async def eventsub_routine():
 
         while True:
             reconnect_to = None
-            async with session.ws_connect(ws_url) as ws:
+            async with session.ws_connect(ws_url, heartbeat=20) as ws:
                 logger.info("📡 [WebSocket] Connexion établie. Écoute du direct lancée...")
+                global eventsub_connected, eventsub_last_event_at
+                eventsub_connected = True
                 async for msg in ws:
+                    eventsub_last_event_at = time.time()
                     if msg.type == aiohttp.WSMsgType.TEXT:
                         data = json.loads(msg.data)
                         msg_type = data.get("metadata", {}).get("message_type")
@@ -355,9 +363,11 @@ async def eventsub_routine():
             break
 
 async def start_eventsub():
+    global eventsub_connected
     while True:
         try:
             await eventsub_routine()
         except Exception as e:
             logger.error(f"🔥 [CRASH] : {e}. Redémarrage dans 15s...")
+            eventsub_connected = False
             await asyncio.sleep(15)
