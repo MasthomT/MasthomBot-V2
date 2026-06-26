@@ -55,13 +55,25 @@ class OBSService:
         """Méthode appelée automatiquement par OBS quand la scène change"""
         scene = data.scene_name
         logger.info(f"🎬 [OBS] Nouvelle scène active : {scene}")
-        
+
         if scene == "ON BREAK":
             logger.info("⏸️ Scène ON BREAK détectée ! Masthbot attend 1.5s qu'OBS charge la page...")
-            # On attend 1.5s pour être sûr que la source navigateur OBS est prête à écouter
             threading.Timer(1.5, self.trigger_brb_overlay, args=["brb"]).start()
+        elif scene == "END":
+            logger.info("🎬 [OBS] Scène END détectée — rechargement du générique.")
+            threading.Timer(1.0, self.refresh_browser_source, args=["WID_Générique"]).start()
+            self.trigger_brb_overlay("main")
         else:
             self.trigger_brb_overlay("main")
+
+    def refresh_browser_source(self, source_name: str):
+        """Force le rechargement d'une Browser Source OBS (équivalent au bouton 'Actualiser')."""
+        try:
+            cl = obs.ReqClient(host=self.host, port=self.port, password=self.password)
+            cl.press_input_properties_button(source_name, "refreshnocache")
+            logger.info(f"🔄 [OBS] Browser Source '{source_name}' rechargée.")
+        except Exception as e:
+            logger.error(f"❌ [OBS] Impossible de recharger '{source_name}' : {e}")
 
     def trigger_brb_overlay(self, scene_state):
         """Masthbot force la régie Node.js via les routes qui existent VRAIMENT."""

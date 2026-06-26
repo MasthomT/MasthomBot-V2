@@ -68,6 +68,7 @@ from app.services.bot_health_service import (
     clear_crash_marker,
 )
 from app.services.wheel_service import init_wheel_tables
+from app.services.bot_system_commands_service import init_system_commands_table
 
 # --- IMPORT DES REPERTOIRES ---
 from app.repositories import viewer_repo
@@ -127,6 +128,7 @@ async def lifespan(app: FastAPI):
     await init_discord_mod_tables()
     await init_bot_health_table()
     await init_wheel_tables()
+    await init_system_commands_table()
     logger.info("✅ [DATABASE] Tables PostgreSQL initialisées avec succès !")
 
     # 1.5 Détection d'un crash précédent (alerte Discord si le process n'a pas été arrêté proprement)

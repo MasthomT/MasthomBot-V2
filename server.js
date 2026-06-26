@@ -453,7 +453,7 @@ app.post('/api/replay', async (req, res) => {
         if (finalClip) {
             shoutoutQueue.push({ target: CONFIG.CHANNEL_NAME, mode: 'replay', extraData: { slug: finalClip.id } });
             if (!isProcessing) processQueue();
-            res.json({ status: "success", title: finalClip.title, creator: finalClip.creator_name });
+            res.json({ status: "success", title: finalClip.title, creator: finalClip.creator_name, clip_id: finalClip.id, url: finalClip.url || `https://clips.twitch.tv/${finalClip.id}` });
         } else {
             res.json({ status: "not_found" });
         }
