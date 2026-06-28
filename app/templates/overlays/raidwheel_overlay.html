@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Raid Wheel</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100vw;
+    height: 100vh;
+    font-family: 'Impact', 'Arial Black', sans-serif;
+    overflow: hidden;
+  }
+
+  #container {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    width: 400px;
+  }
+  #container.visible { display: flex; }
+
+  /* Titre */
+  .title {
+    font-size: 22px;
+    letter-spacing: 5px;
+    color: #fff;
+    text-transform: uppercase;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+    background: rgba(0,0,0,0.55);
+    padding: 8px 24px;
+    border-radius: 8px 8px 0 0;
+    width: 100%;
+    text-align: center;
+  }
+
+  /* Fenêtre de défilement */
+  .slot-window {
+    width: 100%;
+    height: 220px;
+    overflow: hidden;
+    position: relative;
+    background: rgba(0,0,0,0.6);
+    border-left: 3px solid rgba(255,255,255,0.1);
+    border-right: 3px solid rgba(255,255,255,0.1);
+  }
+
+  /* Lignes de visée */
+  .slot-window::before,
+  .slot-window::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0;
+    height: 2px;
+    background: #f0c030;
+    z-index: 10;
+    box-shadow: 0 0 8px rgba(240,192,48,0.9);
+  }
+  .slot-window::before { top: 74px; }
+  .slot-window::after  { bottom: 74px; }
+
+  /* Flèche gauche */
+  .arrow-left, .arrow-right {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 11;
+    color: #f0c030;
+    font-size: 22px;
+    text-shadow: 0 0 8px rgba(240,192,48,0.9);
+  }
+  .arrow-left  { left: 6px; }
+  .arrow-right { right: 6px; }
+
+  /* Surbrillance zone centrale */
+  .highlight {
+    position: absolute;
+    left: 0; right: 0;
+    top: 76px;
+    height: 68px;
+    background: rgba(240,192,48,0.08);
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  /* Track des noms */
+  #track {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    width: 100%;
+    top: 0;
+  }
+
+  .slot-item {
+    height: 74px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .slot-item img {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255,255,255,0.2);
+  }
+
+  .slot-item span {
+    font-size: 26px;
+    letter-spacing: 3px;
+    color: #ccc;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.9);
+    text-transform: uppercase;
+  }
+
+  /* Item central (actif) */
+  .slot-item.active span {
+    color: #f0c030;
+    font-size: 30px;
+    text-shadow: 0 0 14px rgba(240,192,48,0.8);
+  }
+  .slot-item.active img {
+    border-color: #f0c030;
+    box-shadow: 0 0 10px rgba(240,192,48,0.7);
+  }
+
+  /* Résultat */
+  .result-bar {
+    display: none;
+    width: 100%;
+    background: rgba(0,0,0,0.75);
+    border-radius: 0 0 8px 8px;
+    padding: 10px 0;
+    text-align: center;
+    border-left: 3px solid rgba(255,255,255,0.1);
+    border-right: 3px solid rgba(255,255,255,0.1);
+    border-bottom: 3px solid rgba(255,255,255,0.1);
+  }
+  .result-bar.visible { display: block; }
+
+  .result-label {
+    font-size: 13px;
+    letter-spacing: 4px;
+    color: #888;
+    text-transform: uppercase;
+  }
+  .result-name {
+    font-size: 36px;
+    letter-spacing: 5px;
+    color: #f0c030;
+    text-shadow: 0 0 20px rgba(240,192,48,0.9);
+    text-transform: uppercase;
+    animation: pulse 1s ease infinite alternate;
+  }
+
+  @keyframes pulse {
+    from { text-shadow: 0 0 10px rgba(240,192,48,0.6); }
+    to   { text-shadow: 0 0 30px rgba(240,192,48,1), 0 0 60px rgba(255,220,80,0.4); }
+  }
+</style>
+</head>
+<body>
+
+<div id="container">
+  <div class="title">⬡ Qui on raid ? ⬡</div>
+
+  <div class="slot-window">
+    <div class="highlight"></div>
+    <span class="arrow-left">▶</span>
+    <span class="arrow-right">◀</span>
+    <div id="track"></div>
+  </div>
+
+  <div class="result-bar" id="result-bar">
+    <div class="result-label">On raid</div>
+    <div class="result-name" id="result-name"></div>
+  </div>
+</div>
+
+<script>
+const ITEM_H = 74;   // hauteur d'un item en px
+const CENTER = 1;    // index de l'item centré dans la fenêtre (0=haut, 1=milieu, 2=bas)
+
+let streamers = [];
+
+const container  = document.getElementById('container');
+const track      = document.getElementById('track');
+const resultBar  = document.getElementById('result-bar');
+const resultName = document.getElementById('result-name');
+
+function buildTrack(items) {
+  track.innerHTML = '';
+  // Répète la liste pour avoir de la marge (au moins 60 items)
+  const reps = Math.max(8, Math.ceil(60 / items.length));
+  const all = [];
+  for (let i = 0; i < reps; i++) all.push(...items);
+
+  all.forEach(s => {
+    const div = document.createElement('div');
+    div.className = 'slot-item';
+    div.innerHTML = `
+      ${s.avatar ? `<img src="${s.avatar}" onerror="this.remove()" alt="">` : ''}
+      <span>${s.name}</span>`;
+    track.appendChild(div);
+  });
+  return all;
+}
+
+function setY(y) {
+  track.style.transform = `translateY(${y}px)`;
+}
+
+function markActive(y) {
+  const centerIdx = Math.round(-y / ITEM_H) + CENTER;
+  track.querySelectorAll('.slot-item').forEach((el, i) => {
+    el.classList.toggle('active', i === centerIdx);
+  });
+}
+
+function easeOut(t) {
+  return 1 - Math.pow(1 - t, 4);
+}
+
+function spin(winnerIdx, allItems) {
+  // Commence à mi-chemin du deck
+  const startSlot  = Math.floor(allItems.length * 0.3);
+  const laps       = 5;
+  const targetSlot = startSlot + laps * streamers.length + winnerIdx;
+
+  const startY  = -(startSlot  - CENTER) * ITEM_H;
+  const targetY = -(targetSlot - CENTER) * ITEM_H;
+
+  setY(startY);
+  markActive(startY);
+
+  const duration = 4500;
+  let startTime  = null;
+
+  function step(ts) {
+    if (!startTime) startTime = ts;
+    const t = Math.min((ts - startTime) / duration, 1);
+    const y = startY + (targetY - startY) * easeOut(t);
+    setY(y);
+    markActive(y);
+
+    if (t < 1) {
+      requestAnimationFrame(step);
+    } else {
+      setY(targetY);
+      markActive(targetY);
+      showResult(streamers[winnerIdx]);
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+function showResult(streamer) {
+  resultName.textContent = streamer.name.toUpperCase();
+  resultBar.classList.add('visible');
+
+  setTimeout(() => {
+    container.classList.remove('visible');
+    resultBar.classList.remove('visible');
+  }, 12000);
+}
+
+// SSE
+const es = new EventSource('/overlay/raidwheel/events');
+es.onmessage = e => {
+  const msg = JSON.parse(e.data);
+  if (msg.type !== 'spin') return;
+
+  streamers = msg.streamers;
+  if (!streamers.length) return;
+
+  resultBar.classList.remove('visible');
+  container.classList.add('visible');
+
+  const allItems  = buildTrack(streamers);
+  const winnerIdx = streamers.findIndex(s => s.login === msg.winner_login);
+  const idx = winnerIdx >= 0 ? winnerIdx : 0;
+
+  setTimeout(() => spin(idx, allItems), 100);
+};
+</script>
+</body>
+</html>

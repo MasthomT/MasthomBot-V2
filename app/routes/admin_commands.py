@@ -405,3 +405,84 @@ async def list_available_sounds():
     files = [f for f in os.listdir(sound_dir) if f.lower().endswith(valid_extensions)]
     
     return {"sounds": sorted(files)}
+
+
+# ─── Commandes système ────────────────────────────────────────────────────────
+
+@router.get("/api/admin/system-commands")
+async def api_get_system_commands():
+    from app.services.bot_system_commands_service import SYSTEM_COMMANDS_DEFINITION, get_all_configs
+    configs = await get_all_configs()
+    result = []
+    for defn in SYSTEM_COMMANDS_DEFINITION:
+        key = defn["command_key"]
+        cfg = configs.get(key, {})
+        result.append({
+            "command_key":  key,
+            "label":        defn["label"],
+            "description":  defn["description"],
+            "command_name": cfg.get("command_name", defn["default_name"]),
+            "enabled":      cfg.get("enabled", True),
+            "min_role":     cfg.get("min_role", defn["default_role"]),
+            "messages":     cfg.get("messages", defn["messages"]),
+            "tags":         defn["tags"],
+            "default_messages": defn["messages"],
+        })
+    return result
+
+
+@router.patch("/api/admin/system-commands/{command_key}")
+async def api_update_system_command(command_key: str, request: Request):
+    from app.services.bot_system_commands_service import SYSTEM_COMMANDS_DEFINITION, invalidate_cache
+    import json as _json
+
+    defn = next((d for d in SYSTEM_COMMANDS_DEFINITION if d["command_key"] == command_key), None)
+    if not defn:
+        return JSONResponse({"error": "Commande inconnue"}, status_code=404)
+
+    body = await request.json()
+    new_name     = body.get("command_name", "").strip().lower()
+    enabled      = bool(body.get("enabled", True))
+    min_role     = body.get("min_role", defn["default_role"])
+    messages     = body.get("messages", {})
+
+    if not new_name or not new_name.isalnum():
+        return JSONResponse({"error": "Nom invalide (lettres/chiffres uniquement, sans !)"}, status_code=400)
+
+    async with get_db_connection() as db:
+        # Vérifier unicité du nom (sauf pour soi-même)
+        await db.execute(
+            "SELECT command_key FROM bot_system_commands WHERE command_name = $1 AND command_key != $2",
+            (new_name, command_key)
+        )
+        conflict = await db.fetchone()
+        if conflict:
+            return JSONResponse({"error": f"Le nom !{new_name} est déjà utilisé par la commande '{conflict['command_key']}'"}, status_code=409)
+
+        await db.execute("""
+            UPDATE bot_system_commands
+            SET command_name = $1, enabled = $2, min_role = $3, messages = $4
+            WHERE command_key = $5
+        """, (new_name, enabled, min_role, _json.dumps(messages), command_key))
+
+    invalidate_cache()
+    return {"ok": True, "command_name": new_name}
+
+
+@router.post("/api/admin/system-commands/{command_key}/reset")
+async def api_reset_system_command_messages(command_key: str):
+    from app.services.bot_system_commands_service import SYSTEM_COMMANDS_DEFINITION, invalidate_cache
+    import json as _json
+
+    defn = next((d for d in SYSTEM_COMMANDS_DEFINITION if d["command_key"] == command_key), None)
+    if not defn:
+        return JSONResponse({"error": "Commande inconnue"}, status_code=404)
+
+    async with get_db_connection() as db:
+        await db.execute(
+            "UPDATE bot_system_commands SET messages = $1 WHERE command_key = $2",
+            (_json.dumps(defn["messages"]), command_key)
+        )
+
+    invalidate_cache()
+    return {"ok": True}

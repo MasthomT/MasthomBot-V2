@@ -144,6 +144,35 @@ async def overlay_clips_quad(request: Request):
 async def overlay_tiktok(request: Request):
     return templates.TemplateResponse(request=request, name="overlays/tiktok_overlay.html")
 
+
+@router.get("/overlay/raidwheel", response_class=HTMLResponse)
+async def overlay_raidwheel(request: Request):
+    return templates.TemplateResponse(request=request, name="overlays/raidwheel_overlay.html")
+
+_raidwheel_clients: list[asyncio.Queue] = []
+
+@router.get("/overlay/raidwheel/events")
+async def raidwheel_events(request: Request):
+    queue: asyncio.Queue = asyncio.Queue()
+    _raidwheel_clients.append(queue)
+    async def gen():
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                data = await queue.get()
+                yield f"data: {json.dumps(data)}\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            if queue in _raidwheel_clients:
+                _raidwheel_clients.remove(queue)
+    return StreamingResponse(gen(), media_type="text/event-stream")
+
+async def trigger_raidwheel(payload: dict):
+    for q in _raidwheel_clients:
+        await q.put(payload)
+
 # ==========================================
 # 3. PROXY VIDÉO TIKTOK
 # ==========================================

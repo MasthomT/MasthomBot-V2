@@ -443,11 +443,28 @@ class MasthbotTwitch(commands.Bot):
             cmd_name = parts[0][1:].lower()
             user_input = parts[1].strip() if len(parts) > 1 else ""
 
-            # Commandes natives twitchio — ne pas intercepter
+            # ── Résolution du nom personnalisé des commandes système ──────────
+            # Si le viewer tape !shoutout et que l'admin a renommé 'so' → 'shoutout',
+            # on réécrit le contenu du message vers le nom interne ('so') pour que
+            # twitchio retrouve le bon handler enregistré par @commands.command.
+            from app.services.bot_system_commands_service import get_config_by_name
+            syscmd = await get_config_by_name(cmd_name)
+            if syscmd:
+                internal_key, syscmd_cfg = syscmd
+                if not syscmd_cfg["enabled"]:
+                    return  # commande désactivée
+                if internal_key != cmd_name:
+                    # Réécriture vers le nom interne
+                    new_content = f"!{internal_key}" + (f" {user_input}" if user_input else "")
+                    message.content = new_content
+                    cmd_name = internal_key
+
+            # Commandes natives twitchio — ne pas intercepter par le routeur custom
             NATIVE_COMMANDS = {
-                'checkcopains', 'sondage', 'testpoll',
+                'so', 'checkcopains', 'sondage', 'testpoll',
                 'level', 'rang', 'timer', 'chrono', 'voteclips', 'addvip', 'vip',
-                'permit', 'unpermit',
+                'permit', 'unpermit', 'raidqui', 'showtiktok', 'replay', 'renotif',
+                'dé', 'de', 'dice', 'roll', 'uptime', 'counter',
             }
             if cmd_name in NATIVE_COMMANDS:
                 await self.handle_commands(message)
@@ -688,8 +705,11 @@ class MasthbotTwitch(commands.Bot):
         if not is_authorized:
             logger.warning(f"⚠️ [SHOUTOUT] !so refusé pour {ctx.author.name} (is_mod={ctx.author.is_mod}, is_broadcaster={ctx.author.is_broadcaster}, badges={author_badges})")
             return
+        from app.services.bot_system_commands_service import msg as syscmd_msg, get_config
+        syscmd_cfg = await get_config("so")
+        cmd_label = syscmd_cfg["command_name"] if syscmd_cfg else "so"
         if not content:
-            return await ctx.send("Miaou ! Pseudo ou lien requis : !so pseudo")
+            return await ctx.send(await syscmd_msg("so", "usage", command=cmd_label))
 
         input_val = content.replace("!so", "").strip().split()[0].split("?")[0]
         target_name = None
@@ -730,7 +750,7 @@ class MasthbotTwitch(commands.Bot):
             target_name = input_val.replace("@", "")
 
         if not target_name:
-            return await ctx.send("❌ Impossible de récupérer le pseudo depuis ce lien ! Vérifie ton URL.")
+            return await ctx.send(await syscmd_msg("so", "error_url"))
 
         target_name_clean = target_name.lower()
         
@@ -748,12 +768,12 @@ class MasthbotTwitch(commands.Bot):
                                 if c_data.get("data") and c_data["data"][0].get("game_name"):
                                     last_game = c_data["data"][0]["game_name"]
                             
-                            await ctx.send(f"🎬 Allez donner de la force à @{s_display} qui jouait récemment à {last_game} ! https://twitch.tv/{target_name_clean} 💜")
+                            await ctx.send(await syscmd_msg("so", "success", target=s_display, game=last_game, url=f"https://twitch.tv/{target_name_clean}"))
                     else:
-                        await ctx.send(f"Foncez voir @{target_name} ! https://twitch.tv/{target_name_clean}")
+                        await ctx.send(await syscmd_msg("so", "success_basic", target=target_name, url=f"https://twitch.tv/{target_name_clean}"))
         except Exception as e:
             logger.error(f"❌ [SHOUTOUT] Échec récupération infos pour {target_name_clean} : {e}")
-            await ctx.send(f"Foncez voir @{target_name} ! https://twitch.tv/{target_name_clean}")
+            await ctx.send(await syscmd_msg("so", "success_basic", target=target_name, url=f"https://twitch.tv/{target_name_clean}"))
 
         try:
             async with session.post(f"{settings.OVERLAY_NODE_URL}/api/shoutout", json={"target": target_name_clean, "slug": slug_for_node}) as _:
@@ -785,20 +805,68 @@ class MasthbotTwitch(commands.Bot):
 
         session = await self.get_web_session()
 
+        from app.services.bot_system_commands_service import msg as syscmd_msg
+        client_id = os.getenv("TWITCH_CLIENT_ID", getattr(self._http, 'client_id', ''))
+        headers = {"Client-ID": client_id, "Authorization": f"Bearer {self.master_token}"}
+
+        # Résoudre le slug depuis le lien ou la recherche
+        resolved_slug = slug
+        if slug and "twitch.tv" in slug:
+            # Extraire le slug depuis une URL clip
+            if "/clip/" in slug:
+                resolved_slug = slug.split("/clip/")[-1].split("?")[0]
+            elif "clips.twitch.tv/" in slug:
+                resolved_slug = slug.split("clips.twitch.tv/")[-1].split("?")[0]
+
+        clip_title = None
+        clip_url = None
+        clip_broadcaster = None
+
+        # Si on a un slug direct, on récupère les infos
+        if resolved_slug and "/" not in resolved_slug:
+            try:
+                async with session.get(
+                    f"https://api.twitch.tv/helix/clips?id={resolved_slug}",
+                    headers=headers
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        if data.get("data"):
+                            c = data["data"][0]
+                            clip_title = c.get("title", "")
+                            clip_url = c.get("url", f"https://clips.twitch.tv/{resolved_slug}")
+                            clip_broadcaster = c.get("broadcaster_name", "")
+            except Exception as e:
+                logger.warning(f"⚠️ [REPLAY] Impossible de récupérer les infos du clip : {e}")
+
         try:
-            payload = {"slug": slug, "query": query}
-            async with session.post(f"{settings.OVERLAY_NODE_URL}/api/replay", json=payload) as _:
-                pass
-            
-            sound_payload = {
-                "type": "play_sound", 
-                "file": "/static/uploads/hey_listen.mp3"
-            }
+            payload = {"slug": resolved_slug or slug, "query": query}
+            async with session.post(f"{settings.OVERLAY_NODE_URL}/api/replay", json=payload) as resp:
+                node_data = await resp.json() if resp.content_type == "application/json" else {}
+
+            # Si Node.js a choisi le clip (mode query), on récupère les infos depuis sa réponse
+            if not clip_title and node_data.get("title"):
+                clip_title = node_data["title"]
+                clip_broadcaster = node_data.get("creator", clip_broadcaster or self.channel_name)
+                clip_url = node_data.get("url") or (
+                    f"https://clips.twitch.tv/{node_data['clip_id']}" if node_data.get("clip_id") else None
+                )
+
+            sound_payload = {"type": "play_sound", "file": "/static/uploads/hey_listen.mp3"}
             async with session.post(f"{settings.OVERLAY_NODE_URL}/api/alert", json=sound_payload) as _:
                 pass
 
+            # Message chat si titre disponible
+            if clip_title:
+                reply = await syscmd_msg("replay", "playing",
+                    title=clip_title,
+                    url=clip_url or "",
+                    broadcaster=clip_broadcaster or self.channel_name)
+                if reply:
+                    await safe_send(ctx.channel, reply)
+
         except Exception as e:
-             logger.error(f"❌ [REPLAY ERROR] : {e}")
+            logger.error(f"❌ [REPLAY ERROR] : {e}")
 
     @commands.command(name='showtiktok')
     async def cmd_show_tiktok(self, ctx, *, content: str = None):
@@ -883,10 +951,11 @@ class MasthbotTwitch(commands.Bot):
     async def cmd_renotif(self, ctx):
         if not ctx.author.is_mod and not ctx.author.is_broadcaster:
             return
+        from app.services.bot_system_commands_service import msg as syscmd_msg
         config = await self.get_db_config()
         channel_id = config.get('notif_live_channel_id')
         if not channel_id:
-            return await ctx.send("❌ Aucun salon Discord n'est configuré.")
+            return await ctx.send(await syscmd_msg("renotif", "no_channel"))
 
         streams = await self.fetch_streams(user_logins=[self.channel_name])
         if streams:
@@ -898,19 +967,20 @@ class MasthbotTwitch(commands.Bot):
                 game=s.game_name,
                 custom_message=config.get('discord_notify_message')
             )
-            await ctx.send(f"✅ Notification renvoyée sur Discord avec la catégorie : {s.game_name} !")
+            await ctx.send(await syscmd_msg("renotif", "success", game=s.game_name))
         else:
-            await ctx.send("⏳ Twitch ne te voit pas en live. Attends 1 minute et réessaie !")
+            await ctx.send(await syscmd_msg("renotif", "no_live"))
 
     @commands.command(name='checkcopains')
     async def cmd_checkcopains(self, ctx):
         if not ctx.author.is_mod and not ctx.author.is_broadcaster:
             return
             
+        from app.services.bot_system_commands_service import msg as syscmd_msg
         config = await self.get_db_config()
         channel_id = config.get('streamers_channel_id')
         if not channel_id:
-            return await ctx.send("❌ Aucun salon Discord configuré.")
+            return await ctx.send(await syscmd_msg("checkcopains", "no_channel"))
 
         try:
             async with get_db_connection() as conn:
@@ -921,14 +991,14 @@ class MasthbotTwitch(commands.Bot):
             return
 
         if not tracked:
-            return await ctx.send("⚠️ Aucun partenaire surveillé.")
+            return await ctx.send(await syscmd_msg("checkcopains", "no_partners"))
 
         logins = [s["login"] for s in tracked]
-        await ctx.send(f"🔍 Scan des {len(logins)} copains...")
+        await ctx.send(await syscmd_msg("checkcopains", "scanning", count=len(logins)))
 
         streams = await self.fetch_streams(user_logins=logins)
         if not streams:
-            return await ctx.send("💤 Aucun copain n'est en ligne.")
+            return await ctx.send(await syscmd_msg("checkcopains", "empty"))
 
         notified_count = 0
         tracked_by_login = {t["login"].lower(): t for t in tracked}
@@ -952,7 +1022,7 @@ class MasthbotTwitch(commands.Bot):
                             (str(s.id), str(msg_id), streamer["id"]),
                         )
 
-        await ctx.send(f"✅ {notified_count} alertes envoyées !")
+        await ctx.send(await syscmd_msg("checkcopains", "done", count=notified_count))
 
     @commands.command(name='sondage')
     async def cmd_sondage(self, ctx):
@@ -961,8 +1031,9 @@ class MasthbotTwitch(commands.Bot):
                 c = await conn.execute("SELECT * FROM polls WHERE is_active=1 ORDER BY id DESC LIMIT 1")
                 poll = await c.fetchone()
 
+                from app.services.bot_system_commands_service import msg as syscmd_msg
                 if not poll:
-                    return await ctx.send("🐾 Aucun sondage en cours. Crée-en un sur ton interface admin !")
+                    return await ctx.send(await syscmd_msg("sondage", "no_poll"))
 
                 c2 = await conn.execute("SELECT option_index, COUNT(*) as count FROM poll_votes WHERE poll_id=$1 GROUP BY option_index", (poll['id'],))
                 votes = await c2.fetchall()
@@ -1018,7 +1089,8 @@ class MasthbotTwitch(commands.Bot):
                 "payload": poll_state.current_twitch_poll
             })
             
-            await ctx.send("🛠️ Faux sondage de test envoyé à l'overlay !")
+            from app.services.bot_system_commands_service import msg as syscmd_msg
+            await ctx.send(await syscmd_msg("testpoll", "success"))
             
         except Exception as e:
             print(f"❌ Erreur testpoll : {e}")
@@ -1034,14 +1106,14 @@ class MasthbotTwitch(commands.Bot):
             logger.error(f"Erreur cmd_level : {e}")
             return
         
+        from app.services.bot_system_commands_service import msg as syscmd_msg
         points = row['points'] if row else 0
         if points <= 0:
-            return await ctx.send(f"@{ctx.author.name}, tu es Niveau 1 avec 0 EXP ! Parle dans le chat pour progresser. 🐾")
-            
+            return await ctx.send(await syscmd_msg("level", "new", user=ctx.author.name))
+
         level = max(1, int((points / 100) ** (1 / 2.2)))
         next_lvl_xp = int(100 * ((level + 1) ** 2.2))
-        
-        await ctx.send(f"@{ctx.author.name}, tu es Niveau {level} avec {points} EXP ! (Prochain niveau à {next_lvl_xp} EXP) 🌟")
+        await ctx.send(await syscmd_msg("level", "level", user=ctx.author.name, level=level, points=points, next_xp=next_lvl_xp))
 
     @commands.command(name='rang')
     async def cmd_rang(self, ctx):
@@ -1054,8 +1126,9 @@ class MasthbotTwitch(commands.Bot):
             logger.error(f"Erreur cmd_rang : {e}")
             return
         
+        from app.services.bot_system_commands_service import msg as syscmd_msg
         if not viewers:
-            return await ctx.send(f"@{ctx.author.name}, le classement est vide pour le moment !")
+            return await ctx.send(await syscmd_msg("rang", "empty", user=ctx.author.name))
             
         user_idx = -1
         for i, v in enumerate(viewers):
@@ -1064,7 +1137,7 @@ class MasthbotTwitch(commands.Bot):
                 break
                 
         if user_idx == -1:
-            return await ctx.send(f"@{ctx.author.name}, tu n'as pas encore d'EXP pour être classé ! 🐾")
+            return await ctx.send(await syscmd_msg("rang", "not_ranked", user=ctx.author.name))
             
         rank = user_idx + 1
         start_idx = max(0, user_idx - 2)
@@ -1081,13 +1154,16 @@ class MasthbotTwitch(commands.Bot):
             else:
                 leaderboard_snippet.append(f"#{pos} {v_name} ({v_pts} pts)")
                 
-        msg = " | ".join(leaderboard_snippet)
-        await ctx.send(f"🏆 Classement (Rang #{rank}) : {msg}")
+        leaderboard_str = " | ".join(leaderboard_snippet)
+        await ctx.send(await syscmd_msg("rang", "rank", user=ctx.author.name, rank=rank, leaderboard=leaderboard_str))
 
     @commands.command(name='timer')
     async def cmd_timer(self, ctx, time_str: str = None, *, label: str = "OBJECTIF"):
+        from app.services.bot_system_commands_service import msg as syscmd_msg, get_config
         if not ctx.author.is_mod and not ctx.author.is_broadcaster: return
-        if not time_str: return await ctx.send("⏱️ Usage : !timer <minutes> [Nom du timer] (ex: !timer 5 Pause café)")
+        syscmd_cfg = await get_config("timer")
+        cmd_label = syscmd_cfg["command_name"] if syscmd_cfg else "timer"
+        if not time_str: return await ctx.send(await syscmd_msg("timer", "usage", command=cmd_label))
 
         session = await self.get_web_session()
 
@@ -1096,7 +1172,7 @@ class MasthbotTwitch(commands.Bot):
             try:
                 async with session.post(f"{settings.OVERLAY_NODE_URL}/api/trigger", json=payload) as _:
                     pass
-                await ctx.send("🛑 Timer effacé de l'écran !")
+                await ctx.send(await syscmd_msg("timer", "stop"))
             except Exception as e:
                 logger.error(f"Erreur Stop Timer OBS : {e}")
             return
@@ -1105,7 +1181,7 @@ class MasthbotTwitch(commands.Bot):
             minutes = int(time_str)
             duration_seconds = minutes * 60
         except ValueError:
-            return await ctx.send("❌ La durée doit être un chiffre exact en minutes (ex: !timer 5)")
+            return await ctx.send(await syscmd_msg("timer", "invalid", command=cmd_label))
 
         payload = {
             "type": "time_event",
@@ -1114,12 +1190,13 @@ class MasthbotTwitch(commands.Bot):
         try:
             async with session.post(f"{settings.OVERLAY_NODE_URL}/api/trigger", json=payload) as _:
                 pass
-            await ctx.send(f"⏱️ Timer de {minutes} minute(s) lancé à l'écran : {label.upper()}")
+            await ctx.send(await syscmd_msg("timer", "start", minutes=minutes, label=label.upper()))
         except Exception as e:
             logger.error(f"Erreur Envoi Timer OBS : {e}")
 
     @commands.command(name='chrono')
     async def cmd_chrono(self, ctx, *, label: str = "CHRONO"):
+        from app.services.bot_system_commands_service import msg as syscmd_msg
         if not ctx.author.is_mod and not ctx.author.is_broadcaster: return
         
         session = await self.get_web_session()
@@ -1129,7 +1206,7 @@ class MasthbotTwitch(commands.Bot):
             try:
                 async with session.post(f"{settings.OVERLAY_NODE_URL}/api/trigger", json=payload) as _:
                     pass
-                await ctx.send("🛑 Chrono effacé de l'écran !")
+                await ctx.send(await syscmd_msg("chrono", "stop"))
             except Exception as e:
                 logger.error(f"Erreur Stop Chrono OBS : {e}")
             return
@@ -1141,28 +1218,32 @@ class MasthbotTwitch(commands.Bot):
         try:
             async with session.post(f"{settings.OVERLAY_NODE_URL}/api/trigger", json=payload) as _:
                 pass
-            await ctx.send(f"⏱️ Chronomètre lancé à l'écran : {label.upper()}")
+            await ctx.send(await syscmd_msg("chrono", "start", label=label.upper()))
         except Exception as e:
             logger.error(f"Erreur Envoi Chrono OBS : {e}")
 
     @commands.command(name='voteclips')
     async def voteclips_cmd(self, ctx: commands.Context):
+        from app.services.bot_system_commands_service import msg as syscmd_msg
         if ctx.author.is_mod or ctx.author.is_broadcaster:
             result = await start_clips_poll()
             if "error" in result:
-                await ctx.send(f"❌ Erreur : {result['error']}")
+                await ctx.send(await syscmd_msg("voteclips", "error", error=result["error"]))
             else:
-                await ctx.send("📊 Le sondage est lancé ! Votez pour votre clip préféré en haut du t'chat !")
+                await ctx.send(await syscmd_msg("voteclips", "success"))
         else:
-            await ctx.send("Désolé, seuls les modérateurs peuvent lancer le vote des clips !")
+            await ctx.send(await syscmd_msg("voteclips", "denied"))
 
     @commands.command(name='addvip')
     async def cmd_addvip(self, ctx, target: str = None, duration_days: int = 0):
         if not ctx.author.is_mod and not ctx.author.is_broadcaster:
             return
 
+        from app.services.bot_system_commands_service import msg as syscmd_msg, get_config
+        syscmd_cfg = await get_config("addvip")
+        cmd_label = syscmd_cfg["command_name"] if syscmd_cfg else "addvip"
         if not target:
-            return await ctx.send("❌ Usage: !addvip <pseudo> <jours> (Ex: !addvip Masthom_ 7) Mettre 0 pour Permanent.")
+            return await ctx.send(await syscmd_msg("addvip", "usage", command=cmd_label))
 
         target_clean = target.lower().replace("@", "")
 
@@ -1172,7 +1253,7 @@ class MasthbotTwitch(commands.Bot):
                 viewer = await c.fetchone()
 
                 if not viewer:
-                    return await ctx.send(f"❌ Le viewer @{target} n'existe pas dans la base de données. Il doit parler au moins une fois.")
+                    return await ctx.send(await syscmd_msg("addvip", "not_found", target=target))
 
                 expiry = None
                 if duration_days > 0:
@@ -1194,9 +1275,9 @@ class MasthbotTwitch(commands.Bot):
             logger.error(f"Erreur API Twitch !addvip (Réseau) : {e}")
 
         if duration_days > 0:
-            await ctx.send(f"💎 L'élite s'agrandit ! @{target} est désormais VIP pour {duration_days} jours !")
+            await ctx.send(await syscmd_msg("addvip", "success_temp", target=target, days=duration_days))
         else:
-            await ctx.send(f"⭐ Consécration ! @{target} est désormais VIP à vie !")
+            await ctx.send(await syscmd_msg("addvip", "success_permanent", target=target))
 
     @commands.command(name='vip')
     async def cmd_vip(self, ctx):
@@ -1208,18 +1289,19 @@ class MasthbotTwitch(commands.Bot):
             logger.error(f"❌ [DB ERROR] Erreur cmd_vip : {e}")
             return
 
+        from app.services.bot_system_commands_service import msg as syscmd_msg
         if not user or not user['is_vip']:
-            return await ctx.send(f"@{ctx.author.name}, tu n'es pas VIP ! 😿")
+            return await ctx.send(await syscmd_msg("vip", "not_vip", user=ctx.author.name))
 
         if not user['vip_expiry']:
-            return await ctx.send(f"⭐ @{ctx.author.name}, ton grade VIP est Permanent ! Merci pour ton soutien éternel 💜")
+            return await ctx.send(await syscmd_msg("vip", "permanent", user=ctx.author.name))
 
         try:
             expiry = datetime.fromisoformat(user['vip_expiry'])
             now = datetime.now()
 
             if expiry < now:
-                return await ctx.send(f"🥀 @{ctx.author.name}, ton grade VIP a expiré le {expiry.strftime('%d/%m/%Y')}.")
+                return await ctx.send(await syscmd_msg("vip", "expired", user=ctx.author.name, date=expiry.strftime('%d/%m/%Y')))
 
             diff = expiry - now
             days = diff.days
@@ -1233,19 +1315,22 @@ class MasthbotTwitch(commands.Bot):
 
             if not time_str: time_str = "quelques secondes"
 
-            await ctx.send(f"💎 @{ctx.author.name}, il te reste {time_str} de VIP ! (Expire le {expiry.strftime('%d/%m/%Y à %H:%M')})")
+            await ctx.send(await syscmd_msg("vip", "temp", user=ctx.author.name, time=time_str, date=expiry.strftime('%d/%m/%Y à %H:%M')))
         except:
             await ctx.send(f"@{ctx.author.name}, ton grade VIP est bien actif ! 💎")
 
     @commands.command(name='permit')
     async def cmd_permit(self, ctx, *, target: str = None):
+        from app.services.bot_system_commands_service import msg as syscmd_msg, get_config
+        syscmd_cfg = await get_config("permit")
+        cmd_label = syscmd_cfg["command_name"] if syscmd_cfg else "permit"
         if not ctx.author.is_mod and ctx.author.name.lower() != self.channel_name:
             return
         if not target:
-            return await ctx.send("Usage : !permit <pseudo>")
+            return await ctx.send(await syscmd_msg("permit", "usage", command=cmd_label))
         target_clean = target.strip().lstrip('@').lower()
         _permitted_users.add(target_clean)
-        await ctx.send(f"✅ {target_clean} est autorisé à poster un lien pendant 60 secondes.")
+        await ctx.send(await syscmd_msg("permit", "success", target=target_clean))
         async def revoke():
             await asyncio.sleep(60)
             _permitted_users.discard(target_clean)
@@ -1253,13 +1338,166 @@ class MasthbotTwitch(commands.Bot):
 
     @commands.command(name='unpermit')
     async def cmd_unpermit(self, ctx, *, target: str = None):
+        from app.services.bot_system_commands_service import msg as syscmd_msg, get_config
+        syscmd_cfg = await get_config("unpermit")
+        cmd_label = syscmd_cfg["command_name"] if syscmd_cfg else "unpermit"
         if not ctx.author.is_mod and ctx.author.name.lower() != self.channel_name:
             return
         if not target:
-            return await ctx.send("Usage : !unpermit <pseudo>")
+            return await ctx.send(await syscmd_msg("unpermit", "usage", command=cmd_label))
         target_clean = target.strip().lstrip('@').lower()
         _permitted_users.discard(target_clean)
-        await ctx.send(f"🚫 {target_clean} n'est plus autorisé à poster des liens.")
+        await ctx.send(await syscmd_msg("unpermit", "success", target=target_clean))
+
+    @commands.command(name='dé', aliases=['de', 'dice', 'roll'])
+    async def cmd_de(self, ctx, max_val: str = "6"):
+        import random as _random
+        from app.services.bot_system_commands_service import msg as syscmd_msg
+        try:
+            top = max(2, min(int(max_val), 1000000))
+        except (ValueError, TypeError):
+            top = 6
+        result = _random.randint(1, top)
+        await ctx.send(await syscmd_msg("de", "result", user=ctx.author.name, result=result, max=top))
+
+    @commands.command(name='uptime')
+    async def cmd_uptime(self, ctx):
+        from app.services.bot_system_commands_service import msg as syscmd_msg
+        session = await self.get_web_session()
+        client_id = os.getenv("TWITCH_CLIENT_ID", getattr(self._http, 'client_id', ''))
+        headers = {"Client-ID": client_id, "Authorization": f"Bearer {self.master_token}"}
+        try:
+            async with session.get(
+                f"https://api.twitch.tv/helix/streams?user_login={self.channel_name}",
+                headers=headers
+            ) as resp:
+                data = await resp.json()
+                streams = data.get("data", [])
+            if not streams:
+                return await ctx.send(await syscmd_msg("uptime", "offline"))
+            from datetime import datetime, timezone
+            started = datetime.fromisoformat(streams[0]["started_at"].replace("Z", "+00:00"))
+            delta = datetime.now(timezone.utc) - started
+            h, rem = divmod(int(delta.total_seconds()), 3600)
+            m = rem // 60
+            duration = f"{h}h{m:02d}" if h else f"{m} min"
+            await ctx.send(await syscmd_msg("uptime", "live", duration=duration))
+        except Exception as e:
+            logger.error(f"❌ [UPTIME] {e}")
+
+    # Stockage en mémoire des compteurs (persisté en DB pour survivre aux redémarrages)
+    _counters: dict = {}
+
+    @commands.command(name='counter')
+    async def cmd_counter(self, ctx, *, args: str = ""):
+        from app.services.bot_system_commands_service import msg as syscmd_msg
+        author_badges = ctx.author.badges or {}
+        is_mod = ctx.author.is_mod or ctx.author.is_broadcaster or "moderator" in author_badges or "broadcaster" in author_badges
+
+        args = args.strip()
+        # Parsing : "Morts +1", "Morts reset", "Morts", "+1", "reset"
+        parts = args.split() if args else []
+
+        # Détermine le label et l'action
+        label = "Compteur"
+        action = "show"
+        delta = 1
+
+        if parts:
+            # Cherche si le dernier mot est une action/valeur
+            last = parts[-1].lower()
+            if last == "reset":
+                action = "reset"
+                label = " ".join(parts[:-1]) or "Compteur"
+            elif last.lstrip("+-").isdigit():
+                action = "add"
+                delta = int(last)
+                label = " ".join(parts[:-1]) or "Compteur"
+            else:
+                label = " ".join(parts) or "Compteur"
+                action = "show"
+
+        # Seuls les mods peuvent modifier
+        if action in ("add", "reset") and not is_mod:
+            return
+
+        key = label.lower()
+        if key not in self._counters:
+            self._counters[key] = 0
+
+        if action == "add":
+            self._counters[key] += delta
+            await ctx.send(await syscmd_msg("counter", "add", label=label, count=self._counters[key], delta=delta))
+        elif action == "reset":
+            self._counters[key] = 0
+            await ctx.send(await syscmd_msg("counter", "reset", label=label))
+        else:
+            await ctx.send(await syscmd_msg("counter", "show", label=label, count=self._counters[key]))
+
+    @commands.command(name='raidqui')
+    async def cmd_raidqui(self, ctx):
+        author_badges = ctx.author.badges or {}
+        is_authorized = (
+            ctx.author.is_broadcaster
+            or ctx.author.name.lower() == self.channel_name
+            or "broadcaster" in author_badges
+            or ctx.author.is_mod
+            or "moderator" in author_badges
+        )
+        if not is_authorized:
+            return
+
+        from app.core.database import get_db_connection
+        from app.routes.overlays import trigger_raidwheel
+
+        # 1. Récupérer les partners actifs
+        async with get_db_connection() as db:
+            await db.execute(
+                "SELECT twitch_login, display_name, avatar_url FROM partners WHERE is_active = TRUE"
+            )
+            partners = await db.fetchall()
+
+        from app.services.bot_system_commands_service import msg as syscmd_msg
+        if not partners:
+            return await ctx.send(await syscmd_msg("raidqui", "no_partners"))
+
+        # 2. Vérifier lesquels sont en live via l'API Twitch
+        session = await self.get_web_session()
+        client_id = os.getenv("TWITCH_CLIENT_ID", getattr(self._http, 'client_id', ''))
+        headers = {"Client-ID": client_id, "Authorization": f"Bearer {self.master_token}"}
+
+        logins = [p["twitch_login"] for p in partners]
+        # L'API accepte 100 logins max par requête
+        login_params = "&".join(f"user_login={l}" for l in logins[:100])
+        live_logins = set()
+        try:
+            async with session.get(
+                f"https://api.twitch.tv/helix/streams?{login_params}",
+                headers=headers
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    live_logins = {s["user_login"].lower() for s in data.get("data", [])}
+        except Exception as e:
+            logger.error(f"❌ [RAIDQUI] Erreur API Twitch streams : {e}")
+            return await ctx.send(await syscmd_msg("raidqui", "error"))
+
+        live_partners = [
+            {"login": p["twitch_login"], "name": p["display_name"], "avatar": p["avatar_url"] or ""}
+            for p in partners if p["twitch_login"].lower() in live_logins
+        ]
+
+        if not live_partners:
+            return await ctx.send(await syscmd_msg("raidqui", "no_live"))
+
+        import random as _random
+        winner = _random.choice(live_partners)
+
+        await ctx.send(await syscmd_msg("raidqui", "launch", count=len(live_partners)))
+        await trigger_raidwheel({"type": "spin", "streamers": live_partners, "winner_login": winner["login"]})
+
+        await asyncio.sleep(6)
+        await ctx.send(await syscmd_msg("raidqui", "result", name=winner["name"], login=winner["login"]))
 
     @routines.routine(seconds=60)
     async def watchtime_timer(self):
