@@ -57,3 +57,7 @@ data/
 cloudflared
 *.deb
 .github/workflows/
+
+# Marqueur runtime + sauvegardes éditeur (ajouté 29/06/2026)
+.bot_running_marker
+*.save
