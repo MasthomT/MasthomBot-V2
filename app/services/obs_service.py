@@ -55,7 +55,7 @@ class OBSService:
         """Méthode appelée automatiquement par OBS quand la scène change"""
         scene = data.scene_name
         logger.info(f"🎬 [OBS] Nouvelle scène active : {scene}")
-        
+
         if scene == "ON BREAK":
             logger.info("⏸️ Scène ON BREAK détectée ! Masthbot attend 1.5s qu'OBS charge la page...")
             threading.Timer(1.5, self.trigger_brb_overlay, args=["brb"]).start()
@@ -67,7 +67,7 @@ class OBSService:
             self.trigger_brb_overlay("main")
 
     def refresh_browser_source(self, source_name: str):
-        """Force le rechargement d'une Browser Source OBS."""
+        """Force le rechargement d'une Browser Source OBS (équivalent au bouton 'Actualiser')."""
         try:
             cl = obs.ReqClient(host=self.host, port=self.port, password=self.password)
             cl.press_input_properties_button(source_name, "refreshnocache")

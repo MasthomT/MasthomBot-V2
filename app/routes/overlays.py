@@ -149,6 +149,7 @@ async def overlay_tiktok(request: Request):
 async def overlay_raidwheel(request: Request):
     return templates.TemplateResponse(request=request, name="overlays/raidwheel_overlay.html")
 
+# SSE dédié raidwheel — clients s'abonnent ici pour recevoir spin/result
 _raidwheel_clients: list[asyncio.Queue] = []
 
 @router.get("/overlay/raidwheel/events")

@@ -453,7 +453,7 @@ class MasthbotTwitch(commands.Bot):
                 if internal_key != cmd_name:
                     # Réécriture vers le nom interne
                     new_content = f"!{internal_key}" + (f" {user_input}" if user_input else "")
-                    message.content = new_content
+                    message._content = new_content
                     cmd_name = internal_key
 
             # Commandes natives twitchio — ne pas intercepter par le routeur custom
