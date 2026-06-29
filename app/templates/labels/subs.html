@@ -39,7 +39,7 @@
         async function mettreAJour() {
             try {
                 // Interrogation de l'API pour les subs
-                const reponse = await fetch('/api/label/subs');
+                const reponse = await fetch('/api/label/subs?t=' + Date.now(), { cache: 'no-store' });
                 const data = await reponse.json();
                 let valeur = data.texte;
                 
@@ -51,8 +51,16 @@
                 }
             } catch (e) { console.error("Erreur :", e); }
         }
+        function afficherValeur(valeur) {
+            if (valeur === "0" || valeur === "undefined" || valeur === "--" || !valeur) {
+                document.getElementById('chiffre').innerText = "";
+            } else {
+                document.getElementById('chiffre').innerText = valeur;
+            }
+        }
         mettreAJour();
         setInterval(mettreAJour, 10000); // Actualisation toutes les 10s
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) mettreAJour(); });
     </script>
 </body>
 </html>

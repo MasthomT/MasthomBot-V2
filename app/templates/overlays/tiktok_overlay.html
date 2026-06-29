@@ -47,47 +47,133 @@
     </div>
 
     <script>
+        const _log = (m) => { try { console.log('[tiktok]', m); } catch (e) {} };
+
         const widget = document.getElementById('tiktok-widget');
         const video = document.getElementById('tiktok-video');
 
-        const eventSource = new EventSource('/overlay_events');
+        // Connexion SSE auto-réparante : si le bot redémarre (ou coupure réseau), la
+        // connexion est rétablie automatiquement. Sans ça, l'overlay reste "sourd" dans
+        // OBS après un redémarrage et ne reçoit plus jamais les events.
+        let eventSource = null;
+        let fermetureVolontaire = false;
 
-        eventSource.onmessage = (e) => {
-            const data = JSON.parse(e.data);
-            if (data.type === 'show_tiktok' && data.url) {
-                showTikTok(data.url);
-            }
-        };
+        function fermerSSE() {
+            // Libère le slot de connexion (OBS limite ~6 connexions/hôte, partagées entre
+            // toutes les sources) pour que la vidéo puisse charger.
+            fermetureVolontaire = true;
+            if (eventSource) { eventSource.close(); eventSource = null; }
+        }
+
+        function connecterSSE() {
+            fermetureVolontaire = false;
+            _log('SSE connexion…');
+            eventSource = new EventSource('/overlay_events');
+            eventSource.onopen = () => _log('SSE OUVERTE ✓');
+            eventSource.onmessage = (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.type === 'show_tiktok' && data.url) {
+                        _log('show_tiktok → je libère le slot SSE et je charge la vidéo');
+                        // On ferme la connexion SSE AVANT de charger : ça libère le créneau
+                        // réseau dont la vidéo a besoin (sinon elle reste bloquée).
+                        fermerSSE();
+                        showTikTok(data.url);
+                    }
+                } catch (err) {}
+            };
+            eventSource.onerror = () => {
+                if (!fermetureVolontaire && eventSource && eventSource.readyState === EventSource.CLOSED) {
+                    setTimeout(connecterSSE, 3000);
+                }
+            };
+        }
+        connecterSSE();
 
         // Si une nouvelle vidéo démarre pendant le délai de fondu de la précédente, le nettoyage
         // différé de l'ancienne ne doit pas écraser le src de la nouvelle — d'où ce garde-fou.
         let hideCleanupTimer = null;
 
         function hideTikTok() {
+            stopRetry();
             widget.classList.remove('visible');
             hideCleanupTimer = setTimeout(() => {
                 video.pause();
                 video.src = '';
                 hideCleanupTimer = null;
+                // La vidéo a libéré sa connexion : on rouvre le SSE pour le prochain event.
+                if (!eventSource) connecterSSE();
             }, 600);
         }
 
+        let loadWatch = null;
         function showTikTok(url) {
             if (hideCleanupTimer) {
                 clearTimeout(hideCleanupTimer);
                 hideCleanupTimer = null;
             }
-            video.src = url;
-            video.play().catch(err => console.error('TikTok play error:', err));
+            // La vidéo est servie sur un PORT SÉPARÉ (8001) pour qu'OBS lui donne son propre
+            // pool de connexions (sinon les overlays du port 8000 saturent le quota et la
+            // vidéo ne charge jamais). On reconstruit l'URL absolue avec le même hostname.
+            let videoUrl = url;
+            if (url.startsWith('/')) {
+                videoUrl = location.protocol + '//' + location.hostname + ':8001' + url;
+            }
+            video.src = videoUrl;
+            video.load(); // force le démarrage du chargement (CEF ne le fait pas toujours seul)
+            lireVideo();
+            // Sentinelle : si la vidéo n'est pas chargée en 6s, c'est qu'elle reste en attente
+            // (connexion non aboutie / pool OBS saturé).
+            if (loadWatch) clearTimeout(loadWatch);
+            loadWatch = setTimeout(() => {
+                if (video.readyState < 2) {
+                    _log('VIDÉO NE CHARGE PAS (readyState=' + video.readyState + ', net=' + video.networkState + ') — connexion bloquée ?');
+                }
+            }, 6000);
         }
 
-        // L'affichage ne dure QUE le temps réel de la vidéo : apparition une fois chargée,
-        // disparition automatique à la fin (ou immédiatement en cas d'erreur de lecture).
+        let retryTimer = null;
+        function stopRetry() { if (retryTimer) { clearInterval(retryTimer); retryTimer = null; } }
+
+        function lireVideo() {
+            // Démarrage MUET = seul autoplay garanti dans OBS (aucune politique ne le bloque).
+            // On réessaie en boucle tant que ça ne joue pas (bat la suspension d'OBS), puis
+            // une fois en lecture on tente d'activer le son.
+            video.muted = true;
+            const tenter = () => { const p = video.play(); if (p && p.catch) p.catch(() => {}); };
+            tenter();
+            stopRetry();
+            retryTimer = setInterval(() => {
+                if (video.ended) { stopRetry(); return; }
+                if (!video.paused) {
+                    stopRetry();
+                    // La vidéo joue (muette) : on tente le son. Si OBS re-met en pause,
+                    // on revient en muet pour au moins garder l'image à l'écran.
+                    video.muted = false;
+                    setTimeout(() => { if (video.paused) { video.muted = true; video.play().catch(() => {}); } }, 200);
+                    return;
+                }
+                tenter();
+            }, 400);
+        }
+
         video.addEventListener('loadeddata', () => {
+            _log('vidéo CHARGÉE → affichage');
             widget.classList.add('visible');
         });
-        video.addEventListener('ended', hideTikTok);
-        video.addEventListener('error', hideTikTok);
+        video.addEventListener('playing', () => { _log('▶ LECTURE EN COURS'); stopRetry(); });
+        // Si OBS réaffiche la source (changement de scène), on relance la lecture
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && widget.classList.contains('visible') && video.paused && video.src) {
+                lireVideo();
+            }
+        });
+        video.addEventListener('ended', () => { stopRetry(); hideTikTok(); });
+        video.addEventListener('error', () => {
+            const code = video.error ? video.error.code : '?';
+            _log('VIDÉO ERREUR code=' + code + ' (URL inaccessible/expirée ?)');
+            hideTikTok();
+        });
     </script>
 </body>
 </html>

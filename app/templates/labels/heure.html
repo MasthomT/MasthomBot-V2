@@ -62,23 +62,27 @@
     </div>
 
     <script>
-        // Fonction asynchrone pour lire l'heure sur le serveur Python
-        async function mettreAJourHeure() {
-            try {
-                const reponse = await fetch('/api/heure');
-                const data = await reponse.json();
-                
-                // On met à jour uniquement le texte, le logo reste intact
-                document.getElementById('horloge').innerText = data.texte;
-            } catch (erreur) {
-                console.error("Erreur de lecture de l'heure :", erreur);
-            }
+        // 🕐 L'horloge se calcule LOCALEMENT dans le navigateur, chaque seconde.
+        // On n'interroge plus le serveur : pas de dépendance réseau, pas de cache,
+        // et surtout plus jamais d'heure figée dans OBS.
+        const elHorloge = document.getElementById('horloge');
+
+        function mettreAJourHeure() {
+            const maintenant = new Date();
+            const h = String(maintenant.getHours()).padStart(2, '0');
+            const m = String(maintenant.getMinutes()).padStart(2, '0');
+            elHorloge.innerText = `${h}:${m}`;
         }
 
-        // Exécution immédiate au chargement de la source OBS
+        // Mise à jour immédiate puis chaque seconde
         mettreAJourHeure();
-        // Répétition toutes les 10 secondes (10000 millisecondes)
-        setInterval(mettreAJourHeure, 10000); 
+        setInterval(mettreAJourHeure, 1000);
+
+        // Filet de sécurité : si OBS a gelé la page (source non rendue) puis la réaffiche,
+        // on resynchronise dès qu'elle redevient visible.
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) mettreAJourHeure();
+        });
     </script>
 </body>
 </html>

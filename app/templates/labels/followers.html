@@ -25,13 +25,14 @@
     <script>
         async function mettreAJour() {
             try {
-                const reponse = await fetch('/api/followers');
+                const reponse = await fetch('/api/followers?t=' + Date.now(), { cache: 'no-store' });
                 const data = await reponse.json();
                 document.getElementById('chiffre').innerText = data.texte;
             } catch (e) { console.error("Erreur :", e); }
         }
         mettreAJour();
         setInterval(mettreAJour, 10000); // Actualisation web toutes les 10s
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) mettreAJour(); });
     </script>
 </body>
 </html>

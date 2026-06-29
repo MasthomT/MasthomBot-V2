@@ -1,10 +1,34 @@
 import os
+import json
+import asyncio
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
-from app.services.label_service import LABELS_DIR
+
+NO_CACHE = {"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"}
+from app.services.label_service import LABELS_DIR, register_label_client, unregister_label_client
 # On crée le routeur FastAPI (l'équivalent du Blueprint)
 router = APIRouter()
+
+# 📡 Flux SSE : le serveur pousse les changements de label en temps réel aux overlays.
+@router.get('/api/labels/stream')
+async def labels_stream(request: Request):
+    queue: asyncio.Queue = asyncio.Queue()
+    register_label_client(queue)
+
+    async def gen():
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                payload = await queue.get()
+                yield f"data: {json.dumps(payload)}\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            unregister_label_client(queue)
+
+    return StreamingResponse(gen(), media_type="text/event-stream", headers=NO_CACHE)
 
 # Configuration des chemins
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -71,7 +95,7 @@ async def api_label(type_label: str):
         # Si le type_label n'est pas dans notre dictionnaire (ce qui causait l'Erreur de type)
         texte = "0" 
         
-    return {"texte": texte}
+    return JSONResponse({"texte": texte}, headers=NO_CACHE)
 
 @router.get('/overlay/heure', response_class=HTMLResponse)
 async def overlay_heure(request: Request):
@@ -86,7 +110,7 @@ async def overlay_heure(request: Request):
 @router.get('/api/heure')
 async def api_heure():
     texte = lire_fichier_label("heure.txt")
-    return {"texte": texte}
+    return JSONResponse({"texte": texte}, headers=NO_CACHE)
 
 # ==========================================
 # 🌐 ROUTES : VIEWERS ET FOLLOWERS
@@ -105,7 +129,7 @@ async def overlay_followers(request: Request):
 @router.get('/api/followers')
 async def api_followers():
     texte = lire_fichier_label("followers.txt")
-    return {"texte": texte}
+    return JSONResponse({"texte": texte}, headers=NO_CACHE)
 
 @router.get('/api/label/viewers_count')
 async def get_viewers_label():
@@ -113,15 +137,15 @@ async def get_viewers_label():
     file_path = os.path.join(LABELS_DIR, "viewers.txt")
     
     if not os.path.exists(file_path):
-        return {"texte": "0"} # Sécurité : on renvoie 0 si le fichier n'est pas trouvé
+        return JSONResponse({"texte": "0"}, headers=NO_CACHE)
     
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             contenu = f.read().strip()
             # On s'assure de renvoyer une chaîne de caractères propre
-            return {"texte": str(contenu) if contenu else "0"}
+            return JSONResponse({"texte": str(contenu) if contenu else "0"}, headers=NO_CACHE)
     except Exception:
-        return {"texte": "0"}
+        return JSONResponse({"texte": "0"}, headers=NO_CACHE)
 
 @router.get('/overlay/viewers', response_class=HTMLResponse)
 async def overlay_viewers(request: Request):

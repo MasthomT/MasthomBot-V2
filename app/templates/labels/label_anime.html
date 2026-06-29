@@ -80,6 +80,8 @@
     </div>
 
     <script>
+        const _log = (m) => { try { console.log('[label]', m); } catch (e) {} };
+
         // On récupère le type de label (ex: 'follow') depuis Flask
         const typeLabel = "{{ type_label }}";
         let texteActuel = ""; // La mémoire du texte affiché
@@ -115,16 +117,23 @@
             if (isTyping) return; // Si on écrit déjà, on ne dérange pas l'animation
 
             try {
-                // On va interroger notre mini-route Python
-                const reponse = await fetch(`/api/label/${typeLabel}`);
+                _log('fetch ' + typeLabel + '…');
+                // Timeout client : une connexion qui stalle ne bloque plus indéfiniment,
+                // on réessaiera au prochain tour de polling.
+                const ctrl = new AbortController();
+                const tmo = setTimeout(() => ctrl.abort(), 4000);
+                const reponse = await fetch(`/api/label/${typeLabel}?t=${Date.now()}`, { cache: 'no-store', signal: ctrl.signal });
+                clearTimeout(tmo);
                 const data = await reponse.json();
-                
+                _log('reçu: "' + data.texte + '"');
+
                 // Si le fichier texte a changé (un nouvel événement !)
                 if (data.texte !== texteActuel) {
                     texteActuel = data.texte;
                     typeWriter(texteActuel); // On lance l'animation
                 }
             } catch (erreur) {
+                _log('FETCH KO: ' + (erreur.message || erreur));
                 console.error("Erreur de récupération :", erreur);
             }
         }
@@ -132,6 +141,11 @@
         // Lancer la vérification immédiatement, puis toutes les 3000ms (3s)
         verifierNouveauTexte();
         setInterval(verifierNouveauTexte, 3000);
+
+        // Filet de sécurité : si OBS a gelé la source puis la réaffiche, on revérifie aussitôt
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) verifierNouveauTexte();
+        });
     </script>
 </body>
 </html>

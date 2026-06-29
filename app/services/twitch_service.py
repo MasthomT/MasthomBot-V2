@@ -431,12 +431,9 @@ class MasthbotTwitch(commands.Bot):
                 except Exception as e:
                     logger.error(f"🔥 [AI ERROR] : {e}")
 
-        if message.tags and message.tags.get('bits'):
-            bits_amount = message.tags.get('bits')
-            # 1. Mise à jour de l'overlay animé OBS (label_anime.html)
-            write_label("dernier_bits.txt", display_name)
-            # 2. Ajout pour le générique de fin
-            credits_service.log_event("bits", display_name, f"{bits_amount} Bits")
+        # ⚠️ Les bits (cheers) sont désormais gérés EXCLUSIVEMENT par EventSub
+        # (channel.cheer → "Nom | X bits"). On ne les traite plus ici pour éviter le
+        # double comptage et l'écrasement du label par le seul nom sans le nombre.
 
         if message.content.startswith('!'):
             parts = message.content.split(' ', 1)
@@ -647,50 +644,14 @@ class MasthbotTwitch(commands.Bot):
             logger.error(f"Erreur lors du signal de prédiction Twitch : {e}")
 
     async def event_raw_usernotice(self, channel, tags: dict):
-        """Capte les événements officiels Twitch dans le chat (Subs, Raids, etc.)"""
-        msg_id = tags.get('msg-id')
-        display_name = tags.get('display-name', 'Inconnu')
+        """Capte les événements officiels Twitch dans le chat (Subs, Raids, etc.).
 
-        # 🌟 ABONNEMENTS ET RESUBS
-        if msg_id in ['sub', 'resub']:
-            # 1. Label animé OBS
-            write_label("dernier_sub.txt", display_name)
-            # 2. Générique de fin
-            months = tags.get('msg-param-cumulative-months', '1')
-            tier = tags.get('msg-param-sub-plan', '1000')
-            tier_name = "Tier 1" if tier == "1000" else "Tier 2" if tier == "2000" else "Tier 3" if tier == "3000" else "Prime"
-            credits_service.log_event("subscribers", display_name, str(months))
-
-        # 💣 AVALANCHE DE CADEAUX (Mystery Gifts : 5, 10, 20 subs d'un coup !)
-        elif msg_id == 'submysterygift':
-            amount = tags.get('msg-param-mass-gift-count', '1')
-            
-            # 1. Labels animés OBS
-            write_label("dernier_subgift.txt", display_name)
-            
-            # 2. Ajout massif au générique
-            credits_service.log_event("gifters", display_name, f"{amount} Gifts")
-
-        # 🎁 CADEAUX D'ABONNEMENTS INDIVIDUELS (Subgift ciblé ou distribution)
-        elif msg_id == 'subgift':
-            recipient = tags.get('msg-param-recipient-display-name', 'Quelqu\'un')
-            
-            # L'heureux élu s'affiche sur l'overlay
-            write_label("dernier_sub.txt", recipient) 
-            
-            # ⚠️ SÉCURITÉ : On ne compte ce "1 Gift" que si c'est un cadeau unique fait "à la main". 
-            # Si le tag 'msg-param-communitygift-id' est là, c'est que c'est Twitch qui distribue la bombe d'au-dessus, donc on ignore pour ne pas compter double !
-            if not tags.get('msg-param-communitygift-id'):
-                write_label("dernier_subgift.txt", display_name)
-                credits_service.log_event("gifters", display_name, "1 Gift")
-
-        # 🚀 RAIDS
-        elif msg_id == 'raid':
-            viewers = tags.get('msg-param-viewerCount', '0')
-            # 1. Label animé OBS
-            write_label("dernier_raid.txt", display_name)
-            # 2. Générique de fin
-            credits_service.log_event("raiders", display_name, f"{viewers} viewers")
+        ⚠️ Subs / resubs / sub-gifts / raids sont désormais gérés EXCLUSIVEMENT par
+        EventSub (voir eventsub_service.py). On ne fait plus rien ici pour ces events
+        afin d'éviter le double comptage (double XP, double entrée générique) et
+        l'incohérence du label 'dernier sub' (deux écriveurs aux formats différents).
+        """
+        return
 
     @commands.command(name='so')
     async def shoutout_command(self, ctx, *, content: str = None):

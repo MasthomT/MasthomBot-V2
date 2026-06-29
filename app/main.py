@@ -188,6 +188,23 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
+# =====================================================================
+# 🚫 ANTI-CACHE POUR LES OVERLAYS OBS
+# Le navigateur intégré d'OBS (CEF) met en cache les pages d'overlay de façon
+# agressive et affiche de vieilles versions figées. On force le no-cache sur
+# toutes les routes d'overlay et leurs API pour que OBS recharge toujours frais.
+# =====================================================================
+@app.middleware("http")
+async def no_cache_overlays(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/overlay") or path.startswith("/api/label") \
+            or path.startswith("/api/credits") or path in ("/api/heure", "/api/followers"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
 @app.exception_handler(Exception)
 async def validation_exception_handler(request, exc):
     logger.error(f"❌ [UNHANDLED] {request.method} {request.url.path} : {exc}", exc_info=exc)
@@ -296,15 +313,32 @@ if __name__ == "__main__":
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
 
-    config = uvicorn.Config(
-        app, 
-        host="0.0.0.0", 
-        port=8000, 
-        loop="asyncio",
-        access_log=False,
-        log_level="warning"
-    )
-    
-    server = uvicorn.Server(config)
+    # ──────────────────────────────────────────────────────────────────────────
+    # 📦 SERVEUR MÉDIA DÉDIÉ (port 8001)
+    # OBS limite les connexions à ~6 par origine (host:port), partagées entre TOUS
+    # les overlays. Avec assez d'overlays (SSE/WebSocket permanents), il ne reste plus
+    # de connexion libre pour charger une vidéo → la source TikTok reste bloquée.
+    # On sert donc les vidéos sur un PORT SÉPARÉ : OBS lui alloue son propre pool de
+    # connexions, indépendant des overlays. Mini-app SANS lifespan pour ne PAS
+    # redémarrer le bot une 2e fois.
+    # ──────────────────────────────────────────────────────────────────────────
+    from fastapi import FastAPI
+    from fastapi.middleware.cors import CORSMiddleware as _CORS
+    from app.routes.overlays import tiktok_proxy
+
+    media_app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    media_app.add_middleware(_CORS, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+    media_app.add_api_route("/api/v1/tiktok_proxy/{token}", tiktok_proxy, methods=["GET"])
+
+    def _make_server(port):
+        return uvicorn.Server(uvicorn.Config(
+            app if port == 8000 else media_app,
+            host="0.0.0.0", port=port, loop="asyncio",
+            access_log=False, log_level="warning",
+        ))
+
+    server_main = _make_server(8000)
+    server_media = _make_server(8001)
+
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(server.serve())
+    loop.run_until_complete(asyncio.gather(server_main.serve(), server_media.serve()))

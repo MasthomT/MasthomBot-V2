@@ -200,19 +200,20 @@ async def eventsub_routine():
                             
                                 cumulative_months = event.get("cumulative_months", 1)
                                 await update_viewer_stat(user_id, user_name, "sub_months", cumulative_months, increment=False)
-                            
-                                from app.services.label_service import write_label
-                                write_label("dernier_sub.txt", f"{user_name} | {cumulative_months} mois")
-                            
+
                                 if not event.get("is_gift"):
+                                    # Vrai sub (nouveau ou resub) → label "dernier sub" + XP + générique
+                                    from app.services.label_service import write_label
+                                    write_label("dernier_sub.txt", f"{user_name} | {cumulative_months} mois")
                                     xp = int(conf.get(f"exp_sub_t{tier}") or 500)
                                     await viewer_repo.add_experience(user_id, user_name, xp, "SUB", f"Abonnement Tier {tier}")
                                     await log_stream_event("sub", user_name, {"tier": tier, "xp": xp, "is_gift": False})
-                                    # CORRECTION ICI :
                                     credits_service.log_event("subscribers", user_name, str(cumulative_months))
                                 else:
+                                    # Sub OFFERT : le destinataire n'apparaît PAS dans "dernier sub"
+                                    # (le donateur est géré par channel.subscription.gift). On l'ajoute
+                                    # quand même au générique comme abonné présent sur le live.
                                     await log_stream_event("sub", user_name, {"tier": tier, "is_gift": True})
-                                    # CORRECTION ICI :
                                     credits_service.log_event("subscribers", user_name, str(cumulative_months))
 
                             elif sub_type == "channel.subscription.gift":
@@ -225,7 +226,7 @@ async def eventsub_routine():
                                     total_xp = val_per_sub * count
 
                                     from app.services.label_service import write_label
-                                    write_label("dernier_subgift.txt", f"{user_name} | {count} subs")
+                                    write_label("dernier_subgift.txt", f"{user_name} | {count} subgifts")
 
                                     await update_viewer_stat(user_id, user_name, "gifts_count", count, increment=True)
 

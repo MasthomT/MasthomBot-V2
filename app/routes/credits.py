@@ -1,4 +1,5 @@
 import logging
+import aiohttp
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
@@ -43,13 +44,15 @@ async def get_credits_data():
     session = await twitch_bot.get_web_session()
     all_usernames = []
     try:
-        async with session.get(url, headers=headers) as resp:
+        # Timeout court : si Twitch ne répond pas, on n'attend pas indéfiniment
+        # (sinon l'overlay OBS reste bloqué sur "fetch…" et le générique ne s'affiche jamais)
+        async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=4)) as resp:
             if resp.status == 200:
                 data = await resp.json()
                 chatters = data.get("data", [])
                 all_usernames = [c['user_name'].lower() for c in chatters]
     except Exception as e:
-        logger.error(f"❌ [CREDITS API] Erreur appel Twitch : {e}")
+        logger.error(f"❌ [CREDITS API] Erreur/timeout appel Twitch : {e}")
 
     # 3. Récupération des stats de la SESSION (Table journalière)
     session_data = {}
