@@ -306,10 +306,14 @@ class DiscordModBot(discord.Client):
                 return
             row = dict(row)
 
+            def _fill(text: str, use_mention: bool = True) -> str:
+                val = member.mention if use_mention else member.display_name
+                return text.replace("{member}", val).replace("{membre}", val)
+
             if row.get("channel_enabled") and row.get("channel_id"):
                 try:
                     channel = self.get_channel(int(row["channel_id"])) or await self.fetch_channel(int(row["channel_id"]))
-                    msg = row["channel_message"].replace("{member}", member.mention)
+                    msg = _fill(row["channel_message"])
 
                     embed = None
                     if row.get("embed_enabled"):
@@ -318,8 +322,8 @@ class DiscordModBot(discord.Client):
                         except (ValueError, AttributeError):
                             color = discord.Color(0x00F5C3)
                         embed = discord.Embed(
-                            title=row["embed_title"],
-                            description=row["embed_description"].replace("{member}", member.mention),
+                            title=_fill(row["embed_title"], use_mention=False),
+                            description=_fill(row["embed_description"]),
                             color=color,
                         )
                         embed.set_thumbnail(url=member.display_avatar.url)
@@ -332,7 +336,7 @@ class DiscordModBot(discord.Client):
 
             if row.get("dm_enabled"):
                 try:
-                    msg = row["dm_message"].replace("{member}", member.display_name)
+                    msg = row["dm_message"].replace("{member}", member.display_name).replace("{membre}", member.display_name)
                     await member.send(msg)
                 except discord.Forbidden:
                     logger.warning(f"⚠️ [WELCOME] {member} a ses DM fermés, message privé ignoré.")
