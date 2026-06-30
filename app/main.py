@@ -325,10 +325,15 @@ if __name__ == "__main__":
     from fastapi import FastAPI
     from fastapi.middleware.cors import CORSMiddleware as _CORS
     from app.routes.overlays import tiktok_proxy
+    from app.routes.credits import get_credits_data
 
     media_app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     media_app.add_middleware(_CORS, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
     media_app.add_api_route("/api/v1/tiktok_proxy/{token}", tiktok_proxy, methods=["GET"])
+    # Même raison que la vidéo TikTok : le fetch des données du générique se retrouvait
+    # bloqué derrière les connexions SSE/polling permanentes des autres overlays (labels,
+    # time, etc.) qui saturent le quota de ~6 connexions/origine alloué par OBS au port 8000.
+    media_app.add_api_route("/api/credits/data", get_credits_data, methods=["GET"])
 
     def _make_server(port):
         return uvicorn.Server(uvicorn.Config(

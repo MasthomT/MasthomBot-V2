@@ -99,6 +99,36 @@ class NotificationService:
             logger.error(f"❌ [FEL-X] Crash critique lors de la connexion à Discord : {e}")
             return None
 
+    async def send_discord_image(self, channel_id, image_bytes, filename, content=""):
+        """Envoie une image en pièce jointe sur un salon Discord (ex: photos Polaroïd)."""
+        bot_token = self._get_fresh_bot_token()
+
+        if not bot_token or not channel_id:
+            logger.error("❌ [FEL-X] Impossible d'envoyer l'image : token ou channel ID manquant.")
+            return None
+
+        url = f"{self.base_url}/channels/{channel_id}/messages"
+        headers = {"Authorization": f"Bot {bot_token}"}
+
+        form = aiohttp.FormData()
+        form.add_field("payload_json", json.dumps({"content": content}), content_type="application/json")
+        form.add_field("files[0]", image_bytes, filename=filename, content_type="image/png")
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, data=form) as resp:
+                    if resp.status in (200, 201):
+                        data = await resp.json()
+                        logger.info(f"✅ [FEL-X] Image envoyée sur le salon {channel_id} (ID: {data.get('id')}).")
+                        return data.get("id")
+                    else:
+                        error_text = await resp.text()
+                        logger.error(f"❌ [FEL-X] Discord a refusé l'image ({resp.status}) : {error_text}")
+                        return None
+        except Exception as e:
+            logger.error(f"❌ [FEL-X] Crash critique lors de l'envoi de l'image : {e}")
+            return None
+
     async def delete_discord_message(self, channel_id, message_id):
         """Supprime un message précis sur Discord (idéal pour nettoyer quand le live se termine)."""
         bot_token = self._get_fresh_bot_token()

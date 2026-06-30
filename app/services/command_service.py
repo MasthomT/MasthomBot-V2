@@ -108,6 +108,12 @@ async def _resolve_variables(text: str, username: str, viewer_data: dict, stream
         rnd = await _get_random_viewer(username)
         text = text.replace("{random_viewer}", rnd)
 
+    if "{viewer_commands}" in text:
+        all_cmds = await list_commands(active_only=True)
+        viewer_roles = ("viewer", "everyone", "all", "", None)
+        names = [f"!{c['name']}" for c in all_cmds if c.get("min_role") in viewer_roles]
+        text = text.replace("{viewer_commands}", ", ".join(names) if names else "")
+
     # {number:min:max}
     import re
     for match in re.findall(r"\{number:(\d+):(\d+)\}", text):

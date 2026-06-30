@@ -12,6 +12,10 @@ logger = logging.getLogger("masthbot.overlays")
 router = APIRouter(tags=["overlays"])
 templates = Jinja2Templates(directory="app/templates")
 
+# Empêche OBS (cache CEF agressif sur les Browser Sources) de servir une version
+# périmée de la page après un déploiement — voir le piège déjà rencontré sur les labels.
+NO_CACHE = {"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"}
+
 # ==========================================
 # 📡 1. MOTEURS DE DIFFUSION (SSE & WEBSOCKET)
 # ==========================================
@@ -100,7 +104,7 @@ async def get_time_overlay(request: Request):
 
 @router.get("/overlay/credits", response_class=HTMLResponse)
 async def get_credits_overlay(request: Request):
-    return templates.TemplateResponse(request=request, name="overlays/credits.html")
+    return templates.TemplateResponse(request=request, name="overlays/credits.html", headers=NO_CACHE)
 
 @router.get("/overlay/poll", response_class=HTMLResponse)
 async def get_poll_overlay(request: Request):

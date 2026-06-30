@@ -1,8 +1,9 @@
 import logging
+import time
 import aiohttp
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from app.core.database import get_db_connection
 from app.services.credits_service import credits_service
@@ -13,6 +14,9 @@ from app.core.security import require_admin
 logger = logging.getLogger("masthbot.credits")
 router = APIRouter(tags=["credits"])
 templates = Jinja2Templates(directory="app/templates")
+
+# Empêche OBS (cache CEF agressif sur les Browser Sources) de servir une réponse périmée
+NO_CACHE = {"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"}
 
 @router.get("/admin/credits_manager", response_class=HTMLResponse, dependencies=[Depends(require_admin)])
 async def admin_credits_page(request: Request):
@@ -28,14 +32,16 @@ async def admin_credits_page(request: Request):
 @router.get("/api/credits/data")
 async def get_credits_data():
     """Récupère tout le monde présent (Chat Twitch + Base de données)."""
-    
+    _t0 = time.monotonic()
+    logger.info("📥 [CREDITS API] Requête reçue.")
+
     # 1. Sécurité : On s'assure que les valeurs ne sont pas None
     master_token = str(twitch_bot.master_token or "")
     client_id = str(getattr(twitch_bot._http, 'client_id', '') or "")
     
     if not master_token or not client_id:
         logger.error("❌ [CREDITS API] Token ou ClientID manquant !")
-        return {"stats": credits_service.get_stats(), "config": credits_service.config}
+        return JSONResponse({"stats": credits_service.get_stats(), "config": credits_service.config}, headers=NO_CACHE)
 
     # 2. Récupération des chatters via Twitch
     url = f"https://api.twitch.tv/helix/chat/chatters?broadcaster_id={twitch_bot.broadcaster_id}&moderator_id={twitch_bot.broadcaster_id}&first=1000"
@@ -128,10 +134,13 @@ async def get_credits_data():
     # On écrase l'ancienne liste par notre super-liste complète
     final_stats['viewers'] = viewers_list
 
-    return {
+    counts = {k: len(v) for k, v in final_stats.items()}
+    logger.info(f"📤 [CREDITS API] Réponse envoyée en {time.monotonic() - _t0:.2f}s — {counts}")
+
+    return JSONResponse({
         "stats": final_stats,
         "config": credits_service.config
-    }
+    }, headers=NO_CACHE)
 
 @router.post("/api/credits/config", dependencies=[Depends(require_admin)])
 async def save_credits_config(request: Request):

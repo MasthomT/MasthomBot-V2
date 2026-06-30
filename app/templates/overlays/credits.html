@@ -194,28 +194,52 @@
             }));
         }
 
+        function statsSontVides(stats) {
+            if (!stats) return true;
+            return Object.keys(stats).every(k => !stats[k] || stats[k].length === 0);
+        }
+
+        async function fetchCreditsData() {
+            // Timeout CLIENT : si le serveur ne répond pas en 6s, on abandonne pour cette tentative
+            const ctrl = new AbortController();
+            const minuteur = setTimeout(() => ctrl.abort(), 6000);
+            try {
+                // PORT SÉPARÉ (8001), même raison que la vidéo TikTok : OBS limite à ~6 les
+                // connexions partagées entre TOUS les overlays sur le port 8000 (SSE/polling
+                // permanents des labels, etc.), ce qui bloquait ce fetch derrière la file.
+                const apiUrl = location.protocol + '//' + location.hostname + ':8001/api/credits/data?t=' + Date.now();
+                const res = await fetch(apiUrl, { cache: 'no-store', signal: ctrl.signal });
+                const data = await res.json();
+                return { stats: data.stats || {}, config: data.config || {} };
+            } finally {
+                clearTimeout(minuteur);
+            }
+        }
+
         async function loadCredits() {
             if (chargementEnCours) return;
             chargementEnCours = true;
             const container = document.getElementById('credits-container');
             try {
                 if (animationEnCours) { animationEnCours.cancel(); animationEnCours = null; }
-                log('fetch…');
-                // Timeout CLIENT : si le serveur ne répond pas en 6s, on abandonne et on affiche quand même
-                const ctrl = new AbortController();
-                const minuteur = setTimeout(() => ctrl.abort(), 6000);
                 let stats = {}, config = {};
-                try {
-                    const res = await fetch('/api/credits/data?t=' + Date.now(), { cache: 'no-store', signal: ctrl.signal });
-                    const data = await res.json();
-                    stats = data.stats || {};
-                    config = data.config || {};
-                    log('data OK');
-                } catch (errFetch) {
-                    // Même si la donnée échoue/timeout, on n'affiche JAMAIS un écran noir : au moins le titre
-                    log('data KO: ' + (errFetch.name || errFetch));
-                } finally {
-                    clearTimeout(minuteur);
+                // Jusqu'à 3 tentatives : un fetch juste après un rechargement forcé OBS peut
+                // échouer/timeout une fois sans que ce soit un vrai problème de données.
+                for (let tentative = 1; tentative <= 3; tentative++) {
+                    log(`fetch… (tentative ${tentative})`);
+                    try {
+                        const result = await fetchCreditsData();
+                        stats = result.stats;
+                        config = result.config;
+                        if (!statsSontVides(stats)) {
+                            log('data OK');
+                            break;
+                        }
+                        log('data vide, nouvelle tentative dans 1.5s');
+                    } catch (errFetch) {
+                        log('data KO: ' + (errFetch.name || errFetch));
+                    }
+                    if (tentative < 3) await new Promise(r => setTimeout(r, 1500));
                 }
                 container.innerHTML = construireHtml(stats, config);
                 lancerAnimation(config);

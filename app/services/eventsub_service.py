@@ -270,9 +270,13 @@ async def eventsub_routine():
                                 user_name = event.get("user_name", "Inconnu")
                                 user_id = event.get("user_id")
                                 reward_title = event.get("reward", {}).get("title", "Inconnue")
-                            
+
                                 await update_viewer_stat(user_id, user_name, "rewards_claimed", 1, increment=True)
                                 await log_stream_event("reward", user_name, {"reward_name": reward_title})
+
+                                if reward_title == "Polaroïd":
+                                    from app.services.polaroid_service import send_polaroid
+                                    asyncio.create_task(send_polaroid(user_name, event.get("user_input", "")))
 
                             elif sub_type == "channel.follow":
                                 user_name = event.get("user_name", "Inconnu")

@@ -60,20 +60,13 @@ class OBSService:
             logger.info("⏸️ Scène ON BREAK détectée ! Masthbot attend 1.5s qu'OBS charge la page...")
             threading.Timer(1.5, self.trigger_brb_overlay, args=["brb"]).start()
         elif scene == "END":
-            logger.info("🎬 [OBS] Scène END détectée — rechargement du générique.")
-            threading.Timer(1.0, self.refresh_browser_source, args=["WID_Générique"]).start()
+            # Le rechargement de "WID_Générique" est désormais géré nativement par OBS
+            # (option "Actualiser la source quand la scène devient active" sur la Browser
+            # Source) — plus fiable que notre déclenchement via WebSocket, qui pouvait se
+            # gêner avec la scène imbriquée instable (END → ON BREAK → END en moins d'1s).
             self.trigger_brb_overlay("main")
         else:
             self.trigger_brb_overlay("main")
-
-    def refresh_browser_source(self, source_name: str):
-        """Force le rechargement d'une Browser Source OBS (équivalent au bouton 'Actualiser')."""
-        try:
-            cl = obs.ReqClient(host=self.host, port=self.port, password=self.password)
-            cl.press_input_properties_button(source_name, "refreshnocache")
-            logger.info(f"🔄 [OBS] Browser Source '{source_name}' rechargée.")
-        except Exception as e:
-            logger.error(f"❌ [OBS] Impossible de recharger '{source_name}' : {e}")
 
     def trigger_brb_overlay(self, scene_state):
         """Masthbot force la régie Node.js via les routes qui existent VRAIMENT."""
@@ -122,6 +115,26 @@ class OBSService:
 
         except Exception as e:
             logger.debug(f"👀 OBS Vision non disponible : {e}")
+            return None
+
+    def take_source_screenshot(self, source_name: str, width: int = 720, height: int = 900):
+        """Prend un screenshot d'une source précise (ex: la webcam) et le retourne en base64,
+        indépendamment de la scène actuellement affichée."""
+        if not self.host or not self.password:
+            return None
+
+        try:
+            cl = obs.ReqClient(host=self.host, port=self.port, password=self.password)
+            resp = cl.get_source_screenshot(
+                name=source_name,
+                img_format="jpeg",
+                width=width,
+                height=height,
+                quality=85
+            )
+            return resp.image_data.split(",")[1] if "," in resp.image_data else resp.image_data
+        except Exception as e:
+            logger.error(f"❌ [OBS] Impossible de capturer la source '{source_name}' : {e}")
             return None
 
     def get_deck_status(self):
