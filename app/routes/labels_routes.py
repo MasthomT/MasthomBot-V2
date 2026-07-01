@@ -2,7 +2,7 @@ import os
 import json
 import asyncio
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, Response
 from fastapi.templating import Jinja2Templates
 
 NO_CACHE = {"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"}
@@ -29,6 +29,40 @@ async def labels_stream(request: Request):
             unregister_label_client(queue)
 
     return StreamingResponse(gen(), media_type="text/event-stream", headers=NO_CACHE)
+
+# 📡 SharedWorker : UNE seule connexion SSE partagée entre TOUTES les sources OBS
+# de la même origine (au lieu d'une connexion permanente par label), pour respecter
+# le quota de ~6 connexions/origine qu'OBS alloue à toutes les browser sources.
+_LABELS_WORKER_JS = """
+let source = null;
+const ports = [];
+
+function connecter() {
+    if (source) return;
+    source = new EventSource('/api/labels/stream');
+    source.onmessage = (e) => {
+        for (const p of ports) {
+            try { p.postMessage(e.data); } catch (err) {}
+        }
+    };
+    source.onerror = () => {
+        try { source.close(); } catch (err) {}
+        source = null;
+        setTimeout(connecter, 3000);
+    };
+}
+
+self.onconnect = (e) => {
+    const port = e.ports[0];
+    ports.push(port);
+    port.start();
+    connecter();
+};
+"""
+
+@router.get('/api/labels/worker.js')
+async def labels_worker_js():
+    return Response(content=_LABELS_WORKER_JS, media_type="application/javascript", headers=NO_CACHE)
 
 # Configuration des chemins
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -63,9 +97,10 @@ async def overlay_label(request: Request, type_label: str):
         request=request,
         name="labels/label_anime.html",
         context={
-            "type_label": type_label, 
+            "type_label": type_label,
             "icone": icone_choisie
-        }
+        },
+        headers=NO_CACHE
     )
 
 # 📡 ROUTE 2 : Mini API (Pour que le JavaScript interroge le serveur en silence)
@@ -101,9 +136,10 @@ async def api_label(type_label: str):
 async def overlay_heure(request: Request):
     # On indique à FastAPI de chercher dans le sous-dossier "labels"
     return templates.TemplateResponse(
-        request=request, 
+        request=request,
         name="labels/heure.html", # 👈 Modification de l'adresse ici
-        context={}
+        context={},
+        headers=NO_CACHE
     )
 
 # 📡 API : Lecture silencieuse du fichier heure.txt
@@ -120,9 +156,10 @@ async def api_heure():
 @router.get('/overlay/followers', response_class=HTMLResponse)
 async def overlay_followers(request: Request):
     return templates.TemplateResponse(
-        request=request, 
-        name="labels/followers.html", 
-        context={}
+        request=request,
+        name="labels/followers.html",
+        context={},
+        headers=NO_CACHE
     )
 
 # Lecture API silencieuse pour les Followers
@@ -150,16 +187,18 @@ async def get_viewers_label():
 @router.get('/overlay/viewers', response_class=HTMLResponse)
 async def overlay_viewers(request: Request):
     return templates.TemplateResponse(
-        request=request, 
-        name="labels/viewers.html", 
-        context={}
+        request=request,
+        name="labels/viewers.html",
+        context={},
+        headers=NO_CACHE
     )
 
 @router.get('/overlay/subs', response_class=HTMLResponse)
 async def overlay_subs(request: Request):
     # Indique au serveur de renvoyer ton fichier subs.html
     return templates.TemplateResponse(
-        request=request, 
-        name="labels/subs.html", 
-        context={}
+        request=request,
+        name="labels/subs.html",
+        context={},
+        headers=NO_CACHE
     )

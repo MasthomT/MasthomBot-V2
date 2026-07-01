@@ -22,6 +22,24 @@ logger = logging.getLogger("masthbot.eventsub")
 
 processed_message_ids = collections.deque(maxlen=200)
 
+# Twitch envoie "channel.subscribe" ET "channel.subscription.message" pour le MÊME abonnement
+# dès que le viewer partage un message public (deux notifications EventSub distinctes, donc
+# processed_message_ids ne les voit pas comme doublons). Sans ce garde-fou : XP en double et
+# mois cumulés faussés (additionnés) dans le générique de fin.
+_recent_sub_events: dict[str, float] = {}
+_RECENT_SUB_WINDOW = 10.0
+
+
+def _is_duplicate_sub(user_id: str) -> bool:
+    now = time.time()
+    for uid, ts in list(_recent_sub_events.items()):
+        if now - ts > _RECENT_SUB_WINDOW:
+            del _recent_sub_events[uid]
+    if user_id in _recent_sub_events:
+        return True
+    _recent_sub_events[user_id] = now
+    return False
+
 async def log_stream_event(event_type, username, details):
     try:
         clean_username = str(username or "Inconnu").strip()
@@ -196,12 +214,21 @@ async def eventsub_routine():
                             if sub_type in ["channel.subscribe", "channel.subscription.message"]:
                                 user_name = event.get("user_name", "Inconnu")
                                 user_id = event.get("user_id")
-                                tier = event.get("tier", "1000")[0] 
-                            
+                                tier = event.get("tier", "1000")[0]
+
                                 cumulative_months = event.get("cumulative_months", 1)
                                 await update_viewer_stat(user_id, user_name, "sub_months", cumulative_months, increment=False)
 
-                                if not event.get("is_gift"):
+                                # Twitch envoie "channel.subscribe" PUIS "channel.subscription.message"
+                                # pour le MÊME abonnement dès que le viewer partage un message public
+                                # (deux notifications distinctes). Sans ce garde-fou : XP en double et
+                                # mois cumulés faussés (additionnés au lieu d'être corrigés).
+                                if _is_duplicate_sub(user_id):
+                                    if not event.get("is_gift"):
+                                        from app.services.label_service import write_label
+                                        write_label("dernier_sub.txt", f"{user_name} | {cumulative_months} mois")
+                                        credits_service.correct_subscriber_months(user_name, cumulative_months)
+                                elif not event.get("is_gift"):
                                     # Vrai sub (nouveau ou resub) → label "dernier sub" + XP + générique
                                     from app.services.label_service import write_label
                                     write_label("dernier_sub.txt", f"{user_name} | {cumulative_months} mois")

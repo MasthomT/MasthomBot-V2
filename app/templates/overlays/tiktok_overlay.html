@@ -136,23 +136,26 @@
         function stopRetry() { if (retryTimer) { clearInterval(retryTimer); retryTimer = null; } }
 
         function lireVideo() {
-            // Démarrage MUET = seul autoplay garanti dans OBS (aucune politique ne le bloque).
-            // On réessaie en boucle tant que ça ne joue pas (bat la suspension d'OBS), puis
-            // une fois en lecture on tente d'activer le son.
-            video.muted = true;
-            const tenter = () => { const p = video.play(); if (p && p.catch) p.catch(() => {}); };
+            // Démarrage directement AVEC le son : OBS autorise l'autoplay (muet ou non) sur
+            // ses browser sources. Démarrer muet puis démuter EN COURS de lecture déclenche
+            // la politique anti-autoplay de Chromium, qui remet en pause — c'était justement
+            // pourquoi le son ne passait jamais. On ne fait donc plus ce changement à chaud.
+            video.muted = false;
+            const tenter = () => {
+                const p = video.play();
+                if (p && p.catch) p.catch(() => {
+                    // Environnement plus strict qui refuse l'autoplay avec son : on retombe
+                    // en muet pour au moins garder l'image à l'écran.
+                    video.muted = true;
+                    const p2 = video.play();
+                    if (p2 && p2.catch) p2.catch(() => {});
+                });
+            };
             tenter();
             stopRetry();
             retryTimer = setInterval(() => {
                 if (video.ended) { stopRetry(); return; }
-                if (!video.paused) {
-                    stopRetry();
-                    // La vidéo joue (muette) : on tente le son. Si OBS re-met en pause,
-                    // on revient en muet pour au moins garder l'image à l'écran.
-                    video.muted = false;
-                    setTimeout(() => { if (video.paused) { video.muted = true; video.play().catch(() => {}); } }, 200);
-                    return;
-                }
+                if (!video.paused) { stopRetry(); return; }
                 tenter();
             }, 400);
         }

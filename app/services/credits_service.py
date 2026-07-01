@@ -87,6 +87,16 @@ class CreditsService:
         self.session_messages[name_lower] = self.session_messages.get(name_lower, 0) + 1
         self._save_session()
 
+    def correct_subscriber_months(self, name, months):
+        """Remplace (au lieu d'additionner) le nombre de mois affiché pour un abonné.
+        Sert quand Twitch envoie channel.subscribe (mois par défaut à 1) PUIS
+        channel.subscription.message pour le même abonnement, avec le vrai total."""
+        self._load_session()
+        name_lower = name.lower()
+        if name_lower in self.categories.get("subscribers", {}):
+            self.categories["subscribers"][name_lower]["label"] = str(months)
+            self._save_session()
+
     def get_stats(self):
         self._load_session() # On lit la toute dernière version fraîche
         data = {}

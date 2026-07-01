@@ -326,6 +326,7 @@ if __name__ == "__main__":
     from fastapi.middleware.cors import CORSMiddleware as _CORS
     from app.routes.overlays import tiktok_proxy
     from app.routes.credits import get_credits_data
+    from app.routes import labels_routes
 
     media_app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     media_app.add_middleware(_CORS, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -334,6 +335,8 @@ if __name__ == "__main__":
     # bloqué derrière les connexions SSE/polling permanentes des autres overlays (labels,
     # time, etc.) qui saturent le quota de ~6 connexions/origine alloué par OBS au port 8000.
     media_app.add_api_route("/api/credits/data", get_credits_data, methods=["GET"])
+    # Labels également disponibles sur ce port dédié, pour libérer des connexions sur 8000.
+    media_app.include_router(labels_routes.router)
 
     def _make_server(port):
         return uvicorn.Server(uvicorn.Config(

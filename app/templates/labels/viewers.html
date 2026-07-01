@@ -59,8 +59,22 @@
             }
         }
         mettreAJour();
-        setInterval(mettreAJour, 5000); // Actualisation plus rapide (5s) pour les viewers
+        setInterval(mettreAJour, 5000); // Actualisation plus rapide (5s) en filet de sécurité
         document.addEventListener('visibilitychange', () => { if (!document.hidden) mettreAJour(); });
+
+        // 📡 Mise à jour instantanée : UNE seule connexion SSE partagée entre TOUTES les
+        // sources labels via SharedWorker (pas une connexion par label), pour ne pas
+        // saturer le quota de connexions/origine qu'OBS alloue à toutes ses browser sources.
+        if (typeof SharedWorker !== 'undefined') {
+            try {
+                const worker = new SharedWorker('/api/labels/worker.js');
+                worker.port.onmessage = (e) => {
+                    const payload = JSON.parse(e.data);
+                    if (payload.type === 'viewers') afficherValeur(payload.texte);
+                };
+                worker.port.start();
+            } catch (e) { console.error("SharedWorker indisponible :", e); }
+        }
     </script>
 </body>
 </html>

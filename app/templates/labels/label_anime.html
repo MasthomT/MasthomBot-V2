@@ -138,7 +138,7 @@
             }
         }
 
-        // Lancer la vérification immédiatement, puis toutes les 3000ms (3s)
+        // Lancer la vérification immédiatement, puis toutes les 3000ms (3s) en filet de sécurité
         verifierNouveauTexte();
         setInterval(verifierNouveauTexte, 3000);
 
@@ -146,6 +146,24 @@
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) verifierNouveauTexte();
         });
+
+        // 📡 Mise à jour instantanée : UNE seule connexion SSE partagée entre TOUTES les
+        // sources labels via SharedWorker (pas une connexion par label), pour ne pas
+        // saturer le quota de connexions/origine qu'OBS alloue à toutes ses browser sources.
+        if (typeof SharedWorker !== 'undefined') {
+            try {
+                const worker = new SharedWorker('/api/labels/worker.js');
+                worker.port.onmessage = (e) => {
+                    if (isTyping) return;
+                    const payload = JSON.parse(e.data);
+                    if (payload.type === typeLabel && payload.texte !== texteActuel) {
+                        texteActuel = payload.texte;
+                        typeWriter(texteActuel);
+                    }
+                };
+                worker.port.start();
+            } catch (e) { _log('SharedWorker indisponible : ' + e); }
+        }
     </script>
 </body>
 </html>
