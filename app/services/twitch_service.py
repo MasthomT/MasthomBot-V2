@@ -1806,7 +1806,7 @@ class MasthbotTwitch(commands.Bot):
                     from app.services.command_service import list_commands as _list_cmds
                     all_cmds = await _list_cmds(active_only=True)
                     viewer_roles = ("viewer", "everyone", "all", "", None)
-                    names = [f"!{c['name']}" for c in all_cmds if c.get("min_role") in viewer_roles][:7]
+                    names = [f"!{c['name']}" for c in all_cmds if c.get("min_role") in viewer_roles and not c.get("hide_from_list")][:7]
                     msg = msg.replace("{viewer_commands}", ", ".join(names) if names else "")
 
                 if any(t in msg for t in ["{top5_xp}", "{top5_msg}", "{levelups}", "{last_sub}", "{last_raid}"]):

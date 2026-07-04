@@ -69,6 +69,61 @@ app.use(express.json());
 app.use('/static/commands', express.static('/home/thomas/masthom/BOT_V2/static/commands'));
 app.use('/static/uploads', express.static('/home/thomas/masthom/BOT_V2/app/static/uploads'));
 
+// 📡 SharedWorker : UNE seule connexion SSE partagée entre TOUTES les sources OBS de
+// cette origine (au lieu d'une connexion permanente par overlay — BRB, alertes,
+// shoutout, horloge, mur d'emotes), pour respecter le quota de ~6 connexions/origine
+// qu'OBS alloue à toutes ses browser sources. Reprend la logique ping/watchdog qui
+// vivait avant dans chaque page, mais centralisée ici pour tout le monde.
+const WORKER_JS = `
+let source = null;
+let watchdogTimer = null;
+let dernierInit = null; // dernier statut de scène connu (type 'init'/'change_scene'),
+                         // rejoué aux pages qui se connectent après coup (ex: BRB)
+const ports = [];
+
+function reconnecter() {
+    clearTimeout(watchdogTimer);
+    if (source) { try { source.close(); } catch (err) {} source = null; }
+    setTimeout(connecter, 3000);
+}
+
+function connecter() {
+    if (source) return;
+    source = new EventSource('/events');
+
+    source.addEventListener('ping', () => {
+        clearTimeout(watchdogTimer);
+        watchdogTimer = setTimeout(reconnecter, 35000);
+    });
+
+    source.onmessage = (e) => {
+        try {
+            const d = JSON.parse(e.data);
+            if (d.type === 'init' || d.type === 'change_scene') dernierInit = e.data;
+        } catch (err) {}
+        for (const p of ports) {
+            try { p.postMessage(e.data); } catch (err) {}
+        }
+    };
+
+    source.onerror = reconnecter;
+}
+
+self.onconnect = (e) => {
+    const port = e.ports[0];
+    ports.push(port);
+    port.start();
+    if (dernierInit) port.postMessage(dernierInit);
+    connecter();
+};
+`;
+
+app.get('/worker.js', (req, res) => {
+    res.set('Content-Type', 'application/javascript');
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.send(WORKER_JS);
+});
+
 // =================================================================
 // 3. CONNEXION OBS
 // =================================================================
@@ -583,54 +638,43 @@ app.get('/alerts', (req, res) => {
     <script>
         const mediaContainer = document.getElementById('media-container');
         let imgTimeout;
-        let source;
-        let watchdogTimer;
 
-        function connect() {
-            if (source) source.close();
-            source = new EventSource('/events');
+        function handleEvent(d) {
+            if (d.type === 'sound') {
+                const audio = new Audio('/static/commands/sounds/' + d.details.filename);
+                audio.volume = 1.0;
+                audio.play().catch(err => console.error("Erreur Audio:", err));
+            }
 
-            source.addEventListener('ping', (e) => {
-                clearTimeout(watchdogTimer);
-                watchdogTimer = setTimeout(() => { connect(); }, 35000);
-            });
+            if (d.type === 'image') {
+                const filename = d.details.filename;
+                const isVideo = filename.match(/\\.(mp4|webm)$/i);
 
-            source.onmessage = (e) => {
-                const d = JSON.parse(e.data);
-                
-                if (d.type === 'sound') {
-                    const audio = new Audio('/static/commands/sounds/' + d.details.filename);
-                    audio.volume = 1.0;
-                    audio.play().catch(err => console.error("Erreur Audio:", err));
+                if (isVideo) {
+                    mediaContainer.innerHTML = \`<video src="/static/commands/images/\${filename}" autoplay muted style="width:100%; height:100%; object-fit:contain;"></video>\`;
+                } else {
+                    mediaContainer.innerHTML = \`<img src="/static/commands/images/\${filename}" style="width:100%; height:100%; object-fit:contain;" />\`;
                 }
-                
-                if (d.type === 'image') {
-                    const filename = d.details.filename;
-                    const isVideo = filename.match(/\\.(mp4|webm)$/i);
-                    
-                    if (isVideo) {
-                        mediaContainer.innerHTML = \`<video src="/static/commands/images/\${filename}" autoplay muted style="width:100%; height:100%; object-fit:contain;"></video>\`;
-                    } else {
-                        mediaContainer.innerHTML = \`<img src="/static/commands/images/\${filename}" style="width:100%; height:100%; object-fit:contain;" />\`;
-                    }
-                    
-                    mediaContainer.style.opacity = 1;
-                    
-                    if (imgTimeout) clearTimeout(imgTimeout);
-                    imgTimeout = setTimeout(() => {
-                        mediaContainer.style.opacity = 0;
-                        setTimeout(() => { mediaContainer.innerHTML = ''; }, 500);
-                    }, 8000);
-                }
-            };
 
-            source.onerror = () => {
-                clearTimeout(watchdogTimer);
-                setTimeout(connect, 5000);
-            };
+                mediaContainer.style.opacity = 1;
+
+                if (imgTimeout) clearTimeout(imgTimeout);
+                imgTimeout = setTimeout(() => {
+                    mediaContainer.style.opacity = 0;
+                    setTimeout(() => { mediaContainer.innerHTML = ''; }, 500);
+                }, 8000);
+            }
         }
-        
-        connect();
+
+        // 📡 UNE seule connexion SSE partagée entre TOUTES les sources OBS de cette
+        // origine (via SharedWorker), au lieu d'une connexion par overlay.
+        if (typeof SharedWorker !== 'undefined') {
+            try {
+                const worker = new SharedWorker('/worker.js');
+                worker.port.onmessage = (e) => handleEvent(JSON.parse(e.data));
+                worker.port.start();
+            } catch (e) { console.error('SharedWorker indisponible :', e); }
+        }
     </script>
 </body>
 </html>
@@ -684,9 +728,6 @@ app.get('/shoutout', (req, res) => {
         const v = document.getElementById('v');
         const wrapper = document.getElementById('wrapper');
         const p = document.getElementById('progress');
-        
-        let source;
-        let watchdogTimer;
 
         const finishClip = () => {
             if (!v.isEnding) {
@@ -720,54 +761,45 @@ app.get('/shoutout', (req, res) => {
             wrapper.classList.add('visible');
         });
 
-        // ⚡ AJOUT DE LA CONNEXION ROBUSTE (AUTO-RECONNECT)
-        function connect() {
-            if (source) source.close();
-            source = new EventSource('/events');
-
-            source.addEventListener('ping', (e) => {
-                clearTimeout(watchdogTimer);
-                watchdogTimer = setTimeout(() => { connect(); }, 35000);
-            });
-
-            source.onmessage = (e) => {
-                const d = JSON.parse(e.data);
-                if(d.type === 'play_sound') {
-                    // On cherche si la balise existe déjà, sinon on la crée DANS la page HTML
-                    let audioEl = document.getElementById('so-audio');
-                    if (!audioEl) {
-                        audioEl = document.createElement('audio');
-                        audioEl.id = 'so-audio';
-                        document.body.appendChild(audioEl);
-                    }
-                    audioEl.src = d.file;
-                    audioEl.volume = 0.5;
-                    audioEl.play().catch(err => console.error("Erreur Audio:", err));
+        function handleEvent(d) {
+            if(d.type === 'play_sound') {
+                // On cherche si la balise existe déjà, sinon on la crée DANS la page HTML
+                let audioEl = document.getElementById('so-audio');
+                if (!audioEl) {
+                    audioEl = document.createElement('audio');
+                    audioEl.id = 'so-audio';
+                    document.body.appendChild(audioEl);
                 }
+                audioEl.src = d.file;
+                audioEl.volume = 0.5;
+                audioEl.play().catch(err => console.error("Erreur Audio:", err));
+            }
 
-                if(d.type === 'play_clip') {
-                    document.getElementById('avatar').src = d.meta.avatar;
-                    document.getElementById('name').textContent = d.meta.name;
-                    document.getElementById('game').textContent = d.meta.game;
-                    document.getElementById('date').textContent = d.meta.date;
-                    document.getElementById('title').textContent = d.meta.title;
-                    
-                    p.style.width = '0%';
-                    v.isEnding = false;
-                    v.src = d.url;
+            if(d.type === 'play_clip') {
+                document.getElementById('avatar').src = d.meta.avatar;
+                document.getElementById('name').textContent = d.meta.name;
+                document.getElementById('game').textContent = d.meta.game;
+                document.getElementById('date').textContent = d.meta.date;
+                document.getElementById('title').textContent = d.meta.title;
 
-                    // L'embed n'apparaît qu'une fois le clip réellement chargé (voir listener 'error' plus haut pour le cas où ça échoue).
-                    v.play().catch(err => console.error(err));
-                }
-            };
+                p.style.width = '0%';
+                v.isEnding = false;
+                v.src = d.url;
 
-            source.onerror = () => {
-                clearTimeout(watchdogTimer);
-                setTimeout(connect, 5000);
-            };
+                // L'embed n'apparaît qu'une fois le clip réellement chargé (voir listener 'error' plus haut pour le cas où ça échoue).
+                v.play().catch(err => console.error(err));
+            }
         }
-        
-        connect();
+
+        // 📡 UNE seule connexion SSE partagée entre TOUTES les sources OBS de cette
+        // origine (via SharedWorker), au lieu d'une connexion par overlay.
+        if (typeof SharedWorker !== 'undefined') {
+            try {
+                const worker = new SharedWorker('/worker.js');
+                worker.port.onmessage = (e) => handleEvent(JSON.parse(e.data));
+                worker.port.start();
+            } catch (e) { console.error('SharedWorker indisponible :', e); }
+        }
     </script>
 </body>
 </html>
@@ -811,9 +843,6 @@ app.get('/brb', (req, res) => {
         const a = document.getElementById('author');
         const p = document.getElementById('progress');
 
-        let source;
-        let watchdogTimer;
-
         // Le client ne décide JAMAIS de passer au clip suivant.
         // Il se contente de jouer ce que le serveur lui envoie.
         // Le serveur reçoit un signal quand la vidéo est finie pour enchaîner proprement.
@@ -839,46 +868,36 @@ app.get('/brb', (req, res) => {
             notifyEnd();
         });
 
-        // ⚡ AJOUT DE LA CONNEXION ROBUSTE (AUTO-RECONNECT)
-        function connect() {
-            if (source) source.close();
-            source = new EventSource('/events');
-
-            source.addEventListener('ping', (e) => {
-                clearTimeout(watchdogTimer);
-                watchdogTimer = setTimeout(() => { connect(); }, 35000);
-            });
-
-            source.onmessage = (e) => {
-                const d = JSON.parse(e.data);
-                
-                if(d.type === 'change_scene' || d.type === 'init'){
-                    if(d.scene === 'brb') {
-                        c.style.opacity = 1;
-                        if (v.src) v.play().catch(e=>console.log(e));
-                    } else { 
-                        c.style.opacity = 0; 
-                        v.pause(); 
-                    }
+        function handleEvent(d) {
+            if(d.type === 'change_scene' || d.type === 'init'){
+                if(d.scene === 'brb') {
+                    c.style.opacity = 1;
+                    if (v.src) v.play().catch(e=>console.log(e));
+                } else {
+                    c.style.opacity = 0;
+                    v.pause();
                 }
-                
-                if(d.type === 'brb_clip'){
-                    p.style.width = '0%';
-                    v.isEnding = false;
-                    v.src = d.url;
-                    t.textContent = d.title;
-                    a.textContent = d.creator || "Inconnu";
-                    v.play().catch(err => console.error(err));
-                }
-            };
+            }
 
-            source.onerror = () => {
-                clearTimeout(watchdogTimer);
-                setTimeout(connect, 5000);
-            };
+            if(d.type === 'brb_clip'){
+                p.style.width = '0%';
+                v.isEnding = false;
+                v.src = d.url;
+                t.textContent = d.title;
+                a.textContent = d.creator || "Inconnu";
+                v.play().catch(err => console.error(err));
+            }
         }
-        
-        connect();
+
+        // 📡 UNE seule connexion SSE partagée entre TOUTES les sources OBS de cette
+        // origine (via SharedWorker), au lieu d'une connexion par overlay.
+        if (typeof SharedWorker !== 'undefined') {
+            try {
+                const worker = new SharedWorker('/worker.js');
+                worker.port.onmessage = (e) => handleEvent(JSON.parse(e.data));
+                worker.port.start();
+            } catch (e) { console.error('SharedWorker indisponible :', e); }
+        }
     </script>
 </body>
 </html>

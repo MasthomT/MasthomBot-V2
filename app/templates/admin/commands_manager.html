@@ -81,6 +81,11 @@
                 <i class="fas fa-robot text-violet-400"></i> Commandes système
                 <span id="syscmd-badge" class="bg-violet-500/20 text-violet-400 text-[10px] font-black px-2 py-0.5 rounded-full"></span>
             </button>
+            <button id="main-tab-vip" onclick="switchMainTab('vip')"
+                class="main-tab-btn px-5 py-2.5 rounded-xl text-sm font-black border border-slate-700 text-slate-400 transition-all flex items-center gap-2">
+                <i class="fas fa-crown text-amber-400"></i> Demandes VIP
+                <span id="vipcmd-badge" class="bg-amber-500/20 text-amber-400 text-[10px] font-black px-2 py-0.5 rounded-full"></span>
+            </button>
         </div>
 
         <!-- ── Onglet commandes personnalisées ── -->
@@ -92,7 +97,7 @@
                         <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
                         <input id="search-input" oninput="filterCommands()" type="text" placeholder="Chercher…" class="input-dark rounded-xl pl-8 pr-4 py-2 text-sm w-44">
                     </div>
-                    {% for t,label,icon in [('all','Toutes','filter'),('multi','Multi-Actions','layer-group'),('text','Texte','comment'),('image','Image/Vidéo','image'),('sound','Son','music'),('obs','OBS','broadcast-tower')] %}
+                    {% for t,label,icon in [('all','Toutes','filter'),('multi','Multi-Actions','layer-group'),('text','Texte','comment'),('image','Image/Vidéo','image'),('sound','Son','music'),('obs','OBS','broadcast-tower'),('vip','Sons VIP','crown')] %}
                     <button onclick="filterType('{{ t }}')" id="filter-{{ t }}"
                         class="filter-btn {% if t=='all' %}active{% endif %} px-3.5 py-1.5 rounded-xl text-xs font-black border border-slate-700 text-slate-400 transition-all">
                         <i class="fas fa-{{ icon }} mr-1"></i>{{ label }}
@@ -145,6 +150,15 @@
         <!-- ── Onglet commandes système ── -->
         <div id="panel-system" class="hidden">
             <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" id="syscmd-grid"></div>
+        </div>
+
+        <!-- ── Onglet demandes VIP (sons perso à valider) ── -->
+        <div id="panel-vip" class="hidden">
+            <div id="vipcmd-empty" class="hidden config-card p-16 rounded-3xl text-center opacity-40">
+                <i class="fas fa-crown text-5xl mb-4 text-amber-400 block"></i>
+                <p class="text-slate-400 font-bold">Aucune demande en attente</p>
+            </div>
+            <div class="space-y-4" id="vipcmd-list"></div>
         </div>
 
             <!-- ── Modal édition commande système ── -->
@@ -654,7 +668,7 @@ function removeObsAction(index) {
 function renderCommands() {
     const search = (document.getElementById('search-input').value||'').toLowerCase();
     const filtered = allCommands.filter(c =>
-        (currentFilter === 'all' || c.type === currentFilter) &&
+        (currentFilter === 'all' || (currentFilter === 'vip' ? !!c.vip_owner_twitch_id : c.type === currentFilter)) &&
         (!search || c.name.includes(search) || (c.response||'').toLowerCase().includes(search))
     );
     document.getElementById('cmd-count').textContent = `${filtered.length} commande(s)`;
@@ -690,6 +704,7 @@ function renderCommands() {
                             <span class="text-white font-black text-lg">!${c.name}</span>
                             ${c.aliases ? `<span class="text-[10px] text-slate-400 font-mono ml-2 italic" title="Alias de la commande">(ou !${c.aliases.split(',').join(', !')})</span>` : ''}
                             ${c.category && c.category !== 'Général' ? `<span class="text-[9px] px-2 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30">${c.category}</span>` : ''}
+                            ${c.vip_owner_twitch_id ? `<span class="text-[9px] px-2 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30"><i class="fas fa-crown mr-1"></i>${c.vip_owner_username || c.vip_owner_twitch_id}</span>` : ''}
                             ${!c.is_active?'<span class="text-[9px] px-2 py-0.5 rounded-lg bg-slate-700 text-slate-400 font-black uppercase border border-slate-600">OFF</span>':''}
                         </div>
                         <p class="text-slate-400 text-xs truncate mt-0.5">${previewText.slice(0,80)}${previewText.length>80?'…':''}</p>
@@ -1082,9 +1097,74 @@ function showToastErr(msg) {
 function switchMainTab(tab) {
     document.getElementById('panel-custom').classList.toggle('hidden', tab !== 'custom');
     document.getElementById('panel-system').classList.toggle('hidden', tab !== 'system');
+    document.getElementById('panel-vip').classList.toggle('hidden', tab !== 'vip');
     document.getElementById('main-tab-custom').classList.toggle('active', tab === 'custom');
     document.getElementById('main-tab-system').classList.toggle('active', tab === 'system');
+    document.getElementById('main-tab-vip').classList.toggle('active', tab === 'vip');
     if (tab === 'system' && _syscmds.length === 0) loadSyscmds();
+    if (tab === 'vip') loadVipRequests();
+}
+
+// ── Demandes VIP (sons perso) ─────────────────────────────────────────────────
+async function loadVipRequests() {
+    const list = document.getElementById('vipcmd-list');
+    const empty = document.getElementById('vipcmd-empty');
+    const badge = document.getElementById('vipcmd-badge');
+    try {
+        const res = await fetch('/api/admin/vip-sounds');
+        const requests = await res.json();
+        badge.textContent = requests.length || '';
+        badge.classList.toggle('hidden', requests.length === 0);
+
+        if (requests.length === 0) {
+            list.innerHTML = '';
+            empty.classList.remove('hidden');
+            return;
+        }
+        empty.classList.add('hidden');
+        list.innerHTML = requests.map(r => `
+            <div class="config-card p-6 rounded-2xl border border-slate-700" id="vip-req-${r.id}">
+                <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+                    <div>
+                        <span class="font-black text-white text-lg">${r.username}</span>
+                        <span class="text-slate-500 text-sm ml-2">soumis le ${new Date(r.submitted_at).toLocaleString('fr-FR')}</span>
+                    </div>
+                    <audio controls src="/api/admin/vip-sounds/${r.id}/audio" style="height:32px;"></audio>
+                </div>
+                <textarea id="vip-msg-${r.id}" placeholder="Message chat à afficher avec le son (optionnel)…"
+                    class="input-dark rounded-xl w-full p-3 text-sm mb-3" rows="2"></textarea>
+                <div class="flex gap-2">
+                    <button onclick="approveVipRequest(${r.id})" class="px-4 py-2 rounded-xl bg-emerald-500/20 text-emerald-400 font-black text-sm border border-emerald-500/30">
+                        <i class="fas fa-check mr-1"></i> Valider
+                    </button>
+                    <button onclick="rejectVipRequest(${r.id})" class="px-4 py-2 rounded-xl bg-red-500/20 text-red-400 font-black text-sm border border-red-500/30">
+                        <i class="fas fa-times mr-1"></i> Rejeter
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    } catch (e) {
+        list.innerHTML = '<p class="text-red-400">Erreur de chargement des demandes.</p>';
+    }
+}
+
+async function approveVipRequest(id) {
+    const message = document.getElementById(`vip-msg-${id}`).value.trim();
+    const res = await fetch(`/api/admin/vip-sounds/${id}/approve`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message })
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Erreur'); return; }
+    alert(`✅ Commande créée : ${data.trigger}`);
+    loadVipRequests();
+}
+
+async function rejectVipRequest(id) {
+    if (!confirm('Rejeter cette demande ?')) return;
+    const res = await fetch(`/api/admin/vip-sounds/${id}/reject`, { method: 'POST' });
+    if (!res.ok) { alert('Erreur'); return; }
+    loadVipRequests();
 }
 
 // ── Commandes Système ─────────────────────────────────────────────────────────

@@ -30,16 +30,7 @@
         const activeEffects = {};
         let audioCtx;
 
-        function connectWebSocket() {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/ws/overlay`;
-            
-            ws = new WebSocket(wsUrl);
-            ws.onopen = () => console.log("✅ Connecté à l'Overlay du Deck !");
-            
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                
+        function handleAlert(data) {
                 if (data.type === "play_sound") {
                     const details = data.details;
                     // On s'assure d'avoir l'URL absolue complète (ex: http://127.0.0.1:8000/static/uploads/...)
@@ -156,19 +147,43 @@
                             element.currentTime = 0;
                         }
                         // On retire l'élément de l'écran dans tous les cas
-                        element.remove(); 
+                        element.remove();
                         delete activeEffects[effectId];
                     }
                 }
-            };
+        }
 
+        // 📡 UNE seule connexion partagée entre TOUTES les sources OBS de cette origine
+        // (via SharedWorker), au lieu d'une connexion WebSocket dédiée par overlay. Repli
+        // sur le WebSocket direct si SharedWorker n'est pas disponible.
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/overlay`;
+
+            ws = new WebSocket(wsUrl);
+            ws.onopen = () => console.log("✅ Connecté à l'Overlay du Deck (repli WebSocket) !");
+            ws.onmessage = (event) => handleAlert(JSON.parse(event.data));
             ws.onclose = () => {
                 console.log("❌ Déconnecté. Reconnexion dans 2s...");
                 setTimeout(connectWebSocket, 2000);
             };
         }
 
-        connectWebSocket();
+        if (typeof SharedWorker !== 'undefined') {
+            try {
+                const worker = new SharedWorker('/api/labels/worker.js');
+                worker.port.onmessage = (e) => {
+                    const enveloppe = JSON.parse(e.data);
+                    if (enveloppe.channel === 'alerts') handleAlert(enveloppe.data);
+                };
+                worker.port.start();
+            } catch (e) {
+                console.error('SharedWorker indisponible, repli WebSocket :', e);
+                connectWebSocket();
+            }
+        } else {
+            connectWebSocket();
+        }
     </script>
 </body>
 </html>

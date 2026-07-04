@@ -5,7 +5,7 @@ import shutil
 import base64
 from datetime import datetime
 from fastapi import APIRouter, Depends, Request, Form, UploadFile, File
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from app.core.database import get_db_connection
@@ -71,7 +71,12 @@ async def admin_commands_page(request: Request):
 async def api_get_commands():
     try:
         async with get_db_connection() as conn:
-            c = await conn.execute("SELECT * FROM custom_commands ORDER BY name ASC")
+            c = await conn.execute("""
+                SELECT cc.*, v.username AS vip_owner_username
+                FROM custom_commands cc
+                LEFT JOIN viewers v ON v.twitch_id = cc.vip_owner_twitch_id
+                ORDER BY cc.name ASC
+            """)
             rows = await c.fetchall()
         return [dict(r) for r in rows]
     except Exception as e:
@@ -486,3 +491,43 @@ async def api_reset_system_command_messages(command_key: str):
 
     invalidate_cache()
     return {"ok": True}
+
+
+# ─── Sons perso VIP (soumis par les viewers, à valider ici) ───────────────────
+
+@router.get("/api/admin/vip-sounds")
+async def api_list_vip_sounds():
+    from app.services.vip_sound_service import list_pending_requests
+    return await list_pending_requests()
+
+
+@router.get("/api/admin/vip-sounds/{request_id}/audio")
+async def api_vip_sound_audio(request_id: int):
+    async with get_db_connection() as conn:
+        c = await conn.execute("SELECT filename FROM vip_sound_requests WHERE id = $1", (request_id,))
+        row = await c.fetchone()
+    if not row:
+        return JSONResponse(status_code=404, content={"error": "Introuvable"})
+    path = os.path.join(SOUNDS_DIR, row["filename"])
+    if not os.path.exists(path):
+        return JSONResponse(status_code=404, content={"error": "Fichier manquant"})
+    return FileResponse(path)
+
+
+@router.post("/api/admin/vip-sounds/{request_id}/approve")
+async def api_approve_vip_sound(request_id: int, request: Request):
+    from app.services.vip_sound_service import approve_request
+    data = await request.json()
+    result = await approve_request(request_id, data.get("message", ""))
+    if "error" in result:
+        return JSONResponse(status_code=400, content=result)
+    return result
+
+
+@router.post("/api/admin/vip-sounds/{request_id}/reject")
+async def api_reject_vip_sound(request_id: int):
+    from app.services.vip_sound_service import reject_request
+    result = await reject_request(request_id)
+    if "error" in result:
+        return JSONResponse(status_code=400, content=result)
+    return result

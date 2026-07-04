@@ -51,21 +51,34 @@
     <div id="timer-container"></div>
     <script>
         const ip = window.location.hostname;
-        const source = new EventSource(`http://${ip}:3005/events`);
         const container = document.getElementById('timer-container');
 
-        source.onmessage = (e) => {
-            const data = JSON.parse(e.data);
+        function handleEvent(data) {
             if (data.type === 'time_event') {
                 const d = data.details;
-                if (d.action === 'reset' || d.action === 'stop') { 
-                    container.innerHTML = ''; 
+                if (d.action === 'reset' || d.action === 'stop') {
+                    container.innerHTML = '';
                 }
-                else if (d.action === 'start') { 
-                    createTimer(d); 
+                else if (d.action === 'start') {
+                    createTimer(d);
                 }
             }
-        };
+        }
+
+        // 📡 UNE seule connexion SSE partagée entre TOUTES les sources OBS du serveur
+        // régie (port 3005), via SharedWorker cross-origin, au lieu d'une connexion par overlay.
+        if (typeof SharedWorker !== 'undefined') {
+            try {
+                const worker = new SharedWorker(`http://${ip}:3005/worker.js`);
+                worker.port.onmessage = (e) => handleEvent(JSON.parse(e.data));
+                worker.port.start();
+            } catch (e) {
+                console.error('SharedWorker indisponible, repli EventSource direct :', e);
+                new EventSource(`http://${ip}:3005/events`).onmessage = (e) => handleEvent(JSON.parse(e.data));
+            }
+        } else {
+            new EventSource(`http://${ip}:3005/events`).onmessage = (e) => handleEvent(JSON.parse(e.data));
+        }
 
         function createTimer(config) {
             const widget = document.createElement('div');

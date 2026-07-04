@@ -21,14 +21,9 @@
 <script>
     // Détecte automatiquement l'IP du Raspberry Pi (192.168.1.109)
     const ip = window.location.hostname;
-    // Se connecte au serveur Node.js qui gère les événements en direct
-    const source = new EventSource(`http://${ip}:3005/events`);
-    
     const wall = document.getElementById('wall');
 
-    source.onmessage = (e) => {
-        const data = JSON.parse(e.data);
-        
+    function handleEvent(data) {
         if (data.type === 'emote_rain') {
             data.details.urls.forEach((url, index) => {
                 setTimeout(() => {
@@ -38,13 +33,28 @@
                     img.style.left = (Math.random() * 90) + "vw";
                     img.style.width = (Math.random() * 60 + 100) + "px";
                     img.style.animationDuration = (Math.random() * 2 + 2) + "s";
-                    
+
                     document.body.appendChild(img);
                     setTimeout(() => img.remove(), 4000);
-                }, index * 50); 
+                }, index * 50);
             });
         }
-    };
+    }
+
+    // 📡 UNE seule connexion SSE partagée entre TOUTES les sources OBS du serveur
+    // régie (port 3005), via SharedWorker cross-origin, au lieu d'une connexion par overlay.
+    if (typeof SharedWorker !== 'undefined') {
+        try {
+            const worker = new SharedWorker(`http://${ip}:3005/worker.js`);
+            worker.port.onmessage = (e) => handleEvent(JSON.parse(e.data));
+            worker.port.start();
+        } catch (e) {
+            console.error('SharedWorker indisponible, repli EventSource direct :', e);
+            new EventSource(`http://${ip}:3005/events`).onmessage = (e) => handleEvent(JSON.parse(e.data));
+        }
+    } else {
+        new EventSource(`http://${ip}:3005/events`).onmessage = (e) => handleEvent(JSON.parse(e.data));
+    }
 </script>
 </body>
 </html>

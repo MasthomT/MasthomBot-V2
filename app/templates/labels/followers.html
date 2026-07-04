@@ -41,7 +41,9 @@
             try {
                 const worker = new SharedWorker('/api/labels/worker.js');
                 worker.port.onmessage = (e) => {
-                    const payload = JSON.parse(e.data);
+                    const enveloppe = JSON.parse(e.data);
+                    if (enveloppe.channel !== 'labels') return;
+                    const payload = enveloppe.data;
                     if (payload.type === 'followers') document.getElementById('chiffre').innerText = payload.texte;
                 };
                 worker.port.start();

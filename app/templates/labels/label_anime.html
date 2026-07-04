@@ -155,7 +155,9 @@
                 const worker = new SharedWorker('/api/labels/worker.js');
                 worker.port.onmessage = (e) => {
                     if (isTyping) return;
-                    const payload = JSON.parse(e.data);
+                    const enveloppe = JSON.parse(e.data);
+                    if (enveloppe.channel !== 'labels') return;
+                    const payload = enveloppe.data;
                     if (payload.type === typeLabel && payload.texte !== texteActuel) {
                         texteActuel = payload.texte;
                         typeWriter(texteActuel);

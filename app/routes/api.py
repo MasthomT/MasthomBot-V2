@@ -242,6 +242,19 @@ async def get_faq_api():
 # ==========================================================
 # 6. STREAMERBOT (Récompenses First/Deuz/Troiz)
 # ==========================================================
+# 🛡️ Garde-fou anti-rafale : Streamer.bot semble évaluer ses conditions de seuil en
+# ">=" plutôt qu'en "==", donc une fois qu'un viewer a dépassé 1/2/3 messages, il
+# rerenvoie first+deuz+troiz à CHAQUE nouveau message, pour le reste du stream (constaté
+# le 03/07/2026 : quasi tous les chatteurs actifs spammés en boucle). Chaque viewer ne
+# peut donc recevoir qu'UNE FOIS chaque type (first, deuz, troiz) PAR STREAM — mais les
+# trois types restent bien distincts entre eux, pour ne pas bloquer sa progression
+# naturelle first → deuz → troiz au fil de ses messages. Clé de stream = live_id Twitch
+# (settings.personal_last_live_id, déjà suivi par live_monitor.py), remis à zéro à
+# chaque nouveau live.
+_podium_awarded_by_stream: dict[str, set[tuple[str, str]]] = {}
+# Évite de spammer les logs si Streamer.bot insiste (un seul WARNING par doublon, pas un par tentative).
+_podium_rejection_logged_by_stream: dict[str, set[tuple[str, str]]] = {}
+
 @router.post("/rewards/podium")
 async def claim_podium_reward(request: Request):
     try:
@@ -254,7 +267,34 @@ async def claim_podium_reward(request: Request):
         if not t_id or reward_type not in ["first", "deuz", "troiz"]:
             return JSONResponse(status_code=400, content={"error": "Données invalides ou type de récompense non géré."})
 
+        t_id = str(t_id)
+
         async with get_db_connection() as conn:
+            c_live = await conn.execute("SELECT personal_last_live_id FROM settings WHERE id = 1")
+            live_row = await c_live.fetchone()
+            stream_key = (live_row["personal_last_live_id"] if live_row else None) or "no_stream"
+
+            if stream_key not in _podium_awarded_by_stream:
+                _podium_awarded_by_stream.clear()  # nouveau stream : on oublie l'ancien
+                _podium_awarded_by_stream[stream_key] = set()
+                _podium_rejection_logged_by_stream.clear()
+                _podium_rejection_logged_by_stream[stream_key] = set()
+            awarded = _podium_awarded_by_stream[stream_key]
+            rejection_logged = _podium_rejection_logged_by_stream.setdefault(stream_key, set())
+
+            pair = (t_id, reward_type)
+            if pair in awarded:
+                if pair not in rejection_logged:
+                    logger.warning(
+                        f"🛑 [PODIUM] Doublon ignoré pour {username} ({t_id}) : '{reward_type}' déjà accordé sur ce "
+                        f"stream (Streamer.bot semble continuer d'envoyer cet event — prochains doublons silencieux)."
+                    )
+                    rejection_logged.add(pair)
+                return {"status": "ignored", "reason": "ce type de récompense a déjà été attribué à ce viewer sur ce stream"}
+            awarded.add(pair)
+
+            logger.info(f"🏆 [PODIUM] {username} ({t_id}) → {reward_type} (count={count_val})")
+
             # Upsert du viewer au cas où il n'existe pas encore
             await conn.execute(
                 "INSERT INTO viewers (twitch_id, username, points, messages, watchtime) VALUES ($1, $2, 0, 0, 0) "

@@ -227,13 +227,24 @@
             }, 5600);
         }
 
-        const eventSource = new EventSource('/overlay_events');
-        eventSource.onmessage = (e) => {
-            const data = JSON.parse(e.data);
+        function handleAlert(data) {
             if (data.type === 'spin_wheel' && data.wheel_id === WHEEL_ID) {
                 spinTo(data.winner_index);
             }
-        };
+        }
+
+        // 📡 UNE seule connexion SSE partagée entre TOUTES les sources OBS de cette
+        // origine (via SharedWorker), au lieu d'une connexion par overlay.
+        if (typeof SharedWorker !== 'undefined') {
+            try {
+                const worker = new SharedWorker('/api/labels/worker.js');
+                worker.port.onmessage = (e) => {
+                    const enveloppe = JSON.parse(e.data);
+                    if (enveloppe.channel === 'alerts') handleAlert(enveloppe.data);
+                };
+                worker.port.start();
+            } catch (e) { console.error('SharedWorker indisponible :', e); }
+        }
 
         loadWheel();
     </script>

@@ -69,6 +69,7 @@ from app.services.bot_health_service import (
 )
 from app.services.wheel_service import init_wheel_tables
 from app.services.bot_system_commands_service import init_system_commands_table
+from app.services.vip_sound_service import init_vip_sound_tables, sync_vip_command_status_loop
 
 # --- IMPORT DES REPERTOIRES ---
 from app.repositories import viewer_repo
@@ -129,6 +130,7 @@ async def lifespan(app: FastAPI):
     await init_bot_health_table()
     await init_wheel_tables()
     await init_system_commands_table()
+    await init_vip_sound_tables()
     logger.info("✅ [DATABASE] Tables PostgreSQL initialisées avec succès !")
 
     # 1.5 Détection d'un crash précédent (alerte Discord si le process n'a pas été arrêté proprement)
@@ -142,6 +144,7 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(update_time_loop())
     asyncio.create_task(update_twitch_stats_loop())
     asyncio.create_task(start_trophy_engine())
+    asyncio.create_task(sync_vip_command_status_loop())
     asyncio.create_task(games_scheduler_routine())
     asyncio.create_task(felixdle_scheduler_routine())
     asyncio.create_task(start_discord_mod_bot())

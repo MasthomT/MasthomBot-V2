@@ -1,7 +1,8 @@
 import os
+import json
 import aiohttp
 from datetime import datetime
-from fastapi import APIRouter, Request, Response, Form
+from fastapi import APIRouter, Request, Response, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from dotenv import load_dotenv
@@ -68,9 +69,12 @@ async def auth_callback(request: Request, code: str = None):
                 await conn.execute("UPDATE viewers SET username = $1 WHERE twitch_id = $2", (user["display_name"], user["id"]))
 
         response = RedirectResponse(url="/profile")
-        response.set_cookie("viewer_id", user["id"], max_age=2592000, httponly=True)
-        response.set_cookie("viewer_name", user["display_name"], max_age=2592000)
-        response.set_cookie("viewer_avatar", user["profile_image_url"], max_age=2592000)
+        # samesite="none" + secure=True : nécessaire pour que le cookie parte sur les appels
+        # fetch/XHR cross-site (ex: profile.html hébergé sur fel-x.icu appelant l'API du bot
+        # sur un autre domaine) — en SameSite=Lax par défaut, le cookie n'était jamais envoyé.
+        response.set_cookie("viewer_id", user["id"], max_age=2592000, httponly=True, samesite="none", secure=True)
+        response.set_cookie("viewer_name", user["display_name"], max_age=2592000, samesite="none", secure=True)
+        response.set_cookie("viewer_avatar", user["profile_image_url"], max_age=2592000, samesite="none", secure=True)
         return response
 
 @router.get("/logout")
@@ -311,3 +315,80 @@ async def get_secret_rewards():
 async def update_viewer_context_public(request: Request):
     from app.routes.api import update_viewer_context
     return await update_viewer_context(request)
+
+@router.get("/api/public/commands")
+async def api_public_commands():
+    """API publique (sans auth) listant les commandes actives, pour un affichage viewer.
+    Ne renvoie que les champs utiles publiquement — pas created_by/use_count/réponse brute.
+    Champs alignés sur le contrat attendu par commands.js : trigger/category/description/access."""
+    from app.services.command_service import list_commands
+    commands = await list_commands(active_only=True)
+
+    result = []
+    for c in commands:
+        if c.get("hide_from_list"):
+            continue
+        try:
+            resp = json.loads(c.get("response") or "{}")
+        except (TypeError, ValueError):
+            resp = {}
+        aliases = [a for a in (c.get("aliases") or "").split(",") if a]
+        trigger = " ".join(f"!{n}" for n in [c["name"], *aliases])
+        result.append({
+            "trigger": trigger,
+            "category": c.get("category") or "Général",
+            "access": c.get("min_role") or "viewer",
+            "description": c.get("description") or resp.get("text") or "",
+        })
+    return result
+
+# ==========================================
+# SON PERSO VIP (soumission par le viewer, validation côté admin)
+# ==========================================
+@router.post("/api/auth/session")
+async def create_viewer_session(request: Request):
+    from fastapi.responses import JSONResponse
+    data = await request.json()
+    twitch_id    = data.get("twitch_id", "").strip()
+    display_name = data.get("display_name", "").strip()
+    avatar_url   = data.get("avatar_url", "").strip()
+
+    if not twitch_id:
+        return JSONResponse({"error": "twitch_id manquant"}, status_code=400)
+
+    response = JSONResponse({"status": "ok"})
+    response.set_cookie("viewer_id",     twitch_id,    max_age=2592000, httponly=True,  samesite="none", secure=True)
+    response.set_cookie("viewer_name",   display_name, max_age=2592000, httponly=False, samesite="none", secure=True)
+    response.set_cookie("viewer_avatar", avatar_url,   max_age=2592000, httponly=False, samesite="none", secure=True)
+    return response
+
+@router.get("/api/vip-sound/status")
+async def api_vip_sound_status(request: Request, twitch_id: str = None):
+    # Chrome bloque les cookies tiers (fel-x.icu et l'API du bot sont deux domaines
+    # différents) : le cookie viewer_id ne peut pas être livré de manière fiable en
+    # cross-origin. On accepte donc le twitch_id explicitement (déjà connu du frontend,
+    # même principe que /viewer/{twitch_id}), avec le cookie en repli pour l'usage same-origin.
+    from app.services.vip_sound_service import get_viewer_vip_status
+    viewer_id = twitch_id or request.cookies.get("viewer_id")
+    if not viewer_id:
+        return JSONResponse(status_code=401, content={"error": "Non connecté."})
+    return await get_viewer_vip_status(viewer_id)
+
+@router.post("/api/vip-sound/submit")
+async def api_vip_sound_submit(request: Request, file: UploadFile = File(...), twitch_id: str = Form(None)):
+    from app.services.vip_sound_service import submit_vip_sound
+    viewer_id = twitch_id or request.cookies.get("viewer_id")
+    if not viewer_id:
+        return JSONResponse(status_code=401, content={"error": "Non connecté."})
+
+    async with get_db_connection() as conn:
+        c = await conn.execute("SELECT username FROM viewers WHERE twitch_id = $1", (viewer_id,))
+        row = await c.fetchone()
+    if not row:
+        return JSONResponse(status_code=404, content={"error": "Viewer introuvable."})
+
+    content = await file.read()
+    result = await submit_vip_sound(viewer_id, row["username"], file.filename, content)
+    if "error" in result:
+        return JSONResponse(status_code=400, content=result)
+    return result

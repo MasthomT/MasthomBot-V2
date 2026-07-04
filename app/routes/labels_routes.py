@@ -30,25 +30,30 @@ async def labels_stream(request: Request):
 
     return StreamingResponse(gen(), media_type="text/event-stream", headers=NO_CACHE)
 
-# 📡 SharedWorker : UNE seule connexion SSE partagée entre TOUTES les sources OBS
-# de la même origine (au lieu d'une connexion permanente par label), pour respecter
-# le quota de ~6 connexions/origine qu'OBS alloue à toutes les browser sources.
+# 📡 SharedWorker : UNE seule connexion par flux SSE, PARTAGÉE entre TOUTES les sources
+# OBS de la même origine (au lieu d'une connexion permanente par overlay), pour respecter
+# le quota de ~6 connexions/origine qu'OBS alloue à toutes ses browser sources. Un audit
+# complet (juillet 2026) a montré jusqu'à 18 sources actives simultanément sur cette
+# origine — sans ce partage, chaque flux temps réel (labels, alertes, roue de raid)
+# multiplierait les connexions par overlay et ferait déborder le quota.
 _LABELS_WORKER_JS = """
-let source = null;
+const sourcesByChannel = {};
 const ports = [];
 
-function connecter() {
-    if (source) return;
-    source = new EventSource('/api/labels/stream');
-    source.onmessage = (e) => {
+function connecter(channel, url) {
+    if (sourcesByChannel[channel]) return;
+    const es = new EventSource(url);
+    sourcesByChannel[channel] = es;
+    es.onmessage = (e) => {
+        const enveloppe = JSON.stringify({ channel, data: JSON.parse(e.data) });
         for (const p of ports) {
-            try { p.postMessage(e.data); } catch (err) {}
+            try { p.postMessage(enveloppe); } catch (err) {}
         }
     };
-    source.onerror = () => {
-        try { source.close(); } catch (err) {}
-        source = null;
-        setTimeout(connecter, 3000);
+    es.onerror = () => {
+        try { es.close(); } catch (err) {}
+        sourcesByChannel[channel] = null;
+        setTimeout(() => connecter(channel, url), 3000);
     };
 }
 
@@ -56,7 +61,9 @@ self.onconnect = (e) => {
     const port = e.ports[0];
     ports.push(port);
     port.start();
-    connecter();
+    connecter('labels', '/api/labels/stream');
+    connecter('alerts', '/overlay_events');
+    connecter('raidwheel', '/overlay/raidwheel/events');
 };
 """
 

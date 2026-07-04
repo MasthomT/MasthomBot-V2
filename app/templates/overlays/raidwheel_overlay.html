@@ -274,10 +274,7 @@ function showResult(streamer) {
   }, 12000);
 }
 
-// SSE
-const es = new EventSource('/overlay/raidwheel/events');
-es.onmessage = e => {
-  const msg = JSON.parse(e.data);
+function handleSpin(msg) {
   if (msg.type !== 'spin') return;
 
   streamers = msg.streamers;
@@ -291,7 +288,20 @@ es.onmessage = e => {
   const idx = winnerIdx >= 0 ? winnerIdx : 0;
 
   setTimeout(() => spin(idx, allItems), 100);
-};
+}
+
+// 📡 UNE seule connexion SSE partagée entre TOUTES les sources OBS de cette
+// origine (via SharedWorker), au lieu d'une connexion par overlay.
+if (typeof SharedWorker !== 'undefined') {
+  try {
+    const worker = new SharedWorker('/api/labels/worker.js');
+    worker.port.onmessage = (e) => {
+      const enveloppe = JSON.parse(e.data);
+      if (enveloppe.channel === 'raidwheel') handleSpin(enveloppe.data);
+    };
+    worker.port.start();
+  } catch (e) { console.error('SharedWorker indisponible :', e); }
+}
 </script>
 </body>
 </html>

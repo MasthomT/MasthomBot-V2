@@ -52,43 +52,30 @@
         const widget = document.getElementById('tiktok-widget');
         const video = document.getElementById('tiktok-video');
 
-        // Connexion SSE auto-réparante : si le bot redémarre (ou coupure réseau), la
-        // connexion est rétablie automatiquement. Sans ça, l'overlay reste "sourd" dans
-        // OBS après un redémarrage et ne reçoit plus jamais les events.
-        let eventSource = null;
-        let fermetureVolontaire = false;
-
-        function fermerSSE() {
-            // Libère le slot de connexion (OBS limite ~6 connexions/hôte, partagées entre
-            // toutes les sources) pour que la vidéo puisse charger.
-            fermetureVolontaire = true;
-            if (eventSource) { eventSource.close(); eventSource = null; }
-        }
-
-        function connecterSSE() {
-            fermetureVolontaire = false;
-            _log('SSE connexion…');
-            eventSource = new EventSource('/overlay_events');
-            eventSource.onopen = () => _log('SSE OUVERTE ✓');
-            eventSource.onmessage = (e) => {
-                try {
-                    const data = JSON.parse(e.data);
+        // 📡 UNE seule connexion SSE partagée entre TOUTES les sources OBS de cette origine
+        // (via SharedWorker), au lieu d'une connexion par overlay — voir /api/labels/worker.js.
+        // La vidéo TikTok elle-même est servie sur le port 8001 séparé, donc plus besoin de
+        // fermer/rouvrir quoi que ce soit pour lui faire de la place.
+        function ecouterAlertes() {
+            if (typeof SharedWorker === 'undefined') {
+                _log('SharedWorker indisponible, TikTok restera muet aux events overlay_events');
+                return;
+            }
+            try {
+                const worker = new SharedWorker('/api/labels/worker.js');
+                worker.port.onmessage = (e) => {
+                    const msg = JSON.parse(e.data);
+                    if (msg.channel !== 'alerts') return;
+                    const data = msg.data;
                     if (data.type === 'show_tiktok' && data.url) {
-                        _log('show_tiktok → je libère le slot SSE et je charge la vidéo');
-                        // On ferme la connexion SSE AVANT de charger : ça libère le créneau
-                        // réseau dont la vidéo a besoin (sinon elle reste bloquée).
-                        fermerSSE();
+                        _log('show_tiktok → chargement de la vidéo');
                         showTikTok(data.url);
                     }
-                } catch (err) {}
-            };
-            eventSource.onerror = () => {
-                if (!fermetureVolontaire && eventSource && eventSource.readyState === EventSource.CLOSED) {
-                    setTimeout(connecterSSE, 3000);
-                }
-            };
+                };
+                worker.port.start();
+            } catch (e) { _log('SharedWorker erreur : ' + e); }
         }
-        connecterSSE();
+        ecouterAlertes();
 
         // Si une nouvelle vidéo démarre pendant le délai de fondu de la précédente, le nettoyage
         // différé de l'ancienne ne doit pas écraser le src de la nouvelle — d'où ce garde-fou.
@@ -101,8 +88,6 @@
                 video.pause();
                 video.src = '';
                 hideCleanupTimer = null;
-                // La vidéo a libéré sa connexion : on rouvre le SSE pour le prochain event.
-                if (!eventSource) connecterSSE();
             }, 600);
         }
 

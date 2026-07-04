@@ -93,6 +93,22 @@
             </div>
         </div>
 
+        {% if viewer.is_vip or viewer.is_mod %}
+        <div class="id-card" id="vip-sound-card">
+            <div class="id-title">🎵 Mon son perso (VIP / Modérateur)</div>
+            <p style="color:var(--text-dim); font-size:0.9rem; margin-top:-0.5rem;">
+                Propose un son pour ta commande perso <strong>!{{ viewer.username|lower }}</strong>.
+                Une fois validé par le streamer, il sera jouable dans le chat. 1 proposition validée par mois.
+            </p>
+            <div id="vip-sound-status" style="margin-bottom:1rem; color:var(--text-dim);">Chargement...</div>
+            <form id="vip-sound-form" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <input type="file" id="vip-sound-file" accept=".mp3,.wav,.ogg" style="color:white;">
+                <button type="submit" id="vip-sound-submit" style="background:var(--accent); color:#000; border:none; border-radius:8px; padding:10px 20px; font-weight:700; cursor:pointer;">Envoyer</button>
+            </form>
+            <div id="vip-sound-msg" style="margin-top:10px; font-size:0.9rem;"></div>
+        </div>
+        {% endif %}
+
         <div class="id-card">
             <div class="id-title">📜 Historique XP</div>
             <ul class="history-list">
@@ -115,5 +131,77 @@
             </ul>
         </div>
     </main>
+
+    {% if viewer.is_vip or viewer.is_mod %}
+    <script>
+        (async () => {
+            const statusEl = document.getElementById('vip-sound-status');
+            const form = document.getElementById('vip-sound-form');
+            const fileInput = document.getElementById('vip-sound-file');
+            const submitBtn = document.getElementById('vip-sound-submit');
+            const msgEl = document.getElementById('vip-sound-msg');
+
+            function formatDate(iso) {
+                if (!iso) return '';
+                const d = new Date(iso);
+                return d.toLocaleDateString('fr-FR');
+            }
+
+            async function refreshStatus() {
+                try {
+                    const res = await fetch('/api/vip-sound/status?twitch_id={{ viewer.twitch_id }}');
+                    const data = await res.json();
+                    const last = data.last_request;
+
+                    let html = '';
+                    if (last) {
+                        const labels = { pending: '⏳ En attente de validation', approved: '✅ Validé', rejected: '❌ Refusé' };
+                        html += `<div>Dernière proposition (${formatDate(last.submitted_at)}) : <strong>${labels[last.status] || last.status}</strong></div>`;
+                    }
+                    if (!data.can_submit) {
+                        html += `<div>Prochaine proposition possible à partir du <strong>${formatDate(data.next_eligible_at)}</strong>.</div>`;
+                        submitBtn.disabled = true;
+                        submitBtn.style.opacity = 0.5;
+                        submitBtn.style.cursor = 'not-allowed';
+                    }
+                    statusEl.innerHTML = html || 'Aucune proposition envoyée pour le moment.';
+                } catch (e) {
+                    statusEl.textContent = 'Impossible de charger le statut.';
+                }
+            }
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                if (!fileInput.files.length) {
+                    msgEl.textContent = 'Choisis un fichier audio (mp3, wav, ogg).';
+                    msgEl.style.color = '#f87171';
+                    return;
+                }
+                submitBtn.disabled = true;
+                msgEl.textContent = 'Envoi en cours...';
+                msgEl.style.color = 'var(--text-dim)';
+
+                const fd = new FormData();
+                fd.append('file', fileInput.files[0]);
+                fd.append('twitch_id', '{{ viewer.twitch_id }}');
+                try {
+                    const res = await fetch('/api/vip-sound/submit', { method: 'POST', body: fd });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || 'Erreur inconnue');
+                    msgEl.textContent = '✅ Son envoyé ! En attente de validation.';
+                    msgEl.style.color = '#4ade80';
+                    fileInput.value = '';
+                    refreshStatus();
+                } catch (err) {
+                    msgEl.textContent = '❌ ' + err.message;
+                    msgEl.style.color = '#f87171';
+                    submitBtn.disabled = false;
+                }
+            });
+
+            refreshStatus();
+        })();
+    </script>
+    {% endif %}
 </body>
 </html>

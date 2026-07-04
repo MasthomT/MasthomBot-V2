@@ -62,15 +62,26 @@
             this.style.display = 'none';
         });
 
-        const source = new EventSource('/overlay_events');
         let totalClips = 0;
-        
-        source.onmessage = function(event) {
-            const data = JSON.parse(event.data);
+
+        function handleAlert(data) {
             if (data.type === 'start_quad_clips') {
                 buildAndStartShowcase(data.urls, data.meta);
             }
-        };
+        }
+
+        // 📡 UNE seule connexion SSE partagée entre TOUTES les sources OBS de cette
+        // origine (via SharedWorker), au lieu d'une connexion par overlay.
+        if (typeof SharedWorker !== 'undefined') {
+            try {
+                const worker = new SharedWorker('/api/labels/worker.js');
+                worker.port.onmessage = (e) => {
+                    const enveloppe = JSON.parse(e.data);
+                    if (enveloppe.channel === 'alerts') handleAlert(enveloppe.data);
+                };
+                worker.port.start();
+            } catch (e) { console.error('SharedWorker indisponible :', e); }
+        }
 
         // 🧠 FONCTION MAGIQUE QUI CALCULE LES POSITIONS SEMAINE APRÈS SEMAINE
         function getLayoutPositions(count) {

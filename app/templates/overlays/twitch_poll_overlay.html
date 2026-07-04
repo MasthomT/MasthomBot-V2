@@ -102,12 +102,9 @@
     let finalResultTimer; 
     let countdownInterval; // Variable pour stocker la boucle du chronomètre
 
-    const eventSource = new EventSource('/overlay_events');
-
-    eventSource.onmessage = (e) => {
+    function handleAlert(data) {
         try {
-            const data = JSON.parse(e.data);
-            
+
             if (data.type === 'twitch_event_end') {
                 if (data.payload) render(data.payload); 
                 
@@ -133,6 +130,19 @@
             console.error("Erreur de traitement :", err);
         }
     };
+
+    // 📡 UNE seule connexion SSE partagée entre TOUTES les sources OBS de cette
+    // origine (via SharedWorker), au lieu d'une connexion par overlay.
+    if (typeof SharedWorker !== 'undefined') {
+        try {
+            const worker = new SharedWorker('/api/labels/worker.js');
+            worker.port.onmessage = (e) => {
+                const enveloppe = JSON.parse(e.data);
+                if (enveloppe.channel === 'alerts') handleAlert(enveloppe.data);
+            };
+            worker.port.start();
+        } catch (e) { console.error('SharedWorker indisponible :', e); }
+    }
 
     // NOUVEAU : Fonction qui calcule le temps restant
     function startCountdown(endsAtString) {

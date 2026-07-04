@@ -80,15 +80,24 @@
         const totalEl = document.getElementById('poll-total');
         let hideTimer;
 
-        // ✅ Connexion au port 8000
-        const eventSource = new EventSource('/overlay_events');
-
-        eventSource.onmessage = (e) => {
-            const data = JSON.parse(e.data);
+        function handleAlert(data) {
             if (data.type === 'show_poll') {
                 updateAndShow();
             }
-        };
+        }
+
+        // 📡 UNE seule connexion SSE partagée entre TOUTES les sources OBS de cette
+        // origine (via SharedWorker), au lieu d'une connexion par overlay.
+        if (typeof SharedWorker !== 'undefined') {
+            try {
+                const worker = new SharedWorker('/api/labels/worker.js');
+                worker.port.onmessage = (e) => {
+                    const enveloppe = JSON.parse(e.data);
+                    if (enveloppe.channel === 'alerts') handleAlert(enveloppe.data);
+                };
+                worker.port.start();
+            } catch (e) { console.error('SharedWorker indisponible :', e); }
+        }
 
         async function updateAndShow() {
             try {
