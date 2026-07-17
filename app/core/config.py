@@ -76,6 +76,9 @@ class Settings(BaseSettings):
     TROPHY_DISCORD_CHANNEL_ID: str = get_clean_env("TROPHY_DISCORD_CHANNEL_ID", "")
     MODERATION_LOG_CHANNEL_ID: str = get_clean_env("MODERATION_LOG_CHANNEL_ID", "1399730073183191090")
     POLAROID_CHANNEL_ID: str = get_clean_env("POLAROID_CHANNEL_ID", "")
+    # ID Discord du streamer à suivre pour l'overlay "salon vocal" (remplace StreamKit) :
+    # le bot rejoint automatiquement le salon vocal où se trouve ce compte.
+    STREAMER_DISCORD_ID: str = get_clean_env("STREAMER_DISCORD_ID", "")
 
     # --- SERVICES EXTERNES ---
     OPENAI_API_KEY: str = get_clean_env("OPENAI_API_KEY", "")

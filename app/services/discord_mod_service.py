@@ -26,6 +26,7 @@ import discord
 
 from app.core.config import settings
 from app.core.database import get_db_connection
+from app.services.discord_voice_overlay_service import discord_voice_overlay_service
 
 PLATFORM_EMOJI = {"Twitch": "🟣", "Discord": "🔵"}
 
@@ -35,6 +36,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 intents.reactions = True
+intents.voice_states = True  # requis pour l'overlay "salon vocal" (StreamKit maison)
 
 
 async def init_discord_mod_tables() -> None:
@@ -296,6 +298,12 @@ class DiscordModBot(discord.Client):
 
     async def on_ready(self):
         logger.info(f"✅ [DISCORD MOD] Bot connecté en tant que {self.user} — modération active.")
+
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        try:
+            await discord_voice_overlay_service.handle_voice_state_update(member, before, after)
+        except Exception as e:
+            logger.error(f"❌ [VOICE OVERLAY] Erreur on_voice_state_update : {e}")
 
     async def on_member_join(self, member: discord.Member):
         try:

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Overlay Salon Vocal Discord</title>
+<style>
+    * { box-sizing: border-box; }
+    html, body {
+        margin: 0; padding: 0; background: transparent;
+        overflow: hidden; height: 100vh;
+        font-family: "gg sans", "Segoe UI", Arial, sans-serif;
+    }
+    #list {
+        display: flex; flex-direction: column; gap: 10px;
+        padding: 16px; width: fit-content;
+    }
+    .member {
+        display: flex; align-items: center; gap: 12px;
+        background: rgba(15, 23, 42, 0.55);
+        border-radius: 999px;
+        padding: 6px 18px 6px 6px;
+        backdrop-filter: blur(6px);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+        border: 2px solid transparent;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        opacity: 0;
+        animation: fadein 0.25s ease forwards;
+    }
+    .member.speaking {
+        border-color: #23a55a;
+        box-shadow: 0 0 0 3px rgba(35, 165, 90, 0.35), 0 6px 18px rgba(0, 0, 0, 0.35);
+    }
+    .avatar-wrap { position: relative; width: 44px; height: 44px; flex: none; }
+    .avatar {
+        width: 44px; height: 44px; border-radius: 50%;
+        object-fit: cover; display: block;
+        filter: grayscale(0%);
+        transition: filter 0.15s ease;
+    }
+    .member.deafened .avatar, .member.muted .avatar { filter: grayscale(60%); opacity: 0.75; }
+    .status-icon {
+        position: absolute; right: -2px; bottom: -2px;
+        width: 18px; height: 18px; border-radius: 50%;
+        background: #23272a;
+        display: flex; align-items: center; justify-content: center;
+        border: 2px solid rgba(15, 23, 42, 0.9);
+    }
+    .status-icon svg { width: 11px; height: 11px; }
+    .name {
+        color: #f2f3f5; font-size: 15px; font-weight: 600;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+        white-space: nowrap;
+    }
+    @keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+<div id="list"></div>
+
+<script>
+const listEl = document.getElementById('list');
+let currentIds = new Set();
+
+const ICON_MUTED = `<svg viewBox="0 0 24 24" fill="#f23f42"><path d="M6.7 3.3 3.3 6.7l3.4 3.4V11c0 3 2.5 5.5 5.5 5.5.6 0 1.1-.1 1.7-.3l1.6 1.6c-1 .4-2.1.7-3.3.7-4.4 0-8-3.6-8-8v-.5H2v.5c0 5 3.9 9.1 8.9 9.5v3h2v-3c1.3-.1 2.6-.5 3.7-1.1l3.7 3.7 1.4-1.4L8.1 1.9 6.7 3.3ZM17.4 12h1.9c0-1-.2-2-.6-2.9l-1.5 1.5c.1.4.2.9.2 1.4Zm-1.9-8.5C15 2.6 13.6 2 12 2 9 2 6.5 4.5 6.5 7.5v1.9l9-9v-.1c0-.6-.1-1.2-.3-1.7Z"/></svg>`;
+const ICON_DEAF = `<svg viewBox="0 0 24 24" fill="#f23f42"><path d="M12 3a9 9 0 0 0-9 9v5.5A2.5 2.5 0 0 0 5.5 20H7v-7H4.1a8 8 0 0 1 15.8 0H17v7h1.5a2.5 2.5 0 0 0 2.5-2.5V12a9 9 0 0 0-9-9Z"/></svg>`;
+
+function render(state) {
+    const members = state.members || [];
+    const ids = new Set(members.map(m => m.id));
+    currentIds = ids;
+
+    listEl.innerHTML = '';
+    for (const m of members) {
+        const el = document.createElement('div');
+        el.className = 'member' + (m.speaking ? ' speaking' : '') + (m.deafened ? ' deafened' : (m.muted ? ' muted' : ''));
+
+        let icon = '';
+        if (m.deafened) icon = ICON_DEAF;
+        else if (m.muted) icon = ICON_MUTED;
+
+        el.innerHTML = `
+            <div class="avatar-wrap">
+                <img class="avatar" src="${m.avatar}" referrerpolicy="no-referrer">
+                ${icon ? `<div class="status-icon">${icon}</div>` : ''}
+            </div>
+            <div class="name">${escapeHtml(m.name)}</div>
+        `;
+        listEl.appendChild(el);
+    }
+}
+
+function escapeHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
+
+function connect() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(proto + '//' + location.host + '/ws/discord_voice');
+
+    ws.onmessage = (evt) => {
+        try {
+            render(JSON.parse(evt.data));
+        } catch (e) {
+            console.error('Overlay vocal Discord — message invalide', e);
+        }
+    };
+    ws.onclose = () => {
+        listEl.innerHTML = '';
+        setTimeout(connect, 2000);
+    };
+    ws.onerror = () => ws.close();
+}
+connect();
+</script>
+</body>
+</html>
