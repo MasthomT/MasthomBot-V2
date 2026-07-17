@@ -107,7 +107,13 @@ async def toggle_felix_twitch():
 @router.get("/api/deck/status")
 async def deck_status():
     def fetch_obs_status():
+        cl = None
         try:
+            # ⚠️ Cette route est pollée toutes les 1-2s par deck.html/deck_page2.html (Stream
+            # Deck web). Sans le disconnect() explicite ci-dessous, chaque poll laissait une
+            # connexion websocket vers OBS ouverte indéfiniment (obsws_python ne la ferme pas
+            # tout seul quand `cl` sort de portée) — plusieurs centaines de connexions
+            # fantômes accumulées en quelques minutes, cause du "OBS ne répond plus" observé.
             cl = obs.ReqClient(host=obs_service.host, port=obs_service.port, password=obs_service.password, timeout=1)
             scene_name = cl.get_current_program_scene().current_program_scene_name
             is_muted = cl.get_input_mute("Micro").input_muted
@@ -131,6 +137,12 @@ async def deck_status():
             return {"scene": scene_name, "mic_muted": is_muted, "cam_visible": cam_visible, "felicam_visible": felicam_visible}
         except Exception:
             return {"scene": "main", "mic_muted": False, "cam_visible": True, "felicam_visible": False}
+        finally:
+            if cl is not None:
+                try:
+                    cl.disconnect()
+                except Exception:
+                    pass
 
     obs_status = await asyncio.to_thread(fetch_obs_status)
     twitch_status = {"brb_active": False, "emote_only": False, "follower_only": False, "slow_mode": False}
@@ -175,27 +187,33 @@ async def deck_action(data: DeckAction):
     if data.action == "toggle_felicam_obs":
         def execute_felicam():
             cl = obs.ReqClient(host=obs_service.host, port=obs_service.port, password=obs_service.password)
-            scene = "SI - ALERTES"
-            source = "FELI'CAM"
-            
-            items = cl.get_scene_item_list(scene).scene_items
-            item_id = None
-            is_visible = False
-            for item in items:
-                if item['sourceName'] == source:
-                    item_id = item['sceneItemId']
-                    is_visible = item['sceneItemEnabled']
-                    break
-            
-            if item_id is not None:
-                if not is_visible:
-                    try: cl.set_source_filter_enabled(scene, "FELICAM_IN", True)
-                    except: pass
-                    cl.set_scene_item_enabled(scene, item_id, True)
-                else:
-                    cl.set_scene_item_enabled(scene, item_id, False)
-                    try: cl.set_source_filter_enabled(scene, "FELICAM_OUT", True)
-                    except: pass
+            try:
+                scene = "SI - ALERTES"
+                source = "FELI'CAM"
+
+                items = cl.get_scene_item_list(scene).scene_items
+                item_id = None
+                is_visible = False
+                for item in items:
+                    if item['sourceName'] == source:
+                        item_id = item['sceneItemId']
+                        is_visible = item['sceneItemEnabled']
+                        break
+
+                if item_id is not None:
+                    if not is_visible:
+                        try: cl.set_source_filter_enabled(scene, "FELICAM_IN", True)
+                        except: pass
+                        cl.set_scene_item_enabled(scene, item_id, True)
+                    else:
+                        cl.set_scene_item_enabled(scene, item_id, False)
+                        try: cl.set_source_filter_enabled(scene, "FELICAM_OUT", True)
+                        except: pass
+            finally:
+                try:
+                    cl.disconnect()
+                except Exception:
+                    pass
 
         try:
             await asyncio.to_thread(execute_felicam)
@@ -207,18 +225,24 @@ async def deck_action(data: DeckAction):
     if data.action.startswith("obs_") or data.action.startswith("mode_"):
         def execute_obs():
             cl = obs.ReqClient(host=obs_service.host, port=obs_service.port, password=obs_service.password)
-            if data.action in ["obs_change_scene", "mode_chatting_filters", "mode_gaming_filters"]:
-                cl.set_current_program_scene(data.param)
-            elif data.action == "obs_hotkey":
-                cl.trigger_hotkey_by_key_sequence(data.param)
-            elif data.action == "obs_toggle_mute":
-                cl.toggle_input_mute(data.param or "Micro")
-            elif data.action == "obs_toggle_source":
-                scene_name = cl.get_current_program_scene().current_program_scene_name
-                for item in cl.get_scene_item_list(scene_name).scene_items:
-                    if item['sourceName'] == (data.param or "WEBCAM"):
-                        cl.set_scene_item_enabled(scene_name, item['sceneItemId'], not item['sceneItemEnabled'])
-                        break
+            try:
+                if data.action in ["obs_change_scene", "mode_chatting_filters", "mode_gaming_filters"]:
+                    cl.set_current_program_scene(data.param)
+                elif data.action == "obs_hotkey":
+                    cl.trigger_hotkey_by_key_sequence(data.param)
+                elif data.action == "obs_toggle_mute":
+                    cl.toggle_input_mute(data.param or "Micro")
+                elif data.action == "obs_toggle_source":
+                    scene_name = cl.get_current_program_scene().current_program_scene_name
+                    for item in cl.get_scene_item_list(scene_name).scene_items:
+                        if item['sourceName'] == (data.param or "WEBCAM"):
+                            cl.set_scene_item_enabled(scene_name, item['sceneItemId'], not item['sceneItemEnabled'])
+                            break
+            finally:
+                try:
+                    cl.disconnect()
+                except Exception:
+                    pass
         try:
             await asyncio.to_thread(execute_obs)
         except Exception as e:
