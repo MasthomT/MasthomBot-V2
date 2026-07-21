@@ -98,6 +98,7 @@ class OBSService:
         if not self.host or not self.password:
             return None
 
+        cl = None
         try:
             cl = obs.ReqClient(host=self.host, port=self.port, password=self.password)
             current_scene = cl.get_current_program_scene().scene_name
@@ -116,6 +117,12 @@ class OBSService:
         except Exception as e:
             logger.debug(f"👀 OBS Vision non disponible : {e}")
             return None
+        finally:
+            if cl is not None:
+                try:
+                    cl.disconnect()
+                except Exception:
+                    pass
 
     def take_source_screenshot(self, source_name: str, width: int = 720, height: int = 900):
         """Prend un screenshot d'une source précise (ex: la webcam) et le retourne en base64,
@@ -123,6 +130,7 @@ class OBSService:
         if not self.host or not self.password:
             return None
 
+        cl = None
         try:
             cl = obs.ReqClient(host=self.host, port=self.port, password=self.password)
             resp = cl.get_source_screenshot(
@@ -136,12 +144,19 @@ class OBSService:
         except Exception as e:
             logger.error(f"❌ [OBS] Impossible de capturer la source '{source_name}' : {e}")
             return None
+        finally:
+            if cl is not None:
+                try:
+                    cl.disconnect()
+                except Exception:
+                    pass
 
     def get_deck_status(self):
         """Récupère l'état d'OBS pour allumer les lumières du Stream Deck"""
+        cl = None
         try:
             cl = obs.ReqClient(host=self.host, port=self.port, password=self.password)
-            
+
             # 1. Scène Actuelle
             scene_resp = cl.get_current_program_scene()
             scene_name = scene_resp.current_program_scene_name
@@ -165,5 +180,11 @@ class OBSService:
             }
         except Exception:
             return {"scene": "main", "mic_muted": False, "cam_visible": True}
+        finally:
+            if cl is not None:
+                try:
+                    cl.disconnect()
+                except Exception:
+                    pass
 
 obs_service = OBSService()

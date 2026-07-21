@@ -330,6 +330,7 @@ if __name__ == "__main__":
     from app.routes.overlays import tiktok_proxy
     from app.routes.credits import get_credits_data
     from app.routes import labels_routes
+    from app.routes.discord_voice_overlay import router as discord_voice_overlay_router
 
     media_app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     media_app.add_middleware(_CORS, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -340,6 +341,9 @@ if __name__ == "__main__":
     media_app.add_api_route("/api/credits/data", get_credits_data, methods=["GET"])
     # Labels également disponibles sur ce port dédié, pour libérer des connexions sur 8000.
     media_app.include_router(labels_routes.router)
+    # Overlay "salon vocal Discord" (remplace StreamKit) : websocket permanent, donc ici
+    # plutôt que sur le port 8000, pour la même raison que ci-dessus.
+    media_app.include_router(discord_voice_overlay_router)
 
     def _make_server(port):
         return uvicorn.Server(uvicorn.Config(
