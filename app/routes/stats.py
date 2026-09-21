@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 # --- IMPORT CORE POSTGRESQL ---
@@ -20,7 +20,7 @@ templates = Jinja2Templates(directory="app/templates")
 # =================================================================
 # 🛑 LISTE D'EXCLUSION GLOBALE (Bots, Streamer, Vestale)
 # =================================================================
-EXCLUSION_LIST = "('masthom_', 'felixthebigblackcat', 'vestale7', 'streamelements', 'wizebot', 'nightbot')"
+EXCLUSION_LIST = "('masthou', 'felixthebigblackcat', 'vestale7', 'streamelements', 'wizebot', 'nightbot')"
 
 # =================================================================
 # 🛠️ FONCTIONS DE FORMATAGE ET CALCULS (XP / NIVEAUX)
@@ -132,9 +132,9 @@ async def admin_stats_page(request: Request):
             """)
             top_messages = await cursor.fetchall()
 
-            # --- Top Watchtime ---
+            # --- Top Fidèles : cumul ALL TIME ---
             cursor = await conn.execute(f"""
-                SELECT username, watchtime FROM viewers 
+                SELECT username, watchtime FROM viewers
                 WHERE watchtime > 0 AND LOWER(username) NOT IN {EXCLUSION_LIST}
                 ORDER BY watchtime DESC LIMIT 15
             """)
@@ -188,7 +188,7 @@ async def admin_stats_page(request: Request):
                 recent_events.append({
                     "id": d.get("id") or v[0],
                     "event_type": etype,
-                    "username": str(pseudo).replace("masthom_", "Masthom"),
+                    "username": str(pseudo).replace("masthou", "Masthom"),
                     "details": d.get("details") or v[3],
                     "timestamp": format_date(d.get("timestamp") or v[4])
                 })
@@ -288,6 +288,23 @@ async def admin_stats_page(request: Request):
     except Exception as e:
         logger.error(f"❌ [STATS] Erreur Critique : {e}")
         return HTMLResponse(content=f"<h1>Erreur Interne : Statistiques</h1><p>{e}</p>", status_code=500)
+
+@router.get("/api/stats/unfollows")
+async def api_unfollows():
+    """Retourne les derniers unfollows en JSON pour le rafraîchissement temps réel."""
+    try:
+        async with get_db_connection() as conn:
+            cursor = await conn.execute(
+                "SELECT username, timestamp FROM unfollows ORDER BY id DESC LIMIT 20"
+            )
+            rows = await cursor.fetchall()
+            return JSONResponse([
+                {"username": row["username"] or "Anonyme", "timestamp": format_date(row["timestamp"])}
+                for row in rows
+            ])
+    except Exception as e:
+        logger.error(f"❌ [STATS] API unfollows : {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 # NOTE : GET /viewer/{twitch_id}/history et POST /viewer/{twitch_id}/save vivaient ici en
 # double avec app/routes/viewers.py (mêmes routes une fois le préfixe /admin appliqué).

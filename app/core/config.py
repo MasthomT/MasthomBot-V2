@@ -54,8 +54,8 @@ class Settings(BaseSettings):
     VIP_LIST_PATH: str = os.path.join(DATA_DIR, "vip_list.json")
 
     # --- CONFIGURATION TWITCH ---
-    TWITCH_CHANNEL: str = get_clean_env("TWITCH_CHANNEL", "#masthom_")
-    TWITCH_USERNAME: str = get_clean_env("TWITCH_USERNAME", "masthom_")
+    TWITCH_CHANNEL: str = get_clean_env("TWITCH_CHANNEL", "#masthou")
+    TWITCH_USERNAME: str = get_clean_env("TWITCH_USERNAME", "masthou")
     TWITCH_CLIENT_ID: str = get_clean_env("TWITCH_CLIENT_ID", "")
     TWITCH_CLIENT_SECRET: str = get_clean_env("TWITCH_CLIENT_SECRET", "")
     TWITCH_OAUTH_TOKEN: str = get_clean_env("TWITCH_OAUTH_TOKEN", "")
@@ -76,6 +76,7 @@ class Settings(BaseSettings):
     TROPHY_DISCORD_CHANNEL_ID: str = get_clean_env("TROPHY_DISCORD_CHANNEL_ID", "")
     MODERATION_LOG_CHANNEL_ID: str = get_clean_env("MODERATION_LOG_CHANNEL_ID", "1399730073183191090")
     POLAROID_CHANNEL_ID: str = get_clean_env("POLAROID_CHANNEL_ID", "")
+    DISCORD_CLIPS_WEBHOOK_URL: str = get_clean_env("DISCORD_CLIPS_WEBHOOK_URL", "")
 
     # --- SERVICES EXTERNES ---
     OPENAI_API_KEY: str = get_clean_env("OPENAI_API_KEY", "")

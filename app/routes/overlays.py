@@ -71,6 +71,11 @@ async def trigger_overlay_event(payload: dict):
     Fonction universelle pour envoyer une alerte (Son, Image, Trophée).
     Diffuse l'information à TOUS les clients connectés (SSE et WS).
     """
+    evt_type = payload.get("type", "?")
+    logger.debug(f"🔔 [OVERLAY] {evt_type} → {len(sse_clients)} SSE + {len(ws_clients)} WS")
+    if not sse_clients and not ws_clients:
+        logger.warning(f"⚠️ [OVERLAY] Aucun client connecté pour recevoir '{evt_type}' — overlay_deck chargé dans OBS ?")
+
     # 1. Envoi aux clients SSE
     for queue in sse_clients:
         await queue.put(payload)
@@ -148,6 +153,18 @@ async def overlay_clips_quad(request: Request):
 async def overlay_tiktok(request: Request):
     return templates.TemplateResponse(request=request, name="overlays/tiktok_overlay.html")
 
+
+@router.get("/overlay/anniversaire", response_class=HTMLResponse)
+async def overlay_anniversaire(request: Request):
+    return templates.TemplateResponse(request=request, name="overlays/anniversaire_overlay.html", headers=NO_CACHE)
+
+@router.get("/overlay/compteur-defi", response_class=HTMLResponse)
+async def overlay_compteur_defi(request: Request):
+    return templates.TemplateResponse(request=request, name="overlays/compteur_defi_overlay.html", headers=NO_CACHE)
+
+@router.get("/overlay/objectif-subs", response_class=HTMLResponse)
+async def overlay_objectif_subs(request: Request):
+    return templates.TemplateResponse(request=request, name="overlays/objectif_subs_overlay.html", headers=NO_CACHE)
 
 @router.get("/overlay/raidwheel", response_class=HTMLResponse)
 async def overlay_raidwheel(request: Request):

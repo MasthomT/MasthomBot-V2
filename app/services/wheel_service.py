@@ -63,21 +63,21 @@ async def get_wheel(wheel_id: int) -> dict | None:
     return w
 
 
-async def create_wheel(name: str, items: list[dict]) -> int:
+async def create_wheel(name: str, items: list[dict], twitch_command: str = "") -> int:
     async with get_db_connection() as db:
         cursor = await db.execute(
-            "INSERT INTO wheels (name, items_json) VALUES (?, ?) RETURNING id",
-            name.strip() or "Roue sans nom", json.dumps(items)
+            "INSERT INTO wheels (name, items_json, twitch_command) VALUES (?, ?, ?) RETURNING id",
+            name.strip() or "Roue sans nom", json.dumps(items), twitch_command.strip().lstrip("!").lower()
         )
         row = await cursor.fetchone()
     return row["id"]
 
 
-async def update_wheel(wheel_id: int, name: str, items: list[dict]) -> None:
+async def update_wheel(wheel_id: int, name: str, items: list[dict], twitch_command: str = "") -> None:
     async with get_db_connection() as db:
         await db.execute(
-            "UPDATE wheels SET name = ?, items_json = ? WHERE id = ?",
-            name.strip() or "Roue sans nom", json.dumps(items), wheel_id
+            "UPDATE wheels SET name = ?, items_json = ?, twitch_command = ? WHERE id = ?",
+            name.strip() or "Roue sans nom", json.dumps(items), twitch_command.strip().lstrip("!").lower(), wheel_id
         )
 
 

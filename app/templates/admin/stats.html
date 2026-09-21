@@ -165,14 +165,20 @@
 
             <!-- UNFOLLOWS -->
             <div class="config-card p-6 rounded-3xl shadow-xl flex flex-col h-[500px]">
-                <div class="flex items-center gap-3 mb-6">
-                    <div class="w-10 h-10 bg-rose-500/10 rounded-xl flex items-center justify-center border border-rose-500/20">
-                        <i class="fas fa-heart-broken text-rose-400 text-lg"></i>
+                <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-rose-500/10 rounded-xl flex items-center justify-center border border-rose-500/20">
+                            <i class="fas fa-heart-broken text-rose-400 text-lg"></i>
+                        </div>
+                        <h2 class="text-lg font-black text-white">Les Traîtres</h2>
                     </div>
-                    <h2 class="text-lg font-black text-white">Les Traîtres</h2>
+                    <button id="btn-refresh-unfollows" onclick="rafraichirTraitres()" title="Actualiser en temps réel"
+                        class="w-8 h-8 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 hover:bg-rose-500/20 hover:border-rose-500/40 transition-all">
+                        <i id="icon-refresh-unfollows" class="fas fa-sync-alt text-xs"></i>
+                    </button>
                 </div>
-                
-                <div class="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3">
+
+                <div id="liste-traitres" class="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3">
                     {% for traitor in recent_unfollows %}
                     <div class="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 flex justify-between items-center group transition-all hover:border-rose-500/30">
                         <div class="flex items-center gap-3">
@@ -262,7 +268,7 @@
                     <div class="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center border border-emerald-500/20">
                         <i class="fas fa-clock text-emerald-400 text-lg"></i>
                     </div>
-                    <h2 class="text-lg font-black text-white">Top Fidèles</h2>
+                    <h2 class="text-lg font-black text-white">Top Fidèles <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">All time</span></h2>
                 </div>
                 <div class="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3">
                     {% for viewer in top_watchtime %}
@@ -307,6 +313,51 @@
 
     </main>
 
+    <script>
+        async function rafraichirTraitres() {
+            const btn = document.getElementById('btn-refresh-unfollows');
+            const icon = document.getElementById('icon-refresh-unfollows');
+            const liste = document.getElementById('liste-traitres');
+
+            btn.disabled = true;
+            icon.classList.add('animate-spin');
+
+            try {
+                const resp = await fetch('/admin/api/stats/unfollows?t=' + Date.now());
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                const data = await resp.json();
+
+                if (data.error) throw new Error(data.error);
+
+                if (data.length === 0) {
+                    liste.innerHTML = `
+                        <div class="text-center flex flex-col items-center justify-center h-full opacity-50">
+                            <i class="fas fa-shield-alt text-4xl text-emerald-500 mb-4"></i>
+                            <p class="text-slate-500 italic text-sm">Zéro trahison !</p>
+                        </div>`;
+                } else {
+                    liste.innerHTML = data.map(t => `
+                        <div class="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 flex justify-between items-center group transition-all hover:border-rose-500/30">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-rose-400">
+                                    <i class="fas fa-user-secret"></i>
+                                </div>
+                                <div>
+                                    <span class="text-sm font-bold text-slate-200 block">${t.username}</span>
+                                    <span class="text-[10px] text-slate-500">${t.timestamp}</span>
+                                </div>
+                            </div>
+                        </div>`).join('');
+                }
+            } catch (e) {
+                console.error('[unfollows]', e);
+                liste.innerHTML = `<div class="text-center text-rose-400 italic text-sm py-8">Erreur de chargement</div>`;
+            } finally {
+                icon.classList.remove('animate-spin');
+                btn.disabled = false;
+            }
+        }
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
     <script>
         const activityData = {{ activity_trend | tojson }};

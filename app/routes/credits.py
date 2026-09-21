@@ -65,10 +65,11 @@ async def get_credits_data():
     async with get_db_connection() as conn:
         # On va chercher TOUS les viewers qui ont du temps de watchtime aujourd'hui (même s'ils ont quitté le stream)
         rows = await conn.execute("""
-            SELECT LOWER(v.username) as lower_name, v.username as real_name, COALESCE(d.watchtime, 0) as daily_watchtime
+            SELECT LOWER(v.username) as lower_name, v.username as real_name,
+                   COALESCE(d.watchtime, 0) - COALESCE(d.watchtime_offset, 0) as daily_watchtime
             FROM viewers v
             JOIN viewer_daily_stats d ON v.twitch_id = d.twitch_id
-            WHERE d.day = CURRENT_DATE AND d.watchtime > 0
+            WHERE d.day = CURRENT_DATE AND d.watchtime - COALESCE(d.watchtime_offset, 0) > 0
         """)
         db_rows = await rows.fetchall()
         
@@ -118,7 +119,7 @@ async def get_credits_data():
                     all_viewers_dict[uname]['watchtime'] = wt
 
     # C. Filtrage des bots et création de la liste finale
-    exclusion_list = ['masthom_', 'felixthebigblackcat', 'streamelements', 'wizebot', 'nightbot']
+    exclusion_list = ['masthou', 'felixthebigblackcat', 'streamelements', 'wizebot', 'nightbot']
     viewers_list = []
     
     for lower_name, data in all_viewers_dict.items():
@@ -159,7 +160,7 @@ async def reset_credits():
     try:
         async with get_db_connection() as conn:
             # On remet le temps de présence à 0 pour tous ceux enregistrés aujourd'hui
-            await conn.execute("UPDATE viewer_daily_stats SET watchtime = 0 WHERE day = CURRENT_DATE")
+            await conn.execute("UPDATE viewer_daily_stats SET watchtime_offset = watchtime WHERE day = CURRENT_DATE")
     except Exception as e:
         logger.error(f"❌ Erreur lors du reset du watchtime : {e}")
 

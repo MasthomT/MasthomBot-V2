@@ -46,6 +46,7 @@ class WheelItemPayload(BaseModel):
 class WheelPayload(BaseModel):
     name: str
     items: list[WheelItemPayload]
+    twitch_command: str = ""
 
 
 # ── Admin ────────────────────────────────────────────────────────────────────
@@ -64,7 +65,7 @@ async def list_wheels():
 async def create_wheel(payload: WheelPayload):
     if not payload.items or len(payload.items) < 2:
         raise HTTPException(status_code=400, detail="Il faut au moins 2 segments sur la roue.")
-    wheel_id = await wheel_service.create_wheel(payload.name, [i.model_dump() for i in payload.items])
+    wheel_id = await wheel_service.create_wheel(payload.name, [i.model_dump() for i in payload.items], payload.twitch_command)
     return {"status": "ok", "id": wheel_id}
 
 
@@ -72,7 +73,7 @@ async def create_wheel(payload: WheelPayload):
 async def edit_wheel(wheel_id: int, payload: WheelPayload):
     if not payload.items or len(payload.items) < 2:
         raise HTTPException(status_code=400, detail="Il faut au moins 2 segments sur la roue.")
-    await wheel_service.update_wheel(wheel_id, payload.name, [i.model_dump() for i in payload.items])
+    await wheel_service.update_wheel(wheel_id, payload.name, [i.model_dump() for i in payload.items], payload.twitch_command)
     return {"status": "ok"}
 
 

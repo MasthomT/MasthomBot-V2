@@ -172,16 +172,18 @@
                     lines = wrapLabel(rawLabel, segFontSize, chordWidth);
                 }
 
-                // On garde le texte "à l'endroit" même sur la moitié basse de la roue, en
-                // ajoutant 180° de rotation supplémentaire — sinon il apparaît tête en bas.
-                const flip = (midAngle % 360 > 90 && midAngle % 360 < 270) ? midAngle + 180 : midAngle;
+                // Texte radial toujours lisible : on tourne de (midAngle - 90°) pour pointer
+                // vers l'extérieur. Pour la moitié gauche (>= 180°) on ajoute 180° au lieu
+                // de soustraire, ce qui évite tout texte à l'envers sans exception.
+                const normalized = midAngle % 360;
+                const rot = normalized < 180 ? normalized - 90 : normalized + 90;
                 const lineHeight = segFontSize * 1.15;
                 const startDy = -((lines.length - 1) * lineHeight) / 2;
                 const tspans = lines.map((line, li) =>
                     `<tspan x="${labelPos.x.toFixed(2)}" dy="${li === 0 ? startDy.toFixed(2) : lineHeight.toFixed(2)}">${escapeHtml(line)}</tspan>`
                 ).join('');
 
-                labelsHtml += `<g clip-path="url(#wedge-clip-${i})"><text x="${labelPos.x.toFixed(2)}" y="${labelPos.y.toFixed(2)}" class="segment-label" font-size="${segFontSize}" text-anchor="middle" transform="rotate(${flip.toFixed(2)}, ${labelPos.x.toFixed(2)}, ${labelPos.y.toFixed(2)})">${tspans}</text></g>`;
+                labelsHtml += `<g clip-path="url(#wedge-clip-${i})"><text x="${labelPos.x.toFixed(2)}" y="${labelPos.y.toFixed(2)}" class="segment-label" font-size="${segFontSize}" text-anchor="middle" transform="rotate(${rot.toFixed(2)}, ${labelPos.x.toFixed(2)}, ${labelPos.y.toFixed(2)})">${tspans}</text></g>`;
             }
             svg.innerHTML = `<defs>${defsHtml}</defs>${shapesHtml}${labelsHtml}`;
         }
@@ -199,7 +201,7 @@
                 const data = await res.json();
                 items = data.items || [];
                 renderWheel();
-                wrap.classList.add('visible');
+                // Reste invisible jusqu'au premier spin
             } catch (e) { console.error('Erreur chargement roue:', e); }
         }
 
@@ -207,15 +209,13 @@
             const n = items.length;
             if (n === 0) return;
             const anglePer = 360 / n;
-            // Le pointeur est en haut (angle 0 = midi). Le segment "winnerIndex" est centré à
-            // (winnerIndex * anglePer + anglePer/2). On tourne la roue pour amener ce centre
-            // sous le pointeur, plus plusieurs tours complets pour l'effet, avec un petit
-            // décalage aléatoire pour ne pas toujours tomber pile au centre du segment.
             const segmentCenter = winnerIndex * anglePer + anglePer / 2;
             const jitter = (Math.random() - 0.5) * (anglePer * 0.6);
-            const extraSpins = 6 + Math.floor(Math.random() * 3); // 6 à 8 tours
+            const extraSpins = 6 + Math.floor(Math.random() * 3);
             const targetRotation = currentRotation + extraSpins * 360 + (360 - segmentCenter) - (currentRotation % 360) + jitter;
 
+            // Apparition de la roue au démarrage du spin
+            wrap.classList.add('visible');
             banner.classList.remove('visible');
             currentRotation = targetRotation;
             disc.style.transform = `rotate(${targetRotation}deg)`;
@@ -223,7 +223,11 @@
             setTimeout(() => {
                 resultValue.textContent = items[winnerIndex].label || '';
                 banner.classList.add('visible');
-                setTimeout(() => banner.classList.remove('visible'), 8000);
+                // Disparition 8s après le résultat
+                setTimeout(() => {
+                    banner.classList.remove('visible');
+                    setTimeout(() => wrap.classList.remove('visible'), 500);
+                }, 8000);
             }, 5600);
         }
 

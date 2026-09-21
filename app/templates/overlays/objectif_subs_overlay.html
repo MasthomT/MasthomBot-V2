@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: transparent;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  width: 560px;
+  overflow: hidden;
+}
+
+#panel {
+  width: 560px;
+  background: linear-gradient(160deg, rgba(8,4,24,0.97), rgba(22,8,50,0.97));
+  border: 1.5px solid rgba(145,70,255,0.5);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 0 40px rgba(145,70,255,0.18);
+}
+
+/* ── Ligne 1 : header ── */
+#row1 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+#row1 .title {
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 2.5px;
+  color: #9146ff;
+  white-space: nowrap;
+}
+#row1 .sep { color: rgba(255,255,255,0.15); font-size: 12px; }
+
+.badge {
+  display: flex; align-items: center; gap: 4px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+.badge .icon { font-size: 11px; }
+.badge .val  { font-size: 13px; font-weight: 900; color: #fff; }
+.badge .lbl  { font-size: 9px; color: rgba(255,255,255,0.4); font-weight: 600; }
+
+#badge-subs  .val { color: #a5b4fc; }
+#badge-gifts .val { color: #f9a8d4; }
+#badge-bits  .val { color: #fde68a; }
+
+.val.pop { animation: pop .3s cubic-bezier(0.34,1.56,.64,1) forwards; }
+@keyframes pop { 50% { transform:scale(1.25); } }
+
+#countdown {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #fbbf24;
+  white-space: nowrap;
+}
+#countdown.urgent { color: #f87171; animation: blink-r 1s ease infinite; }
+@keyframes blink-r { 50% { opacity:.5; } }
+
+/* ── Ligne 2 : palier courant + barre ── */
+#row2 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 16px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+#cur-block { flex-shrink: 0; }
+#cur-n {
+  font-size: 26px;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+}
+#cur-n sub { font-size: 11px; color: rgba(255,255,255,0.4); font-weight:600; margin-left:2px; vertical-align:middle; }
+#cur-tag {
+  font-size: 8.5px; font-weight: 900;
+  text-transform: uppercase; letter-spacing: 1.5px;
+  color: #9146ff;
+  display: flex; align-items: center; gap: 4px;
+  margin-bottom: 2px;
+}
+#cur-tag::before {
+  content:''; width:5px; height:5px; background:#9146ff; border-radius:50%;
+  animation: pulse 1.2s ease infinite;
+}
+@keyframes pulse { 50% { opacity:.2; } }
+
+#bar-block { flex: 1; }
+#cur-desc {
+  font-size: 11.5px; color: #c4b5fd; margin-bottom: 6px;
+  line-height: 1.25;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#step-bg {
+  height: 8px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 8px; overflow: hidden;
+}
+#step-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #7c3aed, #9146ff);
+  border-radius: 8px;
+  transition: width 1.2s cubic-bezier(.25,1,.5,1);
+  box-shadow: 0 0 8px rgba(145,70,255,.5);
+}
+#step-meta {
+  display: flex; justify-content: space-between;
+  margin-top: 3px;
+  font-size: 9px; color: rgba(255,255,255,.25); font-weight:700;
+}
+#step-meta .cur { color: #c4b5fd; }
+
+/* ── Ligne 3 : pills des paliers ── */
+#row3 {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 14px 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+#row3::-webkit-scrollbar { display: none; }
+
+.pill {
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 3px;
+  border-radius: 20px;
+  padding: 3px 8px;
+  font-size: 10px; font-weight: 700;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  transition: all .3s;
+}
+.pill.done {
+  background: rgba(145,70,255,0.1);
+  border-color: rgba(145,70,255,0.2);
+  color: rgba(255,255,255,0.3);
+}
+.pill.done .pico { font-size: 9px; }
+.pill.active {
+  background: rgba(145,70,255,0.2);
+  border-color: rgba(145,70,255,0.6);
+  color: #e9d5ff;
+  box-shadow: 0 0 8px rgba(145,70,255,0.3);
+}
+.pill.upcoming {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.4);
+}
+.pill .pn {
+  font-weight: 900;
+  margin-right: 1px;
+}
+.pill .pl {
+  font-weight: 500;
+  opacity: 0.8;
+}
+.pill.active .pl { opacity: 1; }
+.pill.done   .pl { opacity: 0.6; }
+
+/* ── Flash palier débloqué ── */
+#fl {
+  position: fixed; inset:0; pointer-events:none; z-index:999;
+  background: rgba(145,70,255,.28); opacity:0;
+}
+#fl.go { animation: fl .6s ease forwards; }
+@keyframes fl { 0% { opacity:1; } 100% { opacity:0; } }
+</style>
+</head>
+<body>
+
+<div id="fl"></div>
+<div id="panel">
+
+  <!-- Ligne 1 : titre + badges + countdown -->
+  <div id="row1">
+    <span class="title">🎂 Objectif</span>
+    <span class="sep">·</span>
+    <div class="badge" id="badge-subs">
+      <span class="icon">🎯</span>
+      <span class="val" id="v-subs">—</span>
+      <span class="lbl">subs</span>
+    </div>
+    <div class="badge" id="badge-gifts">
+      <span class="icon">🎁</span>
+      <span class="val" id="v-gifts">—</span>
+      <span class="lbl">gifts</span>
+    </div>
+    <div class="badge" id="badge-bits">
+      <span class="icon">💎</span>
+      <span class="val" id="v-bits">—</span>
+      <span class="lbl">bits</span>
+    </div>
+    <span id="countdown">…</span>
+  </div>
+
+  <!-- Ligne 2 : prochain palier + barre -->
+  <div id="row2">
+    <div id="cur-block">
+      <div id="cur-tag">Prochain</div>
+      <div id="cur-n">—<sub>subs</sub></div>
+    </div>
+    <div id="bar-block">
+      <div id="cur-desc">Chargement…</div>
+      <div id="step-bg"><div id="step-fill" style="width:0%"></div></div>
+      <div id="step-meta">
+        <span id="s-from">0</span>
+        <span class="cur" id="s-pos">0 / 0</span>
+        <span id="s-to">0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ligne 3 : pills horizontaux -->
+  <div id="row3"></div>
+
+</div>
+
+<script>
+const MS = [
+  { n:   5, label: 'Giveaway "Pattes de Félix" x1' },
+  { n:  10, label: 'On fait des tier lists' },
+  { n:  20, label: 'Julien chante "Joyeux Anniversaire"' },
+  { n:  40, label: 'Jeux d\'horreur Steam de Lucile' },
+  { n:  50, label: 'On vous annonce une surprise !' },
+  { n:  75, label: 'Giveaway "Pattes de Félix" x2' },
+  { n: 100, label: 'Gabriel chante "Joyeux Anniversaire"' },
+  { n: 125, label: 'Live anecdotes grand frère & grande sœur' },
+  { n: 150, label: 'Giveaway "Pattes de Félix" x3' },
+  { n: 175, label: 'On mate le Film de la Honte' },
+  { n: 200, label: 'On renomme la chaîne !' },
+  { n: 225, label: 'Lucile initie au crochet en live' },
+  { n: 250, label: 'Cuisine niçoise avec la Reine Mère' },
+  { n: 300, label: 'On adopte un chaton !' },
+];
+
+const END   = new Date('2026-08-08T21:59:00Z');
+const START = new Date('2026-08-06T00:00:00+02:00');
+let prev = { subs:-1, subgifts:-1, bits:-1, total:-1 };
+let prevIdx = -1;
+
+function fmt(n) { return n>=1000 ? (n/1000).toFixed(1).replace('.',',')+'k' : String(n); }
+function idx(t) { for(let i=0;i<MS.length;i++) if(t<MS[i].n) return i; return MS.length; }
+
+function animVal(id) {
+  const el = document.getElementById(id);
+  el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+}
+
+function render(d) {
+  const first = prev.subs === -1;
+  if (first || d.subs     !== prev.subs)     { document.getElementById('v-subs').textContent  = fmt(d.subs);     animVal('v-subs'); }
+  if (first || d.subgifts !== prev.subgifts) { document.getElementById('v-gifts').textContent = fmt(d.subgifts); animVal('v-gifts'); }
+  if (first || d.bits     !== prev.bits)     { document.getElementById('v-bits').textContent  = fmt(d.bits);     animVal('v-bits'); }
+
+  const total = d.total_subs || 0;
+  const i = idx(total);
+
+  // Carte palier
+  if (i < MS.length) {
+    const cur  = MS[i];
+    const from = i > 0 ? MS[i-1].n : 0;
+    const pct  = from===cur.n ? 100 : Math.min(100,((total-from)/(cur.n-from))*100);
+    document.getElementById('cur-n').innerHTML = `${cur.n}<sub>subs</sub>`;
+    document.getElementById('cur-desc').textContent = cur.label;
+    document.getElementById('step-fill').style.width = pct.toFixed(1)+'%';
+    document.getElementById('s-from').textContent = from;
+    document.getElementById('s-to').textContent   = cur.n;
+    document.getElementById('s-pos').textContent  = `${total} / ${cur.n}`;
+    document.getElementById('cur-tag').style.display = 'flex';
+  } else {
+    document.getElementById('cur-n').innerHTML = `300<sub>subs</sub>`;
+    document.getElementById('cur-desc').textContent = '🎉 Tous débloqués !';
+    document.getElementById('step-fill').style.width = '100%';
+    document.getElementById('cur-tag').style.display = 'none';
+  }
+
+  // Pills
+  const row = document.getElementById('row3');
+  row.innerHTML = '';
+  MS.forEach((ms, j) => {
+    const done=total>=ms.n, active=j===i;
+    const p = document.createElement('div');
+    p.className = 'pill '+(done?'done':active?'active':'upcoming');
+    p.innerHTML = `<span class="pico">${done?'✓':active?'▶':'○'}</span><span class="pn">${ms.n}</span><span class="pl">${ms.label}</span>`;
+    row.appendChild(p);
+  });
+  // Scroll auto sur la pill active
+  const ap = row.querySelector('.active');
+  if (ap) ap.scrollIntoView({ behavior:'smooth', block:'nearest', inline:'center' });
+
+  // Flash si nouveau palier débloqué
+  if (prevIdx >= 0 && i < prevIdx) {
+    const fl = document.getElementById('fl');
+    fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go');
+  }
+  prevIdx = i;
+  prev = { subs:d.subs, subgifts:d.subgifts, bits:d.bits, total };
+}
+
+function tick() {
+  const now  = Date.now();
+  const diff = END - now;
+  const el   = document.getElementById('countdown');
+  if (diff <= 0) { el.textContent='⏰ Terminé !'; el.classList.remove('urgent'); return; }
+  const h=Math.floor(diff/3600000), m=Math.floor((diff%3600000)/60000), s=Math.floor((diff%60000)/1000);
+  el.textContent = h ? `⏳ ${h}h${String(m).padStart(2,'0')}m` : m ? `⏳ ${m}m${String(s).padStart(2,'0')}s` : `⏳ ${s}s`;
+  el.classList.toggle('urgent', diff < 3600000);
+}
+
+async function poll() {
+  try {
+    const r = await fetch('/api/v1/compteur-defi?since=2026-08-06');
+    if (r.ok) render(await r.json());
+  } catch(e) {}
+}
+
+poll();
+setInterval(poll, 30000);
+setInterval(tick, 1000);
+tick();
+</script>
+</body>
+</html>

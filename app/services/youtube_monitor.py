@@ -7,6 +7,7 @@ chaîne (`/feeds/videos.xml?channel_id=...`) — pas de scraping fragile ici.
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timezone
 import xml.etree.ElementTree as ET
 
@@ -16,6 +17,7 @@ from app.core.database import get_db_connection
 from app.services.discord_service import send_message_to_discord
 
 logger = logging.getLogger("masthbot.youtube")
+_last_feed_error_log = 0.0  # horodatage du dernier message d'erreur de flux (anti-spam)
 
 CHECK_INTERVAL_SECONDS = 10 * 60  # 10 minutes
 ATOM_NS = "{http://www.w3.org/2005/Atom}"
@@ -87,7 +89,16 @@ async def check_new_youtube_video() -> None:
     try:
         videos = await _fetch_latest_videos(yt_channel_id)
     except Exception as e:
-        logger.error(f"❌ [YOUTUBE] Échec récupération du flux RSS : {e}")
+        # Un 404 persistant = ID de chaîne erroné ou chaîne sans vidéo publique : inutile de
+        # le répéter à chaque cycle (318 erreurs en 10 jours), on le signale 1 fois / 6 h.
+        global _last_feed_error_log
+        now = time.time()
+        if now - _last_feed_error_log > 6 * 3600:
+            _last_feed_error_log = now
+            logger.error(
+                f"❌ [YOUTUBE] Échec récupération du flux RSS pour la chaîne {yt_channel_id} : {e} "
+                f"(vérifie l'ID de chaîne dans /admin/discord_moderation ; message limité à 1 / 6 h)"
+            )
         return
 
     if not videos:

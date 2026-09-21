@@ -17,7 +17,7 @@ class AdminToolsPlugin(commands.Cog):
         """Lance l'overlay de SO pour un streameur"""
         is_authorized = ctx.author.is_mod or ctx.author.is_broadcaster or ctx.author.name.lower() == "felixthebigblackcat"
         if not is_authorized: return
-        if not content: return await ctx.send("Miaou ! Pseudo ou lien requis : !so masthom_")
+        if not content: return await ctx.send("Miaou ! Pseudo ou lien requis : !so masthou")
 
         content = content.replace("!so", "").strip()
         link_match = re.search(r"https?://\S*twitch\.tv\S+", content)

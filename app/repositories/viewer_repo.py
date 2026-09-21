@@ -84,9 +84,97 @@ async def init_tables() -> None:
     except Exception as e:
         logger.error(f"❌ [DB ERROR] Erreur init_tables : {e}")
 
+# Compteurs additifs fusionnés lorsqu'un compte "streamerbot_<pseudo>" (import Streamer.bot)
+# rejoint le vrai compte Twitch du même viewer.
+_ADDITIVE_COLS = [
+    "messages", "watchtime", "points", "gifts_count", "emotes_count", "bits_count",
+    "first_count", "deuz_count", "troiz_count", "emotes_global", "commands_global",
+    "gamble_won", "ai_prompts", "bombs_won", "bombs_lost", "rewards_claimed",
+    "words_guessed", "poll_votes_count", "questions_asked_count",
+    "games_rank_s_count", "games_rank_a_count", "games_rank_b_count", "games_rank_c_count",
+]
+
+# Évite de refaire la vérification à chaque message d'un même viewer.
+_legacy_checked: set[str] = set()
+
+
+async def _merge_legacy_into(db, twitch_id: str, legacy_id: str) -> None:
+    """Fusionne la ligne héritée `legacy_id` dans le vrai compte `twitch_id`.
+
+    Sans ça, deux lignes partagent le même pseudo et `update_viewer_stats` (avant correction)
+    créditait messages/XP à l'une des deux au hasard, coupant les stats d'un viewer en deux.
+    """
+    real = await db.execute("SELECT 1 FROM viewers WHERE twitch_id = $1", twitch_id)
+    if not await real.fetchone():
+        # Le vrai compte n'existe pas encore : on rebaptise simplement la ligne héritée.
+        await db.execute("UPDATE viewers SET twitch_id = $1 WHERE twitch_id = $2", twitch_id, legacy_id)
+    else:
+        sums = ", ".join(f"{c} = COALESCE(r.{c}, 0) + COALESCE(l.{c}, 0)" for c in _ADDITIVE_COLS)
+        # Un seul ordre SQL (DELETE ... RETURNING + UPDATE) : atomique, pas de double comptage
+        # possible si le bot s'arrête en plein milieu.
+        await db.execute(f"""
+            WITH l AS (DELETE FROM viewers WHERE twitch_id = $2 RETURNING *)
+            UPDATE viewers r SET {sums},
+                sub_months = GREATEST(COALESCE(r.sub_months, 0), COALESCE(l.sub_months, 0))
+            FROM l WHERE r.twitch_id = $1
+        """, twitch_id, legacy_id)
+
+    await _merge_legacy_daily(db, twitch_id, legacy_id)
+    await db.execute("UPDATE viewer_exp_log SET twitch_id = $1 WHERE twitch_id = $2", twitch_id, legacy_id)
+    logger.info(f"🔗 [MERGE] Compte hérité {legacy_id} fusionné dans {twitch_id}.")
+
+
+async def _merge_legacy_daily(db, twitch_id: str, legacy_id: str) -> None:
+    """Historique quotidien : (twitch_id, day) est unique, donc on additionne les jours en commun."""
+    await db.execute("""
+        INSERT INTO viewer_daily_stats (twitch_id, day, messages, watchtime, points_gained)
+        SELECT $1, day, messages, watchtime, points_gained FROM viewer_daily_stats WHERE twitch_id = $2
+        ON CONFLICT (twitch_id, day) DO UPDATE SET
+            messages = viewer_daily_stats.messages + EXCLUDED.messages,
+            watchtime = viewer_daily_stats.watchtime + EXCLUDED.watchtime,
+            points_gained = viewer_daily_stats.points_gained + EXCLUDED.points_gained
+    """, twitch_id, legacy_id)
+    await db.execute("DELETE FROM viewer_daily_stats WHERE twitch_id = $1", legacy_id)
+
+
+async def merge_all_legacy_viewers() -> int:
+    """Fusionne tous les comptes `streamerbot_*` qui ont un vrai compte Twitch de même pseudo.
+    Retourne le nombre de comptes fusionnés (utilisé par le script de nettoyage ponctuel)."""
+    merged = 0
+    async with get_db_connection() as db:
+        cur = await db.execute("""
+            SELECT l.twitch_id AS legacy_id, r.twitch_id AS real_id
+            FROM viewers l JOIN viewers r ON LOWER(r.username) = LOWER(l.username)
+            WHERE l.twitch_id LIKE 'streamerbot\\_%' AND r.twitch_id NOT LIKE 'streamerbot\\_%'
+        """)
+        for row in await cur.fetchall():
+            await _merge_legacy_into(db, row["real_id"], row["legacy_id"])
+            merged += 1
+
+        # Jours orphelins : la ligne `viewers` héritée n'existe plus (fusion partielle ancienne)
+        # mais ses stats quotidiennes traînent encore sous l'ancien identifiant.
+        cur = await db.execute("""
+            SELECT DISTINCT d.twitch_id AS legacy_id, r.twitch_id AS real_id
+            FROM viewer_daily_stats d
+            JOIN viewers r ON LOWER(r.username) = SUBSTRING(d.twitch_id FROM 13)
+            WHERE d.twitch_id LIKE 'streamerbot\\_%'
+              AND NOT EXISTS (SELECT 1 FROM viewers l WHERE l.twitch_id = d.twitch_id)
+        """)
+        for row in await cur.fetchall():
+            await _merge_legacy_daily(db, row["real_id"], row["legacy_id"])
+            merged += 1
+    return merged
+
+
 async def ensure_viewer(twitch_id: str, username: str) -> None:
     try:
         async with get_db_connection() as db:
+            if twitch_id not in _legacy_checked:
+                _legacy_checked.add(twitch_id)
+                legacy_id = f"streamerbot_{username.lower()}"
+                cur = await db.execute("SELECT 1 FROM viewers WHERE twitch_id = $1", legacy_id)
+                if await cur.fetchone():
+                    await _merge_legacy_into(db, twitch_id, legacy_id)
             # ✅ CORRECT : pas de parenthèses autour des variables, 
             # elles sont envoyées séparément.
             await db.execute("""
@@ -136,11 +224,20 @@ async def create_viewer(viewer: ViewerCreate) -> Optional[ViewerResponse]:
         logger.error(f"❌ [DB ERROR] Erreur create_viewer : {e}")
     return await get_viewer(viewer.twitch_id)
 
-async def update_viewer_stats(username: str, messages_add: int = 0, watchtime_add: int = 0, points_add: int = 0) -> bool:
+async def update_viewer_stats(username: str, messages_add: int = 0, watchtime_add: int = 0, points_add: int = 0,
+                              twitch_id: Optional[str] = None) -> bool:
     try:
         async with get_db_connection() as db:
-            cursor = await db.execute("SELECT * FROM viewers WHERE username = $1", (username,))
-            row = await cursor.fetchone()
+            if twitch_id:
+                # Identité fiable : on ne passe plus par le pseudo (deux lignes pouvaient le partager).
+                row = {"twitch_id": twitch_id}
+            else:
+                # Repli par pseudo, insensible à la casse, en préférant le vrai compte Twitch
+                # aux comptes hérités "streamerbot_*".
+                cursor = await db.execute(
+                    "SELECT twitch_id FROM viewers WHERE LOWER(username) = LOWER($1) "
+                    "ORDER BY (twitch_id LIKE 'streamerbot\\_%') ASC LIMIT 1", (username,))
+                row = await cursor.fetchone()
 
             if row:
                 t_id = row['twitch_id']

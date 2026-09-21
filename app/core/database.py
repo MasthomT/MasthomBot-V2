@@ -182,6 +182,9 @@ async def init_db():
             "ALTER TABLE viewer_exp_log ADD COLUMN IF NOT EXISTS twitch_id TEXT",
             "ALTER TABLE viewers ADD COLUMN IF NOT EXISTS vip_expiry TIMESTAMP",
             "ALTER TABLE viewers ADD COLUMN IF NOT EXISTS poll_votes_count INTEGER DEFAULT 0",
+            # Watchtime déjà "consommé" par les crédits de fin de stream : remplace l'ancien reset
+            # à 0 de viewer_daily_stats.watchtime, qui détruisait l'historique quotidien.
+            "ALTER TABLE viewer_daily_stats ADD COLUMN IF NOT EXISTS watchtime_offset INTEGER DEFAULT 0",
             "ALTER TABLE viewers ADD COLUMN IF NOT EXISTS questions_asked_count INTEGER DEFAULT 0",
 
             # --- NOUVELLE TABLE POUR LE DASHBOARD ADMIN (PAGE INFOS) ---

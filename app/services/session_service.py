@@ -10,8 +10,8 @@ logger = logging.getLogger("masthbot.session")
 # =================================================================
 # Attacher les données à 'sys' garantit que Flask (interface web) 
 # et le Bot Twitch (arrière-plan) partagent exactement le même dictionnaire.
-if not hasattr(sys, '_masthom_session_data'):
-    sys._masthom_session_data = {
+if not hasattr(sys, '_masthousession_data'):
+    sys._masthousession_data = {
         "start_time": time.time(),
         "chatters": [],      
         "followers": [],     
@@ -26,11 +26,11 @@ if not hasattr(sys, '_masthom_session_data'):
 
 def get_live_session_data():
     """Récupère la mémoire unique partagée."""
-    return sys._masthom_session_data
+    return sys._masthousession_data
 
 def reset_session_data():
     """Vide la mémoire de la session (Idéal en début de stream via le dashboard)."""
-    data = sys._masthom_session_data
+    data = sys._masthousession_data
     data["start_time"] = time.time()
     for key in data:
         if isinstance(data[key], list):
@@ -40,7 +40,7 @@ def reset_session_data():
 
 def update_live_session_data(event_type, user_name, details=None, is_mod=False, is_vip=False):
     """Inscrit une action dans la RAM, classe STRICTEMENT les rôles et cumule les dons."""
-    data = sys._masthom_session_data
+    data = sys._masthousession_data
     if not user_name: 
         return False
     

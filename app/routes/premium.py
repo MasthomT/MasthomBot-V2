@@ -190,7 +190,7 @@ async def trigger_premium_action(payload: dict):
     
     viewer = dict(viewer)
     is_premium = viewer.get("is_sub", 0) == 1 or viewer.get("is_vip", 0) == 1 or viewer.get("is_mod", 0) == 1
-    is_boss = viewer.get("username", "").lower() == "masthom_"
+    is_boss = viewer.get("username", "").lower() == "masthou"
     
     if not is_premium and not is_boss: 
         return JSONResponse(status_code=403, content={"detail": "🔒 Réservé Premium !"})

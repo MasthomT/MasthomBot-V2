@@ -18,16 +18,40 @@ from app.services.credits_service import credits_service
 from app.routes.overlays import trigger_overlay_event
 from app.services import twitch_poll_state
 
+SPIN_ANIMATION_SECONDS = 5.8
+
+async def _spin_wheel_by_name(wheel_name: str) -> None:
+    """Cherche une roue par nom et la fait tourner (meilleur-effort, silencieux si absente)."""
+    try:
+        from app.services.wheel_service import get_all_wheels, pick_winner
+        from app.core.config import settings
+        wheels = await get_all_wheels()
+        wheel = next((w for w in wheels if w["name"].lower() == wheel_name.lower()), None)
+        if not wheel or len(wheel.get("items", [])) < 2:
+            return
+        winner_index = pick_winner(wheel["items"])
+        winner = wheel["items"][winner_index]
+        await trigger_overlay_event({"type": "spin_wheel", "wheel_id": wheel["id"], "winner_index": winner_index})
+        await asyncio.sleep(SPIN_ANIMATION_SECONDS)
+        from app.services.twitch_service import twitch_bot
+        channel = twitch_bot.get_channel(settings.TWITCH_CHANNEL.replace("#", "").lower())
+        if channel:
+            await channel.send(f"🎡 Roue {wheel_name} : {winner['label']} !")
+    except Exception as e:
+        logging.getLogger("masthbot.eventsub").error(f"❌ [WHEEL] Spin '{wheel_name}' : {e}")
+
 logger = logging.getLogger("masthbot.eventsub")
 
 processed_message_ids = collections.deque(maxlen=200)
 
 # Twitch envoie "channel.subscribe" ET "channel.subscription.message" pour le MÊME abonnement
 # dès que le viewer partage un message public (deux notifications EventSub distinctes, donc
-# processed_message_ids ne les voit pas comme doublons). Sans ce garde-fou : XP en double et
-# mois cumulés faussés (additionnés) dans le générique de fin.
+# processed_message_ids ne les voit pas comme doublons). Sans ce garde-fou : XP en double,
+# mois cumulés faussés dans le générique, ET total SubGoal compté deux fois.
+# Fenêtre à 300s (pas 10s) : le viewer peut mettre du temps à taper/partager son message de
+# resub après l'abonnement lui-même — un écart de 10s ratait ce cas et comptait un 2e sub.
 _recent_sub_events: dict[str, float] = {}
-_RECENT_SUB_WINDOW = 10.0
+_RECENT_SUB_WINDOW = 300.0
 
 
 def _is_duplicate_sub(user_id: str) -> bool:
@@ -236,6 +260,11 @@ async def eventsub_routine():
                                     await viewer_repo.add_experience(user_id, user_name, xp, "SUB", f"Abonnement Tier {tier}")
                                     await log_stream_event("sub", user_name, {"tier": tier, "xp": xp, "is_gift": False})
                                     credits_service.log_event("subscribers", user_name, str(cumulative_months))
+                                    asyncio.create_task(_spin_wheel_by_name("Anniversaire"))
+                                    from app.services.subgoal_service import check_and_announce_new_tiers, maybe_spin_linked_wheel, announce_new_sub
+                                    asyncio.create_task(check_and_announce_new_tiers())
+                                    asyncio.create_task(maybe_spin_linked_wheel())
+                                    asyncio.create_task(announce_new_sub(user_name, "sub"))
                                 else:
                                     # Sub OFFERT : le destinataire n'apparaît PAS dans "dernier sub"
                                     # (le donateur est géré par channel.subscription.gift). On l'ajoute
@@ -260,6 +289,11 @@ async def eventsub_routine():
                                     credits_service.log_event("gifters", user_name, f"{count} Subs offerts")
                                     await viewer_repo.add_experience(user_id, user_name, total_xp, "SUBGIFT", f"Offre {count} Subs Tier {tier}")
                                     await log_stream_event("subgift", user_name, {"count": count, "tier": tier, "xp": total_xp})
+                                    asyncio.create_task(_spin_wheel_by_name("Anniversaire"))
+                                    from app.services.subgoal_service import check_and_announce_new_tiers, maybe_spin_linked_wheel, announce_new_sub
+                                    asyncio.create_task(check_and_announce_new_tiers())
+                                    asyncio.create_task(maybe_spin_linked_wheel())
+                                    asyncio.create_task(announce_new_sub(user_name, "subgift", count))
 
                             elif sub_type == "channel.raid":
                                 raider_name = event.get("from_broadcaster_user_name", "Inconnu")
@@ -292,6 +326,8 @@ async def eventsub_routine():
 
                                 await log_stream_event("cheer", user_name, {"bits": bits, "xp_gained": total_xp})
                                 credits_service.log_event("bits", user_name, f"{bits} Bits")
+                                if bits >= 100:
+                                    asyncio.create_task(_spin_wheel_by_name("Anniversaire"))
 
                             elif sub_type == "channel.channel_points_custom_reward_redemption.add":
                                 user_name = event.get("user_name", "Inconnu")

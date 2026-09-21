@@ -15,7 +15,7 @@ load_dotenv()
 router = APIRouter(tags=["public"])
 templates = Jinja2Templates(directory="app/templates")
 
-EXCLUSION_LIST = "('masthom_', 'felixthebigblackcat', 'vestale7', 'streamelements', 'wizebot', 'nightbot')"
+EXCLUSION_LIST = "('masthou', 'felixthebigblackcat', 'vestale7', 'streamelements', 'wizebot', 'nightbot')"
 
 # ==========================================
 # 1. PORTAIL D'ACCUEIL & AUTHENTIFICATION

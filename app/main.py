@@ -37,7 +37,7 @@ from slowapi.errors import RateLimitExceeded
 from app.core.rate_limit import limiter
 
 # --- IMPORT DES ROUTES ---
-from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes, partners, admin_commands, wheel
+from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes, partners, admin_commands, wheel, subgoal
 from app.routes.credits import router as credits_router
 from app.routes.premium import router as premium_router
 from app.routes.games import router as games_router, init_games_tables
@@ -62,12 +62,15 @@ from app.services.games_scheduler import games_scheduler_routine
 from app.services.discord_mod_service import discord_mod_bot, start_discord_mod_bot, init_discord_mod_tables, birthday_check_routine
 from app.services.tiktok_monitor import tiktok_monitor_routine
 from app.services.youtube_monitor import youtube_monitor_routine
+from app.services.clip_discord_service import clip_monitor_routine
+from app.services.ai_service import felix_vision_loop
 from app.services.bot_health_service import (
     init_bot_health_table,
     check_for_previous_crash_and_alert,
     clear_crash_marker,
 )
 from app.services.wheel_service import init_wheel_tables
+from app.services.subgoal_service import init_subgoal_tables
 from app.services.bot_system_commands_service import init_system_commands_table
 from app.services.vip_sound_service import init_vip_sound_tables, sync_vip_command_status_loop
 
@@ -129,6 +132,7 @@ async def lifespan(app: FastAPI):
     await init_discord_mod_tables()
     await init_bot_health_table()
     await init_wheel_tables()
+    await init_subgoal_tables()
     await init_system_commands_table()
     await init_vip_sound_tables()
     logger.info("✅ [DATABASE] Tables PostgreSQL initialisées avec succès !")
@@ -151,6 +155,8 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(tiktok_monitor_routine())
     asyncio.create_task(youtube_monitor_routine())
     asyncio.create_task(birthday_check_routine())
+    asyncio.create_task(clip_monitor_routine())
+    asyncio.create_task(felix_vision_loop())
 
     # 3. Lancement de l'overlay Node.js
     server_js_path = os.path.join(BASE_DIR, "server.js")
@@ -260,6 +266,7 @@ app.include_router(felixdle_admin_router)
 app.include_router(admin_discord_mod_router)
 app.include_router(partners.router)
 app.include_router(wheel.router)
+app.include_router(subgoal.router)
 
 # ==========================================
 # ROUTES API : INFORMATIONS DE LA CHAÎNE (DASHBOARD ADMIN)

@@ -1,6 +1,7 @@
+import ast
 import logging
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
@@ -12,7 +13,7 @@ router = APIRouter(prefix="/api/v1", tags=["api"])
 # ==========================================================
 # 🛑 LISTE D'EXCLUSION GLOBALE
 # ==========================================================
-EXCLUSION_LIST = "('masthom_', 'felixthebigblackcat', 'vestale7', 'streamelements', 'wizebot', 'nightbot')"
+EXCLUSION_LIST = "('masthou', 'felixthebigblackcat', 'vestale7', 'streamelements', 'wizebot', 'nightbot')"
 
 # ==========================================================
 # 1. STATS GLOBALES
@@ -242,18 +243,16 @@ async def get_faq_api():
 # ==========================================================
 # 6. STREAMERBOT (Récompenses First/Deuz/Troiz)
 # ==========================================================
-# 🛡️ Garde-fou anti-rafale : Streamer.bot semble évaluer ses conditions de seuil en
-# ">=" plutôt qu'en "==", donc une fois qu'un viewer a dépassé 1/2/3 messages, il
-# rerenvoie first+deuz+troiz à CHAQUE nouveau message, pour le reste du stream (constaté
-# le 03/07/2026 : quasi tous les chatteurs actifs spammés en boucle). Chaque viewer ne
-# peut donc recevoir qu'UNE FOIS chaque type (first, deuz, troiz) PAR STREAM — mais les
-# trois types restent bien distincts entre eux, pour ne pas bloquer sa progression
-# naturelle first → deuz → troiz au fil de ses messages. Clé de stream = live_id Twitch
-# (settings.personal_last_live_id, déjà suivi par live_monitor.py), remis à zéro à
-# chaque nouveau live.
-_podium_awarded_by_stream: dict[str, set[tuple[str, str]]] = {}
-# Évite de spammer les logs si Streamer.bot insiste (un seul WARNING par doublon, pas un par tentative).
-_podium_rejection_logged_by_stream: dict[str, set[tuple[str, str]]] = {}
+# 🛡️ Garde-fou anti-rafale : un viewer ne peut recevoir qu'UNE SEULE des 3 récompenses
+# (first, deuz OU troiz — jamais plusieurs) PAR STREAM. Confirmé le 07/07/2026 après un
+# nouveau cas (lehaha25 a réclamé "Deuz" et a reçu les 3 trophées) : les trois positions
+# sont mutuellement exclusives pour un même viewer, ce n'est PAS une progression
+# cumulative. Streamer.bot semble évaluer ses conditions de seuil en ">=" plutôt qu'en
+# "==", donc une fois qu'un viewer a dépassé 1/2/3 messages, il rerenvoie first+deuz+troiz
+# en rafale — on ne garde que la toute première réponse, le reste est ignoré. Clé de
+# stream = live_id Twitch (settings.personal_last_live_id, déjà suivi par
+# live_monitor.py), remis à zéro à chaque nouveau live.
+_podium_awarded_by_stream: dict[str, set[str]] = {}
 
 @router.post("/rewards/podium")
 async def claim_podium_reward(request: Request):
@@ -277,23 +276,11 @@ async def claim_podium_reward(request: Request):
             if stream_key not in _podium_awarded_by_stream:
                 _podium_awarded_by_stream.clear()  # nouveau stream : on oublie l'ancien
                 _podium_awarded_by_stream[stream_key] = set()
-                _podium_rejection_logged_by_stream.clear()
-                _podium_rejection_logged_by_stream[stream_key] = set()
             awarded = _podium_awarded_by_stream[stream_key]
-            rejection_logged = _podium_rejection_logged_by_stream.setdefault(stream_key, set())
 
-            pair = (t_id, reward_type)
-            if pair in awarded:
-                if pair not in rejection_logged:
-                    logger.warning(
-                        f"🛑 [PODIUM] Doublon ignoré pour {username} ({t_id}) : '{reward_type}' déjà accordé sur ce "
-                        f"stream (Streamer.bot semble continuer d'envoyer cet event — prochains doublons silencieux)."
-                    )
-                    rejection_logged.add(pair)
-                return {"status": "ignored", "reason": "ce type de récompense a déjà été attribué à ce viewer sur ce stream"}
-            awarded.add(pair)
-
-            logger.info(f"🏆 [PODIUM] {username} ({t_id}) → {reward_type} (count={count_val})")
+            if t_id in awarded:
+                return {"status": "ignored", "reason": "ce viewer a déjà reçu une récompense de podium sur ce stream"}
+            awarded.add(t_id)
 
             # Upsert du viewer au cas où il n'existe pas encore
             await conn.execute(
@@ -327,6 +314,57 @@ async def claim_podium_reward(request: Request):
 # ==========================================================
 # 7. INFOS CHAÎNE
 # ==========================================================
+@router.get("/compteur-defi")
+async def get_compteur_defi(since: str = "2026-08-06"):
+    """
+    Compteur subs/subgifts/bits depuis une date donnée (YYYY-MM-DD ou ISO).
+    Utilisé par /overlay/compteur-defi.
+    """
+    try:
+        if "T" in since:
+            since_dt = datetime.fromisoformat(since)
+        else:
+            since_dt = datetime.fromisoformat(f"{since}T00:00:00")
+        # On travaille en UTC naïf côté DB
+        since_dt = since_dt.replace(tzinfo=None)
+    except ValueError:
+        since_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    async with get_db_connection() as conn:
+        cursor = await conn.execute(
+            "SELECT event_type, details FROM stream_events WHERE event_type IN ('sub','subgift','cheer') AND timestamp >= $1",
+            (since_dt,)
+        )
+        rows = await cursor.fetchall()
+
+    subs = 0
+    subgifts = 0
+    bits = 0
+
+    for row in rows:
+        etype = row["event_type"]
+        raw = row["details"] or ""
+        try:
+            d = ast.literal_eval(raw)
+        except Exception:
+            d = {}
+
+        if etype == "sub" and not d.get("is_gift"):
+            subs += 1
+        elif etype == "subgift":
+            subgifts += int(d.get("count", 1))
+        elif etype == "cheer":
+            bits += int(d.get("bits", 0))
+
+    return {
+        "subs": subs,
+        "subgifts": subgifts,
+        "bits": bits,
+        "since": since_dt.isoformat(),
+        "total_subs": subs + subgifts,
+    }
+
+
 @router.get("/channel-info")
 async def api_get_channel_info():
     """API publique pour le site fel-x.icu : renvoie les infos et le planning"""

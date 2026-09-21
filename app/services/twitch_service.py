@@ -28,10 +28,15 @@ logger = logging.getLogger("masthbot.twitch")
 _birthday_wished: set = set()
 _permitted_users: set = set()
 
+# Suivi des échecs d'envoi IRC ("closing transport" bloqué en continu, pas juste une
+# reconnexion transitoire) — voir le filet de sécurité dans watchdog_timer ci-dessous.
+_send_failure_since: float | None = None
+
 async def safe_send(channel, content: str) -> bool:
     """Envoie un message en sécurisant la longueur et le contenu.
     Retourne False en cas d'échec, pour permettre à l'appelant de retenter
     plutôt que de considérer le message comme envoyé à tort."""
+    global _send_failure_since
     if not content or not content.strip():
         return False # On ne fait rien si le message est vide
 
@@ -41,12 +46,16 @@ async def safe_send(channel, content: str) -> bool:
 
     try:
         await channel.send(content)
+        _send_failure_since = None  # succès : la connexion écrit de nouveau normalement
         return True
     except Exception as e:
         # "closing transport" : Twitch IRC force une reconnexion périodique, c'est
         # transitoire et attendu — pas la peine de polluer les logs en ERROR pour ça.
+        # Mais si ça persiste (voir watchdog_timer), la connexion est réellement morte.
         if "closing transport" in str(e):
             logger.warning(f"⚠️ Envoi différé (reconnexion IRC en cours) : {e}")
+            if _send_failure_since is None:
+                _send_failure_since = time.time()
         else:
             logger.error(f"❌ Erreur lors de l'envoi du message : {e}")
         return False
@@ -326,9 +335,10 @@ class MasthbotTwitch(commands.Bot):
             exp_msg = 0
 
         await viewer_repo.update_viewer_stats(
-            username=username, 
-            messages_add=1, 
-            points_add=exp_msg
+            username=username,
+            messages_add=1,
+            points_add=exp_msg,
+            twitch_id=str(message.author.id)
         )
 
         emotes_tag = message.tags.get('emotes')
@@ -487,6 +497,12 @@ class MasthbotTwitch(commands.Bot):
                 if reply: # On n'envoie un message que si c'est la bonne réponse !
                     return await message.channel.send(reply)
 
+            # --- SUBGOAL : !subtember (rappelle le principe de l'événement) / !subgoal (roadmap) ---
+            if cmd_name in ["subgoal", "subtember"]:
+                from app.services.subgoal_service import build_subgoal_chat_reply
+                reply = await build_subgoal_chat_reply(mode="explainer" if cmd_name == "subtember" else "roadmap")
+                return await safe_send(message.channel, reply)
+
             if cmd_name in ["game", "infogame"]:
                 from app.services.features_service import handle_game_info
                 import os
@@ -518,9 +534,25 @@ class MasthbotTwitch(commands.Bot):
                 is_sub=bool(message.tags and message.tags.get('subscriber') == '1'),
                 is_vip=is_vip,
                 is_admin=is_owner,
+                caller_twitch_id=str(message.author.id),
             )
             if result and result.get("content"):
                 await safe_send(message.channel, result["content"])
+
+            # --- 4. COMMANDES DÉDIÉES DES ROUES (modos + streameur uniquement) ---
+            if not (result and result.get("content")) and (is_mod or is_owner):
+                try:
+                    from app.services.wheel_service import get_all_wheels
+                    from app.services.eventsub_service import _spin_wheel_by_name
+                    wheels = await get_all_wheels()
+                    matched_wheel = next(
+                        (w for w in wheels if w.get("twitch_command") and w["twitch_command"].lower() == cmd_name),
+                        None
+                    )
+                    if matched_wheel:
+                        asyncio.create_task(_spin_wheel_by_name(matched_wheel["name"]))
+                except Exception as _e:
+                    logger.error(f"❌ [WHEEL CMD] Erreur roue commande '!{cmd_name}' : {_e}")
 
         await self.handle_commands(message)
 
@@ -1476,51 +1508,66 @@ class MasthbotTwitch(commands.Bot):
             session = await self.get_web_session()
             client_id = os.getenv("TWITCH_CLIENT_ID", getattr(self._http, 'client_id', ''))
             headers = {"Client-ID": client_id, "Authorization": f"Bearer {self.master_token}"}
-            url = f"https://api.twitch.tv/helix/chat/chatters?broadcaster_id={self.broadcaster_id}&moderator_id={self.broadcaster_id}"
+            base_url = f"https://api.twitch.tv/helix/chat/chatters?broadcaster_id={self.broadcaster_id}&moderator_id={self.broadcaster_id}&first=1000"
 
-            async with session.get(url, headers=headers) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    chatters = data.get('data', [])
+            # Pagination : sans `first` l'API ne renvoie que 100 personnes, donc au-delà (raid,
+            # gros event) les suivants ne recevaient ni watchtime ni XP.
+            async def _fetch_all_chatters():
+                all_chatters, cursor, status = [], None, 200
+                while True:
+                    page_url = base_url + (f"&after={cursor}" if cursor else "")
+                    async with session.get(page_url, headers=headers) as r:
+                        status = r.status
+                        if status != 200:
+                            return None, status
+                        page = await r.json()
+                    all_chatters.extend(page.get('data', []))
+                    cursor = (page.get('pagination') or {}).get('cursor')
+                    if not cursor:
+                        return all_chatters, status
 
-                    async with get_db_connection() as conn:
-                        count = 0
-                        for c in chatters:
-                            u_name = c['user_name'].lower()
-                            t_id = c['user_id']
+            chatters_list, chatters_status = await _fetch_all_chatters()
+            if chatters_status == 200:
+                chatters = chatters_list
 
-                            if u_name in [self.nick.lower(), 'nightbot', 'streamelements', 'wizebot']:
-                                continue
+                async with get_db_connection() as conn:
+                    count = 0
+                    for c in chatters:
+                        u_name = c['user_name'].lower()
+                        t_id = c['user_id']
 
-                            try:
-                                await conn.execute("""
-                                    INSERT INTO viewers (twitch_id, username, watchtime, points) 
-                                    VALUES ($1, $2, 60, $3)
-                                    ON CONFLICT(twitch_id) DO UPDATE SET 
-                                        watchtime = viewers.watchtime + 60,
-                                        points = viewers.points + EXCLUDED.points,
-                                        username = EXCLUDED.username
-                                """, (t_id, u_name, exp_to_give))
-                                
-                                await conn.execute("""
-                                    INSERT INTO viewer_daily_stats (twitch_id, day, watchtime, points_gained)
-                                    VALUES ($1, CURRENT_DATE, 60, $2)
-                                    ON CONFLICT(twitch_id, day) DO UPDATE SET
-                                        watchtime = viewer_daily_stats.watchtime + 60,
-                                        points_gained = viewer_daily_stats.points_gained + EXCLUDED.points_gained
-                                """, (t_id, exp_to_give))
-                                
-                                credits_service.add_watchtime(c['user_name'], 1)
-                                count += 1
-                            except Exception as e:
-                                logger.warning(f"⚠️ Erreur isolée pour {u_name}: {e}")
+                        if u_name in [self.nick.lower(), 'nightbot', 'streamelements', 'wizebot']:
+                            continue
 
-                        if count > 0:
-                            logger.info(f"💎 Watchtime distribué à {count} personnes.")
-                    api_success = True
+                        try:
+                            await conn.execute("""
+                                INSERT INTO viewers (twitch_id, username, watchtime, points) 
+                                VALUES ($1, $2, 60, $3)
+                                ON CONFLICT(twitch_id) DO UPDATE SET 
+                                    watchtime = viewers.watchtime + 60,
+                                    points = viewers.points + EXCLUDED.points,
+                                    username = EXCLUDED.username
+                            """, (t_id, u_name, exp_to_give))
+                            
+                            await conn.execute("""
+                                INSERT INTO viewer_daily_stats (twitch_id, day, watchtime, points_gained)
+                                VALUES ($1, CURRENT_DATE, 60, $2)
+                                ON CONFLICT(twitch_id, day) DO UPDATE SET
+                                    watchtime = viewer_daily_stats.watchtime + 60,
+                                    points_gained = viewer_daily_stats.points_gained + EXCLUDED.points_gained
+                            """, (t_id, exp_to_give))
+                            
+                            credits_service.add_watchtime(c['user_name'], 1)
+                            count += 1
+                        except Exception as e:
+                            logger.warning(f"⚠️ Erreur isolée pour {u_name}: {e}")
 
-                elif resp.status in [401, 403]:
-                    logger.error(f"❌ BLOCAGE TWITCH ({resp.status}) : Permissions insuffisantes.")
+                    if count > 0:
+                        logger.info(f"💎 Watchtime distribué à {count} personnes.")
+                api_success = True
+
+            elif chatters_status in [401, 403]:
+                logger.error(f"❌ BLOCAGE TWITCH ({chatters_status}) : Permissions insuffisantes.")
 
             if not api_success:
                 channel = self.get_channel(self.channel_name)
@@ -1806,11 +1853,17 @@ class MasthbotTwitch(commands.Bot):
                     from app.services.command_service import list_commands as _list_cmds
                     all_cmds = await _list_cmds(active_only=True)
                     viewer_roles = ("viewer", "everyone", "all", "", None)
-                    names = [f"!{c['name']}" for c in all_cmds if c.get("min_role") in viewer_roles and not c.get("hide_from_list")][:7]
-                    msg = msg.replace("{viewer_commands}", ", ".join(names) if names else "")
+                    names = [
+                        f"!{c['name']}" for c in all_cmds
+                        if c.get("min_role") in viewer_roles
+                        and not c.get("vip_owner_twitch_id")
+                        and not c.get("hide_from_list")
+                    ]
+                    random.shuffle(names)
+                    msg = msg.replace("{viewer_commands}", ", ".join(names[:6]) if names else "")
 
                 if any(t in msg for t in ["{top5_xp}", "{top5_msg}", "{levelups}", "{last_sub}", "{last_raid}"]):
-                    excl_list = ['masthom_', 'felixthebigblackcat', 'streamelements', 'wizebot', 'nightbot']
+                    excl_list = ['masthou', 'felixthebigblackcat', 'streamelements', 'wizebot', 'nightbot']
                     
                     if "{top5_xp}" in msg:
                         c_xp = await conn.execute("SELECT username FROM viewers WHERE LOWER(username) != ALL($1) ORDER BY points DESC LIMIT 5", (excl_list,))
@@ -1960,9 +2013,31 @@ class MasthbotTwitch(commands.Bot):
         # être parfaitement silencieux pendant de longues périodes (nuit, hors stream).
         # Les TCP keepalives OS détectent les vraies coupures réseau en ~60s.
         if getattr(self, 'is_ready_flag', False):
+            # Hors live, un chat muet est NORMAL (nuit, jours sans stream) : sans cette garde le
+            # watchdog tuait le bot toutes les 2 h en continu (104 redémarrages en 10 jours).
+            # On remet donc le compteur à zéro tant que la chaîne n'est pas en direct ; l'horloge
+            # des 2 h ne démarre qu'à l'ouverture du live. Les vraies coupures réseau restent
+            # détectées par les keepalives TCP et par le filet "envois bloqués" ci-dessous.
+            try:
+                is_live_now = bool((await self.get_db_config()).get('personal_last_live_id'))
+            except Exception:
+                is_live_now = True  # dans le doute on garde la protection active
+            if not is_live_now:
+                self._last_irc_at = time.time()
+
             irc_silence = time.time() - getattr(self, '_last_irc_at', time.time())
             if irc_silence > 7200:
                 logger.error(f"🚨 [IRC WATCHDOG] Aucun message IRC depuis {int(irc_silence//60)}min — reconnexion forcée.")
+                import signal as _signal
+                os.kill(os.getpid(), _signal.SIGTERM)
+
+            # Filet ENVOI : contrairement à la réception, l'écriture peut rester bloquée
+            # ("closing transport" en continu) alors que le bot reçoit toujours des messages
+            # — le filet ci-dessus ne voit donc rien passer. Constaté le 07/07/2026 : les
+            # annonces échouaient en boucle pendant 10+ minutes sans jamais se rétablir seules.
+            # Seuil court (3 min) car un vrai cycle de reconnexion Twitch est bien plus rapide.
+            if _send_failure_since is not None and (time.time() - _send_failure_since) > 180:
+                logger.error(f"🚨 [IRC WATCHDOG] Envois bloqués depuis {int(time.time() - _send_failure_since)}s — reconnexion forcée.")
                 import signal as _signal
                 os.kill(os.getpid(), _signal.SIGTERM)
 

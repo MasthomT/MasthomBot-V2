@@ -73,12 +73,12 @@ class ViewerToolsPlugin(commands.Cog):
         """Affiche la position du viewer dans le classement global"""
         username = ctx.author.name.lower()
         
-        if username in ['masthom_', 'felixthebigblackcat']:
+        if username in ['masthou', 'felixthebigblackcat']:
             return await ctx.send(f"@{ctx.author.name}, tu es hors catégorie, tu es au-dessus de tout ça ! 👑")
             
         try:
             async with get_db_connection() as conn:
-                exclusion_list = "('masthom_', 'felixthebigblackcat', 'streamelements', 'wizebot', 'nightbot')"
+                exclusion_list = "('masthou', 'felixthebigblackcat', 'streamelements', 'wizebot', 'nightbot')"
                 c = await conn.execute(f"SELECT username, points FROM viewers WHERE points > 0 AND LOWER(username) NOT IN {exclusion_list} ORDER BY points DESC, watchtime DESC")
                 viewers = await c.fetchall()
         except Exception as e:

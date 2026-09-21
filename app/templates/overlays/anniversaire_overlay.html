@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  width:1920px; height:1080px;
+  background:transparent;
+  overflow:hidden;
+  font-family:'Segoe UI',Arial,sans-serif;
+}
+
+/* ── Flash d'écran ── */
+#flash {
+  position:fixed; inset:0;
+  background:#fff;
+  opacity:0;
+  pointer-events:none;
+  z-index:100;
+}
+
+/* ── Confettis ── */
+.conf {
+  position:absolute;
+  top:-20px;
+  opacity:0;
+  border-radius:2px;
+  animation:fall linear forwards;
+}
+@keyframes fall {
+  0%   { opacity:1; transform:translateY(0) rotate(0deg) scaleX(1); }
+  50%  { transform:translateY(560px) rotate(360deg) scaleX(-1); }
+  90%  { opacity:1; }
+  100% { opacity:0; transform:translateY(1120px) rotate(900deg) scaleX(1); }
+}
+
+/* ── Emoji-pluie ── */
+.emoji-drop {
+  position:absolute;
+  top:-60px;
+  font-size:42px;
+  opacity:0;
+  animation:dropEmoji linear forwards;
+  filter:drop-shadow(0 0 6px rgba(255,200,0,.8));
+}
+@keyframes dropEmoji {
+  0%   { opacity:1; transform:translateY(0) rotate(-10deg); }
+  50%  { transform:translateY(580px) rotate(10deg); }
+  100% { opacity:0; transform:translateY(1140px) rotate(-10deg); }
+}
+
+/* ── Feux d'artifice ── */
+.spark {
+  position:absolute;
+  width:6px; height:6px;
+  border-radius:50%;
+  opacity:0;
+  animation:spark ease-out forwards;
+}
+@keyframes spark {
+  0%   { opacity:1; transform:translate(0,0) scale(1); }
+  100% { opacity:0; transform:var(--tx) scale(0); }
+}
+
+/* ── Carte centrale ── */
+#carte {
+  position:absolute;
+  left:50%; top:50%;
+  transform:translate(-50%,-50%) scale(0) rotate(-8deg);
+  width:860px;
+  background:linear-gradient(135deg,#0d001f 0%,#2a005a 40%,#0d001f 100%);
+  border-radius:36px;
+  border:4px solid #f0c040;
+  box-shadow:
+    0 0 80px rgba(240,192,64,.7),
+    0 0 160px rgba(220,60,220,.4),
+    inset 0 0 60px rgba(240,192,64,.08);
+  padding:44px 52px 40px;
+  text-align:center;
+  opacity:0;
+  /* Pas d'animation au chargement — déclenchée par JS uniquement */
+}
+#carte.active {
+  animation:popIn .55s cubic-bezier(.34,1.56,.64,1) forwards;
+}
+@keyframes popIn {
+  0%   { transform:translate(-50%,-50%) scale(0) rotate(-12deg); opacity:0; }
+  60%  { transform:translate(-50%,-50%) scale(1.08) rotate(3deg); opacity:1; }
+  100% { transform:translate(-50%,-50%) scale(1) rotate(0deg); opacity:1; }
+}
+
+/* Gâteau qui bondit */
+.gateau {
+  display:block;
+  font-size:110px;
+  margin-bottom:4px;
+  filter:drop-shadow(0 0 20px rgba(255,200,50,.9));
+}
+#carte.active .gateau { animation:bounce 0.6s ease .8s infinite alternate; }
+@keyframes bounce {
+  from { transform:translateY(0) scale(1); }
+  to   { transform:translateY(-18px) scale(1.08); }
+}
+
+.joyeux {
+  font-size:28px;
+  font-weight:800;
+  color:#f0c040;
+  text-transform:uppercase;
+  letter-spacing:10px;
+  text-shadow:0 0 25px rgba(240,192,64,1);
+  opacity:0;
+}
+#carte.active .joyeux { animation:slideUp .4s ease .75s forwards; }
+
+.anniv {
+  font-size:68px;
+  font-weight:900;
+  background:linear-gradient(90deg,#f0c040,#ff70d0,#70d0ff,#f0c040);
+  background-size:300%;
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+  opacity:0;
+  margin-bottom:14px;
+  filter:drop-shadow(0 0 12px rgba(255,120,220,.5));
+}
+#carte.active .anniv { animation:shimmer 1.5s linear .8s infinite, slideUp .4s ease .85s forwards; }
+@keyframes shimmer { to { background-position:300%; } }
+
+#username {
+  font-size:58px;
+  font-weight:900;
+  color:#fff;
+  text-shadow:
+    0 0 40px rgba(255,255,255,.8),
+    0 0 80px rgba(240,192,64,.6),
+    0 4px 8px rgba(0,0,0,.6);
+  opacity:0;
+  margin-bottom:20px;
+}
+#carte.active #username { animation:slideUp .4s ease 1s forwards, shake .25s ease 1.8s 3; }
+@keyframes shake {
+  0%,100% { transform:translateX(0); }
+  25%     { transform:translateX(-8px) rotate(-1deg); }
+  75%     { transform:translateX(8px) rotate(1deg); }
+}
+
+.etoiles {
+  font-size:30px;
+  letter-spacing:12px;
+  opacity:0;
+}
+#carte.active .etoiles { animation:slideUp .4s ease 1.15s forwards, spin3d 3s ease 1.6s infinite; }
+@keyframes spin3d {
+  0%,100% { transform:rotateY(0); }
+  50%     { transform:rotateY(20deg); }
+}
+
+@keyframes slideUp {
+  from { opacity:0; transform:translateY(28px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+
+/* Anneau lumineux pulsant */
+#carte::before {
+  content:'';
+  position:absolute;
+  inset:-8px;
+  border-radius:40px;
+  border:3px solid rgba(240,192,64,.3);
+  animation:pulse 1s ease .8s infinite;
+}
+@keyframes pulse {
+  0%,100% { transform:scale(1); opacity:.3; }
+  50%     { transform:scale(1.02); opacity:.9; }
+}
+
+/* Sortie globale */
+body.fade-out { animation:bye .8s ease forwards; }
+@keyframes bye { to { opacity:0; transform:scale(.95); } }
+</style>
+</head>
+<body>
+
+<div id="flash"></div>
+<div id="carte">
+  <span class="gateau">🎂</span>
+  <div class="joyeux">Joyeux</div>
+  <div class="anniv">Anniversaire !</div>
+  <div id="username">…</div>
+  <div class="etoiles">⭐ 🎊 🎉 🎊 ⭐</div>
+</div>
+
+<script>
+const COLORS   = ['#f0c040','#ff70d0','#70d0ff','#a855f7','#34d399','#fb923c','#fff','#ff4444'];
+const EMOJIS   = ['🎂','🎊','🎉','🎈','🎁','⭐','💫','✨','🌟','🥳'];
+const SHAPES   = ['border-radius:2px','border-radius:50%','transform:rotate(45deg)'];
+
+let running = false;
+
+function lancer(username) {
+  if (running) return;
+  running = true;
+
+  const carte = document.getElementById('carte');
+  document.getElementById('username').textContent = username || '🎂';
+
+  // Réinitialise et déclenche les animations
+  carte.classList.remove('active');
+  void carte.offsetWidth; // force reflow pour relancer les animations
+  carte.classList.add('active');
+
+  screenFlash();
+  setTimeout(screenFlash, 600);
+  spawnConfettis();
+  spawnEmojiRain();
+  for (let i = 0; i < 6; i++)
+    setTimeout(() => firework(), i * 350 + 400);
+
+  setTimeout(() => {
+    document.body.classList.add('fade-out');
+    setTimeout(() => {
+      // Remet tout à zéro pour le prochain !anniversaire
+      document.body.classList.remove('fade-out');
+      carte.classList.remove('active');
+      running = false;
+    }, 900);
+  }, 8500);
+}
+
+/* Flash blanc */
+function screenFlash() {
+  const f = document.getElementById('flash');
+  f.style.transition = 'none';
+  f.style.opacity    = '.55';
+  requestAnimationFrame(() => {
+    f.style.transition = 'opacity .35s ease';
+    f.style.opacity    = '0';
+  });
+}
+
+/* Confettis */
+function spawnConfettis() {
+  for (let i = 0; i < 160; i++) {
+    setTimeout(() => {
+      const el   = document.createElement('div');
+      el.className = 'conf';
+      const size = 8 + Math.random() * 16;
+      const dur  = 2 + Math.random() * 3;
+      el.style.cssText = [
+        `left:${Math.random() * 1920}px`,
+        `width:${size}px`, `height:${size * (.4 + Math.random()*.6)}px`,
+        `background:${COLORS[Math.floor(Math.random()*COLORS.length)]}`,
+        SHAPES[Math.floor(Math.random()*SHAPES.length)],
+        `animation-duration:${dur}s`,
+        `animation-delay:${Math.random() * 2.5}s`,
+      ].join(';');
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), (dur + 3) * 1000);
+    }, i * 25);
+  }
+}
+
+/* Pluie d'emojis */
+function spawnEmojiRain() {
+  for (let i = 0; i < 30; i++) {
+    setTimeout(() => {
+      const el  = document.createElement('div');
+      el.className = 'emoji-drop';
+      const dur = 2.2 + Math.random() * 2;
+      el.textContent = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+      el.style.cssText = [
+        `left:${Math.random() * 1880}px`,
+        `font-size:${30 + Math.random() * 30}px`,
+        `animation-duration:${dur}s`,
+        `animation-delay:${Math.random() * 3}s`,
+      ].join(';');
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), (dur + 3.5) * 1000);
+    }, i * 80);
+  }
+}
+
+/* Feux d'artifice */
+function firework() {
+  const cx = 200 + Math.random() * 1520;
+  const cy = 100 + Math.random() * 700;
+  const nb = 22;
+  const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+  for (let i = 0; i < nb; i++) {
+    const angle  = (i / nb) * Math.PI * 2;
+    const dist   = 80 + Math.random() * 160;
+    const tx     = `translate(${Math.cos(angle)*dist}px,${Math.sin(angle)*dist}px)`;
+    const el     = document.createElement('div');
+    el.className = 'spark';
+    const size   = 4 + Math.random() * 6;
+    el.style.cssText = [
+      `left:${cx}px`, `top:${cy}px`,
+      `width:${size}px`, `height:${size}px`,
+      `background:${color}`,
+      `box-shadow:0 0 6px 2px ${color}`,
+      `--tx:${tx}`,
+      `animation-duration:${.6 + Math.random() * .5}s`,
+      `animation-delay:${Math.random() * .1}s`,
+    ].join(';');
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 1500);
+  }
+}
+
+/* SSE via SharedWorker */
+const worker = new SharedWorker('/api/labels/worker.js');
+worker.port.start();
+worker.port.onmessage = (e) => {
+  try {
+    const { channel, data } = JSON.parse(e.data);
+    if (channel === 'alerts' && data.type === 'anniversaire')
+      lancer(data.username || data.texte || '');
+  } catch(_) {}
+};
+</script>
+</body>
+</html>

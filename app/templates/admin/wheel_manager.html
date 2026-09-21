@@ -59,6 +59,15 @@
                 </div>
 
                 <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Commande Twitch (optionnel)</label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-black text-sm">!</span>
+                        <input type="text" id="wheel-command" class="w-full input-dark rounded-xl p-3 pl-7 text-sm font-bold" placeholder="ex: roue (sans le !)">
+                    </div>
+                    <p class="text-[10px] text-slate-600 italic mt-1">Quand un viewer tape cette commande dans le chat, la roue se lance automatiquement.</p>
+                </div>
+
+                <div>
                     <div class="flex items-center justify-between mb-2">
                         <label class="block text-[10px] font-bold text-slate-500 uppercase">Segments (minimum 2)</label>
                         <div class="flex items-center gap-3">
@@ -140,6 +149,7 @@
             editingWheelId = null;
             document.getElementById('modal-title').textContent = 'Nouvelle roue';
             document.getElementById('wheel-name').value = '';
+            document.getElementById('wheel-command').value = '';
             document.getElementById('items-list').innerHTML = '';
             addItemRow(); addItemRow();
             document.getElementById('modal').classList.remove('hidden');
@@ -150,6 +160,7 @@
             editingWheelId = wheel.id;
             document.getElementById('modal-title').textContent = `Modifier "${wheel.name}"`;
             document.getElementById('wheel-name').value = wheel.name;
+            document.getElementById('wheel-command').value = wheel.twitch_command || '';
             document.getElementById('items-list').innerHTML = '';
             (wheel.items || []).forEach(it => addItemRow(it.label, it.color, it.weight));
             document.getElementById('modal').classList.remove('hidden');
@@ -165,6 +176,8 @@
             const name = document.getElementById('wheel-name').value.trim();
             if (!name) { showToast('❌ Donne un nom à la roue', true); return; }
 
+            const twitch_command = document.getElementById('wheel-command').value.trim().replace(/^!+/, '').toLowerCase();
+
             const rows = document.querySelectorAll('#items-list .item-row');
             const items = Array.from(rows).map(r => ({
                 label: r.querySelector('.item-label').value.trim(),
@@ -177,7 +190,7 @@
             try {
                 const url = editingWheelId ? `/admin/api/wheels/${editingWheelId}` : '/admin/api/wheels';
                 const method = editingWheelId ? 'PUT' : 'POST';
-                const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, items }) });
+                const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, items, twitch_command }) });
                 if (res.ok) {
                     showToast('✅ Roue enregistrée !');
                     closeModal();
@@ -256,7 +269,7 @@
                         <div class="w-16 h-16 rounded-full shrink-0 border-2 border-slate-700" style="background: ${gradient}"></div>
                         <div class="flex-1 min-w-0">
                             <div class="font-black text-white text-lg truncate">${escapeHtml(wheel.name)}</div>
-                            <div class="text-xs text-slate-500">${(wheel.items || []).length} segments</div>
+                            <div class="text-xs text-slate-500">${(wheel.items || []).length} segments${wheel.twitch_command ? ` · <span class="text-indigo-400 font-bold">!${escapeHtml(wheel.twitch_command)}</span>` : ''}</div>
                         </div>
                     </div>
                     <div class="flex flex-wrap gap-1.5">

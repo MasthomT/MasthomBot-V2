@@ -3,6 +3,7 @@ import json
 import asyncio
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, Response
+from pydantic import BaseModel
 from fastapi.templating import Jinja2Templates
 
 NO_CACHE = {"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"}
@@ -199,6 +200,27 @@ async def overlay_viewers(request: Request):
         context={},
         headers=NO_CACHE
     )
+
+class LabelPayload(BaseModel):
+    texte: str
+
+FICHIERS_LABELS = {
+    "sub":      "dernier_sub.txt",
+    "subgift":  "dernier_subgift.txt",
+    "bits":     "dernier_bits.txt",
+    "raid":     "dernier_raid.txt",
+    "follow":   "dernier_follow.txt",
+}
+
+@router.post('/api/label/{type_label}')
+async def update_label(type_label: str, body: LabelPayload):
+    """Mise à jour manuelle d'un label (admin) — écrit le fichier ET pousse via SSE."""
+    from app.services.label_service import write_label
+    nom = FICHIERS_LABELS.get(type_label)
+    if not nom:
+        return JSONResponse({"error": f"Type inconnu : {type_label}"}, status_code=400)
+    write_label(nom, body.texte)
+    return JSONResponse({"ok": True, "type": type_label, "texte": body.texte})
 
 @router.get('/overlay/subs', response_class=HTMLResponse)
 async def overlay_subs(request: Request):

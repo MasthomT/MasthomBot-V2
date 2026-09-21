@@ -40,7 +40,7 @@ setInterval(() => { HELIX_TOKEN = loadToken(); }, 2 * 60 * 1000);
 const CONFIG = {
     PORT: 3005,
     TWITCH_CLIENT_ID: process.env.TWITCH_CLIENT_ID,
-    CHANNEL_NAME: (process.env.TWITCH_USERNAME || "masthom_").replace(/['"\s]/g, '').trim(),
+    CHANNEL_NAME: (process.env.TWITCH_USERNAME || "masthou").replace(/['"\s]/g, '').trim(),
     GQL_CLIENT_ID: process.env.TWITCH_CLIENT_ID,
     //GQL_CLIENT_ID: 'kimne78kx3ncx6brgo4mv6wki5h1ko',
     OBS_ADDRESS: `ws://${process.env.OBS_HOST || '127.0.0.1'}:${process.env.OBS_PORT || '4455'}`,
@@ -189,6 +189,29 @@ obs.on('ConnectionClosed', () => {
     scheduleObsReconnect('Connexion perdue');
 });
 
+// 🎬 Écoute en direct des changements de scène OBS. Avant, la scène n'était vérifiée
+// qu'UNE FOIS, au moment de la connexion — si on basculait sur "ON BREAK" pendant que
+// Node était déjà connecté (le cas normal en plein stream), le BRB ne se déclenchait
+// jamais. Constaté le 07/07/2026 : le BRB n'apparaissait plus du tout.
+obs.on('CurrentProgramSceneChanged', (data) => {
+    const isBrbScene = data.sceneName === CONFIG.BRB_SCENE_NAME;
+    if (isBrbScene) {
+        if (!brbLoopActive) {
+            currentScene = 'brb';
+            startBrbLoop();
+            broadcast({ type: 'change_scene', scene: 'brb' });
+            console.log('🎬 [OBS] Scène "ON BREAK" détectée en direct : lancement du BRB.');
+        }
+    } else {
+        if (brbLoopActive) {
+            currentScene = 'main';
+            stopBrbLoop();
+            broadcast({ type: 'change_scene', scene: 'main' });
+            console.log('🛑 [OBS] Sortie de la scène "ON BREAK" détectée en direct : arrêt du BRB.');
+        }
+    }
+});
+
 app.get('/api/health', (req, res) => {
     res.json({
         obs_connected: obsConnected,
@@ -269,7 +292,15 @@ async function getDirectMp4Url(slug) {
 
 async function findSmartClip(userId, mode, extraData) {
     try {
-        const targetId = userId || (await getUserInfo(CONFIG.CHANNEL_NAME))?.id;
+        // Pour le mode 'so', on n'utilise JAMAIS de fallback sur la propre chaîne :
+        // si l'utilisateur cible est introuvable, on abandonne plutôt que d'afficher
+        // ses propres clips par erreur.
+        let targetId;
+        if (userId) {
+            targetId = userId;
+        } else if (mode !== 'so') {
+            targetId = (await getUserInfo(CONFIG.CHANNEL_NAME))?.id;
+        }
         if (!targetId) return null;
         const headers = { 'Client-ID': CONFIG.TWITCH_CLIENT_ID, 'Authorization': `Bearer ${HELIX_TOKEN}` };
 
@@ -348,11 +379,14 @@ async function processQueue() {
     console.log(`[DEBUG] Traitement de : ${JSON.stringify(item)}`);
 
     try {
-        console.log(`[DEBUG] getUserInfo pour : ${item.target}`);
         const targetUser = await getUserInfo(item.target);
-        console.log(`[DEBUG] targetUser : ${JSON.stringify(targetUser)}`);
+        if (!targetUser && item.mode === 'so') {
+            console.error(`❌ [SO] Utilisateur "${item.target}" introuvable sur Twitch — SO annulé.`);
+            isProcessing = false;
+            processQueue();
+            return;
+        }
         const finalClip = await findSmartClip(targetUser?.id, item.mode, item.extraData);
-        console.log(`[DEBUG] finalClip : ${finalClip?.title || 'null'}`);
 
         if (finalClip) {
             console.log(`🎬 [CLIP TROUVÉ] : ${finalClip.title}`);

@@ -111,8 +111,12 @@ async def _resolve_variables(text: str, username: str, viewer_data: dict, stream
     if "{viewer_commands}" in text:
         all_cmds = await list_commands(active_only=True)
         viewer_roles = ("viewer", "everyone", "all", "", None)
-        names = [f"!{c['name']}" for c in all_cmds if c.get("min_role") in viewer_roles]
-        text = text.replace("{viewer_commands}", ", ".join(names) if names else "")
+        names = [
+            f"!{c['name']}" for c in all_cmds
+            if c.get("min_role") in viewer_roles and not c.get("vip_owner_twitch_id")
+        ]
+        random.shuffle(names)
+        text = text.replace("{viewer_commands}", ", ".join(names[:6]) if names else "")
 
     # {number:min:max}
     import re
@@ -131,6 +135,7 @@ async def handle_custom_command(
     is_sub: bool = False,
     is_vip: bool = False,
     is_admin: bool = False,
+    caller_twitch_id: str = None,
 ) -> dict | None:
     now  = time.time()
     name = command_name.lower().strip()
@@ -147,6 +152,11 @@ async def handle_custom_command(
         return None
 
     cmd = dict(row)
+
+    # Commande perso VIP : réservée à son propriétaire (+ le streamer, pour pouvoir tester).
+    if cmd.get("vip_owner_twitch_id") and not is_admin and str(caller_twitch_id) != cmd["vip_owner_twitch_id"]:
+        logger.debug(f"🔒 !{name} réservée à son propriétaire VIP, refusé pour {username}")
+        return None
 
     # Planification horaire
     if not _is_in_schedule(cmd.get("active_from"), cmd.get("active_until")):
@@ -193,11 +203,36 @@ async def handle_custom_command(
     follow_months = "0"
     follow_days = "0"
 
-    # 🌐 NOUVEAUTÉ : On interroge l'API publique IVR
+    # 🌐 Date de follow via l'API Helix officielle (le bot a le scope moderator:read:followers
+    # sur son propre compte/chaîne masthou) — l'API tierce IVR utilisée avant renvoie
+    # systématiquement followedAt=null pour la quasi-totalité des viewers depuis que Twitch a
+    # coupé l'accès public à cette donnée en 2023, d'où le "jamais" affiché à tort.
+    if not follow_date_raw and caller_twitch_id:
+        try:
+            from app.services.twitch_service import twitch_bot
+            if twitch_bot.broadcaster_id:
+                headers = {
+                    "Client-ID": settings.TWITCH_CLIENT_ID,
+                    "Authorization": f"Bearer {settings.TWITCH_OAUTH_TOKEN.replace('oauth:', '').strip()}",
+                }
+                params = {"broadcaster_id": twitch_bot.broadcaster_id, "user_id": str(caller_twitch_id)}
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
+                        "https://api.twitch.tv/helix/channels/followers", headers=headers, params=params, timeout=3
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            rows = data.get("data") or []
+                            if rows:
+                                follow_date_raw = rows[0]["followed_at"]
+                                logger.info(f"✅ [MYINFO] Date de follow récupérée via Helix pour {username}.")
+        except Exception:
+            pass
+
+    # Repli sur l'API tierce IVR si Helix n'a rien donné (best-effort, peut renvoyer null).
     if not follow_date_raw:
         try:
-            # 👉 CORRECTION ICI : D'abord le viewer ({username}), ENSUITE ta chaîne (masthom_)
-            url = f"https://api.ivr.fi/v2/twitch/subage/{username}/masthom_"
+            url = f"https://api.ivr.fi/v2/twitch/subage/{username}/masthou"
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=3) as resp:
                     if resp.status == 200:
@@ -268,7 +303,16 @@ async def handle_custom_command(
         #logger.info(f"💬 Message texte généré : {chat_text}")
 
     # ==========================================
-    # 2. IMAGE
+    # 2. OVERLAY EVENT (SSE Python direct)
+    # ==========================================
+    overlay_evt = payload.get("overlay_event")
+    if overlay_evt:
+        from app.routes.overlays import trigger_overlay_event
+        evt_payload = {**overlay_evt, "username": user_input or username}
+        await trigger_overlay_event(evt_payload)
+
+    # ==========================================
+    # 3. IMAGE
     # ==========================================
     img_file = payload.get("image", "")
     if img_file:

@@ -2,6 +2,7 @@ import logging
 import os
 import shutil
 import asyncio
+import time
 import aiohttp
 import httpx # Ajouté pour la requête Twitch
 import obsws_python as obs
@@ -22,6 +23,35 @@ router = APIRouter(tags=["deck"])
 templates = Jinja2Templates(directory="app/templates")
 
 UPLOAD_DIR = "/home/thomas/masthom/BOT_V2/app/static/uploads"
+
+# Cache 10s pour le statut chat Twitch (pollé toutes les 2s par le deck)
+_chat_cache: dict = {"data": {"emote_only": False, "follower_only": False, "slow_mode": False}, "ts": 0.0}
+_CHAT_CACHE_TTL = 10.0
+
+async def _get_twitch_chat_status(b_id: str, token: str, client_id: str) -> dict:
+    now = time.monotonic()
+    if now - _chat_cache["ts"] < _CHAT_CACHE_TTL:
+        return _chat_cache["data"]
+    try:
+        headers = {"Client-ID": client_id, "Authorization": f"Bearer {token}"}
+        async with aiohttp.ClientSession() as s:
+            async with s.get(
+                f"https://api.twitch.tv/helix/chat/settings?broadcaster_id={b_id}&moderator_id={b_id}",
+                headers=headers, timeout=aiohttp.ClientTimeout(total=3)
+            ) as resp:
+                if resp.status == 200:
+                    d = (await resp.json()).get("data", [{}])[0]
+                    result = {
+                        "emote_only":   d.get("emote_mode", False),
+                        "follower_only": d.get("follower_mode", False),
+                        "slow_mode":    d.get("slow_mode", False),
+                    }
+                    _chat_cache["data"] = result
+                    _chat_cache["ts"] = now
+                    return result
+    except Exception:
+        pass
+    return _chat_cache["data"]
 
 class DeckAction(BaseModel):
     action: str
@@ -145,7 +175,15 @@ async def deck_status():
                     pass
 
     obs_status = await asyncio.to_thread(fetch_obs_status)
-    twitch_status = {"brb_active": False, "emote_only": False, "follower_only": False, "slow_mode": False}
+
+    b_id = getattr(twitch_bot, 'broadcaster_id', None)
+    token = getattr(twitch_bot, 'master_token', None)
+    client_id = os.getenv("TWITCH_CLIENT_ID", getattr(twitch_bot._http, 'client_id', ''))
+    if b_id and token:
+        chat_st = await _get_twitch_chat_status(b_id, token, client_id)
+    else:
+        chat_st = {"emote_only": False, "follower_only": False, "slow_mode": False}
+    twitch_status = {"brb_active": False, **chat_st}
 
     # 🐱 STATUT PRÉSENCE FÉLIX (Fichier texte)
     felix_present = False
@@ -256,10 +294,51 @@ async def deck_action(data: DeckAction):
 
     if b_id and token and data.action in ["clear", "chat_mode", "ad", "marker"]:
         headers = {"Client-ID": client_id, "Authorization": f"Bearer {token}"}
-        async with aiohttp.ClientSession() as session:
-            try:
-                if data.action == "clear": await session.delete(f"https://api.twitch.tv/helix/moderation/chat?broadcaster_id={b_id}&moderator_id={b_id}", headers=headers)
-            except Exception: pass
+        try:
+            async with aiohttp.ClientSession() as session:
+                if data.action == "clear":
+                    await session.delete(
+                        f"https://api.twitch.tv/helix/moderation/chat?broadcaster_id={b_id}&moderator_id={b_id}",
+                        headers=headers
+                    )
+
+                elif data.action == "chat_mode":
+                    _MODES = {
+                        "emote":    {"emote_mode": True},
+                        "follower": {"follower_mode": True, "follower_mode_duration": 0},
+                        "slow":     {"slow_mode": True, "slow_mode_wait_time": 30},
+                        "normal":   {"emote_mode": False, "follower_mode": False,
+                                     "slow_mode": False, "subscriber_mode": False},
+                    }
+                    body = _MODES.get(data.param or "")
+                    if body:
+                        resp = await session.patch(
+                            f"https://api.twitch.tv/helix/chat/settings?broadcaster_id={b_id}&moderator_id={b_id}",
+                            headers=headers, json=body
+                        )
+                        logger.info(f"💬 [DECK] chat_mode={data.param} → HTTP {resp.status}")
+                        _chat_cache["ts"] = 0.0  # force refresh au prochain poll
+
+                elif data.action == "ad":
+                    duration = int(data.param or "60")
+                    resp = await session.post(
+                        "https://api.twitch.tv/helix/channels/commercial",
+                        headers=headers,
+                        json={"broadcaster_id": b_id, "length": duration}
+                    )
+                    logger.info(f"📺 [DECK] pub {duration}s → HTTP {resp.status}")
+
+                elif data.action == "marker":
+                    resp = await session.post(
+                        "https://api.twitch.tv/helix/streams/markers",
+                        headers=headers,
+                        json={"user_id": b_id, "description": "FelixDeck"}
+                    )
+                    logger.info(f"📍 [DECK] marker → HTTP {resp.status}")
+
+        except Exception as e:
+            logger.error(f"❌ [DECK] action Twitch '{data.action}' : {e}")
+
         return {"status": "success"}
 
     return {"status": "success"}

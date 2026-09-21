@@ -28,7 +28,7 @@ async def check_twitch_lives_routine():
             env_vars = dotenv.dotenv_values(".env")
             client_id = env_vars.get("TWITCH_CLIENT_ID", "").strip()
             token = env_vars.get("TWITCH_OAUTH_TOKEN", "").replace("oauth:", "").strip()
-            my_channel = env_vars.get("TWITCH_CHANNEL", "masthom_").replace("#", "").strip()
+            my_channel = env_vars.get("TWITCH_CHANNEL", "masthou").replace("#", "").strip()
 
             if not client_id or not token:
                 logger.warning("⚠️ Identifiants Twitch manquants pour le moniteur.")
@@ -76,7 +76,9 @@ async def check_twitch_lives_routine():
                                         credits_service.reset_session()
                                         
                                         # On réutilise directement "conn" qui est déjà ouverte plus haut !
-                                        await conn.execute("UPDATE viewer_daily_stats SET watchtime = 0 WHERE day = CURRENT_DATE")
+                                        # On mémorise l'offset au lieu d'effacer le watchtime du jour :
+                                        # les crédits lisent (watchtime - offset), les stats gardent tout.
+                                        await conn.execute("UPDATE viewer_daily_stats SET watchtime_offset = watchtime WHERE day = CURRENT_DATE")
                                         logger.info("🧹 [CREDITS] Reset automatique du générique et du watchtime réussi !")
                                     except Exception as e:
                                         logger.error(f"❌ [CREDITS] Erreur lors du reset automatique : {e}")
