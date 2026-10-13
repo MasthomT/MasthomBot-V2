@@ -1,0 +1,72 @@
+{# Style commun des labels (police, couleurs, icônes) réglé dans /admin/labels. Inclus avant </head> de chaque label. #}
+<style>html.lbl-wait { visibility: hidden; }</style>
+<style id="lbl-style"></style>
+<script>
+(function () {
+    // Nom du label = dernier segment de l'adresse (followers, viewers, subs, heure, follow, sub, subgift, bits, raid)
+    var KEY = location.pathname.split('/').filter(Boolean).pop() || '';
+    var HALLOWEEN_ICONS = {
+        followers: 'fa-solid fa-ghost', viewers: 'fa-solid fa-eye', subs: 'fa-solid fa-skull', heure: 'fa-solid fa-moon',
+        follow: 'fa-solid fa-ghost', sub: 'fa-solid fa-skull', subgift: 'fa-solid fa-hat-wizard',
+        bits: 'fa-solid fa-gem', raid: 'fa-solid fa-spider'
+    };
+    var root = document.documentElement;
+    root.classList.add('lbl-wait');                       // évite d'afficher l'ancien style une fraction de seconde
+    setTimeout(function () { root.classList.remove('lbl-wait'); }, 1500);
+
+    var styleEl = document.getElementById('lbl-style');
+    var fontLink = null, lastSig = null, origIcon = null;
+
+    function loadFont(name) {
+        if (fontLink) { fontLink.remove(); fontLink = null; }
+        if (!name) return;
+        fontLink = document.createElement('link');
+        fontLink.rel = 'stylesheet';
+        fontLink.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(name).replace(/%20/g, '+') + '&display=swap';
+        document.head.appendChild(fontLink);
+    }
+
+    function apply(s) {
+        var sig = JSON.stringify(s);
+        if (sig === lastSig) return;
+        lastSig = sig;
+
+        var body = [], text = [], logo = [];
+        if (s.font)   body.push("font-family:'" + s.font.replace(/'/g, '') + "','Montserrat',sans-serif !important");
+        if (s.weight) body.push('font-weight:' + s.weight + ' !important');
+        if (s.size)   body.push('font-size:' + parseInt(s.size, 10) + 'px !important');
+        if (s.color)  body.push('color:' + s.color + ' !important');
+        if (s.spacing !== '' && s.spacing != null) text.push('letter-spacing:' + parseFloat(s.spacing) + 'px !important');
+        if (s.glow) {
+            var shadow = '0 0 6px ' + s.glow + ',0 0 16px ' + s.glow + ',2px 2px 4px rgba(0,0,0,.85)';
+            body.push('text-shadow:' + shadow + ' !important');
+            text.push('text-shadow:' + shadow + ' !important');
+        }
+        if (s.icon_color) logo.push('color:' + s.icon_color + ' !important');
+
+        styleEl.textContent =
+            'body{' + body.join(';') + '}' +
+            '#chiffre,#horloge,#text-container,.cursor{' + text.join(';') + '}' +
+            '.logo{' + logo.join(';') + '}';
+
+        loadFont(s.font);
+
+        var icon = document.querySelector('.logo i');
+        if (icon) {
+            if (origIcon === null) origIcon = icon.className;
+            icon.className = (s.icon_set === 'halloween' && HALLOWEEN_ICONS[KEY]) ? HALLOWEEN_ICONS[KEY] : origIcon;
+        }
+        root.classList.remove('lbl-wait');
+    }
+
+    function refresh() {
+        fetch('/api/labels/style?t=' + Date.now(), { cache: 'no-store' })
+            .then(function (r) { return r.json(); })
+            .then(apply)
+            .catch(function () { root.classList.remove('lbl-wait'); });
+    }
+    refresh();
+    setInterval(refresh, 15000);                          // un changement d'admin est repris sans recharger OBS
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
+})();
+</script>

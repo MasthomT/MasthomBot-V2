@@ -22,6 +22,10 @@
 					<i class="fas fa-chart-line w-5"></i>
 					Vue d'ensemble
 				</a>
+				<a href="/admin/labels" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'admin/labels' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+					<i class="fas fa-font w-5"></i>
+					Style des labels
+				</a>
 				<a href="/admin/scene" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'scene' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fas fa-layer-group w-5"></i>
 					Scène OBS
@@ -88,9 +92,9 @@
 					<i class="fas fa-gem w-5"></i>
 					Gestion VIP
 				</a>
-				<a href="/admin/podium" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'podium' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
-					<i class="fas fa-ranking-star w-5"></i>
-					First / Deuz / Troiz
+				<a href="/admin/rewards" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'admin/rewards' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+					<i class="fas fa-coins w-5"></i>
+					Récompenses Point de Chaîne
 				</a>
 				<a href="/admin/trophy_manager.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'trophy' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fas fa-medal w-5"></i>

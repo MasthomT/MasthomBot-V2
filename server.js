@@ -563,6 +563,16 @@ app.post('/api/replay', async (req, res) => {
     } catch (error) { res.status(500).json({ status: "error" }); }
 });
 
+// Style (thème) des widgets : relais vers le bot Python, pour que les pages Node le lisent sans CORS.
+app.get('/api/theme-style', async (req, res) => {
+    try {
+        const r = await axios.get('http://127.0.0.1:8000/api/labels/style', { timeout: 4000 });
+        res.set('Cache-Control', 'no-store').json(r.data);
+    } catch (e) {
+        res.status(502).json({ error: 'style indisponible' });
+    }
+});
+
 app.post('/api/tiktok', (req, res) => {
     const url = req.body && req.body.url;
     if (!url) return res.status(400).json({ status: "error", message: "url manquante" });
@@ -787,6 +797,7 @@ app.get('/shoutout', (req, res) => {
                     background:#fe2c55; color:#fff; font-weight:900; font-size:1.7vh; text-transform:uppercase; letter-spacing:0.08em; }
         #tt { flex:1; min-height:0; width:100%; object-fit:contain; background:#000; display:block; }
     </style>
+    <script>(function(){var s=document.createElement('script');s.src=location.protocol+'//'+location.hostname+':8000/static/theme.js?t='+Date.now();document.head.appendChild(s);})();</script>
 </head>
 <body>
     <div id="wrapper">
@@ -992,6 +1003,7 @@ app.get('/brb', (req, res) => {
         .bottom-bar { position:absolute; bottom:0; left:0; width:100%; height:64px; background:rgba(15,23,42,0.9); backdrop-filter:blur(8px); border-top:2px solid rgba(145,70,255,0.4); z-index:20; display:flex; align-items:center; justify-content:space-between; padding:0 32px; }
         #progress { position:absolute; top:-4px; left:0; height:4px; background:#bf94ff; width:0%; box-shadow: 0 0 15px #9146FF; transition: width 0.1s linear; z-index:21; }
     </style>
+    <script>(function(){var s=document.createElement('script');s.src=location.protocol+'//'+location.hostname+':8000/static/theme.js?t='+Date.now();document.head.appendChild(s);})();</script>
 </head>
 <body>
     <div id="container">

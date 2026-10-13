@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administration - Récompenses de points de chaîne</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #6366f1; outline: none; }
+        .tab { padding: .6rem 1rem; border-radius: .75rem; font-size: .875rem; font-weight: 700; color: #94a3b8; cursor: pointer; border: 1px solid transparent; }
+        .tab:hover { background: rgba(51,65,85,.5); color: #fff; }
+        .tab.active { background: rgba(99,102,241,.12); color: #818cf8; border-color: rgba(99,102,241,.3); }
+        .panel { display: none; }
+        .panel.active { display: block; }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen">
+
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 md:p-10 min-w-0">
+        <header class="mb-6">
+            <h1 class="text-3xl font-extrabold text-white tracking-tight">Récompenses de points de chaîne</h1>
+            <p class="text-slate-400 mt-1">Toutes les récompenses de ta chaîne, et la configuration de celles qui demandent un comportement précis géré par le bot.</p>
+        </header>
+
+        <nav class="flex flex-wrap gap-2 mb-6" id="tabs">
+            <div class="tab" data-tab="overview"><i class="fas fa-list mr-2"></i>Vue d'ensemble</div>
+            <div class="tab" data-tab="podium"><i class="fas fa-ranking-star mr-2"></i>First / Deuz / Troiz</div>
+        </nav>
+
+        <!-- Vue d'ensemble -->
+        <section class="panel" id="panel-overview">
+            <div class="flex flex-wrap items-center gap-3 mb-4">
+                <input id="ov-filter" placeholder="Filtrer par nom…" class="input-dark rounded-lg px-3 py-2 text-sm w-64">
+                <label class="flex items-center gap-2 text-xs text-slate-400"><input type="checkbox" id="ov-onlyActive"> Seulement les récompenses actives</label>
+                <button id="ov-reload" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold"><i class="fas fa-rotate mr-1"></i>Actualiser</button>
+                <span id="ov-count" class="text-xs text-slate-500"></span>
+            </div>
+            <div class="config-card rounded-2xl overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="text-[11px] uppercase tracking-widest text-slate-500">
+                        <tr class="text-left"><th class="p-3"></th><th class="p-3">Récompense</th><th class="p-3">Prix</th><th class="p-3">État</th><th class="p-3">Limites</th><th class="p-3">Géré par</th></tr>
+                    </thead>
+                    <tbody id="ov-rows"></tbody>
+                </table>
+            </div>
+            <p class="text-xs text-slate-500 mt-3">Twitch ne laisse le bot modifier que les récompenses qu'il a créées lui-même. Les autres se règlent dans le tableau de bord Twitch.</p>
+        </section>
+
+        <!-- First / Deuz / Troiz -->
+        <section class="panel" id="panel-podium">
+            {% include 'admin/partials/podium_panel.html' %}
+        </section>
+    </main>
+
+<script>
+(function () {
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+
+    // ── Onglets (mémorisés dans l'adresse : /admin/rewards#podium) ──
+    function showTab(name) {
+        if (!document.getElementById('panel-' + name)) name = 'overview';
+        document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+        document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
+        if (location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
+    }
+    document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => showTab(t.dataset.tab)));
+    showTab(location.hash.replace('#', '') || 'overview');
+    window.addEventListener('hashchange', () => showTab(location.hash.replace('#', '')));
+
+    // ── Vue d'ensemble ──
+    let all = [];
+    function limits(r) {
+        const out = [];
+        if (r.max_per_stream) out.push(r.max_per_stream + '/stream');
+        if (r.max_per_user) out.push(r.max_per_user + '/viewer');
+        if (r.cooldown) out.push('attente ' + (r.cooldown >= 3600 ? Math.round(r.cooldown / 3600) + ' h' : Math.round(r.cooldown / 60) + ' min'));
+        if (r.user_input) out.push('message requis');
+        return out.join(' · ') || '—';
+    }
+    function render() {
+        const q = $('ov-filter').value.toLowerCase().trim();
+        const only = $('ov-onlyActive').checked;
+        const rows = all.filter(r => (!q || r.title.toLowerCase().includes(q)) && (!only || r.enabled));
+        $('ov-count').textContent = rows.length + ' / ' + all.length + ' récompense(s)';
+        $('ov-rows').innerHTML = rows.map(r => {
+            const state = r.paused ? '<span class="text-amber-400">En pause</span>' : (r.enabled ? '<span class="text-emerald-400">Active</span>' : '<span class="text-slate-500">Désactivée</span>');
+            const img = r.image ? '<img src="' + esc(r.image) + '" class="w-9 h-9 rounded-lg" alt="">' : '<div class="w-9 h-9 rounded-lg" style="background:' + esc(r.color || '#334155') + '"></div>';
+            const by = r.handler
+                ? '<span class="px-2 py-0.5 rounded-md bg-indigo-500/15 text-indigo-300 text-xs font-bold">' + esc(r.handler) + '</span>'
+                : '<span class="text-slate-500 text-xs">' + (r.manageable ? 'Créée par le bot' : 'Hors bot') + '</span>';
+            return '<tr class="border-t border-slate-700/60 hover:bg-slate-800/40">'
+                 + '<td class="p-3 w-14">' + img + '</td>'
+                 + '<td class="p-3 font-bold text-white">' + esc(r.title) + '</td>'
+                 + '<td class="p-3 text-slate-300">' + r.cost.toLocaleString('fr-FR') + ' pts</td>'
+                 + '<td class="p-3">' + state + '</td>'
+                 + '<td class="p-3 text-slate-400 text-xs">' + esc(limits(r)) + '</td>'
+                 + '<td class="p-3">' + by + '</td></tr>';
+        }).join('') || '<tr><td colspan="6" class="p-6 text-center text-slate-500">Aucune récompense.</td></tr>';
+    }
+    async function loadOverview() {
+        $('ov-count').textContent = 'Chargement…';
+        const res = await fetch('/admin/api/rewards/overview');
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) { $('ov-count').textContent = j.detail || ('Erreur ' + res.status); return; }
+        all = j.rewards;
+        render();
+    }
+    $('ov-filter').addEventListener('input', render);
+    $('ov-onlyActive').addEventListener('change', render);
+    $('ov-reload').addEventListener('click', loadOverview);
+    loadOverview();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administration - Thème & style des labels</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #6366f1; outline: none; }
+        .preview { background: repeating-conic-gradient(#0b1220 0% 25%, #111a2e 0% 50%) 50% / 24px 24px; border: 1px solid #334155; border-radius: 12px; }
+        .preview iframe { width: 600px; max-width: 100%; height: 56px; border: 0; display: block; background: transparent; }
+        .preset { padding: .5rem 1rem; border-radius: .75rem; font-size: .8rem; font-weight: 800; background: #334155; }
+        .preset:hover { background: #475569; }
+        .preset.active { background: #4f46e5; color: #fff; }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen">
+
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 md:p-10 min-w-0">
+        <header class="mb-8 flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">Thème & style des labels</h1>
+                <p class="text-slate-400 mt-1">Police, couleurs et icônes des labels OBS, et couleur d'accent + police des widgets de la scène (sondages, trophées, roues, lecteur, chrono, BRB). Un champ vide garde le réglage d'origine.</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <span id="msg" class="text-xs text-slate-400"></span>
+                <button id="saveBtn" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold"><i class="fas fa-save mr-2"></i>Enregistrer</button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <section class="config-card rounded-2xl p-5">
+                <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Thèmes prêts à l'emploi</h2>
+                <div class="flex flex-wrap gap-2 mb-6" id="presets"></div>
+
+                <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Réglages</h2>
+                <div class="grid grid-cols-2 gap-4 text-xs">
+                    <label class="block col-span-2"><span class="text-slate-400">Police</span>
+                        <select id="f-font" class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm"></select></label>
+                    <label class="block"><span class="text-slate-400">Graisse</span>
+                        <select id="f-weight" class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm">
+                            <option value="">Origine</option><option>100</option><option>200</option><option>300</option>
+                            <option>400</option><option>500</option><option>600</option><option>700</option><option>800</option><option>900</option>
+                        </select></label>
+                    <label class="block"><span class="text-slate-400">Taille (px)</span>
+                        <input id="f-size" type="number" min="12" max="120" placeholder="Origine" class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm"></label>
+                    <label class="block"><span class="text-slate-400">Espacement des lettres (px)</span>
+                        <input id="f-spacing" type="number" step="0.5" placeholder="Origine" class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm"></label>
+                    <label class="block"><span class="text-slate-400">Jeu d'icônes</span>
+                        <select id="f-icon_set" class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm">
+                            <option value="default">Classique</option><option value="halloween">Halloween (fantôme, crâne, araignée…)</option>
+                        </select></label>
+                    <div class="col-span-2 grid grid-cols-3 gap-4" id="colors"></div>
+                </div>
+
+                <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest mt-8 mb-3">Thème temporaire</h2>
+                <label class="block text-xs"><span class="text-slate-400">Retour automatique au style classique après le (inclus)</span>
+                    <input id="f-until" type="date" class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm">
+                    <span class="text-slate-500">Laisse vide pour garder le thème sans limite.</span></label>
+
+                <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest mt-8 mb-3">Widgets de la scène</h2>
+                <p class="text-xs text-slate-500 mb-3">Remplace le violet Twitch des cadres (lecteur, sondages, trophées, roue, BRB), recolore le chrono et change la police des titres.</p>
+                <div class="grid grid-cols-2 gap-4 text-xs">
+                    <label class="block col-span-2"><span class="text-slate-400">Police des titres</span>
+                        <select id="f-w_font" class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm"></select></label>
+                    <div class="col-span-2 grid grid-cols-2 gap-4" id="wcolors"></div>
+                </div>
+            </section>
+
+            <section class="config-card rounded-2xl p-5">
+                <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Aperçu (les vrais labels)</h2>
+                <div class="preview p-3 space-y-1" id="preview"></div>
+                <p class="text-xs text-slate-500 mt-3">OBS reprend le nouveau style tout seul en moins de 15 secondes, sans recharger la source.</p>
+            </section>
+        </div>
+    </main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const COLORS = [['color', 'Texte'], ['glow', 'Lueur'], ['icon_color', 'Icône'], ['w_accent', 'Accent'], ['w_accent2', 'Accent 2']];
+const PAGES = ['/overlay/followers', '/overlay/viewers', '/overlay/subs', '/overlay/heure', '/overlay/label/follow', '/overlay/label/sub', '/overlay/label/subgift', '/overlay/label/bits', '/overlay/label/raid'];
+let presets = {};
+let current = {};
+
+function buildColors() {
+    const html = ([k, label]) =>
+        '<div class="text-xs"><span class="text-slate-400">' + label + '</span>'
+      + '<div class="flex items-center gap-2 mt-1"><input type="checkbox" id="on-' + k + '" title="Personnaliser">'
+      + '<input type="color" id="f-' + k + '" class="h-9 w-14 rounded bg-transparent"></div></div>';
+    $('colors').innerHTML = COLORS.slice(0, 3).map(html).join('');
+    $('wcolors').innerHTML = COLORS.slice(3).map(html).join('');
+}
+
+function fill(s) {
+    $('f-font').value = s.font || '';
+    $('f-w_font').value = s.w_font || '';
+    $('f-until').value = s.until || '';
+    $('f-weight').value = s.weight || '';
+    $('f-size').value = s.size || '';
+    $('f-spacing').value = s.spacing || '';
+    $('f-icon_set').value = s.icon_set || 'default';
+    COLORS.forEach(([k]) => { $('on-' + k).checked = !!s[k]; $('f-' + k).value = s[k] || '#ffffff'; });
+    current.preset = s.preset || 'classique';
+    document.querySelectorAll('.preset').forEach(b => b.classList.toggle('active', b.dataset.p === current.preset));
+}
+
+function collect() {
+    const o = { preset: current.preset || 'classique', font: $('f-font').value, weight: $('f-weight').value,
+                size: $('f-size').value, spacing: $('f-spacing').value, icon_set: $('f-icon_set').value, w_font: $('f-w_font').value, until: $('f-until').value };
+    COLORS.forEach(([k]) => { o[k] = $('on-' + k).checked ? $('f-' + k).value : ''; });
+    return o;
+}
+
+function reloadPreview() {
+    $('preview').innerHTML = PAGES.map(p => '<iframe src="' + p + '?v=' + Date.now() + '" title="' + p + '"></iframe>').join('');
+}
+
+async function load() {
+    const res = await fetch('/admin/api/labels/style');
+    if (!res.ok) { $('msg').textContent = 'Chargement impossible (' + res.status + ')'; return; }
+    const j = await res.json();
+    presets = j.presets;
+    $('f-font').innerHTML = j.fonts.map(f => '<option value="' + f + '">' + (f || 'Origine (Montserrat fin)') + '</option>').join('');
+    $('f-w_font').innerHTML = j.fonts.map(f => '<option value="' + f + '">' + (f || 'Origine') + '</option>').join('');
+    $('presets').innerHTML = Object.keys(presets).map(p => '<button class="preset" data-p="' + p + '">' + (p === 'halloween' ? '🎃 Halloween' : 'Classique') + '</button>').join('');
+    document.querySelectorAll('.preset').forEach(b => b.addEventListener('click', () => {
+        fill(presets[b.dataset.p]); current.preset = b.dataset.p;
+        document.querySelectorAll('.preset').forEach(x => x.classList.toggle('active', x === b));
+        $('msg').className = 'text-xs text-amber-400'; $('msg').textContent = 'Thème choisi : pense à enregistrer.';
+    }));
+    fill(j.style);
+    reloadPreview();
+}
+
+$('saveBtn').addEventListener('click', async () => {
+    const m = $('msg'); m.className = 'text-xs text-slate-400'; m.textContent = 'Enregistrement…';
+    const res = await fetch('/admin/api/labels/style', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(collect()) });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) { m.className = 'text-xs text-amber-400'; m.textContent = j.detail || ('Erreur ' + res.status); return; }
+    m.className = 'text-xs text-emerald-400'; m.textContent = 'Enregistré ✓ (OBS le reprend en moins de 15 s)';
+    reloadPreview();
+});
+
+// Toute modification manuelle sort du thème prêt à l'emploi
+document.addEventListener('input', (e) => {
+    if (e.target.id && (e.target.id.startsWith('f-') || e.target.id.startsWith('on-'))) {
+        current.preset = 'perso';
+        document.querySelectorAll('.preset').forEach(x => x.classList.remove('active'));
+    }
+});
+
+buildColors();
+load();
+</script>
+</body>
+</html>

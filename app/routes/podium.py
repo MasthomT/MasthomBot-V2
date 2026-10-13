@@ -1,9 +1,7 @@
-"""Admin des récompenses de points de chaîne First / Deuz / Troiz (voir app/services/podium_service.py)."""
+"""API d'admin du podium First / Deuz / Troiz (page : /admin/rewards#podium, voir app/services/podium_service.py)."""
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from app.core.database import get_db_connection
@@ -12,7 +10,6 @@ from app.services import podium_service
 
 logger = logging.getLogger("masthbot.podium_routes")
 router = APIRouter(tags=["podium"], dependencies=[Depends(require_admin)])
-templates = Jinja2Templates(directory="app/templates")
 
 
 class RewardCfg(BaseModel):
@@ -27,11 +24,6 @@ class RewardCfg(BaseModel):
 
 class PodiumPayload(BaseModel):
     rewards: list[RewardCfg]
-
-
-@router.get("/admin/podium", response_class=HTMLResponse)
-async def admin_podium_page(request: Request):
-    return templates.TemplateResponse(request=request, name="admin/podium_manager.html")
 
 
 @router.get("/admin/api/podium")
