@@ -11,6 +11,7 @@ Routes admin (protégées) :
 
 Routes publiques (overlay OBS, pas d'auth — comme les autres /overlay/*) :
   GET /overlay/wheel/{id}    -> page affichée dans OBS pour CETTE roue précise
+  GET /overlay/wheels        -> UNE page pour TOUTES les roues (celle qui est lancée s'affiche)
   GET /api/v1/wheels/{id}    -> données de la roue (pour que l'overlay les charge)
 """
 
@@ -115,6 +116,14 @@ async def _announce_winner_in_chat(label: str) -> None:
 
 
 # ── Overlay (public, pour OBS) ──────────────────────────────────────────────
+
+@router.get("/overlay/wheels", response_class=HTMLResponse)
+async def wheels_overlay_page(request: Request):
+    """Overlay universel : affiche n'importe quelle roue au moment où elle est lancée (wheel_id = 0)."""
+    return templates.TemplateResponse(
+        request=request, name="overlays/wheel_overlay.html", context={"wheel_id": 0}
+    )
+
 
 @router.get("/overlay/wheel/{wheel_id}", response_class=HTMLResponse)
 async def wheel_overlay_page(request: Request, wheel_id: int):

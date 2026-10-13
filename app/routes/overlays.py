@@ -149,51 +149,12 @@ async def overlay_clips_quad(request: Request):
         context={"request": request}
     )
 
-@router.get("/overlay/tiktok", response_class=HTMLResponse)
-async def overlay_tiktok(request: Request):
-    return templates.TemplateResponse(request=request, name="overlays/tiktok_overlay.html")
 
 
 @router.get("/overlay/anniversaire", response_class=HTMLResponse)
 async def overlay_anniversaire(request: Request):
     return templates.TemplateResponse(request=request, name="overlays/anniversaire_overlay.html", headers=NO_CACHE)
 
-@router.get("/overlay/compteur-defi", response_class=HTMLResponse)
-async def overlay_compteur_defi(request: Request):
-    return templates.TemplateResponse(request=request, name="overlays/compteur_defi_overlay.html", headers=NO_CACHE)
-
-@router.get("/overlay/objectif-subs", response_class=HTMLResponse)
-async def overlay_objectif_subs(request: Request):
-    return templates.TemplateResponse(request=request, name="overlays/objectif_subs_overlay.html", headers=NO_CACHE)
-
-@router.get("/overlay/raidwheel", response_class=HTMLResponse)
-async def overlay_raidwheel(request: Request):
-    return templates.TemplateResponse(request=request, name="overlays/raidwheel_overlay.html")
-
-# SSE dédié raidwheel — clients s'abonnent ici pour recevoir spin/result
-_raidwheel_clients: list[asyncio.Queue] = []
-
-@router.get("/overlay/raidwheel/events")
-async def raidwheel_events(request: Request):
-    queue: asyncio.Queue = asyncio.Queue()
-    _raidwheel_clients.append(queue)
-    async def gen():
-        try:
-            while True:
-                if await request.is_disconnected():
-                    break
-                data = await queue.get()
-                yield f"data: {json.dumps(data)}\n\n"
-        except asyncio.CancelledError:
-            pass
-        finally:
-            if queue in _raidwheel_clients:
-                _raidwheel_clients.remove(queue)
-    return StreamingResponse(gen(), media_type="text/event-stream")
-
-async def trigger_raidwheel(payload: dict):
-    for q in _raidwheel_clients:
-        await q.put(payload)
 
 # ==========================================
 # 3. PROXY VIDÉO TIKTOK
@@ -204,7 +165,7 @@ async def trigger_raidwheel(payload: dict):
 # servie depuis le disque ici, derrière un token à usage limité dans le temps.
 
 TIKTOK_PROXY_CACHE: dict[str, dict] = {}
-TIKTOK_PROXY_TTL = 300  # 5 minutes : largement assez pour charger/jouer une vidéo
+TIKTOK_PROXY_TTL = 900  # 15 minutes : le temps d'attendre son tour dans la file de l'overlay (clips devant) puis de jouer
 
 
 def register_tiktok_proxy(filepath: str) -> str:

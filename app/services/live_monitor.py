@@ -83,6 +83,13 @@ async def check_twitch_lives_routine():
                                     except Exception as e:
                                         logger.error(f"❌ [CREDITS] Erreur lors du reset automatique : {e}")
 
+                                    # --- 1b. PODIUM : on repart de « First » ---
+                                    try:
+                                        from app.services import podium_service
+                                        asyncio.create_task(podium_service.on_stream_start(live_id))
+                                    except Exception as e:
+                                        logger.error(f"❌ [PODIUM] Démarrage du live : {e}")
+
                                     # --- 2. ENVOI DE LA NOTIFICATION DISCORD ---
                                     try:
                                         msg_id = await notification_service.send_discord_live_notification(
@@ -101,6 +108,11 @@ async def check_twitch_lives_routine():
                                 # --- 3. FIN DU LIVE ---
                                 if settings_row.get("personal_last_live_id") != "":
                                     await conn.execute("UPDATE settings SET personal_last_live_id='' WHERE id=1")
+                                    try:
+                                        from app.services import podium_service
+                                        asyncio.create_task(podium_service.on_stream_end())
+                                    except Exception as e:
+                                        logger.error(f"❌ [PODIUM] Fin du live : {e}")
 
                             # ==========================================================
                             # 2. GESTION DES PARTENAIRES

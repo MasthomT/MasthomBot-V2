@@ -32,6 +32,47 @@ _permitted_users: set = set()
 # reconnexion transitoire) — voir le filet de sécurité dans watchdog_timer ci-dessous.
 _send_failure_since: float | None = None
 
+# ── Lecteur unifié (!play, alias !replay / !showtiktok) ─────────────────────────────────
+_TIKTOK_LINK_RE = re.compile(r"https?://\S*tiktok\.com\S*", re.IGNORECASE)   # tiktok.com, vm.tiktok.com, vt.tiktok.com
+
+
+def classify_play_input(content):
+    """Reconnaît ce que l'on veut lire.
+    → ("tiktok", url | None)               url None = dernier TikTok connu
+    → ("clip", {"slug", "query"})          tout à None = dernier clip de la chaîne
+    Les mots-clés « clip » et « tiktok » (seuls ou devant le reste) forcent le type."""
+    text = (content or "").strip()
+    forced = None
+    first, _, rest = text.partition(" ")
+    if first.lower() in ("clip", "tiktok"):
+        forced, text = first.lower(), rest.strip()
+
+    link = _TIKTOK_LINK_RE.search(text)
+    if forced == "tiktok" or (forced is None and link):
+        return "tiktok", (link.group(0) if link else None)
+
+    slug = query = None
+    if text:
+        twitch_link = next((t for t in text.split() if "twitch.tv" in t.lower()), None)
+        if twitch_link:
+            slug = twitch_link
+        else:
+            query = text
+    return "clip", {"slug": slug, "query": query}
+
+
+def play_legacy_input(typed_name, user_input):
+    """Les anciens noms gardent leur comportement d'avant quand on ne donne pas de lien :
+    !showtiktok affichait le dernier TikTok (tout texte qui n'était pas un lien TikTok était ignoré),
+    !replay seul lisait le dernier clip."""
+    typed = (typed_name or "").lower()
+    if typed == "showtiktok":
+        return user_input if _TIKTOK_LINK_RE.search(user_input or "") else "tiktok"
+    if typed == "replay" and not (user_input or "").strip():
+        return "clip"
+    return user_input
+
+
 async def safe_send(channel, content: str) -> bool:
     """Envoie un message en sécurisant la longueur et le contenu.
     Retourne False en cas d'échec, pour permettre à l'appelant de retenter
@@ -258,27 +299,29 @@ class MasthbotTwitch(commands.Bot):
         display_name = message.author.display_name or message.author.name
         config = await self.get_db_config()
 
-        if content_lower.startswith("!choix "):
-            try:
-                parts = content_clean.split(" ")
-                if len(parts) > 1:
-                    choice_idx = int(parts[1])
-                    if 1 <= choice_idx <= 4:
-                        await self._handle_chat_vote(message, choice_idx)
+        # Votes du chat : !choix N (sondage overlay) et !poll N (sondage Twitch). Le nom, l'activation, le rôle
+        # et un éventuel message de confirmation se règlent dans l'admin (page Commandes).
+        if content_lower.startswith("!"):
+            from app.services.bot_system_commands_service import get_config_by_name, msg as _vote_msg
+            vote_hit = await get_config_by_name(content_lower.split(" ", 1)[0][1:])
+            if vote_hit and vote_hit[0] in ("choix", "poll"):
+                vote_key, vote_cfg = vote_hit
+                try:
+                    parts = content_clean.split(" ")
+                    if len(parts) > 1 and 1 <= int(parts[1]) <= 4:
+                        choice_idx = int(parts[1])
+                        if not await self._syscmd_allowed(message, vote_key, vote_cfg):
+                            return
+                        if vote_key == "choix":
+                            await self._handle_chat_vote(message, choice_idx)
+                        else:
+                            await self._handle_twitch_poll_vote(message, choice_idx)
+                        confirm = await _vote_msg(vote_key, "confirm", user=display_name, choice=choice_idx)
+                        if confirm:
+                            await safe_send(message.channel, confirm)
                         return
-            except (ValueError, IndexError):
-                pass
-
-        elif content_lower.startswith("!poll "):
-            try:
-                parts = content_clean.split(" ")
-                if len(parts) > 1:
-                    choice_idx = int(parts[1])
-                    if 1 <= choice_idx <= 4:
-                        await self._handle_twitch_poll_vote(message, choice_idx)
-                        return
-            except (ValueError, IndexError):
-                pass
+                except (ValueError, IndexError):
+                    pass
 
         badges = message.author.badges or {}
         is_owner = username == self.channel_name
@@ -458,8 +501,15 @@ class MasthbotTwitch(commands.Bot):
             syscmd = await get_config_by_name(cmd_name)
             if syscmd:
                 internal_key, syscmd_cfg = syscmd
-                if not syscmd_cfg["enabled"]:
-                    return  # commande désactivée
+                # Activation ET rôle minimum réglés dans l'admin : appliqués ici, à un seul endroit, pour
+                # toutes les commandes système (avant, le rôle du sélecteur n'était lu par aucune commande).
+                if not await self._syscmd_allowed(message, internal_key, syscmd_cfg):
+                    from app.services.bot_system_commands_service import definition_of, msg as _dmsg
+                    if syscmd_cfg.get("enabled", True) and "denied" in (definition_of(internal_key) or {}).get("messages", {}):
+                        await safe_send(message.channel, await _dmsg(internal_key, "denied"))
+                    return
+                if internal_key == "play":
+                    user_input = play_legacy_input(cmd_name, user_input)
                 if internal_key != cmd_name:
                     # Réécriture vers le nom interne
                     new_content = f"!{internal_key}" + (f" {user_input}" if user_input else "")
@@ -470,8 +520,8 @@ class MasthbotTwitch(commands.Bot):
             NATIVE_COMMANDS = {
                 'so', 'checkcopains', 'sondage', 'testpoll',
                 'level', 'rang', 'timer', 'chrono', 'voteclips', 'addvip', 'vip',
-                'permit', 'unpermit', 'raidqui', 'showtiktok', 'replay', 'renotif',
-                'dé', 'de', 'dice', 'roll', 'uptime', 'counter',
+                'permit', 'unpermit', 'play', 'renotif',
+                'de', 'uptime', 'counter',
             }
             if cmd_name in NATIVE_COMMANDS:
                 await self.handle_commands(message)
@@ -480,30 +530,29 @@ class MasthbotTwitch(commands.Bot):
             # --- 1. SYSTÈME DE TRADUCTION ---
             from app.services.features_service import handle_translation, LANGUAGES
             if cmd_name in LANGUAGES:
+                from app.services.bot_system_commands_service import get_config as _get_syscfg
+                if not await self._syscmd_allowed(message, "translate", await _get_syscfg("translate")):
+                    return
                 reply = await handle_translation(cmd_name, display_name, user_input)
                 return await safe_send(message.channel, reply)
+            if cmd_name == "translate":          # le nom « traduire » affiche l'aide
+                from app.services.bot_system_commands_service import msg as _tmsg
+                sample = next(iter(LANGUAGES))
+                return await safe_send(message.channel, await _tmsg(
+                    "translate", "help", commands=" ".join(f"!{c}" for c in LANGUAGES), example=sample))
 
             # --- 2. JEU DU MOT SECRET ---
             from app.services.features_service import handle_set_word, handle_guess_word
             if cmd_name == "setword":
-                if is_mod or is_owner: # Réservé à l'élite
-                    reply = await handle_set_word(display_name, user_input)
-                    return await message.channel.send(reply)
-                else:
-                    return # Les viewers normaux ne peuvent pas définir le mot
-                
-            if cmd_name in ["guess", "mot"]: # Commandes pour deviner
+                reply = await handle_set_word(display_name, user_input)
+                return await message.channel.send(reply)
+
+            if cmd_name == "guess":              # (l'alias « mot » est ramené à « guess » plus haut)
                 reply = await handle_guess_word(display_name, user_input)
                 if reply: # On n'envoie un message que si c'est la bonne réponse !
                     return await message.channel.send(reply)
 
-            # --- SUBGOAL : !subtember (rappelle le principe de l'événement) / !subgoal (roadmap) ---
-            if cmd_name in ["subgoal", "subtember"]:
-                from app.services.subgoal_service import build_subgoal_chat_reply
-                reply = await build_subgoal_chat_reply(mode="explainer" if cmd_name == "subtember" else "roadmap")
-                return await safe_send(message.channel, reply)
-
-            if cmd_name in ["game", "infogame"]:
+            if cmd_name == "game":
                 from app.services.features_service import handle_game_info
                 import os
                 
@@ -521,7 +570,8 @@ class MasthbotTwitch(commands.Bot):
                     reply = await handle_game_info(target_game, client_id, self.master_token)
                     return await safe_send(message.channel, reply)
                 else:
-                    return await safe_send(message.channel, "❌ Aucun jeu spécifié et le stream est actuellement hors ligne.")
+                    from app.services.bot_system_commands_service import msg as _gmsg
+                    return await safe_send(message.channel, await _gmsg("game", "no_game"))
 
             # --- 3. COMMANDES PERSONNALISÉES (Base de données) ---
             from app.services.command_service import handle_custom_command
@@ -571,6 +621,30 @@ class MasthbotTwitch(commands.Bot):
                 logger.info(f"🔄 [API SYNC] Rôles synchronisés pour le Twitch ID {twitch_id}")
         except Exception as e:
             logger.error(f"❌ [DB ERROR] Erreur lors de sync_user_roles : {e}")
+
+    def _role_flags(self, message) -> dict:
+        """Rôles de l'auteur du message (broadcaster > modo > VIP > abonné), pour le contrôle des commandes."""
+        badges = message.author.badges or {}
+        name = message.author.name.lower()
+        is_owner = name == self.channel_name or name == "felixthebigblackcat"   # le bot agit avec les droits du streamer
+        return {
+            "is_owner": is_owner,
+            "is_mod": bool(message.author.is_mod or "moderator" in badges or is_owner),
+            "is_vip": bool(message.author.is_vip or "vip" in badges),
+            "is_sub": bool((message.tags and message.tags.get("subscriber") == "1") or "subscriber" in badges or "founder" in badges),
+        }
+
+    async def _syscmd_allowed(self, message, key: str, cfg: dict | None) -> bool:
+        """La commande système est-elle activée, et l'auteur a-t-il le rôle minimum réglé dans l'admin ?"""
+        from app.services.bot_system_commands_service import enforces_role, role_allowed
+        if cfg is not None and not cfg.get("enabled", True):
+            return False
+        # Récompense de points de chaîne « TikTok Replay » : un viewer peut déclencher le lecteur sans être modo.
+        if key == "play" and message.tags and message.tags.get("custom-reward-id") == "093cceb1-3c5e-4e8e-bc16-7f27ff6a2d2b":
+            return True
+        if cfg is None or not enforces_role(key):
+            return True
+        return role_allowed(cfg["min_role"], **self._role_flags(message))
 
     async def _handle_helix_actions(self, reply, is_admin=False):
         if not is_admin:
@@ -687,17 +761,7 @@ class MasthbotTwitch(commands.Bot):
 
     @commands.command(name='so')
     async def shoutout_command(self, ctx, *, content: str = None):
-        author_badges = ctx.author.badges or {}
-        is_authorized = (
-            ctx.author.is_mod
-            or ctx.author.is_broadcaster
-            or "moderator" in author_badges
-            or ctx.author.name.lower() == self.channel_name
-            or ctx.author.name.lower() == "felixthebigblackcat"
-        )
-        if not is_authorized:
-            logger.warning(f"⚠️ [SHOUTOUT] !so refusé pour {ctx.author.name} (is_mod={ctx.author.is_mod}, is_broadcaster={ctx.author.is_broadcaster}, badges={author_badges})")
-            return
+        # Rôle minimum contrôlé en amont (admin > Commandes).
         from app.services.bot_system_commands_service import msg as syscmd_msg, get_config
         syscmd_cfg = await get_config("so")
         cmd_label = syscmd_cfg["command_name"] if syscmd_cfg else "so"
@@ -774,28 +838,17 @@ class MasthbotTwitch(commands.Bot):
         except Exception as e:
             logger.error(f"Erreur Envoi SO Node : {e}")
 
-    @commands.command(name='replay')
-    async def cmd_replay(self, ctx, *, content: str = None):
-        author_badges = ctx.author.badges or {}
-        is_authorized = (
-            ctx.author.is_mod
-            or ctx.author.is_broadcaster
-            or "moderator" in author_badges
-            or ctx.author.name.lower() == self.channel_name
-            or ctx.author.name.lower() == "felixthebigblackcat"
-        )
-        if not is_authorized:
-            logger.warning(f"⚠️ [REPLAY] !replay refusé pour {ctx.author.name} (is_mod={ctx.author.is_mod}, is_broadcaster={ctx.author.is_broadcaster}, badges={author_badges})")
-            return
+    @commands.command(name='play')
+    async def cmd_play(self, ctx, *, content: str = None):
+        """Lecteur unifié : un clip Twitch ou un TikTok, reconnu automatiquement.
+        Le nom, les alias (replay, showtiktok…), le rôle et les messages se règlent dans l'admin (Commandes)."""
+        kind, value = classify_play_input(content)
+        if kind == "tiktok":
+            await self._play_tiktok(ctx, value)
+        else:
+            await self._play_clip(ctx, value["slug"], value["query"])
 
-        slug, query = None, None
-        if content:
-            content = content.strip()
-            if "twitch.tv" in content:
-                slug = content
-            else:
-                query = content
-
+    async def _play_clip(self, ctx, slug, query):
         session = await self.get_web_session()
 
         from app.services.bot_system_commands_service import msg as syscmd_msg
@@ -830,12 +883,18 @@ class MasthbotTwitch(commands.Bot):
                             clip_url = c.get("url", f"https://clips.twitch.tv/{resolved_slug}")
                             clip_broadcaster = c.get("broadcaster_name", "")
             except Exception as e:
-                logger.warning(f"⚠️ [REPLAY] Impossible de récupérer les infos du clip : {e}")
+                logger.warning(f"⚠️ [PLAY] Impossible de récupérer les infos du clip : {e}")
 
         try:
             payload = {"slug": resolved_slug or slug, "query": query}
             async with session.post(f"{settings.OVERLAY_NODE_URL}/api/replay", json=payload) as resp:
                 node_data = await resp.json() if resp.content_type == "application/json" else {}
+
+            if node_data.get("status") == "not_found":
+                reply = await syscmd_msg("play", "clip_not_found")
+                if reply:
+                    await safe_send(ctx.channel, reply)
+                return
 
             # Si Node.js a choisi le clip (mode query), on récupère les infos depuis sa réponse
             if not clip_title and node_data.get("title"):
@@ -845,13 +904,11 @@ class MasthbotTwitch(commands.Bot):
                     f"https://clips.twitch.tv/{node_data['clip_id']}" if node_data.get("clip_id") else None
                 )
 
-            sound_payload = {"type": "play_sound", "file": "/static/uploads/hey_listen.mp3"}
-            async with session.post(f"{settings.OVERLAY_NODE_URL}/api/alert", json=sound_payload) as _:
-                pass
+            # (le son d'alerte est déjà joué par le serveur Node au moment de lancer le clip)
 
             # Message chat si titre disponible
             if clip_title:
-                reply = await syscmd_msg("replay", "playing",
+                reply = await syscmd_msg("play", "clip_playing",
                     title=clip_title,
                     url=clip_url or "",
                     broadcaster=clip_broadcaster or self.channel_name)
@@ -859,71 +916,41 @@ class MasthbotTwitch(commands.Bot):
                     await safe_send(ctx.channel, reply)
 
         except Exception as e:
-            logger.error(f"❌ [REPLAY ERROR] : {e}")
+            logger.error(f"❌ [PLAY ERROR] clip : {e}")
 
-    @commands.command(name='showtiktok')
-    async def cmd_show_tiktok(self, ctx, *, content: str = None):
-        """!showtiktok -> ressort la dernière vidéo TikTok connue sur l'overlay.
-        !showtiktok <lien> -> affiche le TikTok du lien donné sur l'overlay.
-        (Distinct de !tiktok, qui reste la commande personnalisée donnant le lien du réseau social.)"""
-        TIKTOK_REPLAY_REWARD_ID = "093cceb1-3c5e-4e8e-bc16-7f27ff6a2d2b"
-        reward_id = (ctx.message.tags or {}).get("custom-reward-id", "")
-        is_reward_redemption = reward_id == TIKTOK_REPLAY_REWARD_ID
-
+    async def _play_tiktok(self, ctx, source_url):
+        from app.services.bot_system_commands_service import msg as syscmd_msg
         author_badges = ctx.author.badges or {}
         is_owner = (
             ctx.author.is_broadcaster
             or ctx.author.name.lower() == self.channel_name
             or "broadcaster" in author_badges
         )
-        is_authorized = (
-            is_owner
-            or ctx.author.is_mod
-            or "moderator" in author_badges
-            or ctx.author.name.lower() == "felixthebigblackcat"
-            or is_reward_redemption  # viewer via récompense de points de chaîne TikTok Replay
-        )
-        if not is_authorized:
-            logger.warning(f"⚠️ [TIKTOK] !showtiktok refusé pour {ctx.author.name} (is_mod={ctx.author.is_mod}, is_broadcaster={ctx.author.is_broadcaster}, badges={author_badges})")
-            return
+        # Rôle minimum (et récompense TikTok Replay) contrôlés en amont (admin > Commandes).
 
         async with get_db_connection() as conn:
-            c = await conn.execute(
-                "SELECT showtiktok_enabled, showtiktok_message, tiktok_username FROM discord_features_settings WHERE id = 1"
-            )
+            c = await conn.execute("SELECT tiktok_username FROM discord_features_settings WHERE id = 1")
             row = await c.fetchone()
-        if row and not row["showtiktok_enabled"]:
-            return
-        message_template = (row["showtiktok_message"] if row else None) or "🎵 TikTok affiché à l'écran ! — {title} {url}"
         channel_tiktok_username = (row["tiktok_username"] if row else "") or ""
 
-        logger.info(
-            f"[TIKTOK] is_owner={is_owner} is_reward={is_reward_redemption} | name={ctx.author.name!r} "
-            f"| channel_name={self.channel_name!r} | content={content!r}"
-        )
+        logger.info(f"[PLAY/TIKTOK] is_owner={is_owner} | name={ctx.author.name!r} | url={source_url!r}")
 
         from app.services.tiktok_monitor import get_last_known_tiktok, get_direct_tiktok_video
         from app.routes.overlays import register_tiktok_proxy
 
-        # Si du texte suit la commande mais que ce n'est pas un lien TikTok (ex: une récompense
-        # de points de chaîne qui laisse passer le message tapé par le viewer), on affiche
-        # simplement le dernier TikTok de la chaîne.
-        candidate = content.strip().split()[0] if content and content.strip() else None
-        source_url = candidate if candidate and "tiktok.com" in candidate.lower() else None
-
-        if not source_url:
+        if not source_url:      # « tiktok » sans lien : le dernier TikTok de la chaîne
             last = await get_last_known_tiktok()
             if not last:
-                return await ctx.send("❌ Aucune vidéo TikTok connue pour le moment.")
+                return await safe_send(ctx.channel, await syscmd_msg("play", "tiktok_none"))
             source_url = last["url"]
 
-        logger.info(f"[TIKTOK] Téléchargement en cours : {source_url}")
+        logger.info(f"[PLAY/TIKTOK] Téléchargement en cours : {source_url}")
         video = await get_direct_tiktok_video(source_url)
         if not video:
-            logger.error(f"[TIKTOK] Échec download pour {source_url}")
-            return await ctx.send("❌ Impossible de récupérer cette vidéo TikTok. Vérifie le lien !")
+            logger.error(f"[PLAY/TIKTOK] Échec download pour {source_url}")
+            return await safe_send(ctx.channel, await syscmd_msg("play", "tiktok_download_error"))
 
-        logger.info(f"[TIKTOK] Vidéo OK : uploader={video.get('uploader')!r} filepath={video.get('filepath')!r}")
+        logger.info(f"[PLAY/TIKTOK] Vidéo OK : uploader={video.get('uploader')!r} filepath={video.get('filepath')!r}")
 
         # Les mods/viewers (récompense) sont limités au compte TikTok de la chaîne.
         if not is_owner and channel_tiktok_username and video.get("uploader") != channel_tiktok_username.lower():
@@ -931,19 +958,31 @@ class MasthbotTwitch(commands.Bot):
                 os.remove(video["filepath"])
             except OSError:
                 pass
-            return await ctx.send(f"❌ Seul @{self.channel_name} peut afficher un TikTok d'un autre compte. Les modérateurs sont limités au TikTok de la chaîne (@{channel_tiktok_username}).")
+            return await safe_send(ctx.channel, await syscmd_msg(
+                "play", "tiktok_wrong_account", broadcaster=self.channel_name, tiktok_account=channel_tiktok_username))
 
+        # Le TikTok passe par la MÊME file d'attente et le MÊME overlay que les clips (serveur Node,
+        # page /shoutout) : jamais deux médias à l'écran en même temps.
         token = register_tiktok_proxy(video["filepath"])
-        await trigger_overlay_event({"type": "show_tiktok", "url": f"/api/v1/tiktok_proxy/{token}"})
-        logger.info(f"[TIKTOK] Overlay déclenché avec token={token}")
+        try:
+            session = await self.get_web_session()
+            async with session.post(
+                f"{settings.OVERLAY_NODE_URL}/api/tiktok",
+                json={"url": f"/api/v1/tiktok_proxy/{token}", "duration": video.get("duration") or 0},
+            ) as resp:
+                if resp.status != 200:
+                    raise RuntimeError(f"HTTP {resp.status}")
+            logger.info(f"[PLAY/TIKTOK] Envoyé à la file de l'overlay avec token={token}")
+        except Exception as e:
+            logger.error(f"❌ [PLAY/TIKTOK] Impossible d'envoyer le TikTok à l'overlay : {e}")
+            return await safe_send(ctx.channel, await syscmd_msg("play", "tiktok_download_error"))
 
-        reply = message_template.replace("{title}", video["title"]).replace("{url}", source_url)
-        await safe_send(ctx.channel, reply)
+        reply = await syscmd_msg("play", "tiktok_success", title=video.get("title") or "", url=source_url)
+        if reply:
+            await safe_send(ctx.channel, reply)
 
     @commands.command(name='renotif')
     async def cmd_renotif(self, ctx):
-        if not ctx.author.is_mod and not ctx.author.is_broadcaster:
-            return
         from app.services.bot_system_commands_service import msg as syscmd_msg
         config = await self.get_db_config()
         channel_id = config.get('notif_live_channel_id')
@@ -966,8 +1005,6 @@ class MasthbotTwitch(commands.Bot):
 
     @commands.command(name='checkcopains')
     async def cmd_checkcopains(self, ctx):
-        if not ctx.author.is_mod and not ctx.author.is_broadcaster:
-            return
             
         from app.services.bot_system_commands_service import msg as syscmd_msg
         config = await self.get_db_config()
@@ -1059,8 +1096,6 @@ class MasthbotTwitch(commands.Bot):
 
     @commands.command(name='testpoll')
     async def cmd_testpoll(self, ctx):
-        if not ctx.author.is_mod and not ctx.author.is_broadcaster:
-            return
 
         try:
             import app.services.twitch_poll_state as poll_state
@@ -1153,7 +1188,6 @@ class MasthbotTwitch(commands.Bot):
     @commands.command(name='timer')
     async def cmd_timer(self, ctx, time_str: str = None, *, label: str = "OBJECTIF"):
         from app.services.bot_system_commands_service import msg as syscmd_msg, get_config
-        if not ctx.author.is_mod and not ctx.author.is_broadcaster: return
         syscmd_cfg = await get_config("timer")
         cmd_label = syscmd_cfg["command_name"] if syscmd_cfg else "timer"
         if not time_str: return await ctx.send(await syscmd_msg("timer", "usage", command=cmd_label))
@@ -1190,7 +1224,6 @@ class MasthbotTwitch(commands.Bot):
     @commands.command(name='chrono')
     async def cmd_chrono(self, ctx, *, label: str = "CHRONO"):
         from app.services.bot_system_commands_service import msg as syscmd_msg
-        if not ctx.author.is_mod and not ctx.author.is_broadcaster: return
         
         session = await self.get_web_session()
 
@@ -1218,19 +1251,14 @@ class MasthbotTwitch(commands.Bot):
     @commands.command(name='voteclips')
     async def voteclips_cmd(self, ctx: commands.Context):
         from app.services.bot_system_commands_service import msg as syscmd_msg
-        if ctx.author.is_mod or ctx.author.is_broadcaster:
-            result = await start_clips_poll()
-            if "error" in result:
-                await ctx.send(await syscmd_msg("voteclips", "error", error=result["error"]))
-            else:
-                await ctx.send(await syscmd_msg("voteclips", "success"))
+        result = await start_clips_poll()          # rôle minimum (et message « denied ») contrôlés en amont
+        if "error" in result:
+            await ctx.send(await syscmd_msg("voteclips", "error", error=result["error"]))
         else:
-            await ctx.send(await syscmd_msg("voteclips", "denied"))
+            await ctx.send(await syscmd_msg("voteclips", "success"))
 
     @commands.command(name='addvip')
     async def cmd_addvip(self, ctx, target: str = None, duration_days: int = 0):
-        if not ctx.author.is_mod and not ctx.author.is_broadcaster:
-            return
 
         from app.services.bot_system_commands_service import msg as syscmd_msg, get_config
         syscmd_cfg = await get_config("addvip")
@@ -1317,8 +1345,6 @@ class MasthbotTwitch(commands.Bot):
         from app.services.bot_system_commands_service import msg as syscmd_msg, get_config
         syscmd_cfg = await get_config("permit")
         cmd_label = syscmd_cfg["command_name"] if syscmd_cfg else "permit"
-        if not ctx.author.is_mod and ctx.author.name.lower() != self.channel_name:
-            return
         if not target:
             return await ctx.send(await syscmd_msg("permit", "usage", command=cmd_label))
         target_clean = target.strip().lstrip('@').lower()
@@ -1334,15 +1360,13 @@ class MasthbotTwitch(commands.Bot):
         from app.services.bot_system_commands_service import msg as syscmd_msg, get_config
         syscmd_cfg = await get_config("unpermit")
         cmd_label = syscmd_cfg["command_name"] if syscmd_cfg else "unpermit"
-        if not ctx.author.is_mod and ctx.author.name.lower() != self.channel_name:
-            return
         if not target:
             return await ctx.send(await syscmd_msg("unpermit", "usage", command=cmd_label))
         target_clean = target.strip().lstrip('@').lower()
         _permitted_users.discard(target_clean)
         await ctx.send(await syscmd_msg("unpermit", "success", target=target_clean))
 
-    @commands.command(name='dé', aliases=['de', 'dice', 'roll'])
+    @commands.command(name='de')      # nom et alias (dé, dice, roll…) se règlent dans l'admin, ramenés à « de » en amont
     async def cmd_de(self, ctx, max_val: str = "6"):
         import random as _random
         from app.services.bot_system_commands_service import msg as syscmd_msg
@@ -1384,8 +1408,9 @@ class MasthbotTwitch(commands.Bot):
     @commands.command(name='counter')
     async def cmd_counter(self, ctx, *, args: str = ""):
         from app.services.bot_system_commands_service import msg as syscmd_msg
-        author_badges = ctx.author.badges or {}
-        is_mod = ctx.author.is_mod or ctx.author.is_broadcaster or "moderator" in author_badges or "broadcaster" in author_badges
+        from app.services.bot_system_commands_service import get_config as _get_cfg, role_allowed
+        _cfg = await _get_cfg("counter")
+        is_mod = role_allowed((_cfg or {}).get("min_role", "mod"), **self._role_flags(ctx.message))   # peut modifier ?
 
         args = args.strip()
         # Parsing : "Morts +1", "Morts reset", "Morts", "+1", "reset"
@@ -1426,71 +1451,6 @@ class MasthbotTwitch(commands.Bot):
             await ctx.send(await syscmd_msg("counter", "reset", label=label))
         else:
             await ctx.send(await syscmd_msg("counter", "show", label=label, count=self._counters[key]))
-
-    @commands.command(name='raidqui')
-    async def cmd_raidqui(self, ctx):
-        author_badges = ctx.author.badges or {}
-        is_authorized = (
-            ctx.author.is_broadcaster
-            or ctx.author.name.lower() == self.channel_name
-            or "broadcaster" in author_badges
-            or ctx.author.is_mod
-            or "moderator" in author_badges
-        )
-        if not is_authorized:
-            return
-
-        from app.core.database import get_db_connection
-        from app.routes.overlays import trigger_raidwheel
-
-        # 1. Récupérer les partners actifs
-        async with get_db_connection() as db:
-            await db.execute(
-                "SELECT twitch_login, display_name, avatar_url FROM partners WHERE is_active = TRUE"
-            )
-            partners = await db.fetchall()
-
-        from app.services.bot_system_commands_service import msg as syscmd_msg
-        if not partners:
-            return await ctx.send(await syscmd_msg("raidqui", "no_partners"))
-
-        # 2. Vérifier lesquels sont en live via l'API Twitch
-        session = await self.get_web_session()
-        client_id = os.getenv("TWITCH_CLIENT_ID", getattr(self._http, 'client_id', ''))
-        headers = {"Client-ID": client_id, "Authorization": f"Bearer {self.master_token}"}
-
-        logins = [p["twitch_login"] for p in partners]
-        # L'API accepte 100 logins max par requête
-        login_params = "&".join(f"user_login={l}" for l in logins[:100])
-        live_logins = set()
-        try:
-            async with session.get(
-                f"https://api.twitch.tv/helix/streams?{login_params}",
-                headers=headers
-            ) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    live_logins = {s["user_login"].lower() for s in data.get("data", [])}
-        except Exception as e:
-            logger.error(f"❌ [RAIDQUI] Erreur API Twitch streams : {e}")
-            return await ctx.send(await syscmd_msg("raidqui", "error"))
-
-        live_partners = [
-            {"login": p["twitch_login"], "name": p["display_name"], "avatar": p["avatar_url"] or ""}
-            for p in partners if p["twitch_login"].lower() in live_logins
-        ]
-
-        if not live_partners:
-            return await ctx.send(await syscmd_msg("raidqui", "no_live"))
-
-        import random as _random
-        winner = _random.choice(live_partners)
-
-        await ctx.send(await syscmd_msg("raidqui", "launch", count=len(live_partners)))
-        await trigger_raidwheel({"type": "spin", "streamers": live_partners, "winner_login": winner["login"]})
-
-        await asyncio.sleep(6)
-        await ctx.send(await syscmd_msg("raidqui", "result", name=winner["name"], login=winner["login"]))
 
     @routines.routine(seconds=60)
     async def watchtime_timer(self):

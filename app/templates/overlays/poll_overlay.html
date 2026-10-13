@@ -82,7 +82,7 @@
 
         function handleAlert(data) {
             if (data.type === 'show_poll') {
-                updateAndShow();
+                updateAndShow(data.poll);
             }
         }
 
@@ -99,10 +99,10 @@
             } catch (e) { console.error('SharedWorker indisponible :', e); }
         }
 
-        async function updateAndShow() {
+        async function updateAndShow(provided) {
             try {
-                const res = await fetch('/api/v1/poll/active');
-                const data = await res.json();
+                // `provided` : sondage fourni par l'événement (test depuis /admin/scene), sinon sondage actif en base
+                const data = provided || await (await fetch('/api/v1/poll/active')).json();
                 
                 if (data.active) {
                     questionEl.textContent = data.question;

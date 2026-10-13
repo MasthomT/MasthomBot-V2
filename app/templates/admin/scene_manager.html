@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administration - Scène OBS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #6366f1; outline: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+
+        #canvas {
+            position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden;
+            background:
+                linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px) 0 0 / 5% 8.888%,
+                linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px) 0 0 / 5% 8.888%,
+                #020617;
+            border: 1px solid #334155; border-radius: 12px; user-select: none; touch-action: none;
+        }
+        #bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none; display: none; }
+        .wbox {
+            position: absolute; box-sizing: border-box; cursor: move;
+            border: 2px solid #6366f1; background: rgba(99,102,241,.22); border-radius: 4px;
+            color: #fff; font-size: 11px; font-weight: 700; overflow: hidden;
+        }
+        .wbox.labels { border-color: #22c55e; background: rgba(34,197,94,.22); }
+        .wbox.roues  { border-color: #f59e0b; background: rgba(245,158,11,.22); }
+        .wbox.autres-overlays { border-color: #38bdf8; background: rgba(56,189,248,.22); }
+        .wbox.noembed { border-style: dashed; border-color: #94a3b8; background: rgba(148,163,184,.18); }
+        .wbox.full   { border-style: dashed; background: rgba(99,102,241,.06); }
+        .wbox.sel    { box-shadow: 0 0 0 2px #fff; }
+        .wbox .tag   { position: absolute; left: 4px; top: 2px; white-space: nowrap; text-shadow: 0 1px 2px #000; pointer-events: none; }
+        .wbox .grip  { position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; background: #fff; cursor: nwse-resize; opacity: .9; }
+        .row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+        .row:hover { background: #334155; }
+        .row.sel { background: rgba(99,102,241,.25); }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen">
+
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 md:p-10 min-w-0">
+        <header class="mb-6 flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">Scène OBS</h1>
+                <p class="text-slate-400 mt-1">Chaque scène est une source navigateur (1920×1080, fond transparent). Crée-en plusieurs, donne-leur un nom, coche et place tes widgets.</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <button id="importBtn" class="px-4 py-2.5 rounded-xl bg-sky-700 hover:bg-sky-600 text-white text-sm font-bold"><i class="fas fa-download mr-2"></i>Importer les sources d'OBS</button>
+                <span id="importMsg" class="text-xs text-slate-400"></span>
+                <span id="dirty" class="hidden text-amber-400 text-xs font-bold"><i class="fas fa-circle text-[8px]"></i> Modifications non enregistrées</span>
+                <button id="saveBtn" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold"><i class="fas fa-save mr-2"></i>Enregistrer</button>
+            </div>
+        </header>
+
+        <div class="config-card rounded-2xl p-4 mb-4 flex flex-wrap items-center gap-3">
+            <span class="text-xs font-black text-slate-500 uppercase tracking-widest">Scène</span>
+            <select id="sceneSel" class="input-dark rounded-lg px-3 py-1.5 text-sm font-bold"></select>
+            <button id="newSceneBtn" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-bold"><i class="fas fa-plus mr-1"></i>Nouvelle scène</button>
+            <button id="renameSceneBtn" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold"><i class="fas fa-pen mr-1"></i>Renommer</button>
+            <button id="delSceneBtn" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-red-600 text-xs font-bold"><i class="fas fa-trash mr-1"></i>Supprimer</button>
+            <span id="sceneMsg" class="text-xs text-slate-400"></span>
+        </div>
+        <div class="config-card rounded-2xl p-4 mb-6 flex flex-wrap items-center gap-3">
+            <span class="text-xs font-black text-slate-500 uppercase tracking-widest">Source OBS</span>
+            <input id="sceneUrl" readonly class="input-dark rounded-lg px-3 py-1.5 text-sm w-96 max-w-full" onclick="this.select()">
+            <button id="copyBtn" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold"><i class="fas fa-copy mr-1"></i>Copier</button>
+            <span class="text-xs text-slate-500">Taille 1920×1080 · l'aperçu se met à jour dans OBS en ~5 s après l'enregistrement.</span>
+        </div>
+
+        <div class="flex flex-col xl:flex-row gap-6">
+            <div class="flex-1 min-w-0">
+                <div id="canvas"></div>
+                <div class="mt-3 flex flex-wrap items-center gap-4 text-xs text-slate-400">
+                    <label class="flex items-center gap-2"><input type="checkbox" id="snap" checked> Aimanter à la grille (10 px)</label>
+                    <span class="flex items-center gap-2">
+                        <button id="bgBtn" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold"><i class="fas fa-image mr-1"></i>Image de fond</button>
+                        <button id="bgDel" class="hidden px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-red-600 font-bold"><i class="fas fa-trash mr-1"></i>Retirer</button>
+                        <input type="range" id="bgOpacity" min="10" max="100" value="60" class="hidden w-28" title="Opacité de l'image">
+                        <input type="file" id="bgFile" accept=".png,.jpg,.jpeg,.webp" class="hidden">
+                    </span>
+                    <span>Le canevas représente exactement 1920 × 1080 px (la source OBS doit avoir cette taille). Glisse un widget pour le déplacer, le coin blanc pour l'agrandir. Flèches du clavier : 1 px (Maj : 10 px).</span>
+                </div>
+            </div>
+
+            <aside class="xl:w-96 shrink-0 space-y-4">
+                <div id="props" class="config-card rounded-2xl p-4">
+                    <p class="text-slate-500 text-sm">Sélectionne un widget pour régler sa position.</p>
+                </div>
+                <div class="config-card rounded-2xl p-3 max-h-[60vh] overflow-y-auto custom-scrollbar" id="list"></div>
+            </aside>
+        </div>
+    </main>
+
+<script>
+const W = 1920, H = 1080;
+let widgets = [];
+let scenes = [];
+let sceneSlug = '';
+let selected = null;
+let dirty = false;
+const canvas = document.getElementById('canvas');
+
+const $ = (id) => document.getElementById(id);
+const factor = () => canvas.clientWidth / W;
+const find = (k) => widgets.find(w => w.key === k);
+const noEmbed = (w) => w.embed === 'local' || w.embed === 'blocked';
+
+function setDirty(v) { dirty = v; $('dirty').classList.toggle('hidden', !v); }
+function snapVal(v) { return $('snap').checked ? Math.round(v / 10) * 10 : Math.round(v); }
+
+const sceneQs = () => '?scene=' + encodeURIComponent(sceneSlug);
+
+async function loadScenes(prefer) {
+    const res = await fetch('/admin/api/scenes');
+    if (!res.ok) { alert('Impossible de charger les scènes (' + res.status + ')'); return; }
+    scenes = (await res.json()).scenes;
+    let want = prefer || new URLSearchParams(location.search).get('scene');
+    try { want = want || localStorage.getItem('sceneCurrent'); } catch (e) {}
+    sceneSlug = (scenes.find(s => s.slug === want) || scenes[0]).slug;
+    $('sceneSel').innerHTML = scenes.map(s =>
+        '<option value="' + s.slug + '"' + (s.slug === sceneSlug ? ' selected' : '') + '>' + s.name + ' — /overlay/' + s.slug + ' (' + s.active + ' widget' + (s.active > 1 ? 's' : '') + ')</option>').join('');
+}
+
+async function load() {
+    const res = await fetch('/admin/api/scene' + sceneQs());
+    if (!res.ok) { alert('Impossible de charger la scène (' + res.status + ')'); return; }
+    widgets = (await res.json()).widgets;
+    selected = null;
+    $('sceneUrl').value = location.origin + '/overlay/' + sceneSlug;
+    try { localStorage.setItem('sceneCurrent', sceneSlug); } catch (e) {}
+    setDirty(false);
+    renderAll();
+    await loadBg();
+}
+
+function renderAll() { renderCanvas(); renderList(); renderProps(); }
+
+function renderCanvas() {
+    canvas.innerHTML = '<img id="bg" alt="">';
+    applyBg();
+    const f = factor();
+    widgets.filter(w => w.enabled).sort((a, b) => a.z - b.z).forEach(w => {
+        const el = document.createElement('div');
+        el.className = 'wbox ' + w.group.toLowerCase().replace(/\s+/g, '-') + (w.full ? ' full' : '') + (noEmbed(w) ? ' noembed' : '') + (w.key === selected ? ' sel' : '');
+        el.style.left = (w.x * f) + 'px';
+        el.style.top = (w.y * f) + 'px';
+        el.style.width = (w.nw * w.scale * f) + 'px';
+        el.style.height = (w.nh * w.scale * f) + 'px';
+        el.style.zIndex = w.key === selected ? 9999 : w.z;
+        el.dataset.key = w.key;
+        el.innerHTML = '<span class="tag">' + w.label + '</span><div class="grip"></div>';
+        el.addEventListener('pointerdown', (e) => startDrag(e, w, e.target.classList.contains('grip')));
+        canvas.appendChild(el);
+    });
+}
+
+function renderList() {
+    const groups = {};
+    widgets.forEach(w => (groups[w.group] = groups[w.group] || []).push(w));
+    let html = '';
+    for (const g of Object.keys(groups)) {
+        html += '<div class="px-2 pt-2 pb-1 text-[10px] font-black text-slate-500 uppercase tracking-widest">' + g + '</div>';
+        groups[g].forEach(w => {
+            html += '<div class="row' + (w.key === selected ? ' sel' : '') + '" data-key="' + w.key + '">'
+                 + '<input type="checkbox" ' + (w.enabled ? 'checked' : '') + ' data-toggle="' + w.key + '">'
+                 + '<span class="flex-1 truncate">' + w.label + '</span>'
+                 + (noEmbed(w) ? '<span class="text-[10px] text-slate-400" title="Repère seulement">repère</span>' : '')
+                 + (w.group === 'Autres overlays' ? '<span class="text-[10px] text-slate-500">' + w.nw + '×' + w.nh + '</span>' : '') + '</div>';
+        });
+    }
+    $('list').innerHTML = html;
+    $('list').querySelectorAll('.row').forEach(r => r.addEventListener('click', (e) => {
+        if (e.target.dataset.toggle) return;
+        selected = r.dataset.key; renderAll();
+    }));
+    $('list').querySelectorAll('input[data-toggle]').forEach(cb => cb.addEventListener('change', () => {
+        const w = find(cb.dataset.toggle); w.enabled = cb.checked;
+        if (cb.checked) selected = w.key;
+        setDirty(true); renderAll();
+    }));
+}
+
+function renderProps() {
+    const w = find(selected);
+    if (!w) { $('props').innerHTML = '<p class="text-slate-500 text-sm">Sélectionne un widget pour régler sa position.</p>'; return; }
+    $('props').innerHTML =
+        '<h3 class="font-bold text-white mb-3">' + w.label + '</h3>'
+      + '<div class="grid grid-cols-2 gap-3 text-xs">'
+      + field('X (px)', 'x', w.x) + field('Y (px)', 'y', w.y)
+      + field('Échelle (%)', 'scale', Math.round(w.scale * 100)) + field('Ordre (z)', 'z', w.z)
+      + '</div>'
+      + '<p class="text-[11px] text-slate-500 mt-3">Taille affichée : ' + Math.round(w.nw * w.scale) + ' × ' + Math.round(w.nh * w.scale) + ' px'
+      + (w.full ? ' · widget plein écran (se place par rapport au coin haut-gauche)' : '') + '</p>'
+      + (w.note ? '<p class="text-[11px] mt-2 ' + (noEmbed(w) || w.embed === 'unknown' ? 'text-amber-400' : 'text-slate-400') + '">' + w.note + '</p>' : '')
+      + (w.group === 'Autres overlays' ? '<p class="text-[11px] text-slate-500 mt-1 break-all">' + w.url + '</p>' : '')
+ + '<button id="testBtn" class="mt-3 mr-2 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold"><i class="fas fa-play mr-1"></i>Tester dans OBS</button>'
+      + '<span id="testMsg" class="block text-[11px] mt-2 text-slate-400"></span>'
+      + '<button id="resetBtn" class="mt-3 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold"><i class="fas fa-rotate-left mr-1"></i>Position d\'origine</button>';
+    $('props').querySelectorAll('input').forEach(inp => inp.addEventListener('input', () => {
+        let v = parseFloat(inp.value); if (isNaN(v)) return;
+        if (inp.dataset.f === 'scale') v = Math.max(5, v) / 100;
+        w[inp.dataset.f] = (inp.dataset.f === 'scale') ? v : Math.round(v);
+        setDirty(true); renderCanvas();
+    }));
+    $('testBtn').addEventListener('click', async () => {
+        const msg = $('testMsg'); msg.textContent = 'Envoi…'; msg.className = 'block text-[11px] mt-2 text-slate-400';
+        try {
+            const r = await fetch('/admin/api/scene/test/' + encodeURIComponent(w.key), { method: 'POST' });
+            const j = await r.json();
+            msg.textContent = r.ok ? j.message : (j.detail || 'Erreur ' + r.status);
+            msg.className = 'block text-[11px] mt-2 ' + (r.ok && j.ok ? 'text-emerald-400' : 'text-amber-400');
+        } catch (e) { msg.textContent = 'Erreur réseau'; msg.className = 'block text-[11px] mt-2 text-amber-400'; }
+    });
+    $('resetBtn').addEventListener('click', () => {
+        w.x = w.nx; w.y = w.ny; w.scale = 1; setDirty(true); renderAll();
+    });
+}
+function field(label, f, v) {
+    return '<label class="block"><span class="text-slate-400">' + label + '</span>'
+         + '<input type="number" data-f="' + f + '" value="' + v + '" class="input-dark w-full rounded-lg px-2 py-1.5 mt-1"></label>';
+}
+
+let drag = null;
+function startDrag(e, w, resize) {
+    e.preventDefault(); e.stopPropagation();
+    selected = w.key;
+    const r = canvas.getBoundingClientRect(), f = factor();
+    drag = { w, resize, r, f, ox: (e.clientX - r.left) / f - w.x, oy: (e.clientY - r.top) / f - w.y };
+    e.currentTarget.setPointerCapture(e.pointerId);
+    renderList(); renderProps();
+    e.currentTarget.addEventListener('pointermove', onMove);
+    e.currentTarget.addEventListener('pointerup', endDrag, { once: true });
+}
+function onMove(e) {
+    if (!drag) return;
+    const { w, r, f } = drag;
+    const px = (e.clientX - r.left) / f, py = (e.clientY - r.top) / f;
+    if (drag.resize) {
+        w.scale = Math.max(0.05, Math.round(((px - w.x) / w.nw) * 100) / 100);
+    } else {
+        w.x = snapVal(px - drag.ox); w.y = snapVal(py - drag.oy);
+    }
+    setDirty(true); renderCanvasKeepDrag(e.currentTarget); renderProps();
+}
+// Met à jour seulement la boîte déplacée pour ne pas perdre la capture du pointeur.
+function renderCanvasKeepDrag(el) {
+    const w = drag.w, f = drag.f;
+    el.style.left = (w.x * f) + 'px'; el.style.top = (w.y * f) + 'px';
+    el.style.width = (w.nw * w.scale * f) + 'px'; el.style.height = (w.nh * w.scale * f) + 'px';
+}
+function endDrag(e) {
+    e.currentTarget.removeEventListener('pointermove', onMove);
+    drag = null; renderAll();
+}
+canvas.addEventListener('pointerdown', () => { selected = null; renderAll(); });
+
+document.addEventListener('keydown', (e) => {
+    const w = find(selected);
+    if (!w || e.target.tagName === 'INPUT') return;
+    const d = e.shiftKey ? 10 : 1;
+    const moves = { ArrowLeft: [-d, 0], ArrowRight: [d, 0], ArrowUp: [0, -d], ArrowDown: [0, d] };
+    if (!moves[e.key]) return;
+    e.preventDefault(); w.x += moves[e.key][0]; w.y += moves[e.key][1];
+    setDirty(true); renderAll();
+});
+
+$('saveBtn').addEventListener('click', async () => {
+    const body = { widgets: widgets.map(w => ({ key: w.key, enabled: w.enabled, x: w.x, y: w.y, scale: w.scale, z: w.z })) };
+    const res = await fetch('/admin/api/scene' + sceneQs(), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (res.ok) { setDirty(false); $('saveBtn').innerHTML = '<i class="fas fa-check mr-2"></i>Enregistré'; setTimeout(() => $('saveBtn').innerHTML = '<i class="fas fa-save mr-2"></i>Enregistrer', 1500); }
+    else alert('Erreur à l\'enregistrement (' + res.status + ')');
+});
+$('importBtn').addEventListener('click', async () => {
+    const msg = $('importMsg'); msg.className = 'text-xs text-slate-400'; msg.textContent = 'Lecture d\'OBS…';
+    try {
+        const r = await fetch('/admin/api/scene/import_obs', { method: 'POST' });
+        const j = await r.json();
+        if (!r.ok) { msg.className = 'text-xs text-amber-400'; msg.textContent = j.detail || ('Erreur ' + r.status); return; }
+        msg.className = 'text-xs text-emerald-400';
+        msg.textContent = j.matched + ' taille(s) reprise(s) d\'OBS, ' + j.added + ' overlay(s) ajouté(s), ' + j.ignored + ' source(s) ignorée(s) (pas de nous).';
+        await load();
+    } catch (e) { msg.className = 'text-xs text-amber-400'; msg.textContent = 'Erreur réseau'; }
+});
+$('copyBtn').addEventListener('click', async () => {
+    const inp = $('sceneUrl'), btn = $('copyBtn'), text = inp.value;
+    let ok = false;
+    try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); ok = true; } } catch (e) {}
+    if (!ok) {  // page en http (adresse IP) : le presse-papiers moderne est refusé, on passe par la sélection
+        inp.focus(); inp.select(); inp.setSelectionRange(0, text.length);
+        try { ok = document.execCommand('copy'); } catch (e) {}
+    }
+    btn.innerHTML = ok ? '<i class="fas fa-check mr-1"></i>Copié' : '<i class="fas fa-exclamation mr-1"></i>Ctrl+C';
+    setTimeout(() => btn.innerHTML = '<i class="fas fa-copy mr-1"></i>Copier', 1800);
+});
+window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+window.addEventListener('resize', renderCanvas);
+
+// ── Image de fond (repère visuel, jamais envoyée dans OBS) ──
+let hasBg = false, bgVersion = Date.now();
+function applyBg() {
+    const img = $('bg');
+    if (!img) return;
+    img.style.display = hasBg ? 'block' : 'none';
+    if (hasBg) img.src = '/admin/api/scene/background' + sceneQs() + '&v=' + bgVersion;
+    img.style.opacity = $('bgOpacity').value / 100;
+    $('bgDel').classList.toggle('hidden', !hasBg);
+    $('bgOpacity').classList.toggle('hidden', !hasBg);
+}
+async function loadBg() {
+    const r = await fetch('/admin/api/scene/background' + sceneQs() + '&v=' + bgVersion);
+    hasBg = r.ok;
+    try { const o = localStorage.getItem('sceneBgOpacity'); if (o) $('bgOpacity').value = o; } catch (e) {}
+    renderCanvas();
+}
+$('bgBtn').addEventListener('click', () => $('bgFile').click());
+$('bgFile').addEventListener('change', async () => {
+    const file = $('bgFile').files[0]; if (!file) return;
+    const fd = new FormData(); fd.append('file', file);
+    const r = await fetch('/admin/api/scene/background' + sceneQs(), { method: 'POST', body: fd });
+    $('bgFile').value = '';
+    if (!r.ok) { alert((await r.json().catch(() => ({}))).detail || 'Échec de l\'envoi'); return; }
+    hasBg = true; bgVersion = Date.now(); renderCanvas();
+});
+$('bgDel').addEventListener('click', async () => {
+    if (!confirm('Retirer l\'image de fond ?')) return;
+    await fetch('/admin/api/scene/background' + sceneQs(), { method: 'DELETE' });
+    hasBg = false; renderCanvas();
+});
+$('bgOpacity').addEventListener('input', () => {
+    $('bg').style.opacity = $('bgOpacity').value / 100;
+    try { localStorage.setItem('sceneBgOpacity', $('bgOpacity').value); } catch (e) {}
+});
+
+const sceneMsg = (t, bad) => { $('sceneMsg').textContent = t; $('sceneMsg').className = 'text-xs ' + (bad ? 'text-amber-400' : 'text-emerald-400'); };
+async function api(method, url, body) {
+    const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.detail || ('Erreur ' + r.status));
+    return j;
+}
+function confirmLeave() { return !dirty || confirm('Des modifications ne sont pas enregistrées. Les abandonner ?'); }
+
+$('sceneSel').addEventListener('change', async () => {
+    if (!confirmLeave()) { $('sceneSel').value = sceneSlug; return; }
+    sceneSlug = $('sceneSel').value;
+    await load();
+});
+$('newSceneBtn').addEventListener('click', async () => {
+    if (!confirmLeave()) return;
+    const name = prompt('Nom de la nouvelle scène (ex. BRB, Just Chatting) :');
+    if (!name) return;
+    const copy = confirm('Partir de la disposition de « ' + sceneSlug + ' » ?\n\nOK = copier la disposition actuelle\nAnnuler = scène vide');
+    try {
+        const j = await api('POST', '/admin/api/scenes', { name, copy_from: copy ? sceneSlug : null });
+        await loadScenes(j.slug); await load();
+        sceneMsg('Scène créée : ' + j.path, false);
+    } catch (e) { sceneMsg(e.message, true); }
+});
+$('renameSceneBtn').addEventListener('click', async () => {
+    if (!confirmLeave()) return;
+    const cur = scenes.find(s => s.slug === sceneSlug);
+    const name = prompt('Nouveau nom (l\'adresse change aussi : pense à mettre à jour la source dans OBS) :', cur ? cur.name : '');
+    if (!name || (cur && name === cur.name)) return;
+    try {
+        const j = await api('PUT', '/admin/api/scenes/' + encodeURIComponent(sceneSlug), { name });
+        await loadScenes(j.slug); await load();
+        sceneMsg('Renommée : ' + j.path, false);
+    } catch (e) { sceneMsg(e.message, true); }
+});
+$('delSceneBtn').addEventListener('click', async () => {
+    if (!confirm('Supprimer la scène « ' + sceneSlug + ' » et sa disposition ? La source OBS qui l\'utilise cessera de fonctionner.')) return;
+    try {
+        await api('DELETE', '/admin/api/scenes/' + encodeURIComponent(sceneSlug));
+        dirty = false; await loadScenes(); await load();
+        sceneMsg('Scène supprimée.', false);
+    } catch (e) { sceneMsg(e.message, true); }
+});
+
+loadScenes().then(load);
+</script>
+</body>
+</html>

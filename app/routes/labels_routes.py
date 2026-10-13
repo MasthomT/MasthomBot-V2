@@ -64,7 +64,6 @@ self.onconnect = (e) => {
     port.start();
     connecter('labels', '/api/labels/stream');
     connecter('alerts', '/overlay_events');
-    connecter('raidwheel', '/overlay/raidwheel/events');
 };
 """
 

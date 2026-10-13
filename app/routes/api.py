@@ -314,57 +314,6 @@ async def claim_podium_reward(request: Request):
 # ==========================================================
 # 7. INFOS CHAÎNE
 # ==========================================================
-@router.get("/compteur-defi")
-async def get_compteur_defi(since: str = "2026-08-06"):
-    """
-    Compteur subs/subgifts/bits depuis une date donnée (YYYY-MM-DD ou ISO).
-    Utilisé par /overlay/compteur-defi.
-    """
-    try:
-        if "T" in since:
-            since_dt = datetime.fromisoformat(since)
-        else:
-            since_dt = datetime.fromisoformat(f"{since}T00:00:00")
-        # On travaille en UTC naïf côté DB
-        since_dt = since_dt.replace(tzinfo=None)
-    except ValueError:
-        since_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-
-    async with get_db_connection() as conn:
-        cursor = await conn.execute(
-            "SELECT event_type, details FROM stream_events WHERE event_type IN ('sub','subgift','cheer') AND timestamp >= $1",
-            (since_dt,)
-        )
-        rows = await cursor.fetchall()
-
-    subs = 0
-    subgifts = 0
-    bits = 0
-
-    for row in rows:
-        etype = row["event_type"]
-        raw = row["details"] or ""
-        try:
-            d = ast.literal_eval(raw)
-        except Exception:
-            d = {}
-
-        if etype == "sub" and not d.get("is_gift"):
-            subs += 1
-        elif etype == "subgift":
-            subgifts += int(d.get("count", 1))
-        elif etype == "cheer":
-            bits += int(d.get("bits", 0))
-
-    return {
-        "subs": subs,
-        "subgifts": subgifts,
-        "bits": bits,
-        "since": since_dt.isoformat(),
-        "total_subs": subs + subgifts,
-    }
-
-
 @router.get("/channel-info")
 async def api_get_channel_info():
     """API publique pour le site fel-x.icu : renvoie les infos et le planning"""

@@ -1,13 +1,14 @@
 """
 app/services/bot_system_commands_service.py
 
-Gestion des commandes système du bot (so, raidqui, level, etc.).
+Gestion des commandes système du bot (so, level, etc.).
 - Stocke nom, activation, rôle min, messages dans la DB
 - Cache en mémoire avec TTL 60s (invalidé manuellement à la sauvegarde admin)
 - Fournit le helper msg(key, field, **vars) pour interpoler les messages
 """
 
 import json
+import re
 import time
 import logging
 from typing import Optional
@@ -18,7 +19,7 @@ logger = logging.getLogger("masthbot.syscmds")
 # command_key  : identifiant interne immuable (= nom du décorateur twitchio)
 # label        : nom affiché dans l'admin
 # description  : à quoi ça sert
-# default_name : déclencheur par défaut (!so, !raidqui, …)
+# default_name : déclencheur par défaut (!so, !level, …)
 # default_role : qui peut l'utiliser ('everyone','sub','vip','mod','broadcaster')
 # tags         : variables disponibles dans les messages, affichées dans l'UI
 # messages     : dict {champ: message_par_défaut}
@@ -44,37 +45,31 @@ SYSTEM_COMMANDS_DEFINITION = [
         },
     },
     {
-        "command_key": "replay",
-        "label": "Replay clip",
-        "description": "Affiche un clip sur l'overlay et annonce le titre + lien dans le chat",
-        "default_name": "replay",
+        "command_key": "play",
+        "label": "Lecteur (clip ou TikTok)",
+        "description": (
+            "Affiche sur l'overlay un clip Twitch ou un TikTok, selon ce qu'on lui donne : "
+            "!play <lien TikTok> · !play <lien de clip ou mots du titre> · !play clip (dernier clip) · "
+            "!play tiktok (dernier TikTok). !replay et !showtiktok sont des alias de cette commande."
+        ),
+        "default_name": "play",
+        "default_aliases": ["lecteur", "replay", "showtiktok"],
         "default_role": "mod",
         "tags": {
-            "playing": ["{title}", "{url}", "{broadcaster}"],
-            "extra":   ["{user}"],
+            "clip_playing":          ["{title}", "{url}", "{broadcaster}"],
+            "clip_not_found":        [],
+            "tiktok_success":        ["{title}", "{url}"],
+            "tiktok_none":           [],
+            "tiktok_download_error": [],
+            "tiktok_wrong_account":  ["{broadcaster}", "{tiktok_account}"],
         },
         "messages": {
-            "playing": "🎬 Replay : {title} — twitch.tv/{broadcaster} ({url})",
-            "extra":   "",
-        },
-    },
-    {
-        "command_key": "showtiktok",
-        "label": "Show TikTok",
-        "description": "Affiche un TikTok sur l'overlay (lien ou dernier connu)",
-        "default_name": "showtiktok",
-        "default_role": "mod",
-        "tags": {
-            "success":             ["{title}", "{url}"],
-            "error_no_video":      [],
-            "error_download":      [],
-            "error_wrong_account": ["{broadcaster}", "{tiktok_account}"],
-        },
-        "messages": {
-            "success":             "🎵 TikTok affiché à l'écran ! — {title} {url}",
-            "error_no_video":      "❌ Aucune vidéo TikTok connue pour le moment.",
-            "error_download":      "❌ Impossible de récupérer cette vidéo TikTok. Vérifie le lien !",
-            "error_wrong_account": "❌ Seul @{broadcaster} peut afficher un TikTok d'un autre compte. Les modérateurs sont limités au compte @{tiktok_account}.",
+            "clip_playing":          "🎬 Replay : {title} — twitch.tv/{broadcaster} ({url})",
+            "clip_not_found":        "❌ Aucun clip trouvé.",
+            "tiktok_success":        "🎵 TikTok affiché à l'écran ! — {title} {url}",
+            "tiktok_none":           "❌ Aucune vidéo TikTok connue pour le moment.",
+            "tiktok_download_error": "❌ Impossible de récupérer cette vidéo TikTok. Vérifie le lien !",
+            "tiktok_wrong_account":  "❌ Seul @{broadcaster} peut afficher un TikTok d'un autre compte. Les modérateurs sont limités au compte @{tiktok_account}.",
         },
     },
     {
@@ -297,6 +292,7 @@ SYSTEM_COMMANDS_DEFINITION = [
         "label": "Lancer un dé",
         "description": "Lance un dé aléatoire dans le chat (1-6 par défaut, ou !dé 100)",
         "default_name": "dé",
+        "default_aliases": ["de", "dice", "roll"],
         "default_role": "everyone",
         "tags": {
             "result": ["{user}", "{result}", "{max}"],
@@ -326,6 +322,9 @@ SYSTEM_COMMANDS_DEFINITION = [
         "description": "Compteur incrémental (morts, victoires…) — !counter +1 / !counter reset / !counter",
         "default_name": "counter",
         "default_role": "mod",
+        # Affichage ouvert à tous ; le rôle ci-dessous est celui exigé pour MODIFIER (+1, reset).
+        "enforce_role": False,
+        "role_note": "Rôle exigé pour modifier le compteur (+1 / reset). L'affichage reste ouvert à tous.",
         "tags": {
             "show":  ["{label}", "{count}"],
             "add":   ["{label}", "{count}", "{delta}"],
@@ -338,25 +337,102 @@ SYSTEM_COMMANDS_DEFINITION = [
         },
     },
     {
-        "command_key": "raidqui",
-        "label": "Roulette Raid",
-        "description": "Lance la roulette pour choisir qui raider parmi les partners en live",
-        "default_name": "raidqui",
+        "command_key": "setword",
+        "label": "Mot secret — définir",
+        "description": "Un modo définit le mot secret du mini-jeu ; les viewers le devinent avec la commande « Mot secret — deviner »",
+        "default_name": "setword",
         "default_role": "mod",
         "tags": {
-            "launch":      ["{count}"],
-            "result":      ["{name}", "{login}"],
-            "no_partners": [],
-            "no_live":     [],
-            "error":       [],
+            "usage":   ["{user}", "{command}"],
+            "success": ["{user}", "{guess_command}"],
         },
         "messages": {
-            "launch":      "🎰 Lancement de la roulette raid avec {count} streameur(s) en live...",
-            "result":      "🎯 La roulette a choisi : {name} ! Allez les voir sur twitch.tv/{login} PogChamp",
-            "no_partners": "❌ Aucun partenaire dans la liste !",
-            "no_live":     "😴 Aucun partenaire en live en ce moment !",
-            "error":       "❌ Impossible de vérifier les streameurs en live.",
+            "usage":   "@{user}, tu dois préciser un mot ! Exemple : !{command} ananas",
+            "success": "🤫 Le mot secret a été défini par @{user} ! À vous de le deviner avec !{guess_command} <mot>...",
         },
+    },
+    {
+        "command_key": "guess",
+        "label": "Mot secret — deviner",
+        "description": "Les viewers tentent de deviner le mot secret (aucune réponse si le mot est faux, pour ne pas spammer)",
+        "default_name": "guess",
+        "default_aliases": ["mot"],
+        "default_role": "everyone",
+        "tags": {
+            "no_word": ["{user}"],
+            "win":     ["{user}"],
+        },
+        "messages": {
+            "no_word": "@{user}, aucun mot secret n'est défini pour le moment !",
+            "win":     "🎉 BINGO ! @{user} a trouvé le mot secret ! Félicitations !",
+        },
+    },
+    {
+        "command_key": "game",
+        "label": "Infos du jeu (IGDB)",
+        "description": "Affiche la fiche du jeu en cours (ou du jeu demandé : !game Nom du jeu), traduite en français",
+        "default_name": "game",
+        "default_aliases": ["infogame"],
+        "default_role": "everyone",
+        "tags": {
+            "result":       ["{name}", "{developer}", "{date}", "{genres}", "{summary}", "{steam}"],
+            "steam":        ["{url}"],
+            "no_game":      [],
+            "none_running": [],
+            "igdb_error":   ["{status}"],
+            "not_found":    ["{game}"],
+            "error":        [],
+        },
+        "messages": {
+            "result":       "🎮 {name} | 👨‍💻 {developer} | 📅 {date} | 🔖 {genres} | ℹ️ {summary}{steam}",
+            "steam":        " | 🌐 Steam: {url}",
+            "no_game":      "❌ Aucun jeu spécifié et le stream est actuellement hors ligne.",
+            "none_running": "❌ Aucun jeu précis n'est en cours.",
+            "igdb_error":   "❌ Impossible de joindre IGDB (Erreur {status})",
+            "not_found":    "❌ Aucun jeu trouvé sous le nom '{game}'.",
+            "error":        "❌ Une erreur est survenue lors de la recherche IGDB.",
+        },
+    },
+    {
+        "command_key": "translate",
+        "label": "Traduction (toutes les langues)",
+        "description": "Traduit un message dans la langue demandée : !en Bonjour le chat, !es, !de, !ja… (une commande par langue, liste ci-dessous)",
+        "default_name": "traduire",
+        "default_role": "everyone",
+        "name_locked": True,
+        "role_note": "Les déclencheurs sont les codes de langue (!en, !es…), non renommables un par un ; le nom « traduire » affiche l'aide.",
+        "tags": {
+            "help":        ["{commands}", "{example}"],
+            "usage":       ["{user}", "{command}"],
+            "result":      ["{user}", "{lang}", "{command}", "{text}"],
+            "error":       ["{user}"],
+            "unavailable": ["{user}"],
+        },
+        "messages": {
+            "help":        "🌍 Traductions disponibles : {commands} — exemple : !{example} Bonjour le chat",
+            "usage":       "@{user}, que dois-je traduire ? Exemple : !{command} Bonjour le chat",
+            "result":      "🌍 Traduction ({lang}) {user} : {text}",
+            "error":       "❌ {user}, erreur lors de la traduction (Problème de connexion).",
+            "unavailable": "❌ {user}, service de traduction indisponible.",
+        },
+    },
+    {
+        "command_key": "choix",
+        "label": "Vote sondage overlay",
+        "description": "Le chat vote sur le sondage affiché à l'écran (!choix 1 à 4). Silencieux par défaut : renseigne un message pour confirmer chaque vote.",
+        "default_name": "choix",
+        "default_role": "everyone",
+        "tags": {"confirm": ["{user}", "{choice}"]},
+        "messages": {"confirm": ""},
+    },
+    {
+        "command_key": "poll",
+        "label": "Vote sondage Twitch",
+        "description": "Le chat vote sur un sondage / une prédiction Twitch native (!poll 1 à 4). Silencieux par défaut.",
+        "default_name": "poll",
+        "default_role": "everyone",
+        "tags": {"confirm": ["{user}", "{choice}"]},
+        "messages": {"confirm": ""},
     },
 ]
 
@@ -374,17 +450,22 @@ def invalidate_cache():
     _cache_at = 0.0
 
 
+def _split_aliases(raw) -> list[str]:
+    return [a.strip().lower() for a in (raw or "").replace(";", ",").split(",") if a.strip()]
+
+
 async def _load_cache():
     global _cache, _cache_at
     from app.core.database import get_db_connection
     async with get_db_connection() as db:
-        await db.execute("SELECT command_key, command_name, enabled, min_role, messages FROM bot_system_commands")
+        await db.execute("SELECT command_key, command_name, enabled, min_role, messages, aliases FROM bot_system_commands")
         rows = await db.fetchall()
     _cache = {r["command_key"]: {
         "command_name": r["command_name"],
         "enabled":      bool(r["enabled"]),
         "min_role":     r["min_role"],
         "messages":     json.loads(r["messages"]) if isinstance(r["messages"], str) else (r["messages"] or {}),
+        "aliases":      _split_aliases(r["aliases"]),
     } for r in rows}
     _cache_at = time.time()
 
@@ -402,12 +483,43 @@ async def get_config(command_key: str) -> Optional[dict]:
 
 
 async def get_config_by_name(command_name: str) -> Optional[tuple[str, dict]]:
-    """Retourne (command_key, config) pour un nom de commande donné."""
+    """Retourne (command_key, config) pour un nom de commande donné (nom principal ou alias)."""
     cfg = await get_all_configs()
+    wanted = command_name.lower()
     for key, val in cfg.items():
-        if val["command_name"].lower() == command_name.lower():
+        if val["command_name"].lower() == wanted:
+            return key, val
+    for key, val in cfg.items():
+        if wanted in val.get("aliases", []):
             return key, val
     return None
+
+
+def definition_of(command_key: str) -> Optional[dict]:
+    return next((d for d in SYSTEM_COMMANDS_DEFINITION if d["command_key"] == command_key), None)
+
+
+def enforces_role(command_key: str) -> bool:
+    """Faux pour les commandes qui gèrent elles-mêmes leur rôle (ex. compteur : lecture publique)."""
+    d = definition_of(command_key)
+    return d.get("enforce_role", True) if d else True
+
+
+def role_allowed(min_role: str, *, is_owner: bool, is_mod: bool, is_vip: bool, is_sub: bool) -> bool:
+    """Le rôle du viewer atteint-il le rôle minimum réglé dans l'admin ? (broadcaster > mod > vip > sub > tous)"""
+    level = 4 if is_owner else 3 if is_mod else 2 if is_vip else 1 if is_sub else 0
+    try:
+        required = ROLES_ORDER.index(min_role)
+    except ValueError:
+        required = 3      # rôle inconnu : par prudence on exige modo
+    return level >= required
+
+
+async def command_name_of(command_key: str) -> str:
+    """Nom actuel (sans !) d'une commande système, tel que réglé dans l'admin."""
+    cfg = await get_config(command_key)
+    d = definition_of(command_key)
+    return (cfg or {}).get("command_name") or (d["default_name"] if d else command_key)
 
 
 async def msg(command_key: str, field: str, **kwargs) -> str:
@@ -419,10 +531,9 @@ async def msg(command_key: str, field: str, **kwargs) -> str:
     else:
         default = ""
     template = (cfg["messages"].get(field) if cfg and cfg["messages"].get(field) else None) or default
-    try:
-        return template.format(**kwargs)
-    except KeyError:
-        return template
+    # Remplacement des {variables} connues ; toute autre accolade (faute de frappe, variable inconnue)
+    # est laissée telle quelle au lieu de faire planter la commande.
+    return re.sub(r"\{(\w+)\}", lambda m: str(kwargs[m.group(1)]) if m.group(1) in kwargs else m.group(0), template)
 
 
 async def init_system_commands_table():
@@ -437,10 +548,13 @@ async def init_system_commands_table():
                 messages     JSONB NOT NULL DEFAULT '{}'
             )
         """)
+        # NULL = "jamais réglé" : les alias par défaut sont posés une seule fois, puis l'admin en garde la main.
+        await db.execute("ALTER TABLE bot_system_commands ADD COLUMN IF NOT EXISTS aliases TEXT")
+        await db.execute("ALTER TABLE bot_system_commands ADD COLUMN IF NOT EXISTS description TEXT")
         for defn in SYSTEM_COMMANDS_DEFINITION:
             await db.execute("""
-                INSERT INTO bot_system_commands (command_key, command_name, enabled, min_role, messages)
-                VALUES ($1, $2, TRUE, $3, $4)
+                INSERT INTO bot_system_commands (command_key, command_name, enabled, min_role, messages, aliases, description)
+                VALUES ($1, $2, TRUE, $3, $4, $5, $6)
                 ON CONFLICT (command_key) DO UPDATE
                     SET messages = EXCLUDED.messages
                     WHERE bot_system_commands.messages = '{}'::jsonb
@@ -449,4 +563,68 @@ async def init_system_commands_table():
                 defn["default_name"],
                 defn["default_role"],
                 json.dumps(defn["messages"]),
+                ",".join(defn.get("default_aliases", [])),
+                defn["description"],
             ))
+            await db.execute(
+                "UPDATE bot_system_commands SET aliases = $1 WHERE command_key = $2 AND aliases IS NULL",
+                (",".join(defn.get("default_aliases", [])), defn["command_key"]),
+            )
+            await db.execute(
+                "UPDATE bot_system_commands SET description = $1 WHERE command_key = $2 AND (description IS NULL OR description = '')",
+                (defn["description"], defn["command_key"]),
+            )
+
+        try:
+            await _migrate_legacy_play(db)
+        except Exception as e:      # ne doit jamais empêcher le démarrage du bot
+            logger.error(f"❌ [SYSCMD] Migration !replay/!showtiktok → !play : {e}")
+
+
+
+async def _migrate_legacy_play(db) -> None:
+    """Fusionne les anciennes commandes « replay » et « showtiktok » dans « play » : reprend leurs
+    réglages (rôle, activation, messages — dont le message TikTok réellement utilisé, stocké dans
+    discord_features_settings) puis supprime les anciennes lignes, qui masqueraient les alias.
+    S'exécute une seule fois : sans anciennes lignes, il n'y a rien à faire."""
+    await db.execute(
+        "SELECT command_key, enabled, min_role, messages FROM bot_system_commands WHERE command_key IN ('replay', 'showtiktok')"
+    )
+    legacy = {r["command_key"]: r for r in await db.fetchall()}
+    if not legacy:
+        return
+
+    def as_dict(raw):
+        return json.loads(raw) if isinstance(raw, str) else dict(raw or {})
+
+    defn = next(d for d in SYSTEM_COMMANDS_DEFINITION if d["command_key"] == "play")
+    messages = dict(defn["messages"])
+
+    replay_msgs = as_dict(legacy["replay"]["messages"]) if "replay" in legacy else {}
+    tiktok_msgs = as_dict(legacy["showtiktok"]["messages"]) if "showtiktok" in legacy else {}
+    if replay_msgs.get("playing"):
+        messages["clip_playing"] = replay_msgs["playing"]
+    for old_key, new_key in (("error_download", "tiktok_download_error"), ("error_no_video", "tiktok_none"),
+                             ("error_wrong_account", "tiktok_wrong_account")):
+        if tiktok_msgs.get(old_key):
+            messages[new_key] = tiktok_msgs[old_key]
+
+    # Le message TikTok réellement affiché dans le chat vient de discord_features_settings (l'ancienne
+    # commande ne lisait pas celui de sa carte) : c'est lui qu'on conserve.
+    await db.execute("SELECT showtiktok_message FROM discord_features_settings WHERE id = 1")
+    live = await db.fetchone()
+    if live and live["showtiktok_message"]:
+        messages["tiktok_success"] = live["showtiktok_message"]
+    elif tiktok_msgs.get("success"):
+        messages["tiktok_success"] = tiktok_msgs["success"]
+
+    roles = [legacy[k]["min_role"] for k in legacy if legacy[k]["min_role"] in ROLES_ORDER]
+    min_role = max(roles, key=ROLES_ORDER.index) if roles else defn["default_role"]   # le plus strict des deux
+    enabled = any(bool(legacy[k]["enabled"]) for k in legacy)
+
+    await db.execute(
+        "UPDATE bot_system_commands SET messages = $1, min_role = $2, enabled = $3 WHERE command_key = 'play'",
+        (json.dumps(messages), min_role, enabled),
+    )
+    await db.execute("DELETE FROM bot_system_commands WHERE command_key IN ('replay', 'showtiktok')")
+    logger.info(f"🔗 [SYSCMD] !replay et !showtiktok fusionnés dans !play (rôle={min_role}, activée={enabled}).")

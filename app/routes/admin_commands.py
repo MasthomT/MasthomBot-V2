@@ -93,7 +93,22 @@ async def api_save_command(request: Request):
         aliases_str = ",".join([_safe_name(a) for a in data.get("aliases", [])])
         
         category = data.get("category", "Général").strip() or "Général"
-        
+
+        # Un nom / alias déjà pris par une commande système ou une langue de traduction ne serait
+        # JAMAIS déclenché (le système passe avant) : on refuse plutôt que de créer une commande fantôme.
+        from app.services.bot_system_commands_service import get_all_configs
+        from app.services.features_service import LANGUAGES
+        taken = {}
+        for key, cfg in (await get_all_configs()).items():
+            taken[cfg["command_name"].lower()] = key
+            for a in cfg.get("aliases", []):
+                taken[a] = key
+        for candidate in [name] + [a for a in aliases_str.split(",") if a]:
+            if candidate.lower() in taken:
+                return JSONResponse(status_code=409, content={"error": f"« !{candidate} » est déjà pris par la commande système « {taken[candidate.lower()]} »"})
+            if candidate.lower() in LANGUAGES:
+                return JSONResponse(status_code=409, content={"error": f"« !{candidate} » est un code de langue de la traduction"})
+
         response_payload = {
             "text": data.get("text_response", ""),
             "image": data.get("image_file", ""),
@@ -417,6 +432,7 @@ async def list_available_sounds():
 @router.get("/api/admin/system-commands")
 async def api_get_system_commands():
     from app.services.bot_system_commands_service import SYSTEM_COMMANDS_DEFINITION, get_all_configs
+    from app.services.features_service import LANGUAGES
     configs = await get_all_configs()
     result = []
     for defn in SYSTEM_COMMANDS_DEFINITION:
@@ -427,19 +443,45 @@ async def api_get_system_commands():
             "label":        defn["label"],
             "description":  defn["description"],
             "command_name": cfg.get("command_name", defn["default_name"]),
+            "aliases":      cfg.get("aliases", defn.get("default_aliases", [])),
             "enabled":      cfg.get("enabled", True),
             "min_role":     cfg.get("min_role", defn["default_role"]),
-            "messages":     cfg.get("messages", defn["messages"]),
+            # Les champs ajoutés plus tard à une définition apparaissent aussi pour les commandes déjà en base
+            "messages":     {**defn["messages"], **(cfg.get("messages") or {})},
             "tags":         defn["tags"],
             "default_messages": defn["messages"],
+            "name_locked":  defn.get("name_locked", False),
+            "role_note":    defn.get("role_note", ""),
+            "triggers":     sorted(LANGUAGES) if key == "translate" else [],
         })
     return result
+
+
+async def _name_conflict(db, candidate: str, *, own_key: str, own_aliases_ok: bool = False) -> str | None:
+    """Renvoie un message d'erreur si `candidate` (nom ou alias) est déjà pris par autre chose."""
+    from app.services.bot_system_commands_service import get_all_configs
+    from app.services.features_service import LANGUAGES
+    cand = candidate.lower()
+    for key, cfg in (await get_all_configs()).items():
+        if key == own_key:
+            continue
+        if cfg["command_name"].lower() == cand or cand in cfg.get("aliases", []):
+            return f"« !{cand} » est déjà utilisé par la commande système « {key} »"
+    if own_key != "translate" and cand in LANGUAGES:
+        return f"« !{cand} » est un code de langue de la traduction"
+    await db.execute("SELECT name, aliases FROM custom_commands")
+    for row in await db.fetchall():
+        names = [row["name"].lower()] + [a.strip().lower() for a in (row["aliases"] or "").split(",") if a.strip()]
+        if cand in names:
+            return f"« !{cand} » est déjà utilisé par la commande personnalisée « {row['name']} »"
+    return None
 
 
 @router.patch("/api/admin/system-commands/{command_key}")
 async def api_update_system_command(command_key: str, request: Request):
     from app.services.bot_system_commands_service import SYSTEM_COMMANDS_DEFINITION, invalidate_cache
     import json as _json
+    import re as _re
 
     defn = next((d for d in SYSTEM_COMMANDS_DEFINITION if d["command_key"] == command_key), None)
     if not defn:
@@ -450,28 +492,60 @@ async def api_update_system_command(command_key: str, request: Request):
     enabled      = bool(body.get("enabled", True))
     min_role     = body.get("min_role", defn["default_role"])
     messages     = body.get("messages", {})
+    raw_aliases  = body.get("aliases", [])
+    if isinstance(raw_aliases, str):
+        raw_aliases = _re.split(r"[,;\s]+", raw_aliases)
+    aliases = list(dict.fromkeys(a.strip().lstrip("!").lower() for a in raw_aliases if a.strip()))
 
-    if not new_name or not new_name.isalnum():
+    if defn.get("name_locked"):
+        new_name, aliases = defn["default_name"], []      # déclencheurs = codes de langue, non modifiables ici
+    if not new_name or not _re.fullmatch(r"[a-zA-Z0-9éèêàùîôûç]+", new_name):
         return JSONResponse({"error": "Nom invalide (lettres/chiffres uniquement, sans !)"}, status_code=400)
+    for alias in aliases:
+        if not _re.fullmatch(r"[a-zA-Z0-9éèêàùîôûç]+", alias):
+            return JSONResponse({"error": f"Alias invalide : « {alias} » (lettres/chiffres uniquement, sans !)"}, status_code=400)
+    if new_name in aliases:
+        aliases.remove(new_name)
+    if min_role not in ("everyone", "sub", "vip", "mod", "broadcaster"):
+        return JSONResponse({"error": "Rôle invalide"}, status_code=400)
 
     async with get_db_connection() as db:
-        # Vérifier unicité du nom (sauf pour soi-même)
-        await db.execute(
-            "SELECT command_key FROM bot_system_commands WHERE command_name = $1 AND command_key != $2",
-            (new_name, command_key)
-        )
-        conflict = await db.fetchone()
-        if conflict:
-            return JSONResponse({"error": f"Le nom !{new_name} est déjà utilisé par la commande '{conflict['command_key']}'"}, status_code=409)
+        for candidate in [new_name] + aliases:
+            problem = await _name_conflict(db, candidate, own_key=command_key)
+            if problem:
+                return JSONResponse({"error": problem}, status_code=409)
 
         await db.execute("""
             UPDATE bot_system_commands
-            SET command_name = $1, enabled = $2, min_role = $3, messages = $4
-            WHERE command_key = $5
-        """, (new_name, enabled, min_role, _json.dumps(messages), command_key))
+            SET command_name = $1, enabled = $2, min_role = $3, messages = $4, aliases = $5
+            WHERE command_key = $6
+        """, (new_name, enabled, min_role, _json.dumps(messages), ",".join(aliases), command_key))
 
     invalidate_cache()
-    return {"ok": True, "command_name": new_name}
+    return {"ok": True, "command_name": new_name, "aliases": aliases}
+
+
+@router.get("/api/admin/commands/overview")
+async def api_commands_overview():
+    """Tout ce qui existe dans le bot et qui n'est PAS une carte éditable de cette page : on les liste
+    pour qu'aucune commande ne reste invisible (roues, commandes Discord, lignes de base sans code)."""
+    from app.services.bot_system_commands_service import SYSTEM_COMMANDS_DEFINITION
+    defined = {d["command_key"] for d in SYSTEM_COMMANDS_DEFINITION}
+
+    async with get_db_connection() as db:
+        await db.execute("SELECT id, name, twitch_command FROM wheels WHERE COALESCE(twitch_command, '') <> '' ORDER BY id")
+        wheels = [{"name": r["name"], "command": r["twitch_command"], "link": "/admin/wheels"} for r in await db.fetchall()]
+        await db.execute("SELECT command_key, command_name, description FROM bot_system_commands ORDER BY command_key")
+        orphans = [{"key": r["command_key"], "name": r["command_name"], "description": r["description"] or ""}
+                   for r in await db.fetchall() if r["command_key"] not in defined]
+
+    discord_cmds = []
+    try:
+        from app.services.discord_mod_service import discord_mod_bot
+        discord_cmds = [{"name": c.name, "description": c.description} for c in discord_mod_bot.tree.get_commands()]
+    except Exception:
+        pass
+    return {"wheels": wheels, "discord": discord_cmds, "orphans": orphans}
 
 
 @router.post("/api/admin/system-commands/{command_key}/reset")

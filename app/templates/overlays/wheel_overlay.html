@@ -194,9 +194,9 @@
             return div.innerHTML;
         }
 
-        async function loadWheel() {
+        async function loadWheel(id = WHEEL_ID) {
             try {
-                const res = await fetch(`/api/v1/wheels/${WHEEL_ID}`);
+                const res = await fetch(`/api/v1/wheels/${id}`);
                 if (!res.ok) return;
                 const data = await res.json();
                 items = data.items || [];
@@ -205,9 +205,9 @@
             } catch (e) { console.error('Erreur chargement roue:', e); }
         }
 
-        function spinTo(winnerIndex) {
+        function spinTo(winnerIndex, done = () => {}) {
             const n = items.length;
-            if (n === 0) return;
+            if (n === 0) { done(); return; }
             const anglePer = 360 / n;
             const segmentCenter = winnerIndex * anglePer + anglePer / 2;
             const jitter = (Math.random() - 0.5) * (anglePer * 0.6);
@@ -226,15 +226,31 @@
                 // Disparition 8s après le résultat
                 setTimeout(() => {
                     banner.classList.remove('visible');
-                    setTimeout(() => wrap.classList.remove('visible'), 500);
+                    setTimeout(() => { wrap.classList.remove('visible'); done(); }, 500);
                 }, 8000);
             }, 5600);
         }
 
-        function handleAlert(data) {
-            if (data.type === 'spin_wheel' && data.wheel_id === WHEEL_ID) {
-                spinTo(data.winner_index);
+        // WHEEL_ID = 0 : overlay universel (/overlay/wheels), il affiche la roue qui vient d'être lancée.
+        // Les lancements sont traités l'un après l'autre pour ne jamais changer de roue en plein tour.
+        let chain = Promise.resolve();
+
+        async function runSpin(data) {
+            if (WHEEL_ID === 0) {
+                await loadWheel(data.wheel_id);
+                disc.style.transition = 'none';
+                disc.style.transform = 'rotate(0deg)';
+                currentRotation = 0;
+                void disc.offsetWidth;
+                disc.style.transition = '';
             }
+            await new Promise(resolve => spinTo(data.winner_index, resolve));
+        }
+
+        function handleAlert(data) {
+            if (data.type !== 'spin_wheel') return;
+            if (WHEEL_ID !== 0 && data.wheel_id !== WHEEL_ID) return;
+            chain = chain.then(() => runSpin(data)).catch(e => console.error('Erreur spin roue :', e));
         }
 
         // 📡 UNE seule connexion SSE partagée entre TOUTES les sources OBS de cette
@@ -250,7 +266,7 @@
             } catch (e) { console.error('SharedWorker indisponible :', e); }
         }
 
-        loadWheel();
+        if (WHEEL_ID !== 0) loadWheel();
     </script>
 </body>
 </html>

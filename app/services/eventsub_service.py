@@ -47,7 +47,7 @@ processed_message_ids = collections.deque(maxlen=200)
 # Twitch envoie "channel.subscribe" ET "channel.subscription.message" pour le MÊME abonnement
 # dès que le viewer partage un message public (deux notifications EventSub distinctes, donc
 # processed_message_ids ne les voit pas comme doublons). Sans ce garde-fou : XP en double,
-# mois cumulés faussés dans le générique, ET total SubGoal compté deux fois.
+# mois cumulés faussés dans le générique, ET abonnés comptés deux fois dans les stats.
 # Fenêtre à 300s (pas 10s) : le viewer peut mettre du temps à taper/partager son message de
 # resub après l'abonnement lui-même — un écart de 10s ratait ce cas et comptait un 2e sub.
 _recent_sub_events: dict[str, float] = {}
@@ -260,11 +260,6 @@ async def eventsub_routine():
                                     await viewer_repo.add_experience(user_id, user_name, xp, "SUB", f"Abonnement Tier {tier}")
                                     await log_stream_event("sub", user_name, {"tier": tier, "xp": xp, "is_gift": False})
                                     credits_service.log_event("subscribers", user_name, str(cumulative_months))
-                                    asyncio.create_task(_spin_wheel_by_name("Anniversaire"))
-                                    from app.services.subgoal_service import check_and_announce_new_tiers, maybe_spin_linked_wheel, announce_new_sub
-                                    asyncio.create_task(check_and_announce_new_tiers())
-                                    asyncio.create_task(maybe_spin_linked_wheel())
-                                    asyncio.create_task(announce_new_sub(user_name, "sub"))
                                 else:
                                     # Sub OFFERT : le destinataire n'apparaît PAS dans "dernier sub"
                                     # (le donateur est géré par channel.subscription.gift). On l'ajoute
@@ -289,11 +284,6 @@ async def eventsub_routine():
                                     credits_service.log_event("gifters", user_name, f"{count} Subs offerts")
                                     await viewer_repo.add_experience(user_id, user_name, total_xp, "SUBGIFT", f"Offre {count} Subs Tier {tier}")
                                     await log_stream_event("subgift", user_name, {"count": count, "tier": tier, "xp": total_xp})
-                                    asyncio.create_task(_spin_wheel_by_name("Anniversaire"))
-                                    from app.services.subgoal_service import check_and_announce_new_tiers, maybe_spin_linked_wheel, announce_new_sub
-                                    asyncio.create_task(check_and_announce_new_tiers())
-                                    asyncio.create_task(maybe_spin_linked_wheel())
-                                    asyncio.create_task(announce_new_sub(user_name, "subgift", count))
 
                             elif sub_type == "channel.raid":
                                 raider_name = event.get("from_broadcaster_user_name", "Inconnu")
@@ -326,8 +316,6 @@ async def eventsub_routine():
 
                                 await log_stream_event("cheer", user_name, {"bits": bits, "xp_gained": total_xp})
                                 credits_service.log_event("bits", user_name, f"{bits} Bits")
-                                if bits >= 100:
-                                    asyncio.create_task(_spin_wheel_by_name("Anniversaire"))
 
                             elif sub_type == "channel.channel_points_custom_reward_redemption.add":
                                 user_name = event.get("user_name", "Inconnu")
@@ -336,6 +324,13 @@ async def eventsub_routine():
 
                                 await update_viewer_stat(user_id, user_name, "rewards_claimed", 1, increment=True)
                                 await log_stream_event("reward", user_name, {"reward_name": reward_title})
+
+                                # Récompenses du podium First / Deuz / Troiz : gérées par le bot
+                                try:
+                                    from app.services import podium_service
+                                    await podium_service.handle_redemption(event)
+                                except Exception as e:
+                                    logger.error(f"❌ [PODIUM] Erreur traitement récompense : {e}")
 
                                 if reward_title == "Polaroïd":
                                     from app.services.polaroid_service import send_polaroid

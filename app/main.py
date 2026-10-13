@@ -37,7 +37,7 @@ from slowapi.errors import RateLimitExceeded
 from app.core.rate_limit import limiter
 
 # --- IMPORT DES ROUTES ---
-from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes, partners, admin_commands, wheel, subgoal
+from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes, partners, admin_commands, wheel, scene, podium
 from app.routes.credits import router as credits_router
 from app.routes.premium import router as premium_router
 from app.routes.games import router as games_router, init_games_tables
@@ -70,7 +70,6 @@ from app.services.bot_health_service import (
     clear_crash_marker,
 )
 from app.services.wheel_service import init_wheel_tables
-from app.services.subgoal_service import init_subgoal_tables
 from app.services.bot_system_commands_service import init_system_commands_table
 from app.services.vip_sound_service import init_vip_sound_tables, sync_vip_command_status_loop
 
@@ -132,7 +131,6 @@ async def lifespan(app: FastAPI):
     await init_discord_mod_tables()
     await init_bot_health_table()
     await init_wheel_tables()
-    await init_subgoal_tables()
     await init_system_commands_table()
     await init_vip_sound_tables()
     logger.info("✅ [DATABASE] Tables PostgreSQL initialisées avec succès !")
@@ -266,7 +264,8 @@ app.include_router(felixdle_admin_router)
 app.include_router(admin_discord_mod_router)
 app.include_router(partners.router)
 app.include_router(wheel.router)
-app.include_router(subgoal.router)
+app.include_router(podium.router)
+app.include_router(scene.router)
 
 # ==========================================
 # ROUTES API : INFORMATIONS DE LA CHAÎNE (DASHBOARD ADMIN)

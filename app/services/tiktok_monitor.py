@@ -227,6 +227,7 @@ def _download_video(url: str) -> dict | None:
             "filepath": filepath,
             "title": info.get("title") or "Vidéo TikTok",
             "uploader": (info.get("uploader") or "").lower(),
+            "duration": info.get("duration") or 0,
         }
 
 

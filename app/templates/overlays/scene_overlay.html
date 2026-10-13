@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Scène OBS</title>
+<style>
+  html, body { margin: 0; padding: 0; width: 1920px; height: 1080px; overflow: hidden; background: transparent; }
+  /* Rien ne doit dépasser du cadre 1920x1080, quelle que soit la taille de la source OBS. */
+  #stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: hidden; contain: paint; }
+  .widget {
+    position: absolute; width: 1920px; height: 1080px; border: 0;
+    background: transparent; transform-origin: 0 0; pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+  // Cette page ne contient que des cadres transparents ; chaque widget est une page d'overlay existante.
+  // Le placement est géré dans /admin/scene et rechargé toutes les 5 s sans toucher aux cadres inchangés.
+  // Nom de la scène = dernier segment de l'URL (/overlay/brb -> « brb »)
+  const SCENE = decodeURIComponent(location.pathname.split('/').filter(Boolean).pop() || 'scene');
+  const NODE = location.protocol + '//' + location.hostname + ':3005';
+  const stage = document.getElementById('stage');
+  const frames = new Map(); // key -> { el, sig }
+
+  function resolveUrl(u) { return u.replace('{NODE}', NODE); }
+
+  function place(el, w) {
+    const s = w.scale;
+    el.style.left = (w.x - w.nx * s) + 'px';
+    el.style.top = (w.y - w.ny * s) + 'px';
+    el.style.width = (w.fw || 1920) + 'px';
+    el.style.height = (w.fh || 1080) + 'px';
+    el.style.transform = 'scale(' + s + ')';
+    el.style.zIndex = w.z;
+  }
+
+  async function refresh() {
+    let layout;
+    try {
+      const res = await fetch('/api/scene/layout?scene=' + encodeURIComponent(SCENE), { cache: 'no-store' });
+      if (!res.ok) return;
+      layout = (await res.json()).widgets;
+    } catch (e) { return; }
+
+    const wanted = new Set(layout.map(w => w.key));
+    for (const [key, f] of frames) {
+      if (!wanted.has(key)) { f.el.remove(); frames.delete(key); }
+    }
+    for (const w of layout) {
+      const url = resolveUrl(w.url);
+      let f = frames.get(w.key);
+      if (f && f.url !== url) { f.el.remove(); frames.delete(w.key); f = null; }
+      if (!f) {
+        const el = document.createElement('iframe');
+        el.className = 'widget';
+        el.setAttribute('allowtransparency', 'true');
+        el.setAttribute('scrolling', 'no');
+        el.src = url;
+        stage.appendChild(el);
+        f = { el, url };
+        frames.set(w.key, f);
+      }
+      place(f.el, w);
+    }
+  }
+
+  refresh();
+  setInterval(refresh, 5000);
+</script>
+</body>
+</html>

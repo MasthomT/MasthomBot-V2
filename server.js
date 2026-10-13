@@ -378,6 +378,19 @@ async function processQueue() {
     const item = shoutoutQueue.shift();
     console.log(`[DEBUG] Traitement de : ${JSON.stringify(item)}`);
 
+    // TikTok : même file que les clips, donc jamais les deux en même temps à l'écran. La page signale
+    // la fin via /api/queue/next ; le minuteur n'est qu'un filet si elle ne répond jamais.
+    if (item.mode === 'tiktok') {
+        broadcast({ type: 'play_tiktok', mode: 'tiktok', url: item.extraData.url });
+        if (currentQueueItemTimer) clearTimeout(currentQueueItemTimer);
+        const safetyMs = ((item.extraData.duration || 600) + 20) * 1000;
+        currentQueueItemTimer = setTimeout(() => {
+            isProcessing = false;
+            processQueue();
+        }, safetyMs);
+        return;
+    }
+
     try {
         const targetUser = await getUserInfo(item.target);
         if (!targetUser && item.mode === 'so') {
@@ -398,13 +411,14 @@ async function processQueue() {
                 const dateStr = new Date(finalClip.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
                 // 🧚‍♂️ 1. ON LANCE LE SON INSTANTANÉMENT
-                broadcast({ type: 'play_sound', file: '/static/uploads/hey_listen.mp3' });
+                broadcast({ type: 'play_sound', mode: item.mode, file: '/static/uploads/hey_listen.mp3' });
 
                 // ⏱️ 2. ON ATTEND 1.5 SECONDES (le temps que Navi finisse de parler)
                 setTimeout(() => {
                     // 🎬 3. ON AFFICHE LE CLIP SUR OBS
                     broadcast({ 
                         type: 'play_clip', 
+                        mode: item.mode,
                         url: mp4Url,
                         meta: {
                             name: targetUser ? targetUser.display_name : finalClip.broadcaster_name,
@@ -547,6 +561,14 @@ app.post('/api/replay', async (req, res) => {
             res.json({ status: "not_found" });
         }
     } catch (error) { res.status(500).json({ status: "error" }); }
+});
+
+app.post('/api/tiktok', (req, res) => {
+    const url = req.body && req.body.url;
+    if (!url) return res.status(400).json({ status: "error", message: "url manquante" });
+    shoutoutQueue.push({ mode: 'tiktok', extraData: { url: url, duration: Number(req.body.duration) || 0 } });
+    if (!isProcessing) processQueue();
+    res.json({ status: "success" });
 });
 
 app.post('/api/shoutout', (req, res) => {
@@ -716,26 +738,54 @@ app.get('/alerts', (req, res) => {
 });
 
 app.get('/shoutout', (req, res) => {
+    // OVERLAY UNIQUE « lecteur » : clips (replay / shoutout) ET TikToks, dans une seule source navigateur OBS.
+    // Tailles en vw/vh : la mise en page suit la résolution du canvas (prévue pour 1920x1080).
+    //   - clip   : centré, 50 % de la largeur de l'écran
+    //   - TikTok : à droite, centré verticalement (80 % de la hauteur, format vertical 9:16)
+    // (pas de backticks ni de dollar-accolade dans ce HTML : il vit dans un gabarit JS)
     res.send(`
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { margin:0; overflow:hidden; background:transparent; display:flex; align-items:center; justify-content:center; height:100vh; font-family: 'Inter', sans-serif; }
-        
-        #wrapper { opacity:0; transition:0.5s cubic-bezier(0.4, 0, 0.2, 1); width:1280px; display:flex; flex-direction:column; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); transform: translateY(50px); }
-        #wrapper.visible { opacity:1; transform: translateY(0); }
-        
-        .video-box { position:relative; width:100%; aspect-ratio: 16/9; background:black; border: 6px solid #9146FF; border-bottom: none; border-radius: 24px 24px 0 0; overflow: hidden; }
-        video { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:contain; z-index:1; }
-        
-        .progress-bg { position:absolute; bottom:0; left:0; width:100%; height:8px; background:rgba(15,23,42,0.9); z-index:10; }
-        #progress { height:100%; background:#bf94ff; width:0%; box-shadow: 0 0 15px #9146FF; transition: width 0.1s linear; }
-        
-        .card { background:rgba(15,23,42,0.95); backdrop-filter:blur(10px); border: 6px solid #9146FF; border-top: none; border-radius: 0 0 24px 24px; padding:20px 30px; display:flex; align-items:center; gap:25px; position:relative; overflow:hidden; }
+        * { box-sizing: border-box; }
+        html, body { margin:0; width:100%; height:100%; overflow:hidden; background:transparent; font-family:'Inter','Segoe UI',Arial,sans-serif; }
+
+        /* ───────── CLIP / SHOUTOUT : centré, moitié de la largeur de l'écran ───────── */
+        #wrapper { position:fixed; top:50%; left:50%; width:50vw; display:flex; flex-direction:column;
+                   opacity:0; transform:translate(-50%, calc(-50% + 40px)); transition:0.5s cubic-bezier(0.4,0,0.2,1);
+                   box-shadow:0 25px 50px -12px rgba(0,0,0,0.7); }
+        #wrapper.visible { opacity:1; transform:translate(-50%, -50%); }
+
+        .video-box { position:relative; width:100%; aspect-ratio:16/9; background:#000; border:0.3vw solid #9146FF; border-bottom:none; border-radius:1.2vw 1.2vw 0 0; overflow:hidden; }
+        #v { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:contain; z-index:1; }
+        .progress-bg { position:absolute; bottom:0; left:0; width:100%; height:0.45vw; background:rgba(15,23,42,0.9); z-index:10; }
+        #progress { height:100%; width:0%; background:#bf94ff; box-shadow:0 0 15px #9146FF; transition:width 0.1s linear; }
+
+        .card { position:relative; display:flex; align-items:center; gap:1.4vw; padding:1.1vw 1.6vw; overflow:hidden;
+                background:rgba(15,23,42,0.95); border:0.3vw solid #9146FF; border-top:none; border-radius:0 0 1.2vw 1.2vw; }
+        #avatar { width:4.2vw; height:4.2vw; flex:none; border-radius:50%; border:0.22vw solid #9146FF; object-fit:cover; background:#1e293b; position:relative; z-index:2; }
+        .info { flex:1; min-width:0; color:#fff; position:relative; z-index:2; }
+        #name { margin:0 0 0.2vw; font-size:2vw; font-weight:900; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .meta { display:flex; align-items:center; gap:1vw; color:#bf94ff; font-weight:700; font-size:1.1vw; margin-bottom:0.2vw; }
+        .meta i { margin-right:0.4vw; color:#94a3b8; }
+        .meta .sep { color:#475569; }
+        .meta .date { color:#cbd5e1; font-size:0.95vw; }
+        #title { margin:0; font-style:italic; color:#94a3b8; font-size:0.95vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .twitch-logo { position:absolute; right:1.6vw; font-size:4.4vw; color:#9146FF; opacity:0.2; z-index:1; }
+
+        /* ───────── TIKTOK : collé à droite (marge 20 px), centré verticalement, 80 % de la hauteur ───────── */
+        #tiktok { position:fixed; top:50%; right:20px; height:80vh; width:45vh; display:flex; flex-direction:column;
+                  background:#000; border:3px solid #fe2c55; border-radius:24px; overflow:hidden;
+                  box-shadow:0 25px 50px rgba(0,0,0,0.8), 0 0 30px rgba(254,44,85,0.35);
+                  opacity:0; transform:translateY(-50%) scale(0.85); transform-origin:right center; pointer-events:none;
+                  transition:transform 0.5s cubic-bezier(0.34,1.56,0.64,1), opacity 0.5s ease; }
+        #tiktok.visible { opacity:1; transform:translateY(-50%) scale(1); }
+        .tt-badge { flex:none; display:flex; align-items:center; justify-content:center; gap:8px; padding:0.6vh 0;
+                    background:#fe2c55; color:#fff; font-weight:900; font-size:1.7vh; text-transform:uppercase; letter-spacing:0.08em; }
+        #tt { flex:1; min-height:0; width:100%; object-fit:contain; background:#000; display:block; }
     </style>
 </head>
 <body>
@@ -745,35 +795,46 @@ app.get('/shoutout', (req, res) => {
             <div class="progress-bg"><div id="progress"></div></div>
         </div>
         <div class="card">
-            <img id="avatar" src="" class="w-24 h-24 rounded-full border-4 border-[#9146FF] object-cover bg-slate-800 shadow-xl relative z-10">
-            <div class="flex-1 overflow-hidden text-white relative z-10">
-                <h2 id="name" class="text-4xl font-black mb-1 truncate"></h2>
-                <div class="flex items-center gap-4 text-[#bf94ff] font-bold text-xl mb-1">
-                    <span><i class="fas fa-gamepad mr-2 text-slate-400"></i><span id="game"></span></span>
-                    <span class="text-slate-600">|</span>
-                    <span class="text-slate-300 text-base"><i class="fas fa-calendar-alt mr-2"></i><span id="date"></span></span>
+            <img id="avatar" src="">
+            <div class="info">
+                <h2 id="name"></h2>
+                <div class="meta">
+                    <span><i class="fas fa-gamepad"></i><span id="game"></span></span>
+                    <span class="sep">|</span>
+                    <span class="date"><i class="fas fa-calendar-alt"></i><span id="date"></span></span>
                 </div>
-                <p id="title" class="italic text-slate-400 truncate text-base"></p>
+                <p id="title"></p>
             </div>
-            <i class="fab fa-twitch text-[#9146FF] text-7xl opacity-20 absolute right-8"></i>
+            <i class="fab fa-twitch twitch-logo"></i>
         </div>
     </div>
+
+    <div id="tiktok">
+        <div class="tt-badge">&#127925; TikTok</div>
+        <video id="tt" playsinline preload="auto"></video>
+    </div>
+
     <script>
         const v = document.getElementById('v');
         const wrapper = document.getElementById('wrapper');
         const p = document.getElementById('progress');
+        const tt = document.getElementById('tt');
+        const ttBox = document.getElementById('tiktok');
 
+        function nextInQueue() { fetch('/api/queue/next', { method: 'POST' }).catch(function () {}); }
+
+        // ───── CLIP ─────
         const finishClip = () => {
             if (!v.isEnding) {
                 v.isEnding = true;
                 wrapper.classList.remove('visible');
                 setTimeout(() => { p.style.width = '0%'; }, 500);
-                fetch('/api/queue/next', { method: 'POST' }).catch(e => {});
+                nextInQueue();
             }
         };
 
         v.addEventListener('timeupdate', () => {
-            if(v.duration) {
+            if (v.duration) {
                 p.style.width = (v.currentTime / v.duration * 100) + '%';
                 if (v.duration - v.currentTime <= 0.5) finishClip();
             }
@@ -787,7 +848,7 @@ app.get('/shoutout', (req, res) => {
                 v.isEnding = true;
                 wrapper.classList.remove('visible');
                 p.style.width = '0%';
-                fetch('/api/queue/next', { method: 'POST' }).catch(e => {});
+                nextInQueue();
             }
         });
 
@@ -795,8 +856,78 @@ app.get('/shoutout', (req, res) => {
             wrapper.classList.add('visible');
         });
 
+        // ───── TIKTOK ─────
+        let ttEnding = false, ttRetry = null, ttCleanup = null;
+        function ttStopRetry() { if (ttRetry) { clearInterval(ttRetry); ttRetry = null; } }
+
+        function ttFinish() {
+            if (ttEnding) return;
+            ttEnding = true;
+            ttStopRetry();
+            ttBox.classList.remove('visible');
+            ttCleanup = setTimeout(function () {
+                tt.pause();
+                tt.removeAttribute('src');
+                tt.load();
+                ttCleanup = null;
+            }, 600);
+            nextInQueue();
+        }
+
+        function ttPlay() {
+            // Démarrage directement AVEC le son (OBS autorise l'autoplay) : démuter en cours de lecture
+            // déclencherait la politique anti-autoplay de Chromium. Repli en muet si refus.
+            tt.muted = false;
+            const tenter = function () {
+                const pr = tt.play();
+                if (pr && pr.catch) pr.catch(function () {
+                    tt.muted = true;
+                    const p2 = tt.play();
+                    if (p2 && p2.catch) p2.catch(function () {});
+                });
+            };
+            tenter();
+            ttStopRetry();
+            ttRetry = setInterval(function () {
+                if (tt.ended || !tt.paused) { ttStopRetry(); return; }
+                tenter();
+            }, 400);
+        }
+
+        function showTikTok(url) {
+            if (ttCleanup) { clearTimeout(ttCleanup); ttCleanup = null; }
+            ttEnding = false;
+            // La vidéo est servie sur un PORT SÉPARÉ (8001) : OBS lui alloue son propre pool de connexions
+            // (sinon les overlays saturent le quota et la vidéo ne charge jamais).
+            let src = url;
+            if (url.charAt(0) === '/') src = location.protocol + '//' + location.hostname + ':8001' + url;
+            tt.src = src;
+            tt.load();
+            ttPlay();
+        }
+
+        tt.addEventListener('loadeddata', function () { ttBox.classList.add('visible'); });
+        tt.addEventListener('playing', ttStopRetry);
+        tt.addEventListener('ended', ttFinish);
+        tt.addEventListener('error', function () { if (tt.getAttribute('src')) ttFinish(); });
+        // Si OBS réaffiche la source (changement de scène), on relance la lecture
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden && ttBox.classList.contains('visible') && tt.paused && tt.getAttribute('src')) ttPlay();
+        });
+
+        // ───── Événements ─────
+        // ?only=so | replay | tiktok : cette page ne gère que ce type de lecture (un widget = une chose dans
+        // la scène OBS). Sans paramètre, elle gère tout, comme avant.
+        const ONLY = new URLSearchParams(location.search).get('only') || '';
+        if (ONLY) {
+            const st = document.createElement('style');
+            st.textContent = (ONLY === 'tiktok') ? '#wrapper{display:none !important}' : '#tiktok{display:none !important}';
+            document.head.appendChild(st);
+        }
+
         function handleEvent(d) {
-            if(d.type === 'play_sound') {
+            if (ONLY && (d.type === 'play_sound' || d.type === 'play_clip' || d.type === 'play_tiktok') && d.mode !== ONLY) return;
+            if (d.type === 'play_sound') {
                 // On cherche si la balise existe déjà, sinon on la crée DANS la page HTML
                 let audioEl = document.getElementById('so-audio');
                 if (!audioEl) {
@@ -809,8 +940,10 @@ app.get('/shoutout', (req, res) => {
                 audioEl.play().catch(err => console.error("Erreur Audio:", err));
             }
 
-            if(d.type === 'play_clip') {
-                document.getElementById('avatar').src = d.meta.avatar;
+            if (d.type === 'play_clip') {
+                const avatar = document.getElementById('avatar');
+                avatar.src = d.meta.avatar || '';
+                avatar.style.display = d.meta.avatar ? 'block' : 'none';
                 document.getElementById('name').textContent = d.meta.name;
                 document.getElementById('game').textContent = d.meta.game;
                 document.getElementById('date').textContent = d.meta.date;
@@ -823,6 +956,8 @@ app.get('/shoutout', (req, res) => {
                 // L'embed n'apparaît qu'une fois le clip réellement chargé (voir listener 'error' plus haut pour le cas où ça échoue).
                 v.play().catch(err => console.error(err));
             }
+
+            if (d.type === 'play_tiktok' && d.url) showTikTok(d.url);
         }
 
         // 📡 UNE seule connexion SSE partagée entre TOUTES les sources OBS de cette

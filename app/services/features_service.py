@@ -10,26 +10,28 @@ from urllib.parse import quote
 _secret_state = {"word": "", "setter": ""}
 
 async def handle_set_word(username: str, user_input: str) -> str:
-    """Définit le mot secret (réservé aux modos/vip)."""
+    """Définit le mot secret (le rôle exigé se règle dans l'admin, page Commandes)."""
+    from app.services.bot_system_commands_service import msg, command_name_of
     if not user_input:
-        return f"@{username}, tu dois préciser un mot ! Exemple: !setword ananas"
-    
+        return await msg("setword", "usage", user=username, command=await command_name_of("setword"))
+
     _secret_state["word"] = user_input.lower().strip()
     _secret_state["setter"] = username
-    return f"🤫 Le mot secret a été défini par @{username} ! À vous de le deviner avec !guess <mot>..."
+    return await msg("setword", "success", user=username, guess_command=await command_name_of("guess"))
 
 async def handle_guess_word(username: str, user_input: str) -> str:
     """Vérifie si le joueur a trouvé le mot secret."""
+    from app.services.bot_system_commands_service import msg
     if not _secret_state["word"]:
-        return f"@{username}, aucun mot secret n'est défini pour le moment !"
+        return await msg("guess", "no_word", user=username)
     if not user_input:
         return ""
 
     guess = user_input.lower().strip()
     if guess == _secret_state["word"]:
         _secret_state["word"] = ""  # On réinitialise la partie
-        return f"🎉 BINGO ! @{username} a trouvé le mot secret ! Félicitations !"
-    
+        return await msg("guess", "win", user=username)
+
     return "" # On ne retourne rien si c'est faux pour ne pas spammer le chat
 
 # ==========================================
@@ -59,16 +61,17 @@ LANGUAGES = {
 
 async def handle_translation(target_cmd: str, username: str, user_input: str) -> str:
     """Traduit le texte dans la langue demandée via Google Translate."""
+    from app.services.bot_system_commands_service import msg
     # 1. Vérification : si l'utilisateur n'a rien écrit à traduire
     if not user_input:
-        return f"@{username}, que dois-je traduire ? Exemple: !{target_cmd} Bonjour le chat"
-        
+        return await msg("translate", "usage", user=username, command=target_cmd)
+
     # 2. Récupération du code de la langue
     lang_code = LANGUAGES.get(target_cmd, "en")
-    
+
     # 3. Préparation de l'URL pour l'API Google
     url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={lang_code}&dt=t&q={quote(user_input)}"
-    
+
     # 4. Appel à l'API et formatage du résultat
     try:
         async with aiohttp.ClientSession() as session:
@@ -77,13 +80,12 @@ async def handle_translation(target_cmd: str, username: str, user_input: str) ->
                     data = await resp.json()
                     # On rassemble les morceaux de la phrase traduite
                     translated_text = "".join([sentence[0] for sentence in data[0]])
-                    
-                    # 👉 Le nouveau format exact que tu as demandé
-                    return f"🌍 Traduction ({target_cmd.upper()}) {username} : {translated_text}"
+                    return await msg("translate", "result", user=username, lang=target_cmd.upper(),
+                                     command=target_cmd, text=translated_text)
     except Exception as e:
-        return f"❌ {username}, erreur lors de la traduction (Problème de connexion)."
-        
-    return f"❌ {username}, service de traduction indisponible."
+        return await msg("translate", "error", user=username)
+
+    return await msg("translate", "unavailable", user=username)
 
 logger = logging.getLogger("masthbot.features")
 
@@ -132,8 +134,9 @@ async def translate_with_deepl(text: str, target_lang: str = "FR", source_lang: 
 
 async def handle_game_info(game_name: str, client_id: str, token: str) -> str:
     """Recherche un jeu sur IGDB, traduit les infos et les formate."""
+    from app.services.bot_system_commands_service import msg
     if not game_name or game_name.lower() in ["just chatting", "discussion"]:
-        return "❌ Aucun jeu précis n'est en cours."
+        return await msg("game", "none_running")
 
     igdb_url = "https://api.igdb.com/v4/games"
     # Requête identique à ton script C#
@@ -149,11 +152,11 @@ async def handle_game_info(game_name: str, client_id: str, token: str) -> str:
         async with aiohttp.ClientSession() as session:
             async with session.post(igdb_url, headers=headers, data=query) as resp:
                 if resp.status != 200:
-                    return f"❌ Impossible de joindre IGDB (Erreur {resp.status})"
+                    return await msg("game", "igdb_error", status=resp.status)
                 
                 data = await resp.json()
                 if not data:
-                    return f"❌ Aucun jeu trouvé sous le nom '{game_name}'."
+                    return await msg("game", "not_found", game=game_name)
                 
                 game = data[0]
                 
@@ -179,7 +182,7 @@ async def handle_game_info(game_name: str, client_id: str, token: str) -> str:
                 if "websites" in game:
                     for w in game["websites"]:
                         if "store.steampowered.com" in w.get("url", ""):
-                            steam_url = f" | 🌐 Steam: {w['url']}"
+                            steam_url = await msg("game", "steam", url=w["url"])
                             break
 
                 # 2. Traductions simultanées (gain de temps considérable)
@@ -192,16 +195,9 @@ async def handle_game_info(game_name: str, client_id: str, token: str) -> str:
                 # On coupe le résumé pour s'assurer que le tout tienne sous les 500 caractères Twitch
                 short_summary = t_summary[:180] + "..." if len(t_summary) > 180 else t_summary
 
-                details = (
-                    f"🎮 {t_name} | "
-                    f"👨‍💻 {t_dev} | "
-                    f"📅 {release_date} | "
-                    f"🔖 {t_genres} | "
-                    f"ℹ️ {short_summary}"
-                    f"{steam_url}"
-                )
-                return details
+                return await msg("game", "result", name=t_name, developer=t_dev, date=release_date,
+                                 genres=t_genres, summary=short_summary, steam=steam_url)
 
     except Exception as e:
         logger.error(f"❌ Erreur lors de la recherche du jeu : {e}")
-        return "❌ Une erreur est survenue lors de la recherche IGDB."
+        return await msg("game", "error")

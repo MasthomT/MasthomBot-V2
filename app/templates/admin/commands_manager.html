@@ -150,6 +150,7 @@
         <!-- ── Onglet commandes système ── -->
         <div id="panel-system" class="hidden">
             <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" id="syscmd-grid"></div>
+            <div id="syscmd-overview" class="mt-10 space-y-6"></div>
         </div>
 
         <!-- ── Onglet demandes VIP (sons perso à valider) ── -->
@@ -587,44 +588,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadCommands();
     loadMedia();
     loadSoundDropdown(); // <-- Ajouté
-    loadNativeCommands();
 });
-
-// ── Commandes natives (codées en dur, ex: !showtiktok) ─────────────────────────
-// Les réglages vivent dans la table discord_features_settings (même backend que
-// l'onglet Commandes de /admin/discord_moderation), mais !showtiktok est une
-// commande Twitch normale, pas Discord — son réglage est donc géré ici à la place.
-async function loadNativeCommands() {
-    try {
-        const res = await fetch('/admin/api/discord_mod/features');
-        const f = await res.json();
-        document.getElementById('native-showtiktok-enabled').checked = f.showtiktok_enabled !== false;
-        document.getElementById('native-showtiktok-message').value = f.showtiktok_message || '';
-    } catch (e) { console.error(e); }
-}
-
-async function saveNativeCommands() {
-    const statusEl = document.getElementById('native-cmd-status');
-    try {
-        // L'API attend l'objet complet des réglages : on récupère l'existant et on ne
-        // modifie que les deux champs de cette carte avant de tout renvoyer.
-        const current = await (await fetch('/admin/api/discord_mod/features')).json();
-        const payload = {
-            ...current,
-            showtiktok_enabled: document.getElementById('native-showtiktok-enabled').checked,
-            showtiktok_message: document.getElementById('native-showtiktok-message').value.trim(),
-        };
-        const res = await fetch('/admin/api/discord_mod/features', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-        });
-        statusEl.innerHTML = res.ok
-            ? '<span class="text-emerald-400">✅ Enregistré !</span>'
-            : '<span class="text-rose-400">❌ Erreur</span>';
-    } catch (e) {
-        statusEl.innerHTML = '<span class="text-rose-400">❌ Erreur réseau</span>';
-    }
-    setTimeout(() => statusEl.innerHTML = '', 3000);
-}
 
 // --- NOUVELLES FONCTIONS OBS ---
 function renderObsActionsList() {
@@ -1180,6 +1144,44 @@ async function loadSyscmds() {
     const badge = document.getElementById('syscmd-badge');
     if (badge) badge.textContent = _syscmds.length;
     renderSyscmdGrid();
+    loadCommandsOverview();
+}
+
+// Tout ce qui existe dans le bot sans être une carte éditable ci-dessus : rien ne doit rester invisible.
+async function loadCommandsOverview() {
+    const box = document.getElementById('syscmd-overview');
+    if (!box) return;
+    let data;
+    try { data = await (await fetch('/api/admin/commands/overview')).json(); } catch (e) { return; }
+    const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    let html = '';
+
+    html += `<section class="config-card rounded-2xl border border-slate-700/60 p-5">
+        <h3 class="text-sm font-black text-white mb-1"><i class="fas fa-dharmachakra text-indigo-400 mr-2"></i>Commandes des roues de la fortune</h3>
+        <p class="text-[11px] text-slate-500 mb-3">Réservées aux modos et au streamer. Le nom de la commande se règle sur la page de chaque roue.</p>
+        ${data.wheels.length ? data.wheels.map(w => `<a href="${w.link}" class="inline-flex items-center gap-2 mr-2 mb-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 hover:border-indigo-500 transition-all">
+            <span class="font-mono font-black text-violet-300 text-sm">!${esc(w.command)}</span><span class="text-xs text-slate-400">${esc(w.name)}</span><i class="fas fa-pen text-[10px] text-slate-500"></i></a>`).join('')
+            : '<p class="text-xs text-slate-600 italic">Aucune roue n\'a de commande.</p>'}
+    </section>`;
+
+    if (data.discord.length) {
+        html += `<section class="config-card rounded-2xl border border-slate-700/60 p-5">
+            <h3 class="text-sm font-black text-white mb-1"><i class="fab fa-discord text-indigo-400 mr-2"></i>Commandes Discord (slash)</h3>
+            <p class="text-[11px] text-slate-500 mb-3">Sur le serveur Discord, pas dans le chat Twitch. Elles sont définies dans le code du bot de modération et ne sont pas modifiables ici.</p>
+            ${data.discord.map(c => `<span class="inline-block mr-2 mb-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700" title="${esc(c.description)}">
+                <span class="font-mono font-black text-slate-300 text-sm">/${esc(c.name)}</span> <span class="text-[11px] text-slate-500">${esc(c.description)}</span></span>`).join('')}
+        </section>`;
+    }
+
+    if (data.orphans.length) {
+        html += `<section class="rounded-2xl border border-amber-500/40 bg-amber-500/5 p-5">
+            <h3 class="text-sm font-black text-amber-300 mb-1"><i class="fas fa-triangle-exclamation mr-2"></i>${data.orphans.length} commandes en base sans code pour les exécuter</h3>
+            <p class="text-[11px] text-slate-400 mb-3">Ces lignes existent dans la table des commandes système mais <b>rien dans le bot ne les exécute</b> : taper ces commandes dans le chat ne fait rien. Elles n'apparaissent donc pas comme cartes modifiables.</p>
+            ${data.orphans.map(o => `<span class="inline-block mr-2 mb-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700" title="${esc(o.description)}">
+                <span class="font-mono font-black text-amber-300 text-sm">!${esc(o.name)}</span> <span class="text-[11px] text-slate-500">${esc(o.description)}</span></span>`).join('')}
+        </section>`;
+    }
+    box.innerHTML = html;
 }
 
 function renderSyscmdGrid() {
@@ -1203,7 +1205,8 @@ function buildSyscmdCard(cmd) {
                 <div>
                     <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nom (sans !)</label>
                     <input type="text" id="sc-name-${cmd.command_key}" value="${cmd.command_name}"
-                           class="w-full input-dark rounded-lg p-2 text-sm font-mono" maxlength="30">
+                           class="w-full input-dark rounded-lg p-2 text-sm font-mono ${cmd.name_locked ? 'opacity-50' : ''}" maxlength="30"
+                           ${cmd.name_locked ? 'disabled title="Nom non modifiable"' : ''}>
                 </div>
                 <div>
                     <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Rôle minimum</label>
@@ -1216,6 +1219,15 @@ function buildSyscmdCard(cmd) {
                     </select>
                 </div>
             </div>
+
+            ${cmd.name_locked ? '' : `
+            <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Alias (séparés par des virgules, sans !)</label>
+                <input type="text" id="sc-aliases-${cmd.command_key}" value="${(cmd.aliases || []).join(', ')}" placeholder="ex : lancer, jet"
+                       class="w-full input-dark rounded-lg p-2 text-sm font-mono">
+            </div>`}
+            ${cmd.role_note ? `<p class="text-[10px] text-amber-400/80 leading-snug"><i class="fas fa-info-circle mr-1"></i>${cmd.role_note}</p>` : ''}
+            ${(cmd.triggers || []).length ? `<div class="text-[10px] text-slate-500 leading-relaxed">Déclencheurs : ${cmd.triggers.map(t => `<span class="font-mono text-violet-300">!${t}</span>`).join(' ')}</div>` : ''}
 
             <!-- Messages -->
             <div class="space-y-3">
@@ -1274,6 +1286,7 @@ function buildSyscmdCard(cmd) {
             <div class="flex items-center gap-3 min-w-0">
                 <span class="w-2 h-2 rounded-full flex-shrink-0 ${statusDot}"></span>
                 <span class="font-mono font-black text-violet-300 text-base">!${cmd.command_name}</span>
+                ${(cmd.aliases || []).length ? `<span class="font-mono text-[10px] text-slate-500 hidden sm:inline">${cmd.aliases.map(a => '!' + a).join(' ')}</span>` : ''}
                 <span class="text-xs text-slate-400 truncate hidden sm:block">${cmd.label}</span>
             </div>
             <div class="flex items-center gap-3 flex-shrink-0">
@@ -1326,8 +1339,10 @@ async function saveSyscmdCard(key) {
         if (el) messages[field] = el.value;
     });
 
+    const aliasEl = document.getElementById(`sc-aliases-${key}`);
     const payload = {
         command_name: name,
+        aliases: aliasEl ? aliasEl.value.split(/[,;\s]+/).map(a => a.trim().replace(/^!/, '')).filter(Boolean) : (cmd.aliases || []),
         enabled: document.getElementById(`sc-enabled-${key}`)?.checked ?? cmd.enabled,
         min_role: document.getElementById(`sc-role-${key}`)?.value ?? cmd.min_role,
         messages,
@@ -1347,7 +1362,7 @@ async function saveSyscmdCard(key) {
     }
 
     const idx = _syscmds.findIndex(c => c.command_key === key);
-    if (idx !== -1) Object.assign(_syscmds[idx], payload);
+    if (idx !== -1) Object.assign(_syscmds[idx], payload, { command_name: data.command_name, aliases: data.aliases });
 
     statusEl.textContent = '✅ Sauvegardé !';
     statusEl.className = 'text-[11px] font-bold text-center h-4 text-emerald-400';
