@@ -61,3 +61,7 @@ cloudflared
 # Marqueur runtime + sauvegardes éditeur (ajouté 29/06/2026)
 .bot_running_marker
 *.save
+
+# Sauvegardes locales avant modifications (non versionnées)
+backups/
+.rename-backup-*/
