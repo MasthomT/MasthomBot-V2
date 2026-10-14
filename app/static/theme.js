@@ -9,6 +9,7 @@
     else if (path === '/overlay/twitch_poll') page = 'twitch_poll';
     else if (path === '/overlay/trophies') page = 'trophies';
     else if (path === '/overlay/time') page = 'time';
+    else if (path === '/overlay/credits') page = 'credits';
     else if (/^\/overlay\/wheels?(\/\d+)?$/.test(path)) page = 'wheel';
     else if (path === '/shoutout') page = 'shoutout';
     else if (path === '/brb') page = 'brb';
@@ -67,6 +68,22 @@
                 + '.tt-badge{background:' + a + ' !important}' : '')
                 + (F ? '#name,.tt-badge{font-family:' + F + ' !important}' : '');
         },
+        credits: function (a, a2, F, s) {
+            var spooky = s && (s.icon_set === 'halloween' || s.preset === 'halloween');
+            var second = a2 ? light(a2, 0.45) : (a ? light(a, 0.5) : '');
+            return (a ? '.main-title{color:' + light(a, 0.25) + ' !important;text-shadow:0 0 18px ' + rgba(a, 0.9) + ',0 8px 40px ' + rgba(a, 0.6) + ' !important}'
+                + '.sub-title{color:' + second + ' !important;text-shadow:0 0 16px ' + rgba(a2 || a, 0.7) + ' !important}'
+                + '.section:nth-of-type(odd) .section-title{color:' + a + ' !important;text-shadow:0 0 14px ' + rgba(a, 0.55) + ' !important}'
+                + '.section:nth-of-type(even) .section-title{color:' + second + ' !important;text-shadow:0 0 14px ' + rgba(a2 || a, 0.5) + ' !important}'
+                + '.section-title{border-bottom:2px solid ' + rgba(a, 0.35) + ' !important}'
+                + '.name-item{background:rgba(18,10,28,.88) !important;border:1px solid ' + rgba(a, 0.4) + ' !important;box-shadow:0 0 14px ' + rgba(a, 0.15) + ' !important}'
+                + '.user-label{background:' + rgba(a, 0.16) + ' !important;color:' + light(a, 0.4) + ' !important}'
+                + '.user-label .fa-star,.user-label .fa-clock{color:' + a + ' !important}' : '')
+                + (F ? '.main-title,.sub-title,.section-title,.user-name{font-family:' + F + ' !important}.main-title,.section-title{letter-spacing:.06em !important}' : '')
+                + (spooky ? '.main-title::before{content:"🎃 "}.main-title::after{content:" 🎃"}'
+                          + '.section-title::before{content:"🦇 "}.section-title::after{content:" 🦇"}'
+                          + '.sub-title::before{content:"👻 "}.sub-title::after{content:" 👻"}' : '');
+        },
         brb: function (a, a2, F) {
             return (a ? '#container{border-color:' + a + ' !important}.bottom-bar{border-top-color:' + a + ' !important}'
                 + '#progress{background:' + light(a, 0.35) + ' !important;box-shadow:0 0 15px ' + a + ' !important}' : '')
@@ -80,11 +97,11 @@
     var fontLink = null, lastSig = null;
 
     function apply(s) {
-        var sig = [s.w_accent, s.w_accent2, s.w_font].join('|');
+        var sig = [s.w_accent, s.w_accent2, s.w_font, s.icon_set, s.preset].join('|');
         if (sig === lastSig) return;
         lastSig = sig;
         var F = s.w_font ? "'" + s.w_font.replace(/'/g, '') + "',cursive" : '';
-        styleEl.textContent = RULES[page](s.w_accent || '', s.w_accent2 || '', F);
+        styleEl.textContent = RULES[page](s.w_accent || '', s.w_accent2 || '', F, s);
         if (fontLink) { fontLink.remove(); fontLink = null; }
         if (s.w_font) {
             fontLink = document.createElement('link');

@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administration - Titres</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #6366f1; outline: none; }
+        .btn { padding: .45rem .8rem; border-radius: .6rem; font-size: .75rem; font-weight: 800; background: #334155; color: #e2e8f0; }
+        .btn:hover { background: #475569; }
+        .btn.main { background: #4f46e5; } .btn.main:hover { background: #6366f1; }
+        .btn.go { background: #059669; } .btn.go:hover { background: #10b981; }
+        .tab { padding: .55rem 1rem; border-radius: .75rem; font-size: .85rem; font-weight: 800; color: #94a3b8; cursor: pointer; border: 1px solid transparent; }
+        .tab:hover { background: rgba(51,65,85,.5); color: #fff; }
+        .tab.active { background: rgba(99,102,241,.14); color: #818cf8; border-color: rgba(99,102,241,.35); }
+        .stagewrap { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; border: 1px solid #334155;
+                     background: repeating-conic-gradient(#0b1220 0% 25%, #111a2e 0% 50%) 50% / 28px 28px; }
+        .stagewrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; }
+        .boxes { position: absolute; inset: 0; pointer-events: none; }
+        .box { position: absolute; border: 2px dashed rgba(255,255,255,.5); border-radius: 6px; cursor: move; pointer-events: auto; box-sizing: border-box; touch-action: none; }
+        .box:hover, .box.drag { border-color: #818cf8; background: rgba(99,102,241,.14); }
+        .box .tag { position: absolute; left: 0; top: -19px; font-size: 10px; font-weight: 800; background: #4f46e5; color: #fff; padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
+        label.f { display: block; font-size: 11px; color: #94a3b8; }
+        label.f > .in { margin-top: 4px; }
+        .sec { font-size: 10px; font-weight: 900; letter-spacing: .15em; text-transform: uppercase; color: #64748b; margin: 1.1rem 0 .55rem; }
+        .sec:first-child { margin-top: 0; }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen">
+
+    {% if not embed %}{% include 'admin/sidebar.html' %}{% endif %}
+
+    <main class="flex-1 {% if embed %}p-4{% else %}p-6 md:p-10{% endif %} min-w-0">
+        <header class="mb-4 flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">Titres</h1>
+                <p class="text-slate-400 mt-1 max-w-3xl">Les écrans de titre d'OBS : début de live (avec décompte), pause et fin, avec la décoration de ton ancienne page (sous-titre contour, grand titre animé, message). Chaque écran s'affiche via une source navigateur <code class="text-slate-300">/overlay/titre/start</code>, <code class="text-slate-300">/brk</code> ou <code class="text-slate-300">/end</code>, ou via le widget correspondant de la Scène OBS.</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <span id="msg" class="text-xs text-slate-400"></span>
+                <button id="saveBtn" class="btn main" style="padding:.65rem 1.1rem;font-size:.85rem"><i class="fas fa-save mr-2"></i>Enregistrer</button>
+            </div>
+        </header>
+
+        <div id="offsetWarn" class="hidden mb-4 rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-xs text-amber-200"></div>
+        <nav class="flex flex-wrap gap-2 mb-4" id="tabs"></nav>
+
+        <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px] gap-5">
+            <div class="min-w-0">
+                <div class="stagewrap" id="stage"><iframe id="pv" title="aperçu"></iframe><div class="boxes" id="boxes"></div></div>
+                <div class="flex flex-wrap items-center gap-2 mt-3">
+                    <button class="btn" id="replay"><i class="fas fa-rotate-right mr-1"></i>Rejouer l'aperçu</button>
+                    <button class="btn go" id="startBtn" title="Lance le décompte maintenant sur toutes les pages qui affichent cet écran"><i class="fas fa-play mr-1"></i>Lancer le décompte maintenant</button>
+                    <button class="btn" id="stopBtn"><i class="fas fa-stop mr-1"></i>Arrêter</button>
+                    <button class="btn" id="autoAll" title="Annuler tous les placements à la main : les lignes se rangent automatiquement les unes sous les autres"><i class="fas fa-align-center mr-1"></i>Aligner automatiquement</button>
+                    <span id="cdMsg" class="text-xs text-slate-400"></span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-2">Glisse chaque ligne (et le décompte ou l'image) directement dans l'aperçu pour la placer où tu veux.</p>
+                <p class="text-[11px] text-slate-500 mt-2">URL pour OBS : <code id="urlHint" class="text-slate-300"></code></p>
+            </div>
+            <div class="config-card rounded-2xl p-4 h-fit" id="form"></div>
+        </div>
+
+        <section class="config-card rounded-2xl p-4 mt-5">
+            <h2 class="text-lg font-bold text-white">Un seul widget qui change selon la scène OBS</h2>
+            <p class="text-xs text-slate-400 mt-1 max-w-3xl">Ajoute le widget <strong>« Titre · Automatique »</strong> (page Scène OBS) ou une source navigateur <code class="text-slate-300">/overlay/titre/auto</code> : il affiche l'écran qui correspond au nom de la scène OBS en cours. Dès que le nom de la scène <em>contient</em> le mot, c'est l'écran choisi (la première règle qui correspond gagne). Dans OBS, la source (ou la Scène OBS) doit avoir la permission <strong>« Lecture des informations OBS »</strong>.</p>
+            <div id="rules" class="mt-3 space-y-2"></div>
+            <button class="btn mt-2" id="addRule"><i class="fas fa-plus mr-1"></i>Ajouter une règle</button>
+            <p class="text-[11px] text-slate-500 mt-3">Pour vérifier : ouvre <code class="text-slate-300" id="dbgHint"></code> dans OBS, il écrit en bas à gauche la scène détectée et l'écran choisi.</p>
+        </section>
+    </main>
+    <datalist id="fontList"></datalist>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+const FONTS = ['Montserrat','Poppins','Roboto','Inter','Oswald','Bebas Neue','Orbitron','Audiowide','Press Start 2P','Righteous','Bangers','Fredoka','Pacifico','Lobster',
+               'Permanent Marker','Caveat','Special Elite','Creepster','Mystery Quest','Metal Mania','Butcherman','Jolly Lodger','Pirata One'];
+$('fontList').innerHTML = FONTS.map(f => '<option value="' + f + '">').join('');
+
+let data = null, slug = 'start', theme = {}, pvReady = false, dirty = false;
+const cfgs = {};                       // configuration en cours d'édition, par écran
+const cur = () => cfgs[slug];
+function markDirty() { dirty = true; $('msg').className = 'text-xs text-amber-400'; $('msg').textContent = 'Modifications non enregistrées'; }
+
+function getP(o, p) { return p.split('.').reduce((a, k) => (a == null ? a : a[k]), o); }
+function setP(o, p, v) { const ks = p.split('.'); const l = ks.pop(); ks.reduce((a, k) => a[k], o)[l] = v; }
+
+function fld(label, path, type, ex) {
+    ex = ex || {}; const v = getP(cur(), path); let input;
+    if (type === 'select') input = '<select data-p="' + path + '" class="input-dark w-full rounded-lg px-2 py-1.5 text-sm">' + ex.options.map(o =>
+        '<option value="' + esc(o[0]) + '"' + (String(v) === String(o[0]) ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('') + '</select>';
+    else if (type === 'check') return '<label class="flex items-center gap-2 text-xs text-slate-300 mt-2' + (ex.span ? ' col-span-2' : '') + '"><input type="checkbox" data-p="' + path + '" ' + (v ? 'checked' : '') + '> ' + label + '</label>';
+    else if (type === 'color') input = '<input type="color" data-p="' + path + '" value="' + esc(v || ex.fallback || '#ffffff') + '" class="h-8 w-14 rounded bg-transparent">';
+    else if (type === 'optcolor') input = '<div class="flex items-center gap-2"><input type="checkbox" data-opt="' + path + '" ' + (v ? 'checked' : '') + ' title="Personnaliser (sinon : thème)">'
+        + '<input type="color" data-p="' + path + '" value="' + esc(v || ex.fallback || '#ff7a18') + '" class="h-8 w-14 rounded bg-transparent"></div>';
+    else if (type === 'range') input = '<input type="range" data-p="' + path + '" min="' + ex.min + '" max="' + ex.max + '" step="' + ex.step + '" value="' + esc(v) + '" class="w-full">';
+    else if (type === 'time') input = '<input type="time" data-p="' + path + '" value="' + esc(v) + '" class="input-dark w-full rounded-lg px-2 py-1.5 text-sm">';
+    else if (type === 'text') input = '<input type="text" data-p="' + path + '" value="' + esc(v) + '" ' + (ex.list ? 'list="' + ex.list + '"' : '') + ' placeholder="' + esc(ex.placeholder || '') + '" maxlength="' + (ex.max || 160) + '" class="input-dark w-full rounded-lg px-2 py-1.5 text-sm">';
+    else input = '<input type="number" data-p="' + path + '" value="' + esc(v) + '" ' + (ex.min != null ? 'min="' + ex.min + '"' : '') + ' ' + (ex.max != null ? 'max="' + ex.max + '"' : '') + ' ' + (ex.step ? 'step="' + ex.step + '"' : '') + ' class="input-dark w-full rounded-lg px-2 py-1.5 text-sm">';
+    return '<label class="f' + (ex.span ? ' col-span-2' : '') + '">' + label + '<div class="in">' + input + '</div></label>';
+}
+const opts = (o) => Object.entries(o);
+
+function lineRow(l, i, n) {
+    return '<div class="rounded-xl border border-slate-700 p-2 mb-2" data-line="' + i + '">'
+      + '<div class="flex items-start gap-2">'
+      + '<textarea data-lf="text" rows="2" maxlength="200" placeholder="Texte de la ligne (Entrée = retour à la ligne)" class="input-dark flex-1 rounded-lg px-2 py-1.5 text-sm">' + esc(l.text) + '</textarea>'
+      + '<div class="flex flex-col gap-1">'
+      + '<button class="btn" data-mv="up" title="Monter"' + (i === 0 ? ' disabled style="opacity:.35"' : '') + '><i class="fas fa-arrow-up"></i></button>'
+      + '<button class="btn" data-mv="down" title="Descendre"' + (i === n - 1 ? ' disabled style="opacity:.35"' : '') + '><i class="fas fa-arrow-down"></i></button></div>'
+      + '<button class="btn" data-del title="Supprimer la ligne"><i class="fas fa-trash"></i></button></div>'
+      + '<div class="grid grid-cols-3 gap-2 mt-2">'
+      + '<select data-lf="format" class="input-dark col-span-3 rounded-lg px-2 py-1.5 text-sm">' + Object.entries(data.formats).map(([k, v]) =>
+            '<option value="' + k + '"' + (k === l.format ? ' selected' : '') + '>' + esc(v) + '</option>').join('') + '</select>'
+      + '<label class="text-[11px] text-slate-400">Taille (px)<input data-lf="size" type="number" min="0" max="400" value="' + (l.size || '') + '" placeholder="auto" class="input-dark w-full rounded-lg px-2 py-1 mt-1 text-sm"></label>'
+      + '<label class="text-[11px] text-slate-400 col-span-2">Couleur de la ligne<div class="flex items-center gap-2 mt-1"><input type="checkbox" data-lc ' + (l.color ? 'checked' : '') + ' title="Personnaliser">'
+      + '<input type="color" data-lf="color" value="' + esc(l.color || '#ffffff') + '" class="h-8 w-14 rounded bg-transparent"><span class="text-slate-500">sinon : celle du style</span></div></label>'
+      + '<label class="text-[11px] text-slate-400">X (%)<input data-lf="x" type="number" step="0.5" value="' + (l.x == null ? '' : Math.round(l.x * 10) / 10) + '" placeholder="auto" class="input-dark w-full rounded-lg px-2 py-1 mt-1 text-sm"></label>'
+      + '<label class="text-[11px] text-slate-400">Y (%)<input data-lf="y" type="number" step="0.5" value="' + (l.y == null ? '' : Math.round(l.y * 10) / 10) + '" placeholder="auto" class="input-dark w-full rounded-lg px-2 py-1 mt-1 text-sm"></label>'
+      + '<label class="text-[11px] text-slate-400 col-span-2">Animation d\'entrée de cette ligne<select data-lf="anim" class="input-dark w-full rounded-lg px-2 py-1.5 mt-1 text-sm">' + Object.entries(data.line_anims).map(([k, v]) =>
+            '<option value="' + k + '"' + (k === (l.anim || '') ? ' selected' : '') + '>' + esc(v) + '</option>').join('') + '</select></label>'
+      + '<label class="text-[11px] text-slate-400">Délai (s)<input data-lf="delay" type="number" min="0" max="60" step="0.1" value="' + (l.delay || 0) + '" class="input-dark w-full rounded-lg px-2 py-1 mt-1 text-sm"></label>'
+      + '<div class="flex items-end col-span-3"><button class="btn w-full" data-auto title="Remettre cette ligne dans le bloc automatique"><i class="fas fa-magnet mr-1"></i>Auto</button></div>'
+      + '</div></div>';
+}
+
+function renderForm() {
+    const c = cur(), cd = c.countdown, themed = c.look === 'theme';
+    $('form').innerHTML =
+        '<div class="sec">Lignes du titre</div>'
+      + '<p class="text-[11px] text-slate-500 mb-2">Une ligne = un bloc avec son propre format. <strong>Entrée</strong> fait un retour à la ligne dans la ligne ; <strong>*mot*</strong> met un mot en couleur d\'accent.</p>'
+      + '<div id="lines">' + c.lines.map((l, i) => lineRow(l, i, c.lines.length)).join('') + '</div>'
+      + '<button class="btn main" id="addLine"><i class="fas fa-plus mr-1"></i>Ajouter une ligne</button>'
+
+      + '<div class="sec">Style</div><div class="grid grid-cols-2 gap-3">'
+      + fld('Apparence', 'look', 'select', { span: 2, options: opts(data.looks) })
+      + (themed ? fld('Couleur d\'accent (sinon : thème)', 'accent', 'optcolor', { fallback: '#ff7a18', span: 2 })
+                : fld('Couleur de base du grand titre', 'base_color', 'color') + fld('Couleur des contours / textes', 'outline', 'color')
+                  + fld('Le grand titre change de couleur en continu', 'hue_rotate', 'check', { span: 2 })
+                  + fld('Vitesse du changement de couleur (s)', 'hue_speed', 'number', { min: 5, max: 300, span: 2 }))
+      + fld('Police', 'font', 'text', { list: 'fontList', placeholder: themed ? 'Police du thème' : 'Kanit', span: 2, max: 40 })
+      + fld('Espacement entre les lignes (px)', 'gap', 'number', { min: 0, max: 200 })
+      + fld('Tout en majuscules', 'uppercase', 'check')
+      + fld('Lueur autour des textes', 'glow', 'check')
+      + fld('Léger balancement 3D du bloc', 'ridge', 'check')
+      + fld('Style Halloween : police du thème + couleurs orange/violet et lueur, tant que le thème Halloween est actif (retour au style normal ensuite). Tailles et formats des lignes inchangés.', 'halloween_look', 'check', { span: 2 })
+      + fld('Citrouilles 🎃 autour du grand titre (thème Halloween actif)', 'halloween_decor', 'check', { span: 2 })
+      + '</div>'
+
+      + '<div class="sec">Position du bloc</div><div class="grid grid-cols-3 gap-3">'
+      + fld('X (%)', 'x', 'number', { min: 0, max: 100, step: 0.5 }) + fld('Y (%)', 'y', 'number', { min: 0, max: 100, step: 0.5 }) + fld('Largeur (%)', 'w', 'number', { min: 20, max: 100 })
+      + fld('Taille du titre (1 = ancienne taille, 1.4 = 140 %)', 'zoom', 'number', { min: 0.5, max: 3, step: 0.05, span: 3 })
+      + '</div>'
+
+      + '<div class="sec">Image / logo (facultatif)</div><div class="grid grid-cols-2 gap-3">'
+      + fld('Fichier', 'image', 'select', { span: 2, options: [['', 'Aucune image']].concat(data.images.map(f => [f, f])) })
+      + '<div class="col-span-2 flex items-center gap-2"><input type="file" id="upImg" accept=".png,.jpg,.jpeg,.gif,.webp" class="text-[11px] text-slate-300"><span id="upMsg" class="text-[11px] text-slate-400"></span></div>'
+      + fld('Largeur (% écran)', 'image_w', 'number', { min: 3, max: 80 }) + fld('Position X (%)', 'image_x', 'number', { min: -30, max: 130, step: 0.5 })
+      + fld('Position Y (%)', 'image_y', 'number', { min: -30, max: 130, step: 0.5 })
+      + '</div>'
+
+      + '<div class="sec">Fond, effet et animation</div><div class="grid grid-cols-2 gap-3">'
+      + fld('Cadre en marge avec aura', 'frame', 'check') + fld('Couleur du cadre', 'frame_color', 'color', { fallback: '#ff7a18' })
+      + fld('Fond', 'backdrop', 'select', { options: opts(data.backdrops) }) + fld('Effet d\'ambiance', 'effect', 'select', { options: opts(data.effects) })
+      + fld('Couleur du fond', 'backdrop_color', 'color', { fallback: '#000000' }) + fld('Opacité du fond', 'backdrop_opacity', 'range', { min: 0, max: 1, step: 0.05 })
+      + fld('Animation d\'entrée (par défaut)', 'anim_in', 'select', { options: opts(data.anims) }) + fld('Durée (s)', 'anim_dur', 'number', { min: 0.1, max: 4, step: 0.1 })
+      + fld('Décalage entre chaque ligne (s)', 'stagger', 'number', { min: 0, max: 5, step: 0.1, span: 2 })
+      + '</div>'
+
+      + '<div class="sec">Décompte</div><div class="grid grid-cols-2 gap-3">'
+      + fld('Afficher un décompte sous le titre', 'countdown.enabled', 'check', { span: 2 })
+      + fld('Type', 'countdown.mode', 'select', { options: [['minutes', 'Une durée (minutes)'], ['time', 'Jusqu\'à une heure (HH:MM)']] })
+      + (cd.mode === 'time' ? fld('Heure cible', 'countdown.time', 'time')
+                            : fld('Durée (minutes)', 'countdown.minutes', 'number', { min: 0.1, max: 600, step: 0.5 }))
+      + (cd.mode === 'minutes' ? fld('Démarre tout seul quand l\'écran apparaît dans OBS', 'countdown.auto', 'check', { span: 2 }) : '')
+      + fld('Texte au-dessus du décompte', 'countdown.label', 'text', { span: 2, max: 100 }) + fld('Texte à la fin du décompte', 'countdown.end_text', 'text', { span: 2, max: 100 })
+      + fld('Taille (px)', 'countdown.size', 'number', { min: 20, max: 500 }) + fld('Délai d\'apparition (s)', 'countdown.delay', 'number', { min: 0, max: 60, step: 0.1 })
+      + '</div>'
+      + '<button class="btn mt-4" id="resetBtn"><i class="fas fa-rotate-left mr-1"></i>Remettre les valeurs d\'origine de cet écran</button>';
+
+    $('form').querySelectorAll('[data-p]').forEach(el => {
+        const ev = (el.type === 'checkbox' || el.tagName === 'SELECT' || el.type === 'color' || el.type === 'time') ? 'change' : 'input';
+        el.addEventListener(ev, () => onField(el));
+        if (el.type === 'color') el.addEventListener('input', () => onField(el));
+    });
+    $('form').querySelectorAll('[data-opt]').forEach(cb => cb.addEventListener('change', () => {
+        const p = cb.dataset.opt, col = $('form').querySelector('[data-p="' + p + '"]');
+        setP(cur(), p, cb.checked ? col.value : ''); markDirty(); preview(false);
+    }));
+
+    // lignes
+    $('addLine').addEventListener('click', () => { cur().lines.push({ text: '', format: 'sub', size: 0, color: '', x: null, y: null, anim: '', delay: 0 }); markDirty(); renderForm(); preview(false); });
+    $('lines').querySelectorAll('[data-line]').forEach(row => {
+        const i = parseInt(row.dataset.line, 10), L = () => cur().lines[i];
+        row.querySelectorAll('[data-lf]').forEach(el => {
+            const f = el.dataset.lf;
+            const handler = () => {
+                if (f === 'size') L().size = parseInt(el.value || '0', 10) || 0;
+                else if (f === 'delay') L().delay = parseFloat(el.value || '0') || 0;
+                else if (f === 'x' || f === 'y') { L()[f] = el.value === '' ? null : parseFloat(el.value); }
+                else if (f === 'color') { L().color = el.value; row.querySelector('[data-lc]').checked = true; }
+                else L()[f] = el.value;
+                markDirty(); preview(false);
+            };
+            el.addEventListener(el.tagName === 'SELECT' || el.type === 'color' ? 'change' : 'input', handler);
+            if (el.type === 'color') el.addEventListener('input', handler);
+        });
+        row.querySelector('[data-lc]').addEventListener('change', (e) => { L().color = e.target.checked ? row.querySelector('[data-lf="color"]').value : ''; markDirty(); preview(false); });
+        row.querySelector('[data-auto]').addEventListener('click', () => { L().x = null; L().y = null; markDirty(); renderForm(); preview(false); });
+        row.querySelector('[data-del]').addEventListener('click', () => { cur().lines.splice(i, 1); markDirty(); renderForm(); preview(false); });
+        row.querySelectorAll('[data-mv]').forEach(b => b.addEventListener('click', () => {
+            const j = b.dataset.mv === 'up' ? i - 1 : i + 1, ls = cur().lines;
+            if (j < 0 || j >= ls.length) return;
+            [ls[i], ls[j]] = [ls[j], ls[i]]; markDirty(); renderForm(); preview(false);
+        }));
+    });
+
+    $('upImg').addEventListener('change', upload);
+    $('resetBtn').addEventListener('click', () => { if (confirm('Remettre les valeurs d\'origine pour cet écran ?')) { cfgs[slug] = JSON.parse(JSON.stringify(data.defaults[slug])); markDirty(); renderForm(); preview(true); } });
+}
+function onField(el) {
+    const p = el.dataset.p; let v;
+    if (el.type === 'checkbox') v = el.checked;
+    else if (el.type === 'number' || el.type === 'range') v = el.value === '' ? 0 : parseFloat(el.value);
+    else v = el.value;
+    if (el.type === 'color') { const o = $('form').querySelector('[data-opt="' + p + '"]'); if (o) o.checked = true; }
+    setP(cur(), p, v);
+    markDirty();
+    if (p === 'countdown.mode' || p === 'look') renderForm();
+    preview(p.startsWith('countdown'));
+}
+
+// ── poignées de déplacement sur l'aperçu ──
+let rects = { lines: {}, countdown: null, image: null };
+let drag = null;
+function drawBoxes() {
+    const host = $('boxes'); host.innerHTML = '';
+    const c = cur(); if (!c) return;
+    const add = (key, label, r) => {
+        if (!r) return;
+        const b = document.createElement('div');
+        b.className = 'box'; b.dataset.key = key;
+        b.style.left = r.x + '%'; b.style.top = r.y + '%'; b.style.width = r.w + '%'; b.style.height = r.h + '%';
+        b.innerHTML = '<span class="tag">' + esc(label) + '</span>';
+        b.addEventListener('pointerdown', (e) => startDrag(e, key));
+        host.appendChild(b);
+    };
+    c.lines.forEach((l, i) => add('line:' + i, 'Ligne ' + (i + 1), rects.lines[i]));
+    if (c.countdown.enabled) add('cd', 'Décompte', rects.countdown);
+    if (c.image) add('img', 'Image', rects.image);
+}
+const center = (r) => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
+function targetOf(key) {
+    const c = cur();
+    if (key.startsWith('line:')) { const l = c.lines[parseInt(key.slice(5), 10)]; return { get: () => ({ x: l.x, y: l.y }), set: (x, y) => { l.x = x; l.y = y; } }; }
+    if (key === 'cd') return { get: () => ({ x: c.countdown.x, y: c.countdown.y }), set: (x, y) => { c.countdown.x = x; c.countdown.y = y; } };
+    return { get: () => ({ x: c.image_x, y: c.image_y }), set: (x, y) => { c.image_x = x; c.image_y = y; } };
+}
+function freezeAuto() {
+    // la première fois qu'on déplace quelque chose, tout ce qui était en placement automatique garde sa place actuelle
+    const c = cur();
+    c.lines.forEach((l, i) => { if ((l.x == null || l.y == null) && rects.lines[i]) { const p = center(rects.lines[i]); l.x = p.x; l.y = p.y; } });
+    if (c.countdown.enabled && (c.countdown.x == null || c.countdown.y == null) && rects.countdown) { const p = center(rects.countdown); c.countdown.x = p.x; c.countdown.y = p.y; }
+}
+function startDrag(e, key) {
+    e.preventDefault();
+    const c = cur();
+    if (key !== 'img') freezeAuto();
+    const t = targetOf(key), r = key.startsWith('line:') ? rects.lines[parseInt(key.slice(5), 10)] : (key === 'cd' ? rects.countdown : rects.image);
+    const cur0 = t.get();
+    const start = { x: cur0.x != null ? cur0.x : center(r).x, y: cur0.y != null ? cur0.y : center(r).y };
+    drag = { key, t, stage: $('stage').getBoundingClientRect(), sx: e.clientX, sy: e.clientY, start, box: e.currentTarget, r };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
+    e.currentTarget.classList.add('drag');
+    e.currentTarget.addEventListener('pointermove', onDrag);
+    e.currentTarget.addEventListener('pointerup', endDrag, { once: true });
+}
+function onDrag(e) {
+    if (!drag) return;
+    const dx = (e.clientX - drag.sx) / drag.stage.width * 100, dy = (e.clientY - drag.sy) / drag.stage.height * 100;
+    const x = Math.round((drag.start.x + dx) * 10) / 10, y = Math.round((drag.start.y + dy) * 10) / 10;
+    drag.t.set(x, y);
+    drag.box.style.left = (drag.r.x + (x - drag.start.x)) + '%'; drag.box.style.top = (drag.r.y + (y - drag.start.y)) + '%';
+}
+function endDrag(e) {
+    e.currentTarget.removeEventListener('pointermove', onDrag);
+    e.currentTarget.classList.remove('drag');
+    drag = null; markDirty(); renderForm(); preview(false);
+}
+$('autoAll').addEventListener('click', () => {
+    const c = cur(); c.lines.forEach(l => { l.x = null; l.y = null; }); c.countdown.x = null; c.countdown.y = null;
+    markDirty(); renderForm(); preview(false);
+});
+window.addEventListener('message', (e) => {
+    const d = e.data || {};
+    if (d.type === 'title-rects') { rects = { lines: d.lines || {}, countdown: d.countdown, image: d.image }; drawBoxes(); }
+});
+
+// ── aperçu (même page que dans OBS, alimentée par postMessage) ──
+let pvTimer = null;
+function preview(restart) {
+    clearTimeout(pvTimer);
+    pvTimer = setTimeout(() => {
+        if (!pvReady) return;
+        const c = data.screens[slug].countdown;
+        $('pv').contentWindow.postMessage({ type: 'title-preview', config: cur(), theme, countdown: { now: Date.now() / 1000, target: c.target }, restart: !!restart }, '*');
+    }, 180);
+}
+window.addEventListener('message', (e) => { if (e.data && e.data.type === 'title-ready') { pvReady = true; preview(true); } });
+
+function selectTab(s) {
+    slug = s; rects = { lines: {}, countdown: null, image: null }; if ($('boxes')) $('boxes').innerHTML = '';
+    $('tabs').innerHTML = Object.entries(data.screens).map(([k, v]) => '<div class="tab' + (k === slug ? ' active' : '') + '" data-s="' + k + '">' + esc(v.label) + '</div>').join('');
+    $('tabs').querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => selectTab(t.dataset.s)));
+    $('urlHint').textContent = location.origin + '/overlay/titre/' + slug;
+    renderForm(); preview(true);
+}
+
+function renderOffsets(list) {
+    const w = $('offsetWarn');
+    if (!list || !list.length) { w.classList.add('hidden'); return; }
+    w.classList.remove('hidden');
+    w.innerHTML = '<strong>Attention :</strong> un widget Titre est décalé ou zoomé dans la page Scène OBS ('
+        + list.map(o => esc(o.scene_slug) + ' : X ' + o.x + ', Y ' + o.y + ', ' + Math.round(o.scale * 100) + ' %').join(' ; ')
+        + '). Cet aperçu n\'en tient pas compte : dans OBS le titre apparaît donc ailleurs (voire hors cadre). '
+        + '<button class="btn ml-2" id="offReset">Remettre à 0 / 100 %</button>';
+    $('offReset').addEventListener('click', async () => {
+        const r = await fetch('/admin/api/titres-auto/reset-scene-offsets', { method: 'POST' });
+        if (r.ok) renderOffsets((await r.json()).offsets);
+    });
+}
+let rules = [];
+function renderRules() {
+    $('rules').innerHTML = rules.map((r, i) => '<div class="flex flex-wrap items-center gap-2" data-r="' + i + '">'
+        + '<span class="text-xs text-slate-400">Si la scène OBS contient</span>'
+        + '<input data-rm type="text" maxlength="60" value="' + esc(r.match) + '" placeholder="ex : beggin" class="input-dark rounded-lg px-2 py-1.5 text-sm" style="width:12rem">'
+        + '<span class="text-xs text-slate-400">→ afficher</span>'
+        + '<select data-rs class="input-dark rounded-lg px-2 py-1.5 text-sm">' + Object.entries(data.screens).map(([k, v]) =>
+            '<option value="' + k + '"' + (k === r.screen ? ' selected' : '') + '>' + esc(v.label) + '</option>').join('') + '</select>'
+        + '<button class="btn" data-rd title="Supprimer la règle"><i class="fas fa-trash"></i></button></div>').join('')
+        || '<p class="text-xs text-slate-500">Aucune règle : le widget automatique n\'affichera rien.</p>';
+    $('rules').querySelectorAll('[data-r]').forEach(row => {
+        const i = parseInt(row.dataset.r, 10);
+        row.querySelector('[data-rm]').addEventListener('input', (e) => { rules[i].match = e.target.value; markDirty(); });
+        row.querySelector('[data-rs]').addEventListener('change', (e) => { rules[i].screen = e.target.value; markDirty(); });
+        row.querySelector('[data-rd]').addEventListener('click', () => { rules.splice(i, 1); markDirty(); renderRules(); });
+    });
+}
+$('addRule').addEventListener('click', () => { rules.push({ match: '', screen: 'start' }); markDirty(); renderRules(); });
+$('dbgHint').textContent = location.origin + '/overlay/titre/auto?debug=1';
+
+async function load() {
+    const [res, th] = await Promise.all([fetch('/admin/api/titres'), fetch('/api/labels/style').then(r => r.json()).catch(() => ({}))]);
+    if (!res.ok) { $('msg').textContent = 'Chargement impossible (' + res.status + ')'; return; }
+    data = await res.json(); theme = th || {};
+    Object.entries(data.screens).forEach(([k, v]) => { cfgs[k] = JSON.parse(JSON.stringify(v.config)); });
+    rules = JSON.parse(JSON.stringify(data.auto_rules || [])); renderRules();
+    renderOffsets(data.scene_offsets);
+    $('pv').src = '/overlay/titre/' + slug + '?preview=1';
+    selectTab('start');
+}
+
+async function saveAll() {
+    const m = $('msg'); m.className = 'text-xs text-slate-400'; m.textContent = 'Enregistrement…';
+    for (const k of Object.keys(cfgs)) {
+        const res = await fetch('/admin/api/titres/' + k, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: cfgs[k] }) });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) { m.className = 'text-xs text-amber-400'; m.textContent = data.screens[k].label + ' : ' + (j.detail || 'erreur ' + res.status); return false; }
+        cfgs[k] = j.config;
+    }
+    const rr = await fetch('/admin/api/titres-auto/rules', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rules: rules.filter(r => String(r.match).trim()) }) });
+    const rj = await rr.json().catch(() => ({}));
+    if (!rr.ok) { m.className = 'text-xs text-amber-400'; m.textContent = 'Règles : ' + (rj.detail || 'erreur ' + rr.status); return false; }
+    rules = rj.rules; renderRules();
+    dirty = false; m.className = 'text-xs text-emerald-400'; m.textContent = 'Enregistré ✓'; return true;
+}
+$('saveBtn').addEventListener('click', saveAll);
+$('replay').addEventListener('click', () => preview(true));
+
+$('startBtn').addEventListener('click', async () => {
+    if (!(await saveAll())) return;
+    const res = await fetch('/admin/api/titres/' + slug + '/start', { method: 'POST' });
+    const j = await res.json().catch(() => ({}));
+    if (res.ok) { data.screens[slug].countdown = j.countdown; $('cdMsg').className = 'text-xs text-emerald-400'; $('cdMsg').textContent = 'Décompte lancé.'; preview(false); }
+    else { $('cdMsg').className = 'text-xs text-amber-400'; $('cdMsg').textContent = j.detail || 'Erreur ' + res.status; }
+});
+$('stopBtn').addEventListener('click', async () => {
+    const res = await fetch('/admin/api/titres/' + slug + '/stop', { method: 'POST' });
+    if (res.ok) { data.screens[slug].countdown.target = null; $('cdMsg').className = 'text-xs text-slate-400'; $('cdMsg').textContent = 'Décompte arrêté.'; preview(true); }
+});
+
+async function upload() {
+    const f = $('upImg').files[0]; if (!f) return;
+    const fd = new FormData(); fd.append('file', f); $('upMsg').textContent = 'Envoi…';
+    const res = await fetch('/admin/api/alerts/upload?type=media', { method: 'POST', body: fd });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) { $('upMsg').className = 'text-[11px] text-amber-400'; $('upMsg').textContent = j.detail || 'Erreur ' + res.status; return; }
+    if (!data.images.includes(j.name)) data.images.push(j.name);
+    cur().image = j.name; markDirty(); renderForm(); preview(false);
+}
+window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+load();
+</script>
+</body>
+</html>

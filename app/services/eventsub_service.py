@@ -100,6 +100,17 @@ async def log_stream_event(event_type, username, details):
 
 ALLOWED_STAT_COLUMNS = {"sub_months", "gifts_count", "bits_count", "rewards_claimed"}
 
+def _fire_alert_bg(kind: str, user: str, **values) -> None:
+    """Animation d'alerte à l'écran (voir alerts_service) — jamais bloquant pour le traitement de l'événement."""
+    async def _go():
+        try:
+            from app.services import alerts_service
+            await alerts_service.fire_alert(kind, user, **values)
+        except Exception as e:
+            logger.error(f"❌ [ALERTES] {kind} : {e}")
+    asyncio.create_task(_go())
+
+
 async def update_viewer_stat(user_id, username, stat_column, value, increment=True):
     if not user_id or not username: return
     if stat_column not in ALLOWED_STAT_COLUMNS:
@@ -159,10 +170,11 @@ async def subscribe_to_event(session, client_id, token, ws_session_id, sub_type,
     }
     async with session.post(url, headers=headers, json=payload) as resp:
         if resp.status == 202:
-            logger.info(f"✅ Abonnement actif : {sub_type}")
-        else:
-            err = await resp.text()
-            logger.error(f"❌ Échec abonnement {sub_type} : {err}")
+            logger.info(f"✅ Abonnement actif : {sub_type} (v{version})")
+            return True
+        err = await resp.text()
+        logger.error(f"❌ Échec abonnement {sub_type} v{version} : {err}")
+        return False
 
 async def eventsub_routine():
     env = dotenv.dotenv_values("/home/thomas/masthom/BOT_V2/.env")
@@ -226,6 +238,12 @@ async def eventsub_routine():
                                 await subscribe_to_event(session, client_id, token, ws_id, "channel.prediction.begin", "1", c_broad)
                                 await subscribe_to_event(session, client_id, token, ws_id, "channel.prediction.progress", "1", c_broad)
                                 await subscribe_to_event(session, client_id, token, ws_id, "channel.prediction.end", "1", c_broad)
+                                # Train de la Hype (v2, repli sur v1) et objectifs de la chaîne : animations d'alertes
+                                for _t in ("begin", "progress", "end"):
+                                    if not await subscribe_to_event(session, client_id, token, ws_id, f"channel.hype_train.{_t}", "2", c_broad):
+                                        await subscribe_to_event(session, client_id, token, ws_id, f"channel.hype_train.{_t}", "1", c_broad)
+                                for _t in ("begin", "end"):
+                                    await subscribe_to_event(session, client_id, token, ws_id, f"channel.goal.{_t}", "1", c_broad)
                                 already_subscribed = True
                             else:
                                 logger.info("🔄 Reconnexion EventSub terminée — abonnements déjà actifs, pas de resouscription.")
@@ -256,6 +274,7 @@ async def eventsub_routine():
                                     # Vrai sub (nouveau ou resub) → label "dernier sub" + XP + générique
                                     from app.services.label_service import write_label
                                     write_label("dernier_sub.txt", f"{user_name} | {cumulative_months} mois")
+                                    _fire_alert_bg("sub", user_name, months=cumulative_months)
                                     xp = int(conf.get(f"exp_sub_t{tier}") or 500)
                                     await viewer_repo.add_experience(user_id, user_name, xp, "SUB", f"Abonnement Tier {tier}")
                                     await log_stream_event("sub", user_name, {"tier": tier, "xp": xp, "is_gift": False})
@@ -278,6 +297,7 @@ async def eventsub_routine():
 
                                     from app.services.label_service import write_label
                                     write_label("dernier_subgift.txt", f"{user_name} | {count} subgifts")
+                                    _fire_alert_bg("subgift", user_name, count=count)
 
                                     await update_viewer_stat(user_id, user_name, "gifts_count", count, increment=True)
 
@@ -294,6 +314,7 @@ async def eventsub_routine():
 
                                 from app.services.label_service import write_label
                                 write_label("dernier_raid.txt", f"{raider_name} | {v_count} viewers")
+                                _fire_alert_bg("raid", raider_name, viewers=v_count)
 
                                 if raider_id:
                                     await viewer_repo.add_experience(raider_id, raider_name, total_xp, "RAID", f"Raid de {v_count} personnes")
@@ -309,6 +330,7 @@ async def eventsub_routine():
 
                                 from app.services.label_service import write_label
                                 write_label("dernier_bits.txt", f"{user_name} | {bits} bits")
+                                _fire_alert_bg("bits", user_name, bits=bits)
 
                                 if not is_anon and user_id:
                                     await update_viewer_stat(user_id, user_name, "bits_count", bits, increment=True)
@@ -325,6 +347,15 @@ async def eventsub_routine():
                                 await update_viewer_stat(user_id, user_name, "rewards_claimed", 1, increment=True)
                                 await log_stream_event("reward", user_name, {"reward_name": reward_title})
 
+                                # Récompense « Screamer » (titre réglé dans /admin/alerts)
+                                try:
+                                    from app.services import alerts_service
+                                    _sc = (await alerts_service.get_config())["screamer"]
+                                    if _sc["enabled"] and _sc["reward_title"] and reward_title.strip().lower() == _sc["reward_title"].lower():
+                                        await alerts_service.fire_screamer(source="récompense", user=user_name, force=True)
+                                except Exception as e:
+                                    logger.error(f"❌ [SCREAMER] Récompense : {e}")
+
                                 # Récompenses du podium First / Deuz / Troiz : gérées par le bot
                                 try:
                                     from app.services import podium_service
@@ -336,10 +367,25 @@ async def eventsub_routine():
                                     from app.services.polaroid_service import send_polaroid
                                     asyncio.create_task(send_polaroid(user_name, event.get("user_input", "")))
 
+                            elif sub_type.startswith("channel.hype_train."):
+                                try:
+                                    from app.services import alerts_service
+                                    await alerts_service.handle_hype_train(sub_type.rsplit(".", 1)[-1], event, log_stream_event)
+                                except Exception as e:
+                                    logger.error(f"❌ [HYPE TRAIN] {e}")
+
+                            elif sub_type in ("channel.goal.begin", "channel.goal.end"):
+                                try:
+                                    from app.services import alerts_service
+                                    await alerts_service.handle_goal(sub_type.rsplit(".", 1)[-1], event)
+                                except Exception as e:
+                                    logger.error(f"❌ [OBJECTIF] {e}")
+
                             elif sub_type == "channel.follow":
                                 user_name = event.get("user_name", "Inconnu")
                                 from app.services.label_service import write_label
                                 write_label("dernier_follow.txt", f"{user_name}")
+                                _fire_alert_bg("follow", user_name)
                                 await log_stream_event("follow", user_name, {"msg": "Bienvenue !"})
                                 credits_service.log_event("followers", user_name)
 

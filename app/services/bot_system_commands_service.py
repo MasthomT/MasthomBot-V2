@@ -169,6 +169,21 @@ SYSTEM_COMMANDS_DEFINITION = [
         },
     },
     {
+        "command_key": "screamer",
+        "label": "Screamer",
+        "description": "Déclenche un screamer plein écran dans OBS (réglages : /admin/alerts ; il doit y être activé)",
+        "default_name": "screamer",
+        "default_role": "mod",
+        "tags": {
+            "fired":    ["{user}"],
+            "disabled": [],
+        },
+        "messages": {
+            "fired":    "😱 Attention… {user} a lâché le SCREAMER !",
+            "disabled": "😴 Le screamer est désactivé (à activer dans /admin/alerts).",
+        },
+    },
+    {
         "command_key": "timer",
         "label": "Timer OBS",
         "description": "Lance ou arrête un timer sur l'overlay",

@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Animations d'alertes</title>
+<style>
+  :root { --accent: #ff7a18; --font: 'Inter', 'Segoe UI', Arial, sans-serif; }
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+  #stage { position: fixed; inset: 0; pointer-events: none; }
+
+  /* ───────── éléments positionnés (centre = x% / y% de l'écran) ───────── */
+  .alert { position: absolute; inset: 0; }
+  .el { position: absolute; transform: translate(-50%, -50%); }
+  .el .inner { animation-fill-mode: both; }
+  .media img, .media video { display: block; width: 100%; height: auto; }
+  .media .crop { width: 100%; }
+  .media .emoji { display: block; text-align: center; line-height: 1; }
+
+  .txt { text-align: center; line-height: 1.12; font-family: var(--font); white-space: pre-wrap; }
+  .txt.anywhere { overflow-wrap: anywhere; }
+  .txt .ch { display: inline-block; white-space: pre; }
+  .txt .sp { display: inline-block; width: .3em; }
+
+  /* ───────── animations d'entrée / de sortie (sur .inner, durée = --ad) ───────── */
+  @keyframes in-fade   { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes in-zoom   { from { opacity: 0; transform: scale(.2) } to { opacity: 1; transform: scale(1) } }
+  @keyframes in-bounce { 0% { opacity: 0; transform: scale(.2) } 55% { opacity: 1; transform: scale(1.25) } 75% { transform: scale(.92) } 100% { transform: scale(1) } }
+  @keyframes in-slide-up    { from { opacity: 0; transform: translateY(40vh) } to { opacity: 1; transform: none } }
+  @keyframes in-slide-down  { from { opacity: 0; transform: translateY(-40vh) } to { opacity: 1; transform: none } }
+  @keyframes in-slide-left  { from { opacity: 0; transform: translateX(60vw) } to { opacity: 1; transform: none } }
+  @keyframes in-slide-right { from { opacity: 0; transform: translateX(-60vw) } to { opacity: 1; transform: none } }
+  @keyframes in-shake  { 0% { opacity: 0; transform: translateX(0) } 15% { opacity: 1; transform: translateX(-3vw) rotate(-4deg) } 30% { transform: translateX(3vw) rotate(4deg) }
+                         45% { transform: translateX(-2vw) rotate(-3deg) } 60% { transform: translateX(2vw) rotate(3deg) } 80% { transform: translateX(-1vw) } 100% { opacity: 1; transform: none } }
+  @keyframes in-spin   { from { opacity: 0; transform: rotate(-540deg) scale(.1) } to { opacity: 1; transform: none } }
+  @keyframes out-fade  { to { opacity: 0 } }
+  @keyframes out-zoom-out { to { opacity: 0; transform: scale(.1) } }
+  @keyframes out-slide-up    { to { opacity: 0; transform: translateY(-45vh) } }
+  @keyframes out-slide-down  { to { opacity: 0; transform: translateY(45vh) } }
+  @keyframes out-slide-left  { to { opacity: 0; transform: translateX(-65vw) } }
+  @keyframes out-slide-right { to { opacity: 0; transform: translateX(65vw) } }
+
+  /* lettres : machine à écrire / vague */
+  @keyframes ch-in   { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes ch-wave { 0% { opacity: 0; transform: translateY(1.4em) scale(.5) } 60% { opacity: 1; transform: translateY(-.25em) scale(1.1) } 100% { opacity: 1; transform: none } }
+
+  /* ───────── effets de fond ───────── */
+  .fx { position: absolute; inset: 0; overflow: hidden; }
+  .fx-item { position: absolute; opacity: 0; line-height: 1; }
+  .fx-ghost { top: 20vh; left: -20vw; font-size: 17vw; filter: drop-shadow(0 0 1.4vw var(--accent)); animation: ghostFly var(--dur) linear forwards; opacity: 1; }
+  @keyframes ghostFly { 0% { transform: translate(0,0) rotate(-6deg) } 25% { transform: translate(35vw,-6vh) rotate(6deg) } 50% { transform: translate(70vw,5vh) rotate(-6deg) }
+                        75% { transform: translate(105vw,-5vh) rotate(6deg) } 100% { transform: translate(140vw,0) rotate(-6deg) } }
+  .fx-rise { bottom: -12vh; animation: rise var(--d) var(--delay) ease-in forwards; }
+  @keyframes rise { 0% { opacity: 0; transform: translate(0,0) scale(.6) rotate(-10deg) } 10% { opacity: 1 }
+                    50% { transform: translate(var(--dx), -60vh) scale(1) rotate(12deg) } 100% { opacity: 0; transform: translate(calc(var(--dx)*2), -125vh) scale(1.2) rotate(-10deg) } }
+  .fx-fall { top: -10vh; animation: fall var(--d) var(--delay) linear forwards; }
+  @keyframes fall { 0% { opacity: 0; transform: translateY(0) rotate(0) } 10% { opacity: 1 } 100% { opacity: 1; transform: translateY(115vh) rotate(var(--rot)) } }
+  .fx-float { bottom: -10vh; animation: floatUp var(--d) var(--delay) ease-out forwards; }
+  @keyframes floatUp { 0% { opacity: 0; transform: translateY(0) scale(.5) } 15% { opacity: 1 } 100% { opacity: 0; transform: translateY(-115vh) scale(1.2) } }
+  #flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 5; }
+  #flash.go { animation: flashGo .7s forwards; }
+  @keyframes flashGo { 0% { opacity: 0 } 8% { opacity: .85 } 18% { opacity: 0 } 30% { opacity: .55 } 100% { opacity: 0 } }
+
+  /* ───────── SCREAMER ───────── */
+  #scream { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: #000; z-index: 20; }
+  #scream.on { display: flex; }
+  #scream .face { font-size: 78vh; line-height: 1; animation: snap .12s ease-out forwards; }
+  #scream img { width: 100vw; height: 100vh; object-fit: contain; animation: snap .12s ease-out forwards; }
+  #scream.shake .face, #scream.shake img { animation: snap .12s ease-out forwards, tremble .07s .12s infinite; }
+  #scream::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+                   background: radial-gradient(ellipse at center, rgba(0,0,0,0) 35%, rgba(150,0,0,.75) 100%); }
+  @keyframes snap { from { transform: scale(.35) } to { transform: scale(1.12) } }
+  @keyframes tremble { 0% { transform: translate(0,0) scale(1.12) } 25% { transform: translate(-1.2vw,.8vw) scale(1.14) }
+                       50% { transform: translate(1vw,-1vw) scale(1.12) } 75% { transform: translate(-.8vw,-.6vw) scale(1.15) } 100% { transform: translate(0,0) scale(1.12) } }
+  #scream.out { animation: out-fade .25s forwards; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="flash"></div>
+<div id="scream"></div>
+
+<script>
+  const NODE = location.protocol + '//' + location.hostname + ':3005';
+  const PARAMS = new URLSearchParams(location.search);
+  const PREVIEW = PARAMS.get('preview') === '1';        // utilisé par l'éditeur de /admin/alerts
+  const stage = document.getElementById('stage');
+  const flash = document.getElementById('flash');
+  const scream = document.getElementById('scream');
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  const media = (folder, file) => NODE + '/static/commands/' + folder + '/' + encodeURIComponent(file);
+  const isVideo = (f) => /\.(mp4|webm)$/i.test(f || '');
+
+  // ── Thème (accent + police des widgets) réglé dans /admin/labels ──
+  const loadedFonts = new Set();
+  function loadFont(name) {
+    if (!name || loadedFonts.has(name)) return Promise.resolve();
+    loadedFonts.add(name);
+    const l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(name).replace(/%20/g, '+') + ':wght@100;200;300;400;500;600;700;800;900&display=swap';
+    document.head.appendChild(l);
+    return Promise.race([
+      new Promise(r => { l.onload = r; l.onerror = r; }).then(() => document.fonts.load('40px "' + name + '"')).catch(() => {}),
+      new Promise(r => setTimeout(r, 1500)),
+    ]);
+  }
+  function applyTheme(s) {
+    if (s.w_accent) document.documentElement.style.setProperty('--accent', s.w_accent);
+    if (s.w_font) { document.documentElement.style.setProperty('--font', "'" + s.w_font.replace(/'/g, '') + "', cursive"); loadFont(s.w_font); }
+  }
+  if (!PREVIEW) { const lt = () => fetch('/api/labels/style?t=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).then(applyTheme).catch(() => {}); lt(); setInterval(lt, 15000); }
+
+  function playSound(file, volume) {
+    if (!file) return;
+    try { const a = new Audio(media('sounds', file)); a.volume = Math.max(0, Math.min(1, volume == null ? 0.8 : volume)); a.play().catch(() => {}); } catch (e) {}
+  }
+
+  // ── Texte : variables, pseudo coloré, lettres animées ──
+  function textHtml(t, vars) {
+    // découpe le gabarit autour de {user} pour pouvoir le colorer, puis remplace les autres variables
+    const sub = (s) => s.replace(/\{(months|count|bits|viewers|level|total|goal|description|current|target|type)\}/g, (_, k) => String(vars[k] == null ? '' : vars[k]));
+    const parts = [];
+    String(t.template || '').split('{user}').forEach((chunk, i, arr) => {
+      if (chunk) parts.push({ text: sub(chunk), hl: false });
+      if (i < arr.length - 1) parts.push({ text: String(vars.user || ''), hl: true });
+    });
+    const perChar = t.anim_in === 'typewriter' || t.anim_in === 'wave';
+    let idx = 0, html = '';
+    parts.forEach(p => {
+      const color = p.hl && t.highlight ? ' style="color:' + esc(t.highlight) + '"' : '';
+      if (!perChar) { html += '<span' + (p.hl ? ' class="u"' : '') + color + '>' + esc(p.text) + '</span>'; return; }
+      if (p.hl) html += '<span class="u">';
+      for (const ch of Array.from(p.text)) {
+        if (ch === ' ') { html += '<span class="sp"></span>'; idx++; continue; }
+        const anim = t.anim_in === 'wave' ? 'ch-wave .55s' : 'ch-in .01s';
+        const delay = ((+t.delay || 0) + idx * (t.anim_in === 'wave' ? 0.045 : 0.05)).toFixed(2);
+        html += '<span class="ch"' + (color ? ' style="color:' + esc(t.highlight) + ';' : ' style="') + 'opacity:0;animation:' + anim + ' ' + delay + 's both"' + '>' + esc(ch) + '</span>';
+        idx++;
+      }
+      if (p.hl) html += '</span>';
+    });
+    return html;
+  }
+
+  // ── Effets de fond ──
+  function addEffect(layer, effect, dur) {
+    const mk = (cls, txt, styles) => { const d = document.createElement('div'); d.className = 'fx-item ' + cls; d.textContent = txt;
+      Object.entries(styles || {}).forEach(([k, v]) => d.style.setProperty(k, v)); layer.appendChild(d); return d; };
+    if (effect === 'ghost') mk('fx-ghost', '👻', {});
+    else if (effect === 'bats') for (let i = 0; i < 18; i++)
+      mk('fx-rise', '🦇', { left: rnd(2, 92) + 'vw', 'font-size': '7vw', '--dx': rnd(-18, 18) + 'vw', '--d': rnd(2.6, 4.2) + 's', '--delay': rnd(0, Math.max(0.3, Math.min(2.2, dur - 3))) + 's' });
+    else if (effect === 'confetti') { const bits = ['🎃', '🍬', '🍭', '🕷️', '👻', '⭐'];
+      for (let i = 0; i < 24; i++) mk('fx-fall', bits[i % bits.length], { left: rnd(1, 96) + 'vw', 'font-size': '3.2vw', '--d': rnd(2.4, 4) + 's', '--delay': rnd(0.3, Math.max(0.5, Math.min(2.8, dur - 2))) + 's', '--rot': rnd(-360, 360) + 'deg' }); }
+    else if (effect === 'snow') for (let i = 0; i < 40; i++)
+      mk('fx-fall', '❄', { left: rnd(0, 98) + 'vw', 'font-size': rnd(1.4, 3) + 'vw', color: '#dff3ff', '--d': rnd(3, 5.5) + 's', '--delay': rnd(0, Math.max(0.5, dur - 3)) + 's', '--rot': rnd(-180, 180) + 'deg' });
+    else if (effect === 'hearts') for (let i = 0; i < 22; i++)
+      mk('fx-float', '❤️', { left: rnd(2, 94) + 'vw', 'font-size': rnd(2.5, 5.5) + 'vw', '--d': rnd(2.6, 4.4) + 's', '--delay': rnd(0, Math.max(0.5, dur - 3)) + 's' });
+    else if (effect === 'lightning') { flash.classList.remove('go'); void flash.offsetWidth; flash.classList.add('go'); }
+  }
+
+  // durée puis délai : l'élément reste dans son état « avant l'entrée » (fill-mode both) jusqu'au délai
+  const INNER_ANIM = (name, kind, ad, delay) => name && name !== 'none' && !(name === 'typewriter' || name === 'wave')
+    ? kind + '-' + name + ' ' + ad + 's ' + (delay || 0) + 's both' : '';
+  // masque un élément jusqu'à son délai (utile aussi quand il n'a pas d'animation d'entrée)
+  function revealAfter(el, delay) {
+    if (!(delay > 0)) return;
+    el.style.visibility = 'hidden';
+    setTimeout(() => { el.style.visibility = 'visible'; }, delay * 1000);
+  }
+
+  // ── Pseudo trop long : on garde la taille du texte et on ne réduit QUE le pseudo s'il dépasse du cadre ──
+  function fitUser(inner, t) {
+    const avail = inner.clientWidth;
+    if (!avail) return;
+    const base = +t.size || 84, minRatio = Math.min(1, (+t.min_size || 36) / base);
+    inner.querySelectorAll('.u').forEach(u => {
+      u.style.display = 'inline-block';                   // le pseudo est insécable : sa largeur est mesurable
+      const w = u.getBoundingClientRect().width;
+      if (w <= avail + 1) { u.style.display = ''; return; }
+      const ratio = Math.max(minRatio, (avail / w) * 0.98);
+      u.style.fontSize = (ratio * 100) + '%';
+      if (t.stroke && t.stroke_w > 0) u.style.webkitTextStroke = ((+t.stroke_w) * ratio / 19.2) + 'vw ' + t.stroke;
+      if (ratio <= minRatio + 0.001 && u.getBoundingClientRect().width > avail + 1) inner.classList.add('anywhere'); // dernier recours
+    });
+  }
+
+  // ── Variante « tout sur une ligne » : on réduit la taille de tout le texte ──
+  function fitLine(inner, t) {
+    const mode = t.fit || 'shrink';
+    if (mode === 'none') return;
+    const base = +t.size || 84, min = Math.min(base, +t.min_size || 36);
+    inner.style.whiteSpace = 'pre';                       // une seule ligne (les retours à la ligne voulus sont gardés)
+    const avail = inner.clientWidth, natural = inner.scrollWidth;
+    if (mode === 'wrap' || !avail || natural <= avail + 1) {
+      if (mode === 'wrap') inner.style.whiteSpace = '';   // retour au comportement « passe à la ligne »
+      return;
+    }
+    let size = Math.max(min, Math.floor(base * (avail / natural) * 0.98));
+    const k = size / base;                                // l'espacement et le contour suivent la taille
+    inner.style.fontSize = (size / 19.2) + 'vw';
+    inner.style.letterSpacing = ((+t.letter || 0) * k / 19.2) + 'vw';
+    if (t.stroke && t.stroke_w > 0) inner.style.webkitTextStroke = ((+t.stroke_w) * k / 19.2) + 'vw ' + t.stroke;
+    if (inner.scrollWidth > avail + 1 && size <= min) inner.style.whiteSpace = '';  // taille minimale atteinte : on revient à la ligne
+  }
+
+  // ── Une alerte (variante complète) ──
+  const queue = [];
+  let busy = false, current = null;
+  function enqueue(item) { queue.push(item); if (!busy) next(); }
+  async function next() {
+    const it = queue.shift();
+    if (!it) { busy = false; return; }
+    busy = true;
+    try { await showAlert(it.variant, it.vars); } catch (e) { console.error(e); }
+    next();
+  }
+
+  async function showAlert(v, vars) {
+    const t = v.text || {}, m = v.media || {};
+    await Promise.all([loadFont(t.font)]);
+    const dur = Math.max(2, v.duration || 6), ad = v.anim_dur || 0.6;
+    const root = document.createElement('div');
+    root.className = 'alert';
+    root.style.setProperty('--accent', t.glow || getComputedStyle(document.documentElement).getPropertyValue('--accent'));
+    root.style.setProperty('--dur', dur + 's');
+    stage.appendChild(root);
+    current = root;
+
+    const fx = document.createElement('div'); fx.className = 'fx'; root.appendChild(fx);
+    addEffect(fx, v.effect, dur);
+
+    const outStart = Math.max(0.5, dur - ad);
+
+    // média : fichier image / gif / vidéo, ou emoji
+    let mediaEl = null;
+    if (m.file || m.emoji) {
+      mediaEl = document.createElement('div');
+      mediaEl.className = 'el media';
+      mediaEl.style.left = m.x + '%'; mediaEl.style.top = m.y + '%'; mediaEl.style.width = m.w + 'vw';
+      mediaEl.style.opacity = m.opacity;
+      // Rognage : on masque les bords puis on recentre la partie visible sur la position choisie
+      const ct = +m.crop_t || 0, cr = +m.crop_r || 0, cb = +m.crop_b || 0, cl = +m.crop_l || 0;
+      const cropEl = document.createElement('div'); cropEl.className = 'crop';
+      if (ct || cr || cb || cl) {
+        cropEl.style.clipPath = 'inset(' + ct + '% ' + cr + '% ' + cb + '% ' + cl + '%)';
+        cropEl.style.transform = 'translate(' + (-(cl - cr) / 2) + '%,' + (-(ct - cb) / 2) + '%)';
+      }
+      mediaEl.dataset.crop = [ct, cr, cb, cl].join(',');
+      const inner = document.createElement('div'); inner.className = 'inner';
+      if (m.file) {
+        if (isVideo(m.file)) {
+          const vid = document.createElement('video');
+          const t0 = +m.trim_start || 0, t1 = +m.trim_end || 0;
+          vid.src = media('images', m.file); vid.autoplay = true; vid.muted = !m.video_sound; vid.playsInline = true;
+          vid.loop = !!m.loop && !t1;                      // avec une fin choisie, la boucle est gérée à la main
+          if (t0) vid.addEventListener('loadedmetadata', () => { try { vid.currentTime = t0; } catch (e) {} }, { once: true });
+          if (t1) vid.addEventListener('timeupdate', () => {
+            if (vid.currentTime >= t1) { if (m.loop) vid.currentTime = t0; else vid.pause(); }
+          });
+          inner.appendChild(vid); vid.play().catch(() => { vid.muted = true; vid.play().catch(() => {}); });
+        } else {
+          const img = document.createElement('img'); img.src = media('images', m.file); img.alt = ''; inner.appendChild(img);
+        }
+      } else {
+        const e = document.createElement('div'); e.className = 'emoji'; e.textContent = m.emoji; e.style.fontSize = m.w + 'vw'; inner.appendChild(e);
+      }
+      inner.style.animation = INNER_ANIM(m.anim_in, 'in', ad, m.delay);
+      cropEl.appendChild(inner); mediaEl.appendChild(cropEl); root.appendChild(mediaEl);
+      revealAfter(mediaEl, +m.delay || 0);
+      setTimeout(() => { const a = INNER_ANIM(m.anim_out, 'out', ad); inner.style.animation = a || 'none'; if (!a) inner.style.opacity = 1; }, outStart * 1000);
+    }
+
+    // texte
+    let textEl = null;
+    if (t.template) {
+      textEl = document.createElement('div');
+      textEl.className = 'el';
+      textEl.style.left = t.x + '%'; textEl.style.top = t.y + '%'; textEl.style.width = t.w + 'vw';
+      const inner = document.createElement('div'); inner.className = 'inner txt';
+      inner.style.fontSize = (t.size / 19.2) + 'vw';
+      inner.style.fontWeight = t.weight; inner.style.color = t.color; inner.style.textAlign = t.align;
+      inner.style.letterSpacing = (t.letter / 19.2) + 'vw';
+      if (t.font) inner.style.fontFamily = "'" + t.font + "', var(--font)";
+      if (t.uppercase) inner.style.textTransform = 'uppercase';
+      if (t.stroke && t.stroke_w > 0) { inner.style.webkitTextStroke = (t.stroke_w / 19.2) + 'vw ' + t.stroke; inner.style.paintOrder = 'stroke fill'; }
+      const shadows = [];
+      if (t.glow) shadows.push('0 0 1vw ' + t.glow, '0 0 2.6vw ' + t.glow);
+      shadows.push('0 .35vw .9vw rgba(0,0,0,.85)');
+      inner.style.textShadow = shadows.join(',');
+      inner.innerHTML = textHtml(t, vars);
+      inner.style.animation = INNER_ANIM(t.anim_in, 'in', ad, t.delay);
+      textEl.appendChild(inner); root.appendChild(textEl);
+      const fm = t.fit || 'shrink';
+      if (fm === 'wrap') inner.classList.add('anywhere');
+      else if (fm === 'line') fitLine(inner, t);
+      else if (fm === 'shrink') fitUser(inner, t);
+      revealAfter(textEl, +t.delay || 0);
+      setTimeout(() => { const a = INNER_ANIM(t.anim_out, 'out', ad); inner.style.animation = a || 'none'; if (!a) inner.style.opacity = 1; }, outStart * 1000);
+    }
+
+    if (v.sound_delay > 0) setTimeout(() => playSound(v.sound, v.volume), v.sound_delay * 1000);
+    else playSound(v.sound, v.volume);
+
+    if (PREVIEW && window.parent !== window) {
+      // l'éditeur dessine ses poignées de déplacement sur la position réelle des éléments
+      const vw = innerWidth, vh = innerHeight, rect = (el) => { if (!el) return null; const r = el.getBoundingClientRect();
+        let x = r.left, y = r.top, w = r.width, h = r.height;
+        if (el.dataset && el.dataset.crop) {          // partie réellement visible = boîte entière moins le rognage
+          const [ct, cr, cb, cl] = el.dataset.crop.split(',').map(Number);
+          const cx = x + w / 2, cy = y + h / 2;       // la partie visible est recentrée sur la position du média
+          w = w * (1 - (cl + cr) / 100); h = h * (1 - (ct + cb) / 100); x = cx - w / 2; y = cy - h / 2;
+        }
+        return { x: x / vw * 100, y: y / vh * 100, w: w / vw * 100, h: h / vh * 100 }; };
+      setTimeout(() => window.parent.postMessage({ type: 'alert-rects', media: rect(mediaEl), text: rect(textEl) }, '*'), 120);
+    }
+
+    await new Promise(r => setTimeout(r, dur * 1000 + 150));
+    root.remove();
+    if (current === root) current = null;
+  }
+
+  // ── Screamer : prioritaire, par-dessus tout ──
+  let audioCtx = null;
+  function synthScream(volume) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const t0 = audioCtx.currentTime, len = 1.4;
+      const master = audioCtx.createGain();
+      master.gain.setValueAtTime(0.0001, t0);
+      master.gain.exponentialRampToValueAtTime(Math.max(0.05, volume) * 0.9, t0 + 0.03);
+      master.gain.exponentialRampToValueAtTime(0.0001, t0 + len);
+      master.connect(audioCtx.destination);
+      [1, 1.5, 2.01].forEach((m, i) => {
+        const o = audioCtx.createOscillator();
+        o.type = i === 0 ? 'sawtooth' : 'square';
+        o.frequency.setValueAtTime(500 * m, t0);
+        o.frequency.exponentialRampToValueAtTime(1500 * m, t0 + 0.25);
+        o.frequency.exponentialRampToValueAtTime(700 * m, t0 + len);
+        const g = audioCtx.createGain(); g.gain.value = i === 0 ? 0.6 : 0.25;
+        o.connect(g); g.connect(master); o.start(t0); o.stop(t0 + len);
+      });
+      const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * len, audioCtx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+      const n = audioCtx.createBufferSource(); n.buffer = buf;
+      const ng = audioCtx.createGain(); ng.gain.value = 0.5;
+      n.connect(ng); ng.connect(master); n.start(t0);
+    } catch (e) { console.error(e); }
+  }
+  let screamTimer = null;
+  function showScreamer(p) {
+    clearTimeout(screamTimer);
+    scream.className = 'on' + (p.shake ? ' shake' : '');
+    scream.innerHTML = p.image ? '<img src="' + media('images', p.image) + '" alt="">' : '<div class="face">💀</div>';
+    if (p.flash) { flash.classList.remove('go'); void flash.offsetWidth; flash.classList.add('go'); }
+    if (p.sound) playSound(p.sound, p.volume); else synthScream(p.volume == null ? 1 : p.volume);
+    const dur = Math.max(0.5, p.duration || 1.8);
+    screamTimer = setTimeout(() => {
+      scream.classList.add('out');
+      setTimeout(() => { scream.className = ''; scream.innerHTML = ''; }, 280);
+    }, dur * 1000);
+  }
+
+  // ── Réception : bus d'overlay (OBS) ou postMessage de l'éditeur (aperçu) ──
+  function handleAlert(data) {
+    if (data.type === 'stream_alert' && data.variant) enqueue({ variant: data.variant, vars: data.vars || {} });
+    else if (data.type === 'screamer') showScreamer(data);
+  }
+  if (PREVIEW) {
+    window.addEventListener('message', (e) => {
+      const d = e.data || {};
+      if (d.type !== 'alert-preview') return;
+      queue.length = 0;
+      if (current) { current.remove(); current = null; }
+      document.querySelectorAll('.alert').forEach(a => a.remove());
+      busy = false;
+      enqueue({ variant: d.variant, vars: d.vars || { user: 'PseudoTest', months: 3, count: 5, bits: 500, viewers: 42 } });
+    });
+    window.parent.postMessage({ type: 'alert-ready' }, '*');
+  } else if (typeof SharedWorker !== 'undefined') {
+    try {
+      const worker = new SharedWorker('/api/labels/worker.js');
+      worker.port.onmessage = (e) => {
+        const env = JSON.parse(e.data);
+        if (env.channel === 'alerts') handleAlert(env.data);
+      };
+      worker.port.start();
+    } catch (e) { console.error('SharedWorker indisponible :', e); }
+  }
+</script>
+</body>
+</html>

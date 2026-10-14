@@ -1,4 +1,4 @@
-{# Style commun des labels (police, couleurs, icônes) réglé dans /admin/labels. Inclus avant </head> de chaque label. #}
+{# Style des labels (thème global + réglages propres à chaque label) réglé dans /admin/labels. Inclus avant </head>. #}
 <style>html.lbl-wait { visibility: hidden; }</style>
 <style id="lbl-style"></style>
 <script>
@@ -15,7 +15,15 @@
     setTimeout(function () { root.classList.remove('lbl-wait'); }, 1500);
 
     var styleEl = document.getElementById('lbl-style');
-    var fontLink = null, lastSig = null, origIcon = null;
+    var fontLink = null, lastSig = null, origIcon = null, origLogoHtml = null;
+
+    var KEYFRAMES =
+        '@keyframes lbl-pulse{0%{transform:scale(1)}50%{transform:scale(1.2)}100%{transform:scale(1)}}' +
+        '@keyframes lbl-spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}' +
+        '@keyframes lbl-bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}' +
+        '@keyframes lbl-shake{0%,100%{transform:rotate(0)}25%{transform:rotate(-12deg)}75%{transform:rotate(12deg)}}';
+    var ANIMS = { pulse: 'lbl-pulse 1.5s ease-in-out infinite', spin: 'lbl-spin 3s linear infinite',
+                  bounce: 'lbl-bounce 1s ease-in-out infinite', shake: 'lbl-shake .6s ease-in-out infinite', none: 'none' };
 
     function loadFont(name) {
         if (fontLink) { fontLink.remove(); fontLink = null; }
@@ -26,43 +34,112 @@
         document.head.appendChild(fontLink);
     }
 
-    function apply(s) {
-        var sig = JSON.stringify(s);
+    // Réglages effectifs : thème global, puis réglages propres à ce label (un champ vide ne change rien)
+    function effective(s) {
+        var e = {}, k;
+        for (k in s) if (k !== 'labels') e[k] = s[k];
+        var own = (s.labels && s.labels[KEY]) || {};
+        for (k in own) if (own[k] !== '' && own[k] != null) e[k] = own[k];
+        return e;
+    }
+
+    function gradient(angle, colors) {
+        var c = colors.filter(function (x) { return x; });
+        if (c.length < 2) return '';
+        return 'linear-gradient(' + (angle === '' || angle == null ? 90 : parseInt(angle, 10)) + 'deg,' + c.join(',') + ')';
+    }
+
+    // Le script est dans <head> : le <body> (et donc l'icône) n'existe pas encore au premier appel
+    function whenReady(fn) {
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
+        else fn();
+    }
+
+    function apply(raw) {
+        var sig = JSON.stringify(raw);
         if (sig === lastSig) return;
         lastSig = sig;
+        var s = effective(raw);
 
-        var body = [], text = [], logo = [];
+        var body = [], text = [], logo = [], logoI = [];
         if (s.font)   body.push("font-family:'" + s.font.replace(/'/g, '') + "','Montserrat',sans-serif !important");
         if (s.weight) body.push('font-weight:' + s.weight + ' !important');
         if (s.size)   body.push('font-size:' + parseInt(s.size, 10) + 'px !important');
-        if (s.color)  body.push('color:' + s.color + ' !important');
         if (s.spacing !== '' && s.spacing != null) text.push('letter-spacing:' + parseFloat(s.spacing) + 'px !important');
-        if (s.glow) {
-            var shadow = '0 0 6px ' + s.glow + ',0 0 16px ' + s.glow + ',2px 2px 4px rgba(0,0,0,.85)';
-            body.push('text-shadow:' + shadow + ' !important');
-            text.push('text-shadow:' + shadow + ' !important');
-        }
-        if (s.icon_color) logo.push('color:' + s.icon_color + ' !important');
+        if (s.uppercase) text.push('text-transform:uppercase !important');
 
-        styleEl.textContent =
+        // Texte : dégradé ou couleur unie
+        var tg = s.text_mode === 'gradient' ? gradient(s.grad_angle, [s.grad1, s.grad2, s.grad3]) : '';
+        if (tg) {
+            // text-shadow ne marche pas avec un texte dégradé : la lueur passe par drop-shadow
+            text.push('background:' + tg + ' !important', '-webkit-background-clip:text !important',
+                      'background-clip:text !important', '-webkit-text-fill-color:transparent !important',
+                      'color:transparent !important', 'text-shadow:none !important');
+            if (s.glow) text.push('filter:drop-shadow(0 0 6px ' + s.glow + ') drop-shadow(0 0 14px ' + s.glow + ') !important');
+        } else {
+            if (s.color) body.push('color:' + s.color + ' !important');
+            if (s.glow) {
+                var shadow = '0 0 6px ' + s.glow + ',0 0 16px ' + s.glow + ',2px 2px 4px rgba(0,0,0,.85)';
+                body.push('text-shadow:' + shadow + ' !important');
+                text.push('text-shadow:' + shadow + ' !important');
+            }
+        }
+
+        // Icône : couleur / dégradé / animation / masquée
+        var ig = s.icon_mode === 'gradient' ? gradient(s.icon_grad_angle, [s.icon_grad1, s.icon_grad2]) : '';
+        if (ig) {
+            logoI.push('background:' + ig + ' !important', '-webkit-background-clip:text !important',
+                       'background-clip:text !important', '-webkit-text-fill-color:transparent !important',
+                       'color:transparent !important', 'text-shadow:none !important', 'display:inline-block !important');
+            if (s.glow) logo.push('filter:drop-shadow(0 0 6px ' + s.glow + ') !important');
+        } else if (s.icon_color) {
+            logo.push('color:' + s.icon_color + ' !important');
+        }
+        if (s.icon_anim && ANIMS[s.icon_anim]) logo.push('animation:' + ANIMS[s.icon_anim] + ' !important', 'display:inline-block !important');
+        if (s.icon_hidden) logo.push('display:none !important');
+
+        styleEl.textContent = KEYFRAMES +
             'body{' + body.join(';') + '}' +
             '#chiffre,#horloge,#text-container,.cursor{' + text.join(';') + '}' +
-            '.logo{' + logo.join(';') + '}';
+            '.logo{' + logo.join(';') + '}' +
+            '.logo i,.logo span{' + logoI.join(';') + '}';
 
         loadFont(s.font);
 
+        // Icône affichée : classe FontAwesome (réglage du label, ou jeu Halloween, ou celle de la page) ou texte / emoji
+        var logoEl = document.querySelector('.logo');
         var icon = document.querySelector('.logo i');
-        if (icon) {
-            if (origIcon === null) origIcon = icon.className;
-            icon.className = (s.icon_set === 'halloween' && HALLOWEEN_ICONS[KEY]) ? HALLOWEEN_ICONS[KEY] : origIcon;
+        if (logoEl) {
+            if (origLogoHtml === null) origLogoHtml = logoEl.innerHTML;
+            if (icon && origIcon === null) origIcon = icon.className;
+            if (s.icon_text) {
+                logoEl.innerHTML = '<span style="font-style:normal">' + s.icon_text.replace(/</g, '&lt;') + '</span>';
+            } else {
+                if (logoEl.innerHTML !== origLogoHtml) logoEl.innerHTML = origLogoHtml;
+                icon = document.querySelector('.logo i');
+                if (icon) {
+                    icon.className = s.icon ? s.icon
+                        : ((s.icon_set === 'halloween' && HALLOWEEN_ICONS[KEY]) ? HALLOWEEN_ICONS[KEY] : origIcon);
+                }
+            }
         }
         root.classList.remove('lbl-wait');
+    }
+
+    // Aperçu depuis l'admin : ?preview=<style encodé en base64> (pas de relecture du serveur)
+    var preview = new URLSearchParams(location.search).get('preview');
+    if (preview) {
+        try {
+            var pv = JSON.parse(decodeURIComponent(escape(atob(preview))));
+            whenReady(function () { apply(pv); });
+        } catch (e) { root.classList.remove('lbl-wait'); }
+        return;
     }
 
     function refresh() {
         fetch('/api/labels/style?t=' + Date.now(), { cache: 'no-store' })
             .then(function (r) { return r.json(); })
-            .then(apply)
+            .then(function (st) { whenReady(function () { apply(st); }); })
             .catch(function () { root.classList.remove('lbl-wait'); });
     }
     refresh();

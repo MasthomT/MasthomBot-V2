@@ -20,6 +20,7 @@ KNOWN_BY_ID = {
 # Branchements par titre (voir eventsub_service)
 KNOWN_BY_TITLE = {
     "polaroïd": "Polaroïd (bot)",
+    "screamer": "Screamer (bot)",
 }
 
 

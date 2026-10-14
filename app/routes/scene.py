@@ -46,13 +46,25 @@ NO_CACHE = {"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "n
 FULL = dict(nx=0, ny=0, nw=1920, nh=1080, full=True)
 
 
-def _w(key, label, group, url, nx, ny, nw, nh, x=None, y=None, full=False, z=10, enabled=False):
+def _w(key, label, group, url, nx, ny, nw, nh, x=None, y=None, full=False, z=10, enabled=False, scale=1.0):
+    x = nx if x is None else x
+    y = ny if y is None else y
+    # dx/dy/dscale : réglage « d'origine » (celui d'un widget jamais déplacé, et du bouton « Position d'origine »)
     return dict(key=key, label=label, group=group, url=url, nx=nx, ny=ny, nw=nw, nh=nh,
-                x=nx if x is None else x, y=ny if y is None else y, full=full, z=z, enabled=enabled,
+                x=x, y=y, full=full, z=z, enabled=enabled, dx=x, dy=y, dscale=scale,
                 fw=1920, fh=1080, embed="ok", note="")
 
 
+# Les écrans de titre se placent à 100 % : leur taille (140 %) est réglée dans la page Titres
+TITLE = dict(**FULL, z=42)
+
+
 STATIC_WIDGETS = [
+    # Écrans de titre (page « Titres ») : groupe à part, en haut de la liste des widgets
+    _w("titre_auto",   "Titre · Automatique (début / pause / fin selon la scène OBS)", "Titres", "/overlay/titre/auto", **TITLE),
+    _w("titre_start",  "Titre · Début de live (avec décompte)", "Titres", "/overlay/titre/start", **TITLE),
+    _w("titre_brk",    "Titre · Pause",                         "Titres", "/overlay/titre/brk",   **TITLE),
+    _w("titre_end",    "Titre · Fin de live",                   "Titres", "/overlay/titre/end",   **TITLE),
     # Lecteur séparé en 3 widgets : une même page, filtrée par ?only= (voir /shoutout dans server.js)
     _w("so",           "Shoutout (clip d'un streamer)", "Écran", "{NODE}/shoutout?only=so",     480, 190, 960, 700, z=5),
     _w("replay",       "Replay (clip de ta chaîne)",    "Écran", "{NODE}/shoutout?only=replay", 480, 190, 960, 700, z=5),
@@ -68,6 +80,7 @@ STATIC_WIDGETS = [
     _w("wheels",       "Roues",            "Roues", "/overlay/wheels",        660, 240, 614, 651, z=15),
     _w("credits",      "Générique de fin",          "Écran", "/overlay/credits",       **FULL, z=30),
     _w("brb",          "BRB / pause",               "Écran", "{NODE}/brb",             **FULL, z=40),
+    _w("events",       "Animations d'alertes (follow, sub, raid, screamer)", "Écran", "/overlay/events", **FULL, z=45),
     _w("felix",        "Fel-X (IA)",                "Écran", "/overlay/felix",         830, 450, 260, 180),
     _w("lbl_followers", "Label · Followers",        "Labels", "/overlay/followers",    0, 0, 200, 50,  x=20, y=20),
     _w("lbl_viewers",   "Label · Viewers",          "Labels", "/overlay/viewers",      0, 0, 110, 50,  x=20, y=100),
@@ -96,6 +109,8 @@ async def _ensure_table():
                 created_at TIMESTAMP NOT NULL DEFAULT NOW()
             )
         """)
+        await db.execute("ALTER TABLE scenes ADD COLUMN IF NOT EXISTS frame BOOLEAN NOT NULL DEFAULT FALSE")
+        await db.execute("ALTER TABLE scenes ADD COLUMN IF NOT EXISTS frame_color TEXT NOT NULL DEFAULT '#ff7a18'")
         await db.execute("""
             CREATE TABLE IF NOT EXISTS scene_widgets (
                 scene_slug TEXT NOT NULL DEFAULT 'scene',
@@ -181,7 +196,7 @@ async def _all_widgets(scene: str = "scene") -> list[dict]:
         w["enabled"] = bool(s["enabled"]) if s else w["enabled"]
         w["x"] = int(s["x"]) if s else w["x"]
         w["y"] = int(s["y"]) if s else w["y"]
-        w["scale"] = float(s["scale"]) if s else 1.0
+        w["scale"] = float(s["scale"]) if s else w["dscale"]
         w["z"] = int(s["z"]) if s else w["z"]
     return widgets
 
@@ -203,7 +218,8 @@ class ScenePayload(BaseModel):
 
 @router.get("/admin/scene", response_class=HTMLResponse, dependencies=[Depends(require_admin)])
 async def admin_scene_page(request: Request):
-    return templates.TemplateResponse(request=request, name="admin/scene_manager.html")
+    return templates.TemplateResponse(request=request, name="admin/scene_manager.html",
+                                      context={"embed": request.query_params.get("embed") == "1"})
 
 
 # ── Scènes (une disposition de widgets par scène) ───────────────────────────
@@ -247,7 +263,7 @@ async def _scene_or_404(slug: str | None) -> dict:
 async def admin_scenes_list():
     await _ensure_table()
     async with get_db_connection() as db:
-        c = await db.execute("SELECT slug, name FROM scenes ORDER BY created_at, slug")
+        c = await db.execute("SELECT slug, name, frame, frame_color FROM scenes ORDER BY created_at, slug")
         rows = [dict(r) for r in await c.fetchall()]
     scenes = []
     for r in rows:
@@ -306,6 +322,22 @@ async def admin_scenes_rename(slug: str, payload: SceneName, request: Request):
     return {"status": "ok", "slug": new_slug, "name": name, "path": f"/overlay/{new_slug}"}
 
 
+class FramePayload(BaseModel):
+    frame: bool = False
+    frame_color: str = "#ff7a18"
+
+
+@router.put("/admin/api/scenes/{slug}/frame", dependencies=[Depends(require_admin)])
+async def admin_scene_frame(slug: str, payload: FramePayload):
+    scene = await _scene_or_404(slug)
+    if not re.fullmatch(r"#[0-9a-fA-F]{6}", payload.frame_color):
+        raise HTTPException(status_code=400, detail="Couleur invalide.")
+    async with get_db_connection() as db:
+        await db.execute("UPDATE scenes SET frame = $1, frame_color = $2 WHERE slug = $3",
+                         (payload.frame, payload.frame_color, scene["slug"]))
+    return {"status": "ok", "frame": payload.frame, "frame_color": payload.frame_color}
+
+
 @router.delete("/admin/api/scenes/{slug}", dependencies=[Depends(require_admin)])
 async def admin_scenes_delete(slug: str):
     scene = await _scene_or_404(slug)
@@ -317,6 +349,100 @@ async def admin_scenes_delete(slug: str):
         await db.execute("DELETE FROM scenes WHERE slug = $1", (scene["slug"],))
     _clear_bg(scene["slug"])
     return {"status": "ok"}
+
+
+class CopyPayload(BaseModel):
+    targets: list[str]
+    keys: list[str] | None = None        # None = tous les widgets
+    background: bool = False
+
+
+class ImportPayload(BaseModel):
+    name: str
+    widgets: list[dict]
+
+
+async def _effective_rows(slug: str, keys: list[str] | None) -> list[dict]:
+    rows = []
+    for w in await _all_widgets(slug):
+        if keys is None or w["key"] in keys:
+            rows.append({"key": w["key"], "enabled": bool(w["enabled"]), "x": int(w["x"]), "y": int(w["y"]),
+                         "scale": float(w["scale"]), "z": int(w["z"])})
+    return rows
+
+
+@router.post("/admin/api/scenes/{slug}/copy", dependencies=[Depends(require_admin)])
+async def admin_scenes_copy(slug: str, payload: CopyPayload):
+    """Copie l'état (activé, position, échelle, ordre) de tout ou partie des widgets vers d'autres scènes."""
+    src = await _scene_or_404(slug)
+    targets = []
+    for t in payload.targets:
+        if t == src["slug"]:
+            continue
+        targets.append((await _scene_or_404(t))["slug"])
+    if not targets:
+        raise HTTPException(status_code=400, detail="Choisis au moins une autre scène.")
+    rows = await _effective_rows(src["slug"], payload.keys)
+    if not rows:
+        raise HTTPException(status_code=400, detail="Aucun widget à copier.")
+    async with get_db_connection() as db:
+        for t in targets:
+            for r in rows:
+                await db.execute(
+                    """INSERT INTO scene_widgets (scene_slug, widget_key, enabled, x, y, scale, z)
+                       VALUES ($1, $2, $3, $4, $5, $6, $7)
+                       ON CONFLICT (scene_slug, widget_key) DO UPDATE
+                       SET enabled = EXCLUDED.enabled, x = EXCLUDED.x, y = EXCLUDED.y,
+                           scale = EXCLUDED.scale, z = EXCLUDED.z""",
+                    (t, r["key"], r["enabled"], r["x"], r["y"], r["scale"], r["z"]),
+                )
+    if payload.background:
+        bg = _bg_path(src["slug"])
+        if bg:
+            for t in targets:
+                _clear_bg(t)
+                shutil.copyfile(bg, os.path.join(BG_DIR, f"bg_{t}" + os.path.splitext(bg)[1]))
+    return {"status": "ok", "widgets": len(rows), "scenes": targets}
+
+
+@router.get("/admin/api/scenes/{slug}/export", dependencies=[Depends(require_admin)])
+async def admin_scenes_export(slug: str):
+    sc = await _scene_or_404(slug)
+    return {"format": "masthbot-scene", "version": 1, "name": sc["name"], "widgets": await _effective_rows(sc["slug"], None)}
+
+
+@router.post("/admin/api/scenes/import", dependencies=[Depends(require_admin)])
+async def admin_scenes_import(payload: ImportPayload, request: Request):
+    """Crée une nouvelle scène à partir d'un fichier exporté (les widgets inconnus sont ignorés)."""
+    await _ensure_table()
+    name = payload.name.strip()
+    slug = _url_slug(name)
+    if not name or not slug:
+        raise HTTPException(status_code=400, detail="Donne un nom à la scène importée.")
+    if slug in _reserved_slugs(request):
+        raise HTTPException(status_code=400, detail=f"« {slug} » est déjà utilisé par un autre overlay du bot.")
+    known = {w["key"] for w in await _all_widgets("scene")}
+    async with get_db_connection() as db:
+        c = await db.execute("SELECT 1 FROM scenes WHERE slug = $1", (slug,))
+        if await c.fetchone():
+            raise HTTPException(status_code=400, detail=f"Une scène « {slug} » existe déjà : change le nom.")
+        await db.execute("INSERT INTO scenes (slug, name) VALUES ($1, $2)", (slug, name))
+        count = 0
+        for w in payload.widgets:
+            try:
+                key = str(w["key"])
+                if key not in known:
+                    continue
+                scale = min(max(float(w.get("scale", 1)), 0.05), 5.0)
+                await db.execute(
+                    """INSERT INTO scene_widgets (scene_slug, widget_key, enabled, x, y, scale, z)
+                       VALUES ($1, $2, $3, $4, $5, $6, $7)""",
+                    (slug, key, bool(w.get("enabled")), int(w.get("x", 0)), int(w.get("y", 0)), scale, int(w.get("z", 10))),
+                )
+                count += 1
+            except (KeyError, TypeError, ValueError):
+                continue
+    return {"status": "ok", "slug": slug, "name": name, "path": f"/overlay/{slug}", "widgets": count}
 
 
 @router.get("/admin/api/scene", dependencies=[Depends(require_admin)])
@@ -530,6 +656,12 @@ async def _node_post(path: str, payload: dict) -> dict:
 
 @router.post("/admin/api/scene/test/{key}", dependencies=[Depends(require_admin)])
 async def admin_scene_test(key: str):
+    if key == "events":
+        from app.services import alerts_service
+        await alerts_service.fire_alert("follow", "PseudoTest", force=True)
+        return {"ok": True, "message": "Animation de follow envoyée (les autres se testent dans /admin/alerts)."}
+    if key.startswith("titre_"):
+        return {"ok": False, "message": "Rien à déclencher : l'écran de titre s'affiche tel quel (décompte : page Titres)."}
     if key in ("credits", "brb"):
         return {"ok": False, "message": "Pas de test ici : le générique et le BRB se lancent depuis leurs propres pages."}
     if key.startswith("obs_"):
@@ -670,7 +802,11 @@ async def scene_layout(scene: str = "scene"):
     keys = ("key", "url", "nx", "ny", "nw", "nh", "fw", "fh", "x", "y", "scale", "z")
     widgets = [{k: w[k] for k in keys} for w in await _all_widgets(scene.lower())
                if w["enabled"] and w["embed"] not in ("local", "blocked")]
-    return {"widgets": sorted(widgets, key=lambda w: w["z"])}
+    async with get_db_connection() as db:
+        c = await db.execute("SELECT frame, frame_color FROM scenes WHERE slug = $1", (scene.lower(),))
+        row = await c.fetchone()
+    return {"widgets": sorted(widgets, key=lambda w: w["z"]),
+            "frame": bool(row["frame"]) if row else False, "frame_color": row["frame_color"] if row else "#ff7a18"}
 
 
 # Doit rester le DERNIER chemin /overlay/... déclaré : les overlays du bot (déclarés avant) l'emportent,

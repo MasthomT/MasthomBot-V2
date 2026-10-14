@@ -520,7 +520,7 @@ class MasthbotTwitch(commands.Bot):
             NATIVE_COMMANDS = {
                 'so', 'checkcopains', 'sondage', 'testpoll',
                 'level', 'rang', 'timer', 'chrono', 'voteclips', 'addvip', 'vip',
-                'permit', 'unpermit', 'play', 'renotif',
+                'permit', 'unpermit', 'play', 'screamer', 'renotif',
                 'de', 'uptime', 'counter',
             }
             if cmd_name in NATIVE_COMMANDS:
@@ -1184,6 +1184,16 @@ class MasthbotTwitch(commands.Bot):
                 
         leaderboard_str = " | ".join(leaderboard_snippet)
         await ctx.send(await syscmd_msg("rang", "rank", user=ctx.author.name, rank=rank, leaderboard=leaderboard_str))
+
+    @commands.command(name='screamer')
+    async def cmd_screamer(self, ctx):
+        from app.services import alerts_service
+        from app.services.bot_system_commands_service import msg as syscmd_msg
+        ok = await alerts_service.fire_screamer(source="commande", user=ctx.author.name)
+        if ok:
+            await ctx.send(await syscmd_msg("screamer", "fired", user=ctx.author.name))
+        else:
+            await ctx.send(await syscmd_msg("screamer", "disabled"))
 
     @commands.command(name='timer')
     async def cmd_timer(self, ctx, time_str: str = None, *, label: str = "OBJECTIF"):

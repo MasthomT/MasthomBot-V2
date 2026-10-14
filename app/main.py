@@ -37,7 +37,7 @@ from slowapi.errors import RateLimitExceeded
 from app.core.rate_limit import limiter
 
 # --- IMPORT DES ROUTES ---
-from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes, partners, admin_commands, wheel, scene, podium, channel_rewards, label_style
+from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes, partners, admin_commands, wheel, scene, podium, channel_rewards, label_style, alerts_admin, overlays_hub, titles
 from app.routes.credits import router as credits_router
 from app.routes.premium import router as premium_router
 from app.routes.games import router as games_router, init_games_tables
@@ -268,6 +268,11 @@ app.include_router(podium.router)
 app.include_router(channel_rewards.router)
 app.include_router(label_style.public_router)
 app.include_router(label_style.admin_router)
+app.include_router(overlays_hub.router)
+app.include_router(titles.public_router)
+app.include_router(titles.admin_router)
+app.include_router(alerts_admin.public_router)
+app.include_router(alerts_admin.admin_router)
 app.include_router(scene.router)
 
 # ==========================================
@@ -349,6 +354,7 @@ if __name__ == "__main__":
     media_app.add_api_route("/api/credits/data", get_credits_data, methods=["GET"])
     # Labels également disponibles sur ce port dédié, pour libérer des connexions sur 8000.
     media_app.include_router(labels_routes.router)
+    media_app.include_router(label_style.public_router)   # style/thème lisible par les pages locales d'OBS (CORS *)
 
     def _make_server(port):
         return uvicorn.Server(uvicorn.Config(

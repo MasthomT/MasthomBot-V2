@@ -43,9 +43,32 @@
 </head>
 <body class="font-sans antialiased flex min-h-screen">
 
-    {% include 'admin/sidebar.html' %}
+    {% if not embed %}{% include 'admin/sidebar.html' %}{% endif %}
 
-    <main class="flex-1 p-6 md:p-10 min-w-0">
+    <div id="copyModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6">
+        <div class="config-card rounded-2xl w-full max-w-lg p-5">
+            <h3 class="text-lg font-black text-white mb-1">Copier vers d'autres scènes</h3>
+            <p class="text-xs text-slate-400 mb-4">Depuis « <span id="cpSrc" class="text-white"></span> ». Les réglages copiés écrasent ceux des scènes choisies pour ces widgets (actif ou non, position, taille, ordre).</p>
+            <div class="text-[10px] font-black tracking-widest uppercase text-slate-500 mb-2">Vers quelles scènes ?</div>
+            <div id="cpTargets" class="space-y-1 mb-4 text-sm"></div>
+            <div class="text-[10px] font-black tracking-widest uppercase text-slate-500 mb-2">Quels widgets ?</div>
+            <div class="space-y-1 mb-3 text-sm">
+                <label class="flex items-center gap-2"><input type="radio" name="cpWhat" value="all" checked> Tous les widgets de la scène</label>
+                <label class="flex items-center gap-2"><input type="radio" name="cpWhat" value="active"> Seulement ceux qui sont activés</label>
+                <label class="flex items-center gap-2"><input type="radio" name="cpWhat" value="selected"> Seulement le widget sélectionné : <span id="cpSel" class="text-slate-400"></span></label>
+                <label class="flex items-center gap-2"><input type="radio" name="cpWhat" value="group"> Seulement un groupe :
+                    <select id="cpGroup" class="input-dark rounded-lg px-2 py-1 text-xs"></select></label>
+            </div>
+            <label class="flex items-center gap-2 text-sm mb-4"><input type="checkbox" id="cpBg"> Copier aussi l'image de fond de l'éditeur</label>
+            <div class="flex items-center gap-3">
+                <button id="cpGo" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold">Copier</button>
+                <button id="cpCancel" class="px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-sm font-bold">Annuler</button>
+                <span id="cpMsg" class="text-xs text-slate-400"></span>
+            </div>
+        </div>
+    </div>
+
+    <main class="flex-1 {% if embed %}p-4{% else %}p-6 md:p-10{% endif %} min-w-0">
         <header class="mb-6 flex flex-wrap items-start justify-between gap-4">
             <div>
                 <h1 class="text-3xl font-extrabold text-white tracking-tight">Scène OBS</h1>
@@ -64,7 +87,14 @@
             <select id="sceneSel" class="input-dark rounded-lg px-3 py-1.5 text-sm font-bold"></select>
             <button id="newSceneBtn" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-bold"><i class="fas fa-plus mr-1"></i>Nouvelle scène</button>
             <button id="renameSceneBtn" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold"><i class="fas fa-pen mr-1"></i>Renommer</button>
+            <button id="copyToBtn" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold" title="Copier les réglages de cette scène vers d'autres scènes"><i class="fas fa-share mr-1"></i>Copier vers…</button>
+            <button id="exportBtn" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold" title="Télécharger cette scène dans un fichier"><i class="fas fa-file-export mr-1"></i>Exporter</button>
+            <label class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold cursor-pointer" title="Créer une scène depuis un fichier exporté"><i class="fas fa-file-import mr-1"></i>Importer
+                <input type="file" id="importFile" accept=".json,application/json" class="hidden"></label>
             <button id="delSceneBtn" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-red-600 text-xs font-bold"><i class="fas fa-trash mr-1"></i>Supprimer</button>
+            <label class="flex items-center gap-2 text-xs font-bold text-slate-300 ml-2" title="Un cadre en marge de l'écran avec une aura colorée, derrière tous les widgets de cette scène">
+                <input type="checkbox" id="frameOn"> Cadre aura</label>
+            <input type="color" id="frameColor" value="#ff7a18" class="h-8 w-12 rounded bg-transparent" title="Couleur de l'aura">
             <span id="sceneMsg" class="text-xs text-slate-400"></span>
         </div>
         <div class="config-card rounded-2xl p-4 mb-6 flex flex-wrap items-center gap-3">
@@ -93,6 +123,7 @@
                 <div id="props" class="config-card rounded-2xl p-4">
                     <p class="text-slate-500 text-sm">Sélectionne un widget pour régler sa position.</p>
                 </div>
+                <div class="config-card rounded-2xl p-3" id="layers"></div>
                 <div class="config-card rounded-2xl p-3 max-h-[60vh] overflow-y-auto custom-scrollbar" id="list"></div>
             </aside>
         </div>
@@ -108,6 +139,7 @@ let dirty = false;
 const canvas = document.getElementById('canvas');
 
 const $ = (id) => document.getElementById(id);
+const esc = (t) => String(t ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 const factor = () => canvas.clientWidth / W;
 const find = (k) => widgets.find(w => w.key === k);
 const noEmbed = (w) => w.embed === 'local' || w.embed === 'blocked';
@@ -134,13 +166,60 @@ async function load() {
     widgets = (await res.json()).widgets;
     selected = null;
     $('sceneUrl').value = location.origin + '/overlay/' + sceneSlug;
+    syncFrame();
     try { localStorage.setItem('sceneCurrent', sceneSlug); } catch (e) {}
     setDirty(false);
     renderAll();
     await loadBg();
 }
 
-function renderAll() { renderCanvas(); renderList(); renderProps(); }
+function syncFrame() {
+    const sc = scenes.find(x => x.slug === sceneSlug) || {};
+    $('frameOn').checked = !!sc.frame; $('frameColor').value = sc.frame_color || '#ff7a18';
+}
+async function saveFrame() {
+    const sc = scenes.find(x => x.slug === sceneSlug); if (!sc) return;
+    sc.frame = $('frameOn').checked; sc.frame_color = $('frameColor').value;
+    const r = await fetch('/admin/api/scenes/' + encodeURIComponent(sceneSlug) + '/frame', { method: 'PUT',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ frame: sc.frame, frame_color: sc.frame_color }) });
+    $('sceneMsg').textContent = r.ok ? 'Cadre enregistré ✓ (visible dans OBS en ~5 s)' : 'Erreur ' + r.status;
+}
+$('frameOn').addEventListener('change', saveFrame);
+$('frameColor').addEventListener('change', saveFrame);
+
+function renderAll() { renderCanvas(); renderLayers(); renderList(); renderProps(); }
+
+// ── ordre d'affichage : en haut de la liste = devant tout le reste ──
+function layerOrder() {
+    return widgets.map((w, i) => ({ w, i })).filter(o => o.w.enabled)
+        .sort((a, b) => (b.w.z - a.w.z) || (a.i - b.i)).map(o => o.w);   // du plus devant au plus derrière
+}
+function moveLayer(key, to) {   // to : 'front' | 'back' | 'up' | 'down'
+    const ord = layerOrder(), i = ord.findIndex(w => w.key === key);
+    if (i < 0) return;
+    const [w] = ord.splice(i, 1);
+    const j = to === 'front' ? 0 : to === 'back' ? ord.length : to === 'up' ? Math.max(0, i - 1) : Math.min(ord.length, i + 1);
+    ord.splice(j, 0, w);
+    ord.forEach((x, k) => { x.z = (ord.length - k) * 10; });   // renumérote : le premier de la liste a le plus grand z
+    setDirty(true); renderAll();
+}
+function renderLayers() {
+    const ord = layerOrder();
+    if (!ord.length) { $('layers').innerHTML = ''; return; }
+    $('layers').innerHTML = '<div class="px-1 pb-1 text-[10px] font-black text-slate-500 uppercase tracking-widest">Ordre d\'affichage</div>'
+      + '<p class="text-[11px] text-slate-500 px-1 mb-2">Le haut de la liste s\'affiche <strong>devant</strong> les autres (ex : le titre devant le BRB).</p>'
+      + ord.map((w, i) => '<div class="row' + (w.key === selected ? ' sel' : '') + '" data-lk="' + w.key + '">'
+          + '<span class="text-[10px] text-slate-500 w-4 text-right">' + (i + 1) + '</span>'
+          + '<span class="flex-1 truncate">' + w.label + '</span>'
+          + '<button class="px-1.5 text-slate-300 hover:text-white" data-mv="front" title="Tout devant"><i class="fas fa-angles-up"></i></button>'
+          + '<button class="px-1.5 text-slate-300 hover:text-white" data-mv="up" title="Monter d\'un cran (plus devant)"><i class="fas fa-angle-up"></i></button>'
+          + '<button class="px-1.5 text-slate-300 hover:text-white" data-mv="down" title="Descendre d\'un cran (plus derrière)"><i class="fas fa-angle-down"></i></button>'
+          + '<button class="px-1.5 text-slate-300 hover:text-white" data-mv="back" title="Tout derrière"><i class="fas fa-angles-down"></i></button></div>').join('');
+    $('layers').querySelectorAll('[data-lk]').forEach(r => {
+        r.addEventListener('click', (e) => { if (e.target.closest('[data-mv]')) return; selected = r.dataset.lk; renderAll(); });
+        r.querySelectorAll('[data-mv]').forEach(b => b.addEventListener('click', () => moveLayer(r.dataset.lk, b.dataset.mv)));
+    });
+}
 
 function renderCanvas() {
     canvas.innerHTML = '<img id="bg" alt="">';
@@ -196,6 +275,8 @@ function renderProps() {
       + field('X (px)', 'x', w.x) + field('Y (px)', 'y', w.y)
       + field('Échelle (%)', 'scale', Math.round(w.scale * 100)) + field('Ordre (z)', 'z', w.z)
       + '</div>'
+      + (w.enabled ? '<div class="flex gap-2 mt-3"><button id="toFront" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold flex-1"><i class="fas fa-angles-up mr-1"></i>Tout devant</button>'
+        + '<button id="toBack" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold flex-1"><i class="fas fa-angles-down mr-1"></i>Tout derrière</button></div>' : '')
       + '<p class="text-[11px] text-slate-500 mt-3">Taille affichée : ' + Math.round(w.nw * w.scale) + ' × ' + Math.round(w.nh * w.scale) + ' px'
       + (w.full ? ' · widget plein écran (se place par rapport au coin haut-gauche)' : '') + '</p>'
       + (w.note ? '<p class="text-[11px] mt-2 ' + (noEmbed(w) || w.embed === 'unknown' ? 'text-amber-400' : 'text-slate-400') + '">' + w.note + '</p>' : '')
@@ -207,8 +288,9 @@ function renderProps() {
         let v = parseFloat(inp.value); if (isNaN(v)) return;
         if (inp.dataset.f === 'scale') v = Math.max(5, v) / 100;
         w[inp.dataset.f] = (inp.dataset.f === 'scale') ? v : Math.round(v);
-        setDirty(true); renderCanvas();
+        setDirty(true); renderCanvas(); if (inp.dataset.f === 'z') renderLayers();
     }));
+    if ($('toFront')) { $('toFront').addEventListener('click', () => moveLayer(w.key, 'front')); $('toBack').addEventListener('click', () => moveLayer(w.key, 'back')); }
     $('testBtn').addEventListener('click', async () => {
         const msg = $('testMsg'); msg.textContent = 'Envoi…'; msg.className = 'block text-[11px] mt-2 text-slate-400';
         try {
@@ -219,7 +301,7 @@ function renderProps() {
         } catch (e) { msg.textContent = 'Erreur réseau'; msg.className = 'block text-[11px] mt-2 text-amber-400'; }
     });
     $('resetBtn').addEventListener('click', () => {
-        w.x = w.nx; w.y = w.ny; w.scale = 1; setDirty(true); renderAll();
+        w.x = w.dx ?? w.nx; w.y = w.dy ?? w.ny; w.scale = w.dscale ?? 1; setDirty(true); renderAll();
     });
 }
 function field(label, f, v) {
@@ -381,6 +463,65 @@ $('delSceneBtn').addEventListener('click', async () => {
         dirty = false; await loadScenes(); await load();
         sceneMsg('Scène supprimée.', false);
     } catch (e) { sceneMsg(e.message, true); }
+});
+
+// ───── Copier vers d'autres scènes / exporter / importer ─────
+function downloadJson(obj, filename) {
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+$('copyToBtn').addEventListener('click', async () => {
+    if (dirty && !confirm('Enregistrer d\'abord les modifications de cette scène ?')) return;
+    if (dirty) { $('saveBtn').click(); await new Promise(r => setTimeout(r, 700)); }
+    const others = scenes.filter(s => s.slug !== sceneSlug);
+    if (!others.length) { sceneMsg('Il n\'y a pas d\'autre scène : crée-en une d\'abord.', true); return; }
+    $('cpSrc').textContent = (scenes.find(s => s.slug === sceneSlug) || {}).name || sceneSlug;
+    $('cpTargets').innerHTML = others.map(s => '<label class="flex items-center gap-2"><input type="checkbox" data-cpt="' + s.slug + '"> ' + esc(s.name)
+        + ' <span class="text-xs text-slate-500">/overlay/' + esc(s.slug) + '</span></label>').join('');
+    const sel = widgets.find(w => w.key === selected);
+    $('cpSel').textContent = sel ? sel.label : '(aucun widget sélectionné)';
+    document.querySelector('input[name="cpWhat"][value="selected"]').disabled = !sel;
+    $('cpGroup').innerHTML = [...new Set(widgets.map(w => w.group))].map(g => '<option>' + esc(g) + '</option>').join('');
+    $('cpMsg').textContent = ''; $('copyModal').classList.remove('hidden');
+});
+$('cpCancel').addEventListener('click', () => $('copyModal').classList.add('hidden'));
+$('copyModal').addEventListener('click', (e) => { if (e.target === $('copyModal')) $('copyModal').classList.add('hidden'); });
+$('cpGo').addEventListener('click', async () => {
+    const targets = [...document.querySelectorAll('[data-cpt]:checked')].map(c => c.dataset.cpt);
+    if (!targets.length) { $('cpMsg').className = 'text-xs text-amber-400'; $('cpMsg').textContent = 'Choisis au moins une scène.'; return; }
+    const what = document.querySelector('input[name="cpWhat"]:checked').value;
+    let keys = null;
+    if (what === 'active') keys = widgets.filter(w => w.enabled).map(w => w.key);
+    else if (what === 'selected') keys = [selected];
+    else if (what === 'group') keys = widgets.filter(w => w.group === $('cpGroup').value).map(w => w.key);
+    if (keys && !keys.length) { $('cpMsg').className = 'text-xs text-amber-400'; $('cpMsg').textContent = 'Aucun widget dans ce choix.'; return; }
+    try {
+        const j = await api('POST', '/admin/api/scenes/' + encodeURIComponent(sceneSlug) + '/copy', { targets, keys, background: $('cpBg').checked });
+        $('copyModal').classList.add('hidden');
+        sceneMsg(j.widgets + ' widget(s) copié(s) vers ' + j.scenes.length + ' scène(s).', false);
+        await loadScenes(sceneSlug);
+    } catch (e) { $('cpMsg').className = 'text-xs text-amber-400'; $('cpMsg').textContent = e.message; }
+});
+$('exportBtn').addEventListener('click', async () => {
+    try {
+        const j = await api('GET', '/admin/api/scenes/' + encodeURIComponent(sceneSlug) + '/export');
+        downloadJson(j, 'scene-' + sceneSlug + '.json'); sceneMsg('Scène exportée.', false);
+    } catch (e) { sceneMsg(e.message, true); }
+});
+$('importFile').addEventListener('change', async (e) => {
+    const file = e.target.files[0]; e.target.value = ''; if (!file) return;
+    if (!confirmLeave()) return;
+    let obj;
+    try { obj = JSON.parse(await file.text()); } catch (err) { return sceneMsg('Fichier illisible (JSON attendu).', true); }
+    if (obj.format !== 'masthbot-scene' || !Array.isArray(obj.widgets)) return sceneMsg('Ce fichier n\'est pas une scène exportée.', true);
+    const name = prompt('Nom de la nouvelle scène :', obj.name || 'Scène importée');
+    if (!name) return;
+    try {
+        const j = await api('POST', '/admin/api/scenes/import', { name, widgets: obj.widgets });
+        await loadScenes(j.slug); await load();
+        sceneMsg('Scène importée : ' + j.path + ' (' + j.widgets + ' widgets).', false);
+    } catch (err) { sceneMsg(err.message, true); }
 });
 
 loadScenes().then(load);

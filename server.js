@@ -130,6 +130,7 @@ app.get('/worker.js', (req, res) => {
 let sourceMap = new Map();
 let obsReconnectTimeout = null; // 🛡️ Le filet de sécurité pour éviter le crash
 let obsConnected = false; // exposé via /api/health pour le dashboard de santé du bot
+let obsProgramScene = ''; // scène OBS en cours (écran de titre automatique : le navigateur OBS ne la donne pas toujours)
 
 async function refreshSourceMap() {
     try {
@@ -170,6 +171,7 @@ async function connectOBS() {
         // ⚡ On vérifie sur quelle scène on est au moment même de la connexion
         await refreshSourceMap();
         const data = await obs.call('GetCurrentProgramScene');
+        obsProgramScene = data.currentProgramSceneName || '';
         if (data.currentProgramSceneName === CONFIG.BRB_SCENE_NAME) {
             if (!brbLoopActive) {
                 currentScene = 'brb';
@@ -194,6 +196,7 @@ obs.on('ConnectionClosed', () => {
 // Node était déjà connecté (le cas normal en plein stream), le BRB ne se déclenchait
 // jamais. Constaté le 07/07/2026 : le BRB n'apparaissait plus du tout.
 obs.on('CurrentProgramSceneChanged', (data) => {
+    obsProgramScene = data.sceneName || '';
     const isBrbScene = data.sceneName === CONFIG.BRB_SCENE_NAME;
     if (isBrbScene) {
         if (!brbLoopActive) {
@@ -210,6 +213,10 @@ obs.on('CurrentProgramSceneChanged', (data) => {
             console.log('🛑 [OBS] Sortie de la scène "ON BREAK" détectée en direct : arrêt du BRB.');
         }
     }
+});
+
+app.get('/api/obs-scene', (req, res) => {
+    res.json({ scene: obsProgramScene, connected: obsConnected });
 });
 
 app.get('/api/health', (req, res) => {

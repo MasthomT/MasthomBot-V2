@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administration - Alertes</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #6366f1; outline: none; }
+        .btn { padding: .45rem .8rem; border-radius: .6rem; font-size: .75rem; font-weight: 800; background: #334155; color: #e2e8f0; }
+        .btn:hover { background: #475569; }
+        .btn.go { background: #059669; } .btn.go:hover { background: #10b981; }
+        .btn.scare { background: #be123c; } .btn.scare:hover { background: #e11d48; }
+        .btn.main { background: #4f46e5; } .btn.main:hover { background: #6366f1; }
+        .tab { padding: .55rem 1rem; border-radius: .75rem; font-size: .85rem; font-weight: 800; color: #94a3b8; cursor: pointer; border: 1px solid transparent; }
+        .tab:hover { background: rgba(51,65,85,.5); color: #fff; }
+        .tab.active { background: rgba(99,102,241,.14); color: #818cf8; border-color: rgba(99,102,241,.35); }
+        .panel { display: none; } .panel.active { display: block; }
+        .vitem { display: flex; align-items: center; gap: .5rem; padding: .55rem .7rem; border-radius: .7rem; cursor: pointer; font-size: .82rem; font-weight: 700; border: 1px solid transparent; }
+        .vitem:hover { background: #334155; }
+        .vitem.sel { background: rgba(99,102,241,.2); border-color: rgba(99,102,241,.5); color: #fff; }
+        .vitem small { display: block; font-weight: 500; color: #94a3b8; }
+        .stagewrap { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; border: 1px solid #334155;
+                     background: repeating-conic-gradient(#0b1220 0% 25%, #111a2e 0% 50%) 50% / 28px 28px; }
+        .stagewrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; }
+        .boxes { position: absolute; inset: 0; }
+        .box { position: absolute; border: 2px dashed rgba(255,255,255,.55); border-radius: 6px; cursor: move; box-sizing: border-box; touch-action: none; }
+        .box:hover, .box.drag { border-color: #818cf8; background: rgba(99,102,241,.12); }
+        .box .tag { position: absolute; left: 0; top: -20px; font-size: 11px; font-weight: 800; background: #4f46e5; color: #fff; padding: 1px 7px; border-radius: 5px; white-space: nowrap; }
+        .box .grip { position: absolute; right: -6px; bottom: -6px; width: 14px; height: 14px; background: #fff; border-radius: 4px; cursor: ew-resize; }
+        .edge { position: absolute; background: #fff; border-radius: 3px; z-index: 3; }
+        .edge.t, .edge.b { left: 50%; width: 34px; height: 8px; margin-left: -17px; cursor: ns-resize; }
+        .edge.l, .edge.r { top: 50%; height: 34px; width: 8px; margin-top: -17px; cursor: ew-resize; }
+        .edge.t { top: -5px; } .edge.b { bottom: -5px; } .edge.l { left: -5px; } .edge.r { right: -5px; }
+        .sec { font-size: 10px; font-weight: 900; letter-spacing: .15em; text-transform: uppercase; color: #64748b; margin: 1.1rem 0 .55rem; }
+        .sec:first-child { margin-top: 0; }
+        details > summary { cursor: pointer; font-weight: 800; font-size: .85rem; padding: .6rem .2rem; list-style: none; }
+        details > summary::before { content: '▸ '; color: #818cf8; }
+        details[open] > summary::before { content: '▾ '; }
+        label.f { display: block; font-size: 11px; color: #94a3b8; }
+        label.f > .in { margin-top: 4px; }
+    </style>
+</head>
+<body class="font-sans antialiased flex min-h-screen">
+
+    {% if not embed %}{% include 'admin/sidebar.html' %}{% endif %}
+
+    <main class="flex-1 {% if embed %}p-4{% else %}p-6 md:p-10{% endif %} min-w-0">
+        <header class="mb-5 flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">Alertes</h1>
+                <p class="text-slate-400 mt-1 max-w-3xl">Ce qui s'affiche à l'écran quand quelqu'un follow, sub, offre des subs, envoie des bits ou raid : <strong>une image (ou un GIF / une vidéo), un son, un texte</strong>. Les réglages fins sont repliés dans « Options avancées ». Pour les voir dans OBS, coche le widget « Animations d'alertes » dans ta scène.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 justify-end">
+                <span id="msg" class="text-xs text-slate-400"></span>
+                <button id="exportBtn" class="btn" title="Télécharger tous les réglages d'alertes dans un fichier"><i class="fas fa-file-export mr-1"></i>Exporter</button>
+                <label class="btn cursor-pointer" title="Charger des réglages exportés (rien n'est appliqué avant « Enregistrer »)"><i class="fas fa-file-import mr-1"></i>Importer
+                    <input type="file" id="importFile" accept=".json,application/json" class="hidden"></label>
+                <button id="saveBtn" class="btn main" style="padding:.65rem 1.1rem;font-size:.85rem"><i class="fas fa-save mr-2"></i>Enregistrer</button>
+            </div>
+        </header>
+
+        <div class="config-card rounded-2xl p-3 mb-5 text-xs text-amber-200 border-amber-500/30">
+            <i class="fas fa-triangle-exclamation mr-2"></i>Si ton OBS affiche déjà des alertes d'un autre service (Viewer Attack, StreamElements…), ne les laisse pas actives en même temps : chaque alerte serait en double.
+        </div>
+
+        <nav class="flex flex-wrap gap-2 mb-5" id="mainTabs">
+            <div class="tab active" data-tab="alerts"><i class="fas fa-bell mr-2"></i>Alertes</div>
+            <div class="tab" data-tab="screamer"><i class="fas fa-skull mr-2 text-rose-400"></i>Screamer</div>
+        </nav>
+
+        <!-- ══════════ ALERTES ══════════ -->
+        <section class="panel active" id="panel-alerts">
+            <div id="widgetBanner" class="mb-4"></div>
+            <p class="text-sm text-slate-300 mb-4">Pour chaque événement, choisis <strong>une image</strong>, <strong>un son</strong> et <strong>un texte</strong>. C'est tout. Position, police, couleurs, animations et variantes sont des options facultatives.</p>
+            <div id="simple" class="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-5 mb-6"></div>
+
+            <details id="adv" class="config-card rounded-2xl p-4">
+            <summary>Options avancées : déplacer le texte et l'image, police, couleurs, animations, effets, plusieurs variantes selon le montant…</summary>
+            <div class="flex flex-wrap gap-2 mb-4 mt-3" id="kindTabs"></div>
+
+            <div class="grid grid-cols-1 xl:grid-cols-[250px_minmax(0,1fr)_360px] gap-5">
+                <!-- variantes -->
+                <div class="config-card rounded-2xl p-3 h-fit">
+                    <div class="flex items-center justify-between mb-2 px-1">
+                        <span class="text-[10px] font-black tracking-widest uppercase text-slate-500">Variantes</span>
+                        <button class="btn main" id="addVariant"><i class="fas fa-plus mr-1"></i>Ajouter</button>
+                    </div>
+                    <div id="variantList" class="space-y-1"></div>
+                    <p class="text-[11px] text-slate-500 mt-3 px-1">Plusieurs variantes pour un même type : la bonne est choisie selon le montant (ex. un raid de 100+ viewers a sa propre animation).</p>
+                </div>
+
+                <!-- aperçu -->
+                <div class="min-w-0">
+                    <div class="stagewrap" id="stage">
+                        <iframe id="pv" src="/overlay/events?preview=1" title="aperçu"></iframe>
+                        <div class="boxes" id="boxes"></div>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 mt-3">
+                        <button class="btn" id="replay"><i class="fas fa-rotate-right mr-1"></i>Rejouer l'aperçu</button>
+                        <button class="btn go" id="sendBtn"><i class="fas fa-tv mr-1"></i>Envoyer dans OBS (test)</button>
+                        <button class="btn" id="copyKindBtn" title="Reprendre l'apparence de cette alerte pour d'autres types d'alerte"><i class="fas fa-share mr-1"></i>Copier vers…</button>
+                        <label class="flex items-center gap-2 text-xs text-slate-400 ml-2"><input type="checkbox" id="loop" checked> En boucle</label>
+                        <label class="flex items-center gap-2 text-xs text-slate-400 ml-2">Pseudo d'essai
+                            <input id="testUser" value="PseudoTest" maxlength="40" class="input-dark rounded-lg px-2 py-1 text-sm w-44">
+                            <button class="btn" id="longUser" title="Remplir avec un pseudo de 25 caractères">Très long</button></label>
+                        <span class="text-[11px] text-slate-500 ml-auto">Glisse le texte et le média directement dans l'aperçu. Le coin blanc règle la largeur.</span>
+                    </div>
+                </div>
+
+                <!-- réglages -->
+                <div class="config-card rounded-2xl p-4 h-fit" id="settings"></div>
+            </div>
+            </details>
+        </section>
+
+        <!-- ══════════ SCREAMER ══════════ -->
+        <section class="panel" id="panel-screamer">
+            <div class="config-card rounded-2xl p-5 border-rose-500/30" id="screamer"></div>
+        </section>
+    </main>
+
+    <datalist id="fontList"></datalist>
+
+    <div id="copyModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6">
+        <div class="config-card rounded-2xl w-full max-w-md p-5">
+            <h3 class="text-lg font-black text-white mb-1">Copier vers d'autres alertes</h3>
+            <p class="text-xs text-slate-400 mb-4">Depuis « <span id="cpName" class="text-white"></span> ». Remplace l'apparence de la <strong>première variante</strong> du type choisi : position, police, couleurs, animations, effet, durée et délais.</p>
+            <div id="cpKinds" class="space-y-1 mb-4 text-sm"></div>
+            <div class="text-[10px] font-black tracking-widest uppercase text-slate-500 mb-2">Que copier ?</div>
+            <div class="space-y-1 mb-4 text-sm">
+                <label class="flex items-start gap-2"><input type="radio" name="cpMode" value="notext" checked class="mt-1"> <span><strong>Tout sauf le texte</strong> : image, son, apparence, animations, délais <span class="text-xs text-slate-500">(le message de chaque alerte reste le sien)</span></span></label>
+                <label class="flex items-start gap-2"><input type="radio" name="cpMode" value="all" class="mt-1"> <span><strong>Absolument tout</strong>, texte compris <span class="text-xs text-slate-500">(les variables {months}, {bits}… sont propres à chaque type)</span></span></label>
+                <label class="flex items-start gap-2"><input type="radio" name="cpMode" value="look" class="mt-1"> <span><strong>L'apparence seulement</strong> : sans l'image, le son ni le texte</span></label>
+            </div>
+            <div class="flex items-center gap-3">
+                <button id="cpGo" class="btn main" style="padding:.55rem 1rem;font-size:.85rem">Copier</button>
+                <button id="cpCancel" class="btn" style="padding:.55rem 1rem;font-size:.85rem">Annuler</button>
+                <span id="cpMsg" class="text-xs text-slate-400"></span>
+            </div>
+        </div>
+    </div>
+
+    <div id="picker" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6">
+        <div class="config-card rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+            <div class="flex items-center justify-between p-4 border-b border-slate-700">
+                <h3 class="font-black text-white">Choisir une image, un GIF ou une vidéo</h3>
+                <button class="btn" id="pickerClose"><i class="fas fa-xmark"></i></button>
+            </div>
+            <div class="p-4 overflow-y-auto" id="pickerGrid"></div>
+            <div class="p-4 border-t border-slate-700 flex items-center gap-3 text-xs">
+                <label class="btn main cursor-pointer"><i class="fas fa-upload mr-1"></i>Envoyer un fichier
+                    <input type="file" id="pickerUpload" accept=".png,.jpg,.jpeg,.gif,.webp,.mp4,.webm" class="hidden"></label>
+                <span class="text-slate-500">png, jpg, gif, webp, mp4, webm — 25 Mo max</span>
+                <span id="pickerMsg" class="text-slate-400"></span>
+            </div>
+        </div>
+    </div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+const FONTS = ['Montserrat', 'Poppins', 'Roboto', 'Inter', 'Oswald', 'Bebas Neue', 'Orbitron', 'Audiowide', 'Press Start 2P', 'Righteous',
+               'Bangers', 'Fredoka', 'Pacifico', 'Lobster', 'Permanent Marker', 'Caveat', 'Special Elite', 'Creepster', 'Nosifer', 'Eater',
+               'Butcherman', 'Metal Mania', 'Jolly Lodger', 'Mystery Quest', 'Rubik Wet Paint', 'Frijole', 'Pirata One'];
+$('fontList').innerHTML = FONTS.map(f => '<option value="' + f + '">').join('');
+
+let data = null;            // réponse de /admin/api/alerts
+let variants = [];
+let screamer = {};
+let kind = 'follow';
+let selId = null;
+let dirty = false;
+let rects = {};             // positions réelles des éléments (renvoyées par l'aperçu)
+let pvReady = false;
+
+const cur = () => variants.find(v => v.id === selId);
+const kindVariants = () => variants.filter(v => v.kind === kind);
+function markDirty() { dirty = true; $('msg').className = 'text-xs text-amber-400'; $('msg').textContent = 'Modifications non enregistrées'; }
+
+// ───────── chemins « media.x » ─────────
+function getP(o, path) { return path.split('.').reduce((a, k) => (a == null ? a : a[k]), o); }
+function setP(o, path, val) { const ks = path.split('.'); const last = ks.pop(); const t = ks.reduce((a, k) => a[k], o); t[last] = val; }
+
+// ───────── aperçu ─────────
+let loopTimer = null;
+function sendPreview() {
+    clearTimeout(loopTimer);
+    const v = cur();
+    if (!v || !pvReady) return;
+    $('pv').contentWindow.postMessage({ type: 'alert-preview', variant: v, vars: sampleVars(v.kind) }, '*');
+    if ($('loop').checked) loopTimer = setTimeout(sendPreview, (v.duration + 1.4) * 1000);
+}
+function sampleVars(k) {
+    const s = data.samples[k] || {};
+    return Object.assign({ months: 3, count: 5, bits: 500, viewers: 42, level: 1, total: 0, goal: 0, description: '', current: 0, target: 0, type: '' }, s,
+                         { user: ($('testUser') && $('testUser').value.trim()) || s.user || 'PseudoTest' });
+}
+let pvTimer = null;
+function replaySoon() { clearTimeout(pvTimer); pvTimer = setTimeout(sendPreview, 220); }
+
+window.addEventListener('message', (e) => {
+    const d = e.data || {};
+    if (d.type === 'alert-ready') { pvReady = true; sendPreview(); }
+    if (d.type === 'alert-rects') { rects = { media: d.media, text: d.text }; drawBoxes(); }
+});
+
+// ───────── boîtes glissables ─────────
+function drawBoxes() {
+    const v = cur(); const host = $('boxes');
+    host.innerHTML = '';
+    if (!v) return;
+    [['media', 'Média', v.media], ['text', 'Texte', v.text]].forEach(([key, label, obj]) => {
+        const r = rects[key]; if (!r) return;
+        const b = document.createElement('div');
+        b.className = 'box'; b.dataset.key = key;
+        b.style.left = r.x + '%'; b.style.top = r.y + '%'; b.style.width = r.w + '%'; b.style.height = r.h + '%';
+        b.innerHTML = '<span class="tag">' + label + '</span><span class="grip"></span>'
+            + (key === 'media' && obj.file ? ['t', 'r', 'b', 'l'].map(ed => '<span class="edge ' + ed + '" data-edge="' + ed + '" title="Rogner"></span>').join('') : '');
+        b.addEventListener('pointerdown', (e) => {
+            const ed = e.target.dataset && e.target.dataset.edge;
+            if (ed) startCrop(e, ed); else startDrag(e, key, e.target.classList.contains('grip'));
+        });
+        host.appendChild(b);
+    });
+}
+let drag = null;
+function startDrag(e, key, resize) {
+    e.preventDefault();
+    const stage = $('stage').getBoundingClientRect(), v = cur(), obj = v[key];
+    drag = { key, resize, stage, sx: e.clientX, sy: e.clientY, x: obj.x, y: obj.y, w: obj.w, el: e.currentTarget };
+    e.currentTarget.setPointerCapture(e.pointerId);
+    e.currentTarget.classList.add('drag');
+    e.currentTarget.addEventListener('pointermove', onDrag);
+    e.currentTarget.addEventListener('pointerup', endDrag, { once: true });
+}
+function onDrag(e) {
+    if (!drag) return;
+    const v = cur(), obj = v[drag.key];
+    const dx = (e.clientX - drag.sx) / drag.stage.width * 100, dy = (e.clientY - drag.sy) / drag.stage.height * 100;
+    if (drag.resize) obj.w = Math.max(3, Math.round((drag.w + dx * 2) * 10) / 10);
+    else { obj.x = Math.round((drag.x + dx) * 10) / 10; obj.y = Math.round((drag.y + dy) * 10) / 10; }
+    // la boîte suit immédiatement ; l'aperçu se rejoue à la fin du geste
+    const r = rects[drag.key];
+    if (r) {
+        const ddx = drag.resize ? 0 : obj.x - drag.x, ddy = drag.resize ? 0 : obj.y - drag.y;
+        drag.el.style.left = (r.x + ddx) + '%'; drag.el.style.top = (r.y + ddy) + '%';
+        if (drag.resize) { const scale = obj.w / drag.w; drag.el.style.width = (r.w * scale) + '%'; drag.el.style.height = (r.h * scale) + '%'; }
+    }
+    syncInputs();
+}
+// rognage : on tire un bord de l'image vers l'intérieur (le recadrage s'applique à l'image d'origine)
+let crop = null;
+function startCrop(e, edge) {
+    e.preventDefault(); e.stopPropagation();
+    const m = cur().media, r = rects.media; if (!r) return;
+    const keep = 1 - ((+m.crop_t || 0) + (+m.crop_b || 0)) / 100;
+    crop = { edge, stage: $('stage').getBoundingClientRect(), sx: e.clientX, sy: e.clientY, start: +m['crop_' + edge] || 0,
+             fullW: m.w, fullH: r.h / Math.max(0.05, keep), el: e.currentTarget };
+    e.currentTarget.setPointerCapture(e.pointerId);
+    e.currentTarget.addEventListener('pointermove', onCrop);
+    e.currentTarget.addEventListener('pointerup', endCrop, { once: true });
+}
+function onCrop(e) {
+    if (!crop) return;
+    const m = cur().media;
+    const dx = (e.clientX - crop.sx) / crop.stage.width * 100, dy = (e.clientY - crop.sy) / crop.stage.height * 100;
+    const delta = { l: dx / crop.fullW * 100, r: -dx / crop.fullW * 100, t: dy / crop.fullH * 100, b: -dy / crop.fullH * 100 }[crop.edge];
+    let v = Math.max(0, Math.min(90, Math.round(crop.start + delta)));
+    const opp = { l: 'r', r: 'l', t: 'b', b: 't' }[crop.edge];
+    v = Math.min(v, 95 - (+m['crop_' + opp] || 0));
+    m['crop_' + crop.edge] = v;
+    syncInputs();
+}
+function endCrop(e) {
+    e.currentTarget.removeEventListener('pointermove', onCrop);
+    crop = null; markDirty(); sendPreview();
+}
+function endDrag(e) {
+    e.currentTarget.removeEventListener('pointermove', onDrag);
+    e.currentTarget.classList.remove('drag');
+    drag = null; markDirty(); sendPreview();
+}
+
+// ───────── réglages (panneau de droite) ─────────
+function fld(label, path, kindInput, extra) {
+    const v = cur();
+    const val = getP(v, path);
+    let input = '';
+    extra = extra || {};
+    if (kindInput === 'select') {
+        input = '<select data-p="' + path + '" class="input-dark w-full rounded-lg px-2 py-1.5 text-sm">' + extra.options.map(o =>
+            '<option value="' + esc(o[0]) + '"' + (String(val) === String(o[0]) ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('') + '</select>';
+    } else if (kindInput === 'check') {
+        return '<label class="flex items-center gap-2 text-xs text-slate-300 mt-2"><input type="checkbox" data-p="' + path + '" ' + (val ? 'checked' : '') + '> ' + label + '</label>';
+    } else if (kindInput === 'optcolor') {
+        input = '<div class="flex items-center gap-2"><input type="checkbox" data-opt="' + path + '" ' + (val ? 'checked' : '') + ' title="Activer">'
+              + '<input type="color" data-p="' + path + '" value="' + esc(val || extra.fallback || '#ffffff') + '" class="h-8 w-12 rounded bg-transparent"></div>';
+    } else if (kindInput === 'color') {
+        input = '<input type="color" data-p="' + path + '" value="' + esc(val || '#ffffff') + '" class="h-8 w-12 rounded bg-transparent">';
+    } else if (kindInput === 'range') {
+        input = '<input type="range" data-p="' + path + '" min="' + extra.min + '" max="' + extra.max + '" step="' + extra.step + '" value="' + esc(val) + '" class="w-full">';
+    } else if (kindInput === 'text') {
+        input = '<input type="text" data-p="' + path + '" value="' + esc(val) + '" ' + (extra.list ? 'list="' + extra.list + '"' : '') + ' ' + (extra.maxlength ? 'maxlength="' + extra.maxlength + '"' : '') + ' placeholder="' + esc(extra.placeholder || '') + '" class="input-dark w-full rounded-lg px-2 py-1.5 text-sm">';
+    } else {
+        input = '<input type="number" data-p="' + path + '" value="' + esc(val) + '" ' + (extra.min != null ? 'min="' + extra.min + '"' : '') + ' ' + (extra.max != null ? 'max="' + extra.max + '"' : '') + ' ' + (extra.step ? 'step="' + extra.step + '"' : '') + ' class="input-dark w-full rounded-lg px-2 py-1.5 text-sm">';
+    }
+    return '<label class="f ' + (extra.span ? 'col-span-' + extra.span : '') + '">' + label + '<div class="in">' + input + '</div></label>';
+}
+const opts = (obj) => Object.entries(obj);
+function fileOpts(list, none) { return [['', none]].concat(list.map(f => [f, f])); }
+
+function renderSettings() {
+    const v = cur(); const host = $('settings');
+    if (!v) { host.innerHTML = '<p class="text-slate-500 text-sm">Aucune variante : clique sur « Ajouter ».</p>'; return; }
+    const k = data.kinds.find(x => x.key === v.kind);
+    const hasAmount = !!k.amount;
+    host.innerHTML =
+        '<details open><summary>Général</summary><div class="grid grid-cols-2 gap-3 pb-2">'
+      + fld('Nom de la variante', 'name', 'text', { span: 2, maxlength: 60 })
+      + fld('Durée affichée (s)', 'duration', 'number', { min: 2, max: 30, step: 0.5 })
+      + fld('Effet de fond', 'effect', 'select', { options: opts(data.effects) })
+      + (hasAmount ? fld('Se déclenche à partir de (' + k.amount + ')', 'min_amount', 'number', { min: 0 })
+                    + fld('Jusqu\'à (0 = sans limite)', 'max_amount', 'number', { min: 0 }) : '')
+      + fld('Durée des animations (s)', 'anim_dur', 'number', { min: 0.1, max: 3, step: 0.1 })
+      + '</div><label class="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" data-p="enabled" ' + (v.enabled ? 'checked' : '') + '> Variante activée</label></details>'
+
+      + '<details open><summary>Texte</summary><div class="grid grid-cols-2 gap-3 pb-2">'
+      + '<label class="f col-span-2">Message <span class="text-slate-500">(variables : ' + k.vars.map(x => '{' + x + '}').join(' ') + ')</span><div class="in">'
+      +   '<textarea data-p="text.template" rows="2" maxlength="240" class="input-dark w-full rounded-lg px-2 py-1.5 text-sm">' + esc(v.text.template) + '</textarea></div></label>'
+      + fld('Police (Google Fonts)', 'text.font', 'text', { list: 'fontList', placeholder: 'Police du thème', span: 2 })
+      + fld('Taille (px)', 'text.size', 'number', { min: 12, max: 400 })
+      + fld('Graisse', 'text.weight', 'select', { options: ['100','200','300','400','500','600','700','800','900'].map(w => [w, w]) })
+      + fld('Couleur', 'text.color', 'color')
+      + fld('Couleur du pseudo', 'text.highlight', 'optcolor', { fallback: '#ffa24d' })
+      + fld('Contour', 'text.stroke', 'optcolor', { fallback: '#000000' })
+      + fld('Épaisseur contour (px)', 'text.stroke_w', 'number', { min: 0, max: 30 })
+      + fld('Lueur', 'text.glow', 'optcolor', { fallback: '#ff7a18' })
+      + fld('Espacement lettres (px)', 'text.letter', 'number', { min: -10, max: 40 })
+      + fld('Alignement', 'text.align', 'select', { options: [['left', 'Gauche'], ['center', 'Centré'], ['right', 'Droite']] })
+      + fld('Entrée', 'text.anim_in', 'select', { options: opts(data.anim_in) })
+      + fld('Sortie', 'text.anim_out', 'select', { options: opts(data.anim_out) })
+      + fld('Position X (%)', 'text.x', 'number', { step: 0.5 }) + fld('Position Y (%)', 'text.y', 'number', { step: 0.5 })
+      + fld('Largeur (% écran)', 'text.w', 'number', { min: 5, max: 120, step: 1 })
+      + fld('Pseudo trop long', 'text.fit', 'select', { options: [['shrink', 'Réduire seulement le pseudo s\'il dépasse (taille du texte gardée)'], ['line', 'Tout sur une ligne (réduit toute la taille)'],
+                                                  ['wrap', 'Couper où il faut (même dans le pseudo)'], ['none', 'Ne rien faire'] ] })
+      + fld('Taille minimale (px)', 'text.min_size', 'number', { min: 12, max: 400 })
+      + fld('Majuscules', 'text.uppercase', 'check')
+      + fld('Apparaît après (secondes)', 'text.delay', 'number', { min: 0, max: 30, step: 0.1, span: 2 })
+      + '</div></details>'
+
+      + '<details open><summary>Message dans le t\'chat</summary><div class="pb-2">'
+      + fld('Envoyer un message', 'chat_enabled', 'check')
+      + '<label class="f mt-2">Message <span class="text-slate-500">(variables : ' + k.vars.map(x => '{' + x + '}').join(' ') + ')</span><div class="in">'
+      +   '<textarea data-p="chat_message" rows="2" maxlength="450" class="input-dark w-full rounded-lg px-2 py-1.5 text-sm">' + esc(v.chat_message || '') + '</textarea></div></label>'
+      + '</div></details>'
+
+      + '<details open><summary>Image / GIF / vidéo</summary><div class="grid grid-cols-2 gap-3 pb-2">'
+      + fld('Fichier', 'media.file', 'select', { options: fileOpts(data.images, 'Aucun (ou emoji ci-dessous)'), span: 2 })
+      + '<div class="col-span-2 flex items-center gap-2"><input type="file" id="upMedia" accept=".png,.jpg,.jpeg,.gif,.webp,.mp4,.webm" class="text-[11px] text-slate-300"><span id="upMediaMsg" class="text-[11px] text-slate-400"></span></div>'
+      + fld('Ou un emoji', 'media.emoji', 'text', { maxlength: 8, placeholder: '🎃' })
+      + fld('Largeur (% écran)', 'media.w', 'number', { min: 2, max: 120, step: 1 })
+      + fld('Position X (%)', 'media.x', 'number', { step: 0.5 }) + fld('Position Y (%)', 'media.y', 'number', { step: 0.5 })
+      + fld('Opacité', 'media.opacity', 'range', { min: 0, max: 1, step: 0.05 })
+      + fld('Apparaît après (secondes)', 'media.delay', 'number', { min: 0, max: 30, step: 0.1 })
+      + fld('Entrée', 'media.anim_in', 'select', { options: opts(data.anim_in).filter(o => !['typewriter', 'wave'].includes(o[0])) })
+      + fld('Sortie', 'media.anim_out', 'select', { options: opts(data.anim_out) })
+      + fld('Vidéo en boucle', 'media.loop', 'check') + fld('Son de la vidéo', 'media.video_sound', 'check')
+      + '<div class="col-span-2 sec" style="margin-top:.6rem">Rogner l\'image <span class="normal-case font-medium text-slate-500">(ou tire les bords blancs dans l\'aperçu)</span></div>'
+      + fld('Haut (%)', 'media.crop_t', 'number', { min: 0, max: 90, step: 1 }) + fld('Bas (%)', 'media.crop_b', 'number', { min: 0, max: 90, step: 1 })
+      + fld('Gauche (%)', 'media.crop_l', 'number', { min: 0, max: 90, step: 1 }) + fld('Droite (%)', 'media.crop_r', 'number', { min: 0, max: 90, step: 1 })
+      + '<div class="col-span-2"><button class="btn" id="resetCrop"><i class="fas fa-expand mr-1"></i>Remettre l\'image entière</button></div>'
+      + '<div class="col-span-2 sec" style="margin-top:.6rem">Couper la vidéo <span class="normal-case font-medium text-slate-500">(vidéos seulement)</span></div>'
+      + fld('Début (secondes)', 'media.trim_start', 'number', { min: 0, step: 0.1 }) + fld('Fin (0 = jusqu\'au bout)', 'media.trim_end', 'number', { min: 0, step: 0.1 })
+      + '</div></details>'
+
+      + '<details open><summary>Son</summary><div class="grid grid-cols-2 gap-3 pb-2">'
+      + fld('Fichier', 'sound', 'select', { options: fileOpts(data.sounds, 'Aucun son'), span: 2 })
+      + '<div class="col-span-2 flex items-center gap-2"><input type="file" id="upSound" accept=".mp3,.wav,.ogg" class="text-[11px] text-slate-300"><span id="upSoundMsg" class="text-[11px] text-slate-400"></span></div>'
+      + fld('Volume', 'volume', 'range', { min: 0, max: 1, step: 0.05 })
+      + fld('Joué après (secondes)', 'sound_delay', 'number', { min: 0, max: 30, step: 0.1 })
+      + '</div></details>';
+
+    host.querySelectorAll('[data-p]').forEach(el => {
+        const ev = (el.type === 'checkbox' || el.tagName === 'SELECT' || el.type === 'color') ? 'change' : 'input';
+        el.addEventListener(ev, () => onField(el));
+        if (el.type === 'color') el.addEventListener('input', () => onField(el));
+    });
+    host.querySelectorAll('[data-opt]').forEach(cb => cb.addEventListener('change', () => {
+        const path = cb.dataset.opt, col = host.querySelector('[data-p="' + path + '"]');
+        setP(cur(), path, cb.checked ? col.value : ''); markDirty(); replaySoon();
+    }));
+    if ($('resetCrop')) $('resetCrop').addEventListener('click', () => {
+        const m = cur().media; m.crop_t = m.crop_r = m.crop_b = m.crop_l = 0; markDirty(); renderSettings(); sendPreview();
+    });
+    if ($('upMedia')) $('upMedia').addEventListener('change', () => upload('media', $('upMedia')));
+    if ($('upSound')) $('upSound').addEventListener('change', () => upload('sound', $('upSound')));
+}
+function onField(el) {
+    const v = cur(), p = el.dataset.p;
+    let val;
+    if (el.type === 'checkbox') val = el.checked;
+    else if (el.type === 'number' || el.type === 'range') val = el.value === '' ? 0 : parseFloat(el.value);
+    else val = el.value;
+    if (el.type === 'color') {
+        const opt = $('settings').querySelector('[data-opt="' + p + '"]');
+        if (opt && !opt.checked) { opt.checked = true; }
+    }
+    setP(v, p, val);
+    if (p === 'name') renderVariantList();
+    markDirty(); replaySoon(); refreshSimple();
+}
+function syncInputs() {   // pendant un glisser : met à jour les champs numériques
+    const v = cur(); if (!v) return;
+    document.querySelectorAll('#settings [data-p]').forEach(el => {
+        if (['media.x', 'media.y', 'media.w', 'text.x', 'text.y', 'text.w', 'media.crop_t', 'media.crop_r', 'media.crop_b', 'media.crop_l'].includes(el.dataset.p)) el.value = getP(v, el.dataset.p);
+    });
+}
+
+// ───────── liste des variantes ─────────
+function condText(v) {
+    const k = data.kinds.find(x => x.key === v.kind);
+    if (!k.amount) return 'Chaque ' + k.label.toLowerCase();
+    if (v.max_amount) return v.min_amount + ' à ' + v.max_amount + ' ' + k.amount;
+    return v.min_amount > 1 ? v.min_amount + '+ ' + k.amount : 'Tous les montants';
+}
+function renderVariantList() {
+    $('variantList').innerHTML = kindVariants().map(v =>
+        '<div class="vitem' + (v.id === selId ? ' sel' : '') + '" data-id="' + v.id + '">'
+      + '<input type="checkbox" data-en="' + v.id + '" ' + (v.enabled ? 'checked' : '') + ' title="Activée">'
+      + '<div class="flex-1 min-w-0 truncate">' + esc(v.name) + '<small>' + esc(condText(v)) + '</small></div>'
+      + '<button class="btn" data-dup="' + v.id + '" title="Dupliquer"><i class="fas fa-clone"></i></button>'
+      + '<button class="btn" data-del="' + v.id + '" title="Supprimer"><i class="fas fa-trash"></i></button></div>').join('')
+      || '<p class="text-xs text-slate-500 px-1">Aucune variante pour ce type.</p>';
+    $('variantList').querySelectorAll('.vitem').forEach(el => el.addEventListener('click', (e) => {
+        if (e.target.closest('[data-en],[data-dup],[data-del]')) return;
+        select(el.dataset.id);
+    }));
+    $('variantList').querySelectorAll('[data-en]').forEach(cb => cb.addEventListener('change', () => {
+        variants.find(v => v.id === cb.dataset.en).enabled = cb.checked; markDirty(); if (cb.dataset.en === selId) renderSettings();
+    }));
+    $('variantList').querySelectorAll('[data-dup]').forEach(b => b.addEventListener('click', () => {
+        const src = variants.find(v => v.id === b.dataset.dup), c = JSON.parse(JSON.stringify(src));
+        c.id = 'v_' + Math.random().toString(36).slice(2, 10); c.name = src.name + ' (copie)';
+        variants.push(c); markDirty(); select(c.id);
+    }));
+    $('variantList').querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
+        const v = variants.find(x => x.id === b.dataset.del);
+        if (!confirm('Supprimer la variante « ' + v.name + ' » ?')) return;
+        variants = variants.filter(x => x.id !== v.id); markDirty();
+        select((kindVariants()[0] || {}).id || null);
+    }));
+}
+function select(id) {
+    selId = id; rects = {};
+    renderVariantList(); renderSettings(); drawBoxes(); sendPreview();
+}
+
+function renderKindTabs() {
+    $('kindTabs').innerHTML = data.kinds.map(k => '<div class="tab' + (k.key === kind ? ' active' : '') + '" data-k="' + k.key + '">' + esc(k.label)
+        + ' <span class="text-[10px] text-slate-500">' + variants.filter(v => v.kind === k.key && v.enabled).length + '</span></div>').join('');
+    $('kindTabs').querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+        kind = t.dataset.k; renderKindTabs(); select((kindVariants()[0] || {}).id || null);
+    }));
+}
+
+$('addVariant').addEventListener('click', () => {
+    const base = JSON.parse(JSON.stringify(data.template_variant[kind]));
+    base.id = 'v_' + Math.random().toString(36).slice(2, 10);
+    base.name = 'Variante ' + (kindVariants().length + 1);
+    const k = data.kinds.find(x => x.key === kind);
+    if (k.amount) base.min_amount = 1;
+    variants.push(base); markDirty(); renderKindTabs(); select(base.id);
+});
+$('replay').addEventListener('click', sendPreview);
+$('testUser').addEventListener('input', replaySoon);
+$('longUser').addEventListener('click', () => { $('testUser').value = 'XxMonSuperPseudo_Tres_Long'; sendPreview(); });
+$('loop').addEventListener('change', sendPreview);
+
+// ───────── envoi OBS / enregistrement / upload ─────────
+$('sendBtn').addEventListener('click', async () => {
+    const v = cur(); if (!v) return;
+    const res = await fetch('/admin/api/alerts/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ variant: v, user: $('testUser').value.trim() }) });
+    const j = await res.json().catch(() => ({}));
+    const w = (j.warnings || []);
+    $('msg').className = 'text-xs ' + (res.ok && !w.length ? 'text-emerald-400' : 'text-amber-400');
+    $('msg').textContent = res.ok ? (j.message + (w.length ? ' ⚠ ' + w.join(' ') : '')) : (j.detail || 'Erreur ' + res.status);
+});
+
+async function save() {
+    const m = $('msg'); m.className = 'text-xs text-slate-400'; m.textContent = 'Enregistrement…';
+    const res = await fetch('/admin/api/alerts', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ variants, screamer: collectScreamer() }) });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) { m.className = 'text-xs text-amber-400'; m.textContent = j.detail || ('Erreur ' + res.status); return false; }
+    dirty = false; m.className = 'text-xs text-emerald-400'; m.textContent = 'Enregistré ✓';
+    return true;
+}
+$('saveBtn').addEventListener('click', save);
+
+async function upload(type, input) {
+    const file = input.files[0]; if (!file) return;
+    const msg = $(type === 'media' ? 'upMediaMsg' : 'upSoundMsg'); msg.textContent = 'Envoi…';
+    const fd = new FormData(); fd.append('file', file);
+    const res = await fetch('/admin/api/alerts/upload?type=' + type, { method: 'POST', body: fd });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) { msg.className = 'text-[11px] text-amber-400'; msg.textContent = j.detail || ('Erreur ' + res.status); return; }
+    if (type === 'media') { data.images.push(j.name); data.images.sort(); data.media_info[j.name] = j.info || {}; const v = cur(); v.media.file = j.name; v.media.emoji = ''; }
+    else { data.sounds.push(j.name); data.sounds.sort(); cur().sound = j.name; }
+    markDirty(); renderSettings(); replaySoon(); refreshSimple();
+}
+
+// ───────── Screamer ─────────
+function renderScreamer() {
+    const s = screamer;
+    const sel = (list, cur, none) => '<option value="">' + none + '</option>' + list.map(f => '<option value="' + esc(f) + '"' + (f === cur ? ' selected' : '') + '>' + esc(f) + '</option>').join('');
+    $('screamer').innerHTML =
+        '<div class="flex flex-wrap items-center justify-between gap-3 mb-4"><h2 class="text-lg font-black text-white"><i class="fas fa-skull mr-2 text-rose-400"></i>Screamer</h2>'
+      + '<div class="flex items-center gap-3"><label class="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" data-s="enabled" ' + (s.enabled ? 'checked' : '') + '> Activé</label>'
+      + '<button class="btn scare" id="scTest"><i class="fas fa-bolt mr-1"></i>Tester (l\'écran va hurler)</button></div></div>'
+      + '<p class="text-xs text-slate-400 mb-4">Une image plein écran qui claque, avec un son fort, une secousse et deux éclairs blancs (jamais de stroboscope). Sans image ni son : un crâne géant et un cri généré. Déclenché par la commande <strong>!screamer</strong> (modos par défaut), par une récompense de points de chaîne, ou par hasard à la place d\'une alerte.</p>'
+      + '<div class="grid grid-cols-2 md:grid-cols-4 gap-4">'
+      + '<label class="f">Image<div class="in"><select data-s="image" class="input-dark w-full rounded-lg px-2 py-1.5 text-sm">' + sel(data.images.filter(f => !/\.(mp4|webm)$/i.test(f)), s.image, 'Crâne par défaut 💀') + '</select></div></label>'
+      + '<label class="f">Son<div class="in"><select data-s="sound" class="input-dark w-full rounded-lg px-2 py-1.5 text-sm">' + sel(data.sounds, s.sound, 'Cri généré par défaut') + '</select></div></label>'
+      + '<label class="f">Volume<div class="in"><input data-s="volume" type="range" min="0" max="1" step="0.05" value="' + esc(s.volume) + '" class="w-full"></div></label>'
+      + '<label class="f">Durée (s)<div class="in"><input data-s="duration" type="number" min="0.5" max="6" step="0.1" value="' + esc(s.duration) + '" class="input-dark w-full rounded-lg px-2 py-1.5 text-sm"></div></label>'
+      + '<label class="f">Récompense de points de chaîne (titre exact)<div class="in"><input data-s="reward_title" value="' + esc(s.reward_title) + '" maxlength="45" placeholder="Screamer" class="input-dark w-full rounded-lg px-2 py-1.5 text-sm"></div></label>'
+      + '<label class="f">Chance à chaque alerte (%)<div class="in"><input data-s="chance" type="number" min="0" max="100" step="0.5" value="' + esc(s.chance) + '" class="input-dark w-full rounded-lg px-2 py-1.5 text-sm"></div></label>'
+      + '<label class="f">Délai minimum entre deux (s)<div class="in"><input data-s="cooldown" type="number" min="0" max="3600" value="' + esc(s.cooldown) + '" class="input-dark w-full rounded-lg px-2 py-1.5 text-sm"></div></label>'
+      + '<div class="flex flex-col gap-2 justify-end text-xs text-slate-300"><label class="flex items-center gap-2"><input type="checkbox" data-s="flash" ' + (s.flash ? 'checked' : '') + '> Éclairs blancs</label>'
+      + '<label class="flex items-center gap-2"><input type="checkbox" data-s="shake" ' + (s.shake ? 'checked' : '') + '> Secousse</label></div></div>'
+      + '<div class="mt-5 flex flex-wrap items-end gap-6 text-xs border-t border-slate-700 pt-4">'
+      + '<div><div class="text-slate-400 mb-1">Ajouter une image (png, jpg, gif, webp)</div><input type="file" id="scUpImg" accept=".png,.jpg,.jpeg,.gif,.webp" class="text-slate-300"></div>'
+      + '<div><div class="text-slate-400 mb-1">Ajouter un son (mp3, wav, ogg)</div><input type="file" id="scUpSnd" accept=".mp3,.wav,.ogg" class="text-slate-300"></div>'
+      + '<span id="scUpMsg" class="text-slate-400"></span></div>';
+    $('screamer').querySelectorAll('[data-s]').forEach(el => el.addEventListener('input', () => { screamer = collectScreamer(); markDirty(); }));
+    $('screamer').querySelectorAll('select[data-s], input[type=checkbox][data-s]').forEach(el => el.addEventListener('change', () => { screamer = collectScreamer(); markDirty(); }));
+    $('scTest').addEventListener('click', async () => {
+        if (!(await save())) return;
+        const res = await fetch('/admin/api/alerts/test_screamer', { method: 'POST' });
+        const j = await res.json().catch(() => ({}));
+        $('msg').className = 'text-xs ' + (res.ok ? 'text-emerald-400' : 'text-amber-400'); $('msg').textContent = res.ok ? j.message : (j.detail || 'Erreur');
+    });
+    $('scUpImg').addEventListener('change', () => scUpload('media', $('scUpImg')));
+    $('scUpSnd').addEventListener('change', () => scUpload('sound', $('scUpSnd')));
+}
+function collectScreamer() {
+    const host = $('screamer'); if (!host.querySelector('[data-s]')) return screamer;
+    const o = {};
+    host.querySelectorAll('[data-s]').forEach(el => {
+        const k = el.dataset.s;
+        o[k] = el.type === 'checkbox' ? el.checked : (el.type === 'number' || el.type === 'range') ? parseFloat(el.value || 0) : el.value;
+    });
+    return o;
+}
+async function scUpload(type, input) {
+    const file = input.files[0]; if (!file) return;
+    const fd = new FormData(); fd.append('file', file);
+    $('scUpMsg').textContent = 'Envoi…';
+    const res = await fetch('/admin/api/alerts/upload?type=' + type, { method: 'POST', body: fd });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) { $('scUpMsg').className = 'text-amber-400'; $('scUpMsg').textContent = j.detail || ('Erreur ' + res.status); return; }
+    if (type === 'media') { data.images.push(j.name); screamer = collectScreamer(); screamer.image = j.name; }
+    else { data.sounds.push(j.name); screamer = collectScreamer(); screamer.sound = j.name; }
+    renderScreamer(); markDirty();
+    $('scUpMsg').className = 'text-emerald-400'; $('scUpMsg').textContent = '« ' + j.name + ' » ajouté et sélectionné.';
+}
+
+// ───────── Cartes simples : image + son + texte ─────────
+const NODE_URL = location.protocol + '//' + location.hostname + ':3005';
+const mediaUrl = (f) => NODE_URL + '/static/commands/images/' + encodeURIComponent(f);
+const soundUrl = (f) => NODE_URL + '/static/commands/sounds/' + encodeURIComponent(f);
+const isVid = (f) => /\.(mp4|webm)$/i.test(f || '');
+
+function primary(k) {
+    let v = variants.find(x => x.kind === k);
+    if (!v) {
+        v = JSON.parse(JSON.stringify(data.template_variant[k]));
+        v.id = 'v_' + Math.random().toString(36).slice(2, 10);
+        variants.push(v);
+    }
+    return v;
+}
+function thumb(v) {
+    const f = v.media.file;
+    if (f) return isVid(f)
+        ? '<video src="' + mediaUrl(f) + '" muted loop autoplay playsinline class="max-h-full max-w-full"></video>'
+        : '<img src="' + mediaUrl(f) + '" class="max-h-full max-w-full" alt="">';
+    if (v.media.emoji) return '<span style="font-size:42px">' + esc(v.media.emoji) + '</span>';
+    return '<span class="text-xs text-slate-500">Aucune image</span>';
+}
+const mediaWarn = (f) => { const i = f && data.media_info && data.media_info[f]; return i && i.message ? '⚠ ' + i.message : ''; };
+
+function renderWidgetBanner() {
+    const host = $('widgetBanner'), w = data.widget || [];
+    const on = w.filter(x => x.enabled);
+    if (on.length) {
+        host.innerHTML = '<div class="text-xs text-emerald-400"><i class="fas fa-circle-check mr-1"></i>Les alertes s\'affichent dans : ' + on.map(x => esc(x.name)).join(', ')
+            + (on.length < w.length ? ' <span class="text-slate-500">(pas dans : ' + w.filter(x => !x.enabled).map(x => esc(x.name)).join(', ') + ')</span>' : '') + '</div>';
+        return;
+    }
+    host.innerHTML = '<div class="config-card rounded-2xl p-4 border-amber-500/40"><div class="text-sm text-amber-300 font-bold mb-2"><i class="fas fa-triangle-exclamation mr-2"></i>'
+        + 'Aucune scène n\'affiche les alertes : tant que ce n\'est pas activé, rien n\'apparaît dans OBS.</div>'
+        + '<div class="flex flex-wrap items-center gap-4 text-xs text-slate-300">' + w.map(x => '<label class="flex items-center gap-2"><input type="checkbox" data-wsc="' + esc(x.slug) + '" checked> ' + esc(x.name) + '</label>').join('')
+        + '<button class="btn go" id="enableWidget">Afficher les alertes dans ces scènes</button><span id="enableMsg" class="text-slate-400"></span></div></div>';
+    $('enableWidget').addEventListener('click', async () => {
+        const scenes = [...host.querySelectorAll('[data-wsc]:checked')].map(c => c.dataset.wsc);
+        const res = await fetch('/admin/api/alerts/enable-widget', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scenes }) });
+        if (res.ok) { w.forEach(x => { if (scenes.includes(x.slug)) x.enabled = true; }); renderWidgetBanner(); }
+        else $('enableMsg').textContent = 'Erreur ' + res.status;
+    });
+}
+
+function renderSimple() {
+    let lastGroup = null;
+    $('simple').innerHTML = data.kinds.map(k => {
+        const v = primary(k.key);
+        const head = k.group !== lastGroup ? '<div class="col-span-full text-[11px] font-black tracking-widest uppercase text-slate-500 mt-2 -mb-2">' + esc(k.group) + '</div>' : '';
+        lastGroup = k.group;
+        return head + '<div class="config-card rounded-2xl p-5" data-sk="' + k.key + '">'
+          + '<div class="flex items-center justify-between mb-4"><h2 class="text-lg font-black text-white">' + esc(k.label) + '</h2>'
+          + '<label class="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" data-sf="enabled" ' + (v.enabled ? 'checked' : '') + '> Activée</label></div>'
+
+          + '<div class="text-[10px] font-black tracking-widest uppercase text-slate-500 mb-1">1 · Image</div>'
+          + '<div class="flex items-center gap-3 mb-1"><div class="w-36 h-20 rounded-xl border border-slate-600 flex items-center justify-center overflow-hidden" '
+          +   'style="background:repeating-conic-gradient(#0b1220 0% 25%,#111a2e 0% 50%) 50%/16px 16px" data-sthumb>' + thumb(v) + '</div>'
+          + '<div class="flex flex-col gap-2"><button class="btn main" data-spick><i class="fas fa-image mr-1"></i>Choisir une image</button>'
+          + '<button class="btn" data-scrop title="Rogner les bords, couper la vidéo, déplacer"><i class="fas fa-crop-simple mr-1"></i>Rogner</button>'
+          + '<button class="btn" data-sclear><i class="fas fa-xmark mr-1"></i>Retirer</button></div></div>'
+          + '<div class="text-[11px] text-amber-400 mb-3 min-h-[1rem]" data-swarn>' + esc(mediaWarn(v.media.file)) + '</div>'
+
+          + '<div class="text-[10px] font-black tracking-widest uppercase text-slate-500 mb-1">2 · Son</div>'
+          + '<div class="flex items-center gap-2 mb-4"><select data-sf="sound" class="input-dark flex-1 rounded-lg px-2 py-1.5 text-sm min-w-0">'
+          +   '<option value="">Aucun son</option>' + data.sounds.map(f => '<option value="' + esc(f) + '"' + (f === v.sound ? ' selected' : '') + '>' + esc(f) + '</option>').join('') + '</select>'
+          + '<button class="btn" data-splay title="Écouter"><i class="fas fa-play"></i></button>'
+          + '<label class="btn cursor-pointer" title="Envoyer un son"><i class="fas fa-upload"></i><input type="file" data-supsound accept=".mp3,.wav,.ogg" class="hidden"></label></div>'
+
+          + '<div class="text-[10px] font-black tracking-widest uppercase text-slate-500 mb-1">3 · Texte</div>'
+          + '<input data-sf="template" value="' + esc(v.text.template) + '" maxlength="240" class="input-dark w-full rounded-lg px-3 py-2 text-sm mb-2">'
+          + '<div class="flex flex-wrap items-center gap-1 mb-4">' + k.vars.map(x => '<button class="btn" data-svar="{' + x + '}">{' + x + '}</button>').join('')
+          + '<span class="ml-auto flex items-center gap-2 text-[11px] text-slate-400">Le texte apparaît après '
+          + '<input data-sf="text_delay" type="number" min="0" max="30" step="0.1" value="' + esc(v.text.delay || 0) + '" class="input-dark rounded-lg px-2 py-1 text-sm w-16"> s</span></div>'
+
+          + '<div class="flex items-center justify-between mb-1"><div class="text-[10px] font-black tracking-widest uppercase text-slate-500">4 · Message dans le t\'chat</div>'
+          + '<label class="flex items-center gap-2 text-[11px] text-slate-300"><input type="checkbox" data-sf="chat_enabled" ' + (v.chat_enabled ? 'checked' : '') + '> Envoyer</label></div>'
+          + '<input data-sf="chat_message" value="' + esc(v.chat_message || '') + '" maxlength="450" placeholder="Aucun message" class="input-dark w-full rounded-lg px-3 py-2 text-sm mb-2">'
+          + '<div class="flex flex-wrap gap-1 mb-4">' + k.vars.map(x => '<button class="btn" data-cvar="{' + x + '}">{' + x + '}</button>').join('')
+          + '<button class="btn ml-auto" data-chattest title="Envoie ce message dans le vrai t\'chat, préfixé [TEST]"><i class="fas fa-comment mr-1"></i>Tester dans le t\'chat</button></div>'
+
+          + '<div class="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-700">'
+          + '<button class="btn go" data-stest><i class="fas fa-play mr-1"></i>Tester dans OBS</button>'
+          + '<button class="btn" data-scopy title="Reprendre ces réglages pour d\'autres alertes (Sub, Raid…)"><i class="fas fa-share mr-1"></i>Copier vers…</button>'
+          + '<button class="btn" data-sadv><i class="fas fa-sliders mr-1"></i>Aperçu &amp; options avancées</button>'
+          + '<span class="text-[11px] text-slate-500 w-full" data-smsg></span></div></div>';
+    }).join('');
+    bindSimple();
+}
+function refreshSimple() {
+    document.querySelectorAll('#simple [data-sk]').forEach(card => {
+        const v = primary(card.dataset.sk);
+        card.querySelector('[data-sthumb]').innerHTML = thumb(v);
+        const en = card.querySelector('[data-sf="enabled"]'); if (en) en.checked = v.enabled;
+        const wn = card.querySelector('[data-swarn]'); if (wn) wn.textContent = mediaWarn(v.media.file);
+        const so = card.querySelector('[data-sf="sound"]'); if (so && document.activeElement !== so) so.value = v.sound || '';
+        const tx = card.querySelector('[data-sf="template"]'); if (tx && document.activeElement !== tx) tx.value = v.text.template;
+        const dl = card.querySelector('[data-sf="text_delay"]'); if (dl && document.activeElement !== dl) dl.value = v.text.delay || 0;
+        const cm = card.querySelector('[data-sf="chat_message"]'); if (cm && document.activeElement !== cm) cm.value = v.chat_message || '';
+        const ce = card.querySelector('[data-sf="chat_enabled"]'); if (ce) ce.checked = !!v.chat_enabled;
+    });
+}
+function bindSimple() {
+    document.querySelectorAll('#simple [data-sk]').forEach(card => {
+        const k = card.dataset.sk, msg = card.querySelector('[data-smsg]');
+        const say = (t, ok) => { msg.className = 'text-[11px] w-full ' + (ok ? 'text-emerald-400' : 'text-amber-400'); msg.textContent = t; };
+        card.querySelector('[data-sf="enabled"]').addEventListener('change', (e) => { primary(k).enabled = e.target.checked; markDirty(); renderVariantList(); renderKindTabs(); });
+        card.querySelector('[data-sf="sound"]').addEventListener('change', (e) => { primary(k).sound = e.target.value; markDirty(); if (k === kind) renderSettings(); });
+        const cm = card.querySelector('[data-sf="chat_message"]');
+        cm.addEventListener('input', () => { primary(k).chat_message = cm.value; markDirty(); if (k === kind && cur() && cur().id === primary(k).id) renderSettings(); });
+        card.querySelector('[data-sf="chat_enabled"]').addEventListener('change', (e) => { primary(k).chat_enabled = e.target.checked; markDirty(); if (k === kind) renderSettings(); });
+        card.querySelectorAll('[data-cvar]').forEach(b => b.addEventListener('click', () => {
+            const at = cm.selectionStart ?? cm.value.length;
+            cm.value = cm.value.slice(0, at) + b.dataset.cvar + cm.value.slice(cm.selectionEnd ?? at);
+            cm.dispatchEvent(new Event('input')); cm.focus();
+        }));
+        card.querySelector('[data-chattest]').addEventListener('click', async () => {
+            const res = await fetch('/admin/api/alerts/test_chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ variant: primary(k) }) });
+            const j = await res.json().catch(() => ({}));
+            say(res.ok ? j.message : (j.detail || ('Erreur ' + res.status)), res.ok);
+        });
+        const dl = card.querySelector('[data-sf="text_delay"]');
+        dl.addEventListener('input', () => {
+            primary(k).text.delay = Math.max(0, parseFloat(dl.value) || 0); markDirty();
+            if (k === kind && cur() && cur().id === primary(k).id) { renderSettings(); replaySoon(); }
+        });
+        const tx = card.querySelector('[data-sf="template"]');
+        tx.addEventListener('input', () => { primary(k).text.template = tx.value; markDirty(); renderVariantList(); if (k === kind && cur() && cur().id === primary(k).id) { renderSettings(); replaySoon(); } });
+        card.querySelectorAll('[data-svar]').forEach(b => b.addEventListener('click', () => {
+            const at = tx.selectionStart ?? tx.value.length;
+            tx.value = tx.value.slice(0, at) + b.dataset.svar + tx.value.slice(tx.selectionEnd ?? at);
+            tx.dispatchEvent(new Event('input')); tx.focus();
+        }));
+        card.querySelector('[data-spick]').addEventListener('click', () => openPicker(k));
+        card.querySelector('[data-sclear]').addEventListener('click', () => { const v = primary(k); v.media.file = ''; v.media.emoji = ''; markDirty(); refreshSimple(); if (k === kind) { renderSettings(); replaySoon(); } });
+        card.querySelector('[data-splay]').addEventListener('click', () => {
+            const f = primary(k).sound; if (!f) return say('Choisis d\'abord un son.', false);
+            const a = new Audio(soundUrl(f)); a.volume = primary(k).volume; a.play().catch(() => say('Lecture impossible.', false));
+        });
+        card.querySelector('[data-supsound]').addEventListener('change', async (e) => {
+            const file = e.target.files[0]; if (!file) return;
+            say('Envoi du son…', true);
+            const fd = new FormData(); fd.append('file', file);
+            const res = await fetch('/admin/api/alerts/upload?type=sound', { method: 'POST', body: fd });
+            const j = await res.json().catch(() => ({}));
+            if (!res.ok) return say(j.detail || ('Erreur ' + res.status), false);
+            data.sounds.push(j.name); data.sounds.sort(); primary(k).sound = j.name; markDirty();
+            renderSimple(); renderSettings(); say('« ' + j.name + ' » ajouté.', true);
+        });
+        card.querySelector('[data-stest]').addEventListener('click', async () => {
+            const res = await fetch('/admin/api/alerts/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ variant: primary(k) }) });
+            const j = await res.json().catch(() => ({}));
+            if (!res.ok) return say(j.detail || ('Erreur ' + res.status), false);
+            const w = j.warnings || [];
+            say(w.length ? 'Envoyé, mais : ' + w.join(' ') : 'Envoyé à l\'écran.', !w.length);
+        });
+        card.querySelector('[data-scrop]').addEventListener('click', () => card.querySelector('[data-sadv]').click());
+        card.querySelector('[data-scopy]').addEventListener('click', () => { kind = k; renderKindTabs(); select(primary(k).id); openCopy(); });
+        card.querySelector('[data-sadv]').addEventListener('click', () => {
+            kind = k; renderKindTabs(); select(primary(k).id);
+            const adv = $('adv'); adv.open = true; adv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    });
+}
+
+// fenêtre de choix du média
+let pickKind = null;
+function openPicker(k) {
+    pickKind = k; $('pickerMsg').textContent = '';
+    renderPicker(); $('picker').classList.remove('hidden');
+}
+function renderPicker() {
+    const cur_ = primary(pickKind).media.file;
+    $('pickerGrid').innerHTML = data.images.length ? '<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">' + data.images.map(f =>
+        '<button data-pf="' + esc(f) + '" class="rounded-xl border ' + (f === cur_ ? 'border-indigo-400' : 'border-slate-600') + ' p-2 hover:border-indigo-400 text-left" '
+      + 'style="background:repeating-conic-gradient(#0b1220 0% 25%,#111a2e 0% 50%) 50%/16px 16px">'
+      + '<div class="h-24 flex items-center justify-center overflow-hidden">'
+      + (isVid(f) ? '<video src="' + mediaUrl(f) + '" muted class="max-h-full max-w-full"></video>' : '<img src="' + mediaUrl(f) + '" class="max-h-full max-w-full" alt="">')
+      + '</div><div class="text-[11px] text-slate-300 mt-1 truncate">' + esc(f) + '</div>'
+      + (mediaWarn(f) ? '<div class="text-[10px] text-amber-400 mt-1">⚠ illisible dans OBS</div>' : '') + '</button>').join('') + '</div>'
+      : '<p class="text-slate-400 text-sm">Aucun fichier pour l\'instant : envoie une image, un GIF animé ou une vidéo avec le bouton ci-dessous.</p>';
+    $('pickerGrid').querySelectorAll('[data-pf]').forEach(b => b.addEventListener('click', () => {
+        const v = primary(pickKind); v.media.file = b.dataset.pf; v.media.emoji = '';
+        markDirty(); $('picker').classList.add('hidden'); refreshSimple();
+        if (pickKind === kind) { renderSettings(); replaySoon(); }
+    }));
+}
+$('pickerClose').addEventListener('click', () => $('picker').classList.add('hidden'));
+$('picker').addEventListener('click', (e) => { if (e.target === $('picker')) $('picker').classList.add('hidden'); });
+$('pickerUpload').addEventListener('change', async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    $('pickerMsg').className = 'text-slate-400'; $('pickerMsg').textContent = 'Envoi…';
+    const fd = new FormData(); fd.append('file', file);
+    const res = await fetch('/admin/api/alerts/upload?type=media', { method: 'POST', body: fd });
+    const j = await res.json().catch(() => ({}));
+    e.target.value = '';
+    if (!res.ok) { $('pickerMsg').className = 'text-amber-400'; $('pickerMsg').textContent = j.detail || ('Erreur ' + res.status); return; }
+    data.images.push(j.name); data.images.sort(); data.media_info[j.name] = j.info || {};
+    const v = primary(pickKind); v.media.file = j.name; v.media.emoji = '';
+    if (j.info && j.info.message) { /* l'avertissement s'affiche sous la vignette */ }
+    markDirty(); $('picker').classList.add('hidden'); refreshSimple(); renderSettings();
+});
+
+// ───────── Copier vers d'autres types d'alerte ─────────
+$('copyKindBtn').addEventListener('click', () => openCopy());
+function openCopy() {
+    const v = cur(); if (!v) return;
+    $('cpName').textContent = v.name + ' (' + data.kinds.find(k => k.key === v.kind).label + ')';
+    $('cpKinds').innerHTML = data.kinds.filter(k => k.key !== v.kind).map(k =>
+        '<label class="flex items-center gap-2"><input type="checkbox" data-ck="' + k.key + '"> ' + esc(k.label) + '</label>').join('');
+    document.querySelector('input[name="cpMode"][value="notext"]').checked = true; $('cpMsg').textContent = '';
+    $('copyModal').classList.remove('hidden');
+}
+$('cpCancel').addEventListener('click', () => $('copyModal').classList.add('hidden'));
+$('copyModal').addEventListener('click', (e) => { if (e.target === $('copyModal')) $('copyModal').classList.add('hidden'); });
+$('cpGo').addEventListener('click', () => {
+    const src = cur(); if (!src) return;
+    const targets = [...document.querySelectorAll('[data-ck]:checked')].map(c => c.dataset.ck);
+    if (!targets.length) { $('cpMsg').className = 'text-xs text-amber-400'; $('cpMsg').textContent = 'Choisis au moins un type.'; return; }
+    targets.forEach(k => {
+        const dst = primary(k), keep = { id: dst.id, kind: dst.kind, name: dst.name, enabled: dst.enabled, min_amount: dst.min_amount, max_amount: dst.max_amount };
+        const own = { template: dst.text.template, file: dst.media.file, emoji: dst.media.emoji, sound: dst.sound, volume: dst.volume };
+        const copy = JSON.parse(JSON.stringify(src));
+        Object.assign(dst, copy, keep);
+        const mode = document.querySelector('input[name="cpMode"]:checked').value;
+        if (mode !== 'all') dst.text.template = own.template;
+        if (mode === 'look') { dst.media.file = own.file; dst.media.emoji = own.emoji; dst.sound = own.sound; dst.volume = own.volume; }
+    });
+    $('copyModal').classList.add('hidden');
+    markDirty(); renderSimple(); renderVariantList(); renderKindTabs();
+    $('msg').className = 'text-xs text-emerald-400'; $('msg').textContent = 'Réglages copiés vers ' + targets.length + ' type(s) : pense à enregistrer.';
+});
+
+// ───────── Exporter / importer tous les réglages ─────────
+$('exportBtn').addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify({ format: 'masthbot-alerts', version: 1, variants, screamer: collectScreamer() }, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'alertes.json';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    $('msg').className = 'text-xs text-emerald-400'; $('msg').textContent = 'Réglages exportés (les images et sons ne sont pas dans le fichier).';
+});
+$('importFile').addEventListener('change', async (e) => {
+    const file = e.target.files[0]; e.target.value = ''; if (!file) return;
+    let obj;
+    try { obj = JSON.parse(await file.text()); } catch (err) { $('msg').className = 'text-xs text-amber-400'; $('msg').textContent = 'Fichier illisible.'; return; }
+    if (obj.format !== 'masthbot-alerts' || !Array.isArray(obj.variants)) { $('msg').className = 'text-xs text-amber-400'; $('msg').textContent = 'Ce fichier n\'est pas un export d\'alertes.'; return; }
+    if (dirty && !confirm('Remplacer les réglages en cours (non enregistrés) par ceux du fichier ?')) return;
+    const missing = new Set();
+    obj.variants.forEach(v => {
+        if (v.media && v.media.file && !data.images.includes(v.media.file)) { missing.add(v.media.file); v.media.file = ''; }
+        if (v.sound && !data.sounds.includes(v.sound)) { missing.add(v.sound); v.sound = ''; }
+    });
+    const sc = obj.screamer || {};
+    if (sc.image && !data.images.includes(sc.image)) { missing.add(sc.image); sc.image = ''; }
+    if (sc.sound && !data.sounds.includes(sc.sound)) { missing.add(sc.sound); sc.sound = ''; }
+    variants = obj.variants; screamer = Object.assign({}, screamer, sc);
+    renderSimple(); renderKindTabs(); select((kindVariants()[0] || {}).id || null); renderScreamer(); markDirty();
+    $('msg').className = 'text-xs text-amber-400';
+    $('msg').textContent = 'Importé : vérifie puis enregistre.' + (missing.size ? ' Fichiers absents ici (à renvoyer) : ' + [...missing].join(', ') : '');
+});
+
+// ───────── onglets principaux + init ─────────
+document.querySelectorAll('#mainTabs .tab').forEach(t => t.addEventListener('click', () => {
+    document.querySelectorAll('#mainTabs .tab').forEach(x => x.classList.toggle('active', x === t));
+    document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + t.dataset.tab));
+}));
+window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+async function load() {
+    const res = await fetch('/admin/api/alerts');
+    if (!res.ok) { $('msg').textContent = 'Chargement impossible (' + res.status + ')'; return; }
+    data = await res.json();
+    variants = data.variants; screamer = data.screamer;
+    renderWidgetBanner();
+    renderSimple();
+    renderKindTabs();
+    select((kindVariants()[0] || {}).id || null);
+    renderScreamer();
+}
+load();
+</script>
+</body>
+</html>
