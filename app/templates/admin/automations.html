@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automatisations - MasthomBot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #6366f1; outline: none; }
+        .chip { cursor: pointer; }
+    </style>
+    <link rel="stylesheet" href="/static/scrollbar.css">
+</head>
+<body class="flex min-h-screen">
+    {% include 'admin/sidebar.html' %}
+
+    <main class="flex-1 p-6 md:p-10 min-w-0">
+        <header class="mb-8 flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">Automatisations</h1>
+                <p class="text-slate-400 mt-1 max-w-3xl">« Quand ça arrive, le bot écrit ce message dans le t'chat. » Crée autant d'automatisations que tu veux : choisis le déclencheur, les conditions et les messages.</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <select id="newTrigger" class="input-dark rounded-xl px-3 py-2.5 text-sm"></select>
+                <button id="newBtn" class="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold"><i class="fas fa-plus mr-2"></i>Nouvelle automatisation</button>
+            </div>
+        </header>
+
+        <div id="cards" class="space-y-2"></div>
+
+        <section class="config-card rounded-2xl p-5 mt-8">
+            <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Derniers envois</h2>
+            <div id="log" class="text-xs text-slate-400 space-y-1"></div>
+        </section>
+    </main>
+
+<script>
+(function () {
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+    let triggers = [], rules = [], lastFocus = null;
+    const trig = (k) => triggers.find(t => t.key === k);
+
+    async function api(method, url, body) {
+        const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+        return { ok: r.ok, j: await r.json().catch(() => ({})) };
+    }
+    const groupedOptions = (sel) => {
+        const groups = {};
+        triggers.forEach(t => (groups[t.group] = groups[t.group] || []).push(t));
+        return Object.entries(groups).map(([g, ts]) => '<optgroup label="' + esc(g) + '">' + ts.map(t =>
+            '<option value="' + t.key + '"' + (t.key === sel ? ' selected' : '') + '>' + esc(t.label) + '</option>').join('') + '</optgroup>').join('');
+    };
+    function msgRow(m) {
+        return '<div class="flex items-start gap-2" data-msg>'
+            + '<textarea rows="2" maxlength="450" class="input-dark flex-1 rounded-lg px-3 py-2 text-sm" data-m>' + esc(m) + '</textarea>'
+            + '<button class="px-2.5 py-2 rounded-lg bg-slate-700 hover:bg-red-600 text-xs" data-rm title="Supprimer ce message"><i class="fas fa-trash"></i></button></div>';
+    }
+    function detail(r) {            // partie qui dépend du déclencheur : description, variables, conditions
+        const t = trig(r.trigger);
+        let h = '<p class="text-xs text-slate-400">' + esc(t.description) + '</p>'
+          + (t.note ? '<p class="text-[11px] text-amber-400 mt-1"><i class="fas fa-triangle-exclamation mr-1"></i>' + esc(t.note) + '</p>' : '');
+        h += '<div class="text-xs text-slate-400 mt-4 mb-2">Messages'
+           + (Object.keys(t.vars).length ? ' — variables à cliquer :' : '') + '</div>'
+           + '<div class="flex flex-wrap gap-2 mb-3">' + Object.entries(t.vars).map(([k, d]) =>
+                '<button class="px-2 py-1 rounded-md bg-indigo-500/15 text-indigo-300 text-[11px] font-bold" data-var="' + k + '" title="' + esc(d) + '">{' + k + '}</button>').join('') + '</div>';
+        return h;
+    }
+    function summary(r) {
+        const t = trig(r.trigger);
+        const first = (r.messages[0] || '').replace(/\s+/g, ' ');
+        return '<i class="fas ' + esc(t.icon) + ' w-5 text-center ' + (r.enabled ? 'text-indigo-400' : 'text-slate-600') + '"></i>'
+          + '<span class="font-bold text-sm ' + (r.enabled ? 'text-white' : 'text-slate-500') + ' shrink-0 max-w-[16rem] truncate">' + esc(r.name) + '</span>'
+          + '<span class="text-[11px] text-slate-500 shrink-0 hidden md:inline">' + esc(t.label) + '</span>'
+          + '<span class="text-xs text-slate-400 truncate flex-1 min-w-0">' + esc(first) + (r.messages.length > 1 ? ' <span class="text-slate-500">(+' + (r.messages.length - 1) + ')</span>' : '') + '</span>'
+          + '<label class="flex items-center gap-1.5 text-[11px] font-bold shrink-0 ' + (r.enabled ? 'text-emerald-400' : 'text-slate-500') + '" data-sw title="Activer / désactiver">'
+          + '<input type="checkbox" data-sumsw ' + (r.enabled ? 'checked' : '') + '>' + (r.enabled ? 'Activée' : 'Désactivée') + '</label>'
+          + '<i class="fas fa-chevron-down text-slate-500 text-xs transition-transform" data-chev></i>';
+    }
+    function card(r) {
+        const t = trig(r.trigger);
+        return '<section class="config-card rounded-2xl overflow-hidden" data-id="' + r.id + '">'
+          + '<div class="flex items-center gap-3 px-5 py-3.5 cursor-pointer hover:bg-slate-800/50" data-summary>' + summary(r) + '</div>'
+          + '<div class="hidden p-6 border-t border-slate-700/70" data-body>'
+          + '<div class="flex flex-wrap items-center gap-3 mb-4">'
+          + '<i class="fas ' + esc(t.icon) + ' text-indigo-400 text-lg" data-icon></i>'
+          + '<input data-f="name" value="' + esc(r.name) + '" maxlength="80" class="input-dark rounded-lg px-3 py-2 text-sm font-bold flex-1 min-w-[12rem]">'
+          + '<label class="flex items-center gap-2 text-sm font-bold text-slate-200"><input type="checkbox" data-f="enabled" ' + (r.enabled ? 'checked' : '') + '> Activée</label></div>'
+          + '<label class="block text-xs mb-3"><span class="text-slate-400">Déclencheur — quand ça arrive…</span>'
+          + '<select data-f="trigger" class="input-dark w-full md:w-96 rounded-lg px-3 py-2 mt-1 text-sm">' + groupedOptions(r.trigger) + '</select></label>'
+          + '<div data-detail>' + detail(r) + '</div>'
+          + '<div class="space-y-2" data-msgs>' + r.messages.map(msgRow).join('') + '</div>'
+          + '<button class="mt-3 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold" data-add><i class="fas fa-plus mr-1"></i>Ajouter un message</button>'
+          + '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-5 text-xs" data-conds>' + conds(r) + '</div>'
+          + '<div class="flex flex-wrap items-center gap-3 mt-5">'
+          + '<button class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold" data-save><i class="fas fa-save mr-2"></i>Enregistrer</button>'
+          + '<button class="px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-sm font-bold" data-test title="Écrit vraiment le premier message dans ton t\'chat, avec des valeurs d\'exemple"><i class="fas fa-paper-plane mr-2"></i>Tester dans le t\'chat</button>'
+          + '<button class="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-sm" data-dup title="Dupliquer"><i class="fas fa-copy"></i></button>'
+          + '<button class="px-3 py-2 rounded-xl bg-slate-700 hover:bg-red-600 text-sm" data-del title="Supprimer"><i class="fas fa-trash"></i></button>'
+          + '<button class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm text-slate-300" data-close title="Fermer sans enregistrer"><i class="fas fa-chevron-up mr-1"></i>Fermer</button>'
+          + '<span class="text-xs" data-out></span></div></div></section>';
+    }
+    function setOpen(el, open) {
+        el.querySelector('[data-body]').classList.toggle('hidden', !open);
+        el.querySelector('[data-chev]').style.transform = open ? 'rotate(180deg)' : '';
+        el.classList.toggle('ring-1', open); el.classList.toggle('ring-indigo-500/60', open);
+    }
+    function openOnly(el) {            // une seule automatisation ouverte à la fois : les autres se referment
+        $('cards').querySelectorAll('[data-id]').forEach(c => setOpen(c, c === el));
+    }
+    function conds(r) {
+        const t = trig(r.trigger);
+        const num = (f, label, v, extra) => '<label class="block"><span class="text-slate-400">' + label + '</span><input data-f="' + f + '" type="number" min="0" ' + (extra || '') + ' value="' + esc(v) + '" class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm"></label>';
+        return '<label class="block"><span class="text-slate-400">Plusieurs messages :</span><select data-f="mode" class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm">'
+             + '<option value="all"' + (r.mode !== 'random' ? ' selected' : '') + '>les envoyer tous, à la suite</option>'
+             + '<option value="random"' + (r.mode === 'random' ? ' selected' : '') + '>en envoyer un seul, au hasard</option></select></label>'
+             + num('gap', 'Écart entre deux messages (secondes)', r.gap, 'max="30" step="0.5"')
+             + num('delay', 'Délai avant l\'envoi (secondes)', r.delay, 'max="120" step="0.5"')
+             + num('cooldown', 'Attente minimale entre deux envois (secondes)', r.cooldown)
+             + (t.value ? num('min_value', t.value.label, r.min_value) : '')
+             + (t.text ? '<label class="block"><span class="text-slate-400">' + esc(t.text.label) + '</span><input data-f="text_filter" maxlength="100" value="' + esc(r.text_filter) + '" class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm"></label>' : '');
+    }
+    function collect(el) {
+        const q = (f) => el.querySelector('[data-f="' + f + '"]');
+        return {
+            name: q('name').value, enabled: q('enabled').checked, trigger: q('trigger').value,
+            messages: [...el.querySelectorAll('[data-m]')].map(t => t.value),
+            mode: q('mode').value, gap: parseFloat(q('gap').value || 0),
+            delay: parseFloat(q('delay').value || 0), cooldown: parseInt(q('cooldown').value || 0, 10),
+            min_value: q('min_value') ? parseInt(q('min_value').value || 0, 10) : 0,
+            text_filter: q('text_filter') ? q('text_filter').value : '',
+        };
+    }
+    function bindMsgs(el) {
+        const rmBind = (row) => row.querySelector('[data-rm]').addEventListener('click', () => { if (el.querySelectorAll('[data-msg]').length > 1) row.remove(); });
+        el.querySelectorAll('[data-msg]').forEach(rmBind);
+        el.querySelector('[data-add]').onclick = () => {
+            const d = document.createElement('div'); d.innerHTML = msgRow(''); const row = d.firstChild;
+            el.querySelector('[data-msgs]').appendChild(row); rmBind(row); row.querySelector('textarea').focus();
+        };
+        el.querySelectorAll('[data-var]').forEach(b => b.onclick = () => {
+            const t = lastFocus && el.contains(lastFocus) ? lastFocus : el.querySelector('[data-m]');
+            if (!t) return;
+            const s = t.selectionStart ?? t.value.length, e2 = t.selectionEnd ?? s, v = '{' + b.dataset.var + '}';
+            t.value = t.value.slice(0, s) + v + t.value.slice(e2); t.focus(); t.selectionStart = t.selectionEnd = s + v.length;
+        });
+    }
+    function bind() {
+        $('cards').querySelectorAll('[data-id]').forEach(el => {
+            const id = el.dataset.id, out = el.querySelector('[data-out]');
+            const say = (t, ok) => { out.className = 'text-xs ' + (ok === false ? 'text-amber-400' : 'text-emerald-400'); out.textContent = t || ''; };
+            el.addEventListener('focusin', (e) => { if (e.target.matches('[data-m]')) lastFocus = e.target; });
+            const body = el.querySelector('[data-body]');
+            el.querySelector('[data-summary]').addEventListener('click', (e) => {
+                if (e.target.closest('[data-sw]')) return;
+                if (body.classList.contains('hidden')) openOnly(el); else setOpen(el, false);
+            });
+            el.querySelector('[data-close]').addEventListener('click', () => setOpen(el, false));
+            el.querySelector('[data-sumsw]').addEventListener('change', async (e) => {      // interrupteur de la ligne : enregistré tout de suite
+                const rule = rules.find(x => x.id == id);
+                const { ok, j } = await api('PUT', '/admin/api/automations/' + id, { rule: Object.assign({}, rule, { enabled: e.target.checked }) });
+                if (ok) { Object.assign(rule, j.rule); el.querySelector('[data-f="enabled"]').checked = rule.enabled; el.querySelector('[data-summary]').innerHTML = summary(rule); }
+                else { e.target.checked = !e.target.checked; }
+            });
+            bindMsgs(el);
+            el.querySelector('[data-f="trigger"]').addEventListener('change', (e) => {      // autre déclencheur : variables, conditions et message d'origine changent
+                const old = rules.find(x => x.id == id) || {}, oldT = trig(old.trigger), t = trig(e.target.value);
+                const cur = collect(el);
+                const isOriginal = oldT && cur.messages.length === 1 && cur.messages[0].trim() === oldT.default;
+                if (isOriginal || cur.messages.every(m => !m.trim())) cur.messages = [t.default];   // message non modifié : on met celui du nouveau déclencheur
+                const r2 = Object.assign({}, old, cur, { id: Number(id), trigger: e.target.value });
+                el.querySelector('[data-detail]').innerHTML = detail(r2);
+                el.querySelector('[data-msgs]').innerHTML = cur.messages.map(msgRow).join('');
+                el.querySelector('[data-conds]').innerHTML = conds(r2);
+                el.querySelector('[data-icon]').className = 'fas ' + t.icon + ' text-indigo-400 text-lg';
+                old.trigger = e.target.value;
+                bindMsgs(el);
+            });
+            el.querySelector('[data-save]').addEventListener('click', async () => {
+                const { ok, j } = await api('PUT', '/admin/api/automations/' + id, { rule: collect(el) });
+                say(ok ? 'Enregistré ✓' : (j.detail || 'Erreur'), ok);
+                if (ok) {
+                    const i = rules.findIndex(x => x.id == id); rules[i] = j.rule;
+                    el.querySelector('[data-summary]').innerHTML = summary(j.rule);
+                    setTimeout(() => setOpen(el, false), 500);          // enregistré : la carte se referme sur une ligne
+                }
+            });
+            el.querySelector('[data-test]').addEventListener('click', async () => {
+                say('Envoi…');
+                const { ok, j } = await api('POST', '/admin/api/automations/test', { rule: collect(el) });
+                say(ok ? (j.message || 'Envoyé') : (j.detail || j.message || 'Erreur'), ok && j.ok !== false); refreshLog();
+            });
+            el.querySelector('[data-dup]').addEventListener('click', async () => { await api('POST', '/admin/api/automations/' + id + '/duplicate'); await load(); });
+            el.querySelector('[data-del]').addEventListener('click', async () => {
+                if (!confirm('Supprimer cette automatisation ?')) return;
+                await api('DELETE', '/admin/api/automations/' + id); await load();
+            });
+        });
+    }
+    async function refreshLog() {
+        const { ok, j } = await api('GET', '/admin/api/automations'); if (!ok) return;
+        $('log').innerHTML = j.log.map(l => '<div>' + esc(l.ts) + ' · <strong class="text-slate-300">' + esc(l.key) + '</strong> — ' + esc(l.detail) + '</div>').join('') || 'Aucun envoi pour l\'instant.';
+    }
+    async function load() {
+        const { ok, j } = await api('GET', '/admin/api/automations');
+        if (!ok) return;
+        triggers = j.triggers; rules = j.rules;
+        $('newTrigger').innerHTML = groupedOptions('raid_out');
+        $('cards').innerHTML = rules.map(card).join('') || '<p class="text-slate-500 text-sm">Aucune automatisation. Choisis un déclencheur en haut et clique sur « Nouvelle automatisation ».</p>';
+        bind();
+        $('log').innerHTML = j.log.map(l => '<div>' + esc(l.ts) + ' · <strong class="text-slate-300">' + esc(l.key) + '</strong> — ' + esc(l.detail) + '</div>').join('') || 'Aucun envoi pour l\'instant.';
+    }
+    $('newBtn').addEventListener('click', async () => {
+        const { j } = await api('POST', '/admin/api/automations', { trigger: $('newTrigger').value }); await load();
+        const el = j.rule && $('cards').querySelector('[data-id="' + j.rule.id + '"]');
+        if (el) { openOnly(el); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    });
+    load();
+})();
+</script>
+</body>
+</html>

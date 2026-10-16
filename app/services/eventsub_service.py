@@ -228,9 +228,14 @@ async def eventsub_routine():
                                 await subscribe_to_event(session, client_id, token, ws_id, "channel.subscription.message", "1", c_broad)
                                 await subscribe_to_event(session, client_id, token, ws_id, "channel.subscription.gift", "1", c_broad)
                                 await subscribe_to_event(session, client_id, token, ws_id, "channel.raid", "1", c_raid)
+                                # Raid SORTANT (c'est toi qui lances un raid) : message automatique dans le t'chat
+                                await subscribe_to_event(session, client_id, token, ws_id, "channel.raid", "1", {"from_broadcaster_user_id": broadcaster_id})
                                 await subscribe_to_event(session, client_id, token, ws_id, "channel.cheer", "1", c_broad)
                                 await subscribe_to_event(session, client_id, token, ws_id, "channel.follow", "2", c_mod)
                                 await subscribe_to_event(session, client_id, token, ws_id, "channel.ban", "1", c_broad)
+                                # Début / fin de live (automatisations)
+                                await subscribe_to_event(session, client_id, token, ws_id, "stream.online", "1", c_broad)
+                                await subscribe_to_event(session, client_id, token, ws_id, "stream.offline", "1", c_broad)
                                 # Modérateurs : un modo protégé qui perd son statut est remis par le bot
                                 await subscribe_to_event(session, client_id, token, ws_id, "channel.moderator.remove", "1", c_broad)
                                 await subscribe_to_event(session, client_id, token, ws_id, "channel.moderator.add", "1", c_broad)
@@ -255,6 +260,12 @@ async def eventsub_routine():
                             sub_type = data["metadata"]["subscription_type"]
                             event = data["payload"]["event"]
                             conf = await get_current_xp_settings()
+                            # Automatisations (page /admin/automatisations) : tâche de fond, ne ralentit pas le traitement normal
+                            try:
+                                from app.services import automation_service
+                                asyncio.create_task(automation_service.on_eventsub(sub_type, event, broadcaster_id))
+                            except Exception as e:
+                                logger.error(f"❌ [AUTOMATISATION] {e}")
 
                             if sub_type in ["channel.subscribe", "channel.subscription.message"]:
                                 user_name = event.get("user_name", "Inconnu")
@@ -307,6 +318,9 @@ async def eventsub_routine():
                                     credits_service.log_event("gifters", user_name, f"{count} Subs offerts")
                                     await viewer_repo.add_experience(user_id, user_name, total_xp, "SUBGIFT", f"Offre {count} Subs Tier {tier}")
                                     await log_stream_event("subgift", user_name, {"count": count, "tier": tier, "xp": total_xp})
+
+                            elif sub_type == "channel.raid" and str(event.get("from_broadcaster_user_id")) == str(broadcaster_id):
+                                pass  # raid SORTANT : géré par les automatisations (rien à compter comme raid reçu)
 
                             elif sub_type == "channel.raid":
                                 raider_name = event.get("from_broadcaster_user_name", "Inconnu")

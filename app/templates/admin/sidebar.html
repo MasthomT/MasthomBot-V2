@@ -49,6 +49,10 @@
 					<i class="fas fa-brain w-5"></i>
 					Cerveau de Félix
 				</a>
+				<a href="/admin/automatisations" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'automatisations' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
+					<i class="fas fa-bolt w-5"></i>
+					Automatisations
+				</a>
 				<a href="/admin/notifications" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'notifications' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fas fa-bell w-5"></i>
 					Notifications
