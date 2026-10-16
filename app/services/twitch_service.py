@@ -236,6 +236,11 @@ class MasthbotTwitch(commands.Bot):
                 self.sync_roles_timer.start()
                 self._sync_roles_started = True
 
+            if not hasattr(self, "_mod_guard_started"):
+                print("🛡️ [ROUTINE] Lancement de la protection des modérateurs...")
+                self.mod_guard_timer.start()
+                self._mod_guard_started = True
+
             if not hasattr(self, "_sync_subs_started"):
                 print("⭐ [ROUTINE] Lancement du compteur d'abonnés...")
                 self.sync_subs_timer.start()
@@ -1686,6 +1691,17 @@ class MasthbotTwitch(commands.Bot):
         except Exception as e:
             logger.error(f"❌ [ROUTINE] Erreur dans l'aspirateur Twitch : {e}")
 
+    @routines.routine(minutes=10)
+    async def mod_guard_timer(self):
+        """Filet de sécurité : un modérateur protégé qui a perdu son statut est remis (en plus de la détection en direct)."""
+        if not self.broadcaster_id:
+            return
+        try:
+            from app.services import mod_guard_service
+            await mod_guard_service.reconcile("vérification régulière")
+        except Exception as e:
+            logger.error(f"❌ [ROUTINE] Protection des modérateurs : {e}")
+
     @routines.routine(minutes=5)
     async def sync_subs_timer(self):
         if not self.broadcaster_id: return
@@ -1954,6 +1970,7 @@ class MasthbotTwitch(commands.Bot):
             "Annonces": self.announcements_timer,
             "Annonces Spéciales": self.special_announcements_timer,
             "Aspirateur de Rôles": self.sync_roles_timer,
+            "Protection des modos": self.mod_guard_timer,
             "Compteur Subs": self.sync_subs_timer,
             "Compteur Viewers": self.sync_viewers_timer,
             "Expiration VIP": self.vip_expiration_timer,

@@ -231,6 +231,9 @@ async def eventsub_routine():
                                 await subscribe_to_event(session, client_id, token, ws_id, "channel.cheer", "1", c_broad)
                                 await subscribe_to_event(session, client_id, token, ws_id, "channel.follow", "2", c_mod)
                                 await subscribe_to_event(session, client_id, token, ws_id, "channel.ban", "1", c_broad)
+                                # Modérateurs : un modo protégé qui perd son statut est remis par le bot
+                                await subscribe_to_event(session, client_id, token, ws_id, "channel.moderator.remove", "1", c_broad)
+                                await subscribe_to_event(session, client_id, token, ws_id, "channel.moderator.add", "1", c_broad)
                                 await subscribe_to_event(session, client_id, token, ws_id, "channel.channel_points_custom_reward_redemption.add", "1", c_broad)
                                 await subscribe_to_event(session, client_id, token, ws_id, "channel.poll.begin", "1", c_broad)
                                 await subscribe_to_event(session, client_id, token, ws_id, "channel.poll.progress", "1", c_broad)
@@ -395,6 +398,16 @@ async def eventsub_routine():
                                 _fire_alert_bg("follow", user_name)
                                 await log_stream_event("follow", user_name, {"msg": "Bienvenue !"})
                                 credits_service.log_event("followers", user_name)
+
+                            elif sub_type in ("channel.moderator.remove", "channel.moderator.add"):
+                                try:
+                                    from app.services import mod_guard_service
+                                    if sub_type.endswith("remove"):
+                                        asyncio.create_task(mod_guard_service.on_moderator_removed(event))
+                                    else:
+                                        asyncio.create_task(mod_guard_service.on_moderator_added(event))
+                                except Exception as e:
+                                    logger.error(f"❌ [MODGUARD] Événement modérateur : {e}")
 
                             elif sub_type == "channel.ban":
                                 user_name = event.get("user_name", "Inconnu")

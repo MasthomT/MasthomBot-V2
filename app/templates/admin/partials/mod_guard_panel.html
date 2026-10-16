@@ -1,0 +1,77 @@
+{# Protection des modérateurs (incluse dans admin/moderation.html). Ids préfixés mg- #}
+                <!-- PROTECTION DES MODÉRATEURS -->
+                <section class="config-card p-8 rounded-3xl shadow-2xl border-l-4 border-emerald-500" id="mg-root">
+                    <div class="flex flex-wrap items-start justify-between gap-4 mb-4">
+                        <h2 class="text-xs font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
+                            <i class="fas fa-user-shield text-emerald-400 text-lg"></i> Protection des modérateurs
+                        </h2>
+                        <div class="flex items-center gap-3">
+                            <span id="mg-msg" class="text-xs text-slate-400"></span>
+                            <button id="mg-check" class="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold"><i class="fas fa-rotate mr-1"></i>Vérifier maintenant</button>
+                        </div>
+                    </div>
+                    <p class="text-sm text-slate-300 leading-relaxed mb-4">Si un modérateur de cette liste perd son statut sur Twitch, <strong>le bot le lui remet automatiquement</strong> (tout de suite, et par une vérification toutes les 10 minutes). Les nouveaux modérateurs sont ajoutés à la liste tout seuls.
+                        Pour retirer quelqu'un <em>volontairement</em>, utilise « Retirer le modo » ici : le retrait directement dans Twitch serait annulé par le bot.</p>
+                    <div class="flex flex-wrap gap-x-6 gap-y-2 text-xs text-slate-300 mb-4">
+                        <label class="flex items-center gap-2"><input type="checkbox" id="mg-enabled"> Remettre automatiquement le statut perdu</label>
+                        <label class="flex items-center gap-2"><input type="checkbox" id="mg-auto"> Protéger automatiquement les nouveaux modos</label>
+                        <label class="flex items-center gap-2"><input type="checkbox" id="mg-announce"> Prévenir dans le t'chat</label>
+                    </div>
+                    <div id="mg-rows" class="space-y-2"></div>
+                    <details class="mt-4">
+                        <summary class="text-xs font-bold text-slate-400 cursor-pointer">Dernières actions</summary>
+                        <div id="mg-log" class="mt-2 text-xs text-slate-400 space-y-1"></div>
+                    </details>
+                </section>
+
+<script>
+(function () {
+    const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+    let data = null;
+    const say = (t, ok) => { $('mg-msg').className = 'text-xs ' + (ok === false ? 'text-amber-400' : 'text-emerald-400'); $('mg-msg').textContent = t || ''; };
+    async function api(method, url, body) {
+        const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+        return { ok: r.ok, j: await r.json().catch(() => ({})) };
+    }
+    function render() {
+        const c = data.config;
+        $('mg-enabled').checked = c.enabled; $('mg-auto').checked = c.auto_protect; $('mg-announce').checked = c.announce;
+        $('mg-rows').innerHTML = data.roster.map(r => {
+            const lost = r.protected && !r.is_mod_db;
+            return '<div class="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl border border-slate-800 bg-slate-900/50" data-id="' + esc(r.twitch_id) + '">'
+                + '<div class="flex items-center gap-3"><span class="font-black text-white text-sm">' + esc(r.username) + '</span>'
+                + (r.protected ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300">protégé</span>'
+                               : '<span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-700 text-slate-300">non protégé</span>')
+                + (lost ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300">statut absent, sera remis</span>' : '')
+                + '<span class="text-[10px] text-slate-500">depuis le ' + esc(r.added_at) + '</span></div>'
+                + '<div class="flex gap-2">'
+                + '<button data-act="toggle" class="px-2.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-[11px] font-bold">' + (r.protected ? 'Ne plus protéger' : 'Protéger') + '</button>'
+                + '<button data-act="demote" class="px-2.5 py-1.5 rounded-lg bg-slate-700 hover:bg-red-600 text-[11px] font-bold" title="Retire le statut sur Twitch ET de la liste protégée">Retirer le modo</button>'
+                + '<button data-act="forget" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-bold text-slate-400" title="Oublier cette personne (sans toucher à Twitch)"><i class="fas fa-trash"></i></button>'
+                + '</div></div>';
+        }).join('') || '<p class="text-sm text-slate-500">Aucun modérateur en liste : clique sur « Vérifier maintenant » pour reprendre ceux de Twitch.</p>';
+        $('mg-log').innerHTML = data.log.map(l => '<div>' + esc(l.ts) + ' · <strong class="text-slate-300">' + esc(l.username) + '</strong> · ' + esc(l.action) + (l.detail ? ' — ' + esc(l.detail) : '') + '</div>').join('') || 'Rien pour l\'instant.';
+        $('mg-rows').querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', async () => {
+            const id = b.closest('[data-id]').dataset.id, r = data.roster.find(x => x.twitch_id === id);
+            if (b.dataset.act === 'toggle') { await api('POST', '/admin/api/modguard/' + id + '/protect', { protected: !r.protected }); }
+            else if (b.dataset.act === 'demote') {
+                if (!confirm('Retirer le statut de modérateur à ' + r.username + ' sur Twitch ? Le bot ne le remettra pas.')) return;
+                const { j } = await api('POST', '/admin/api/modguard/' + id + '/demote'); say(j.message, j.ok);
+            } else if (b.dataset.act === 'forget') {
+                if (!confirm('Oublier ' + r.username + ' ? (son statut sur Twitch ne change pas)')) return;
+                await api('DELETE', '/admin/api/modguard/' + id);
+            }
+            await load();
+        }));
+    }
+    async function load() { const { ok, j } = await api('GET', '/admin/api/modguard'); if (ok) { data = j; render(); } }
+    async function saveCfg() {
+        await api('PUT', '/admin/api/modguard/config', { config: { enabled: $('mg-enabled').checked, auto_protect: $('mg-auto').checked, announce: $('mg-announce').checked } });
+        say('Réglage enregistré ✓');
+    }
+    ['mg-enabled', 'mg-auto', 'mg-announce'].forEach(id => $(id).addEventListener('change', saveCfg));
+    $('mg-check').addEventListener('click', async () => { say('Vérification…'); const { j } = await api('POST', '/admin/api/modguard/check'); say(j.message, j.ok); await load(); });
+    load();
+})();
+</script>
