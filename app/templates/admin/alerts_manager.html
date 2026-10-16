@@ -44,6 +44,7 @@
         label.f { display: block; font-size: 11px; color: #94a3b8; }
         label.f > .in { margin-top: 4px; }
     </style>
+    <link rel="stylesheet" href="/static/scrollbar.css">
 </head>
 <body class="font-sans antialiased flex min-h-screen">
 
@@ -521,9 +522,9 @@ function renderScreamer() {
         '<div class="flex flex-wrap items-center justify-between gap-3 mb-4"><h2 class="text-lg font-black text-white"><i class="fas fa-skull mr-2 text-rose-400"></i>Screamer</h2>'
       + '<div class="flex items-center gap-3"><label class="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" data-s="enabled" ' + (s.enabled ? 'checked' : '') + '> Activé</label>'
       + '<button class="btn scare" id="scTest"><i class="fas fa-bolt mr-1"></i>Tester (l\'écran va hurler)</button></div></div>'
-      + '<p class="text-xs text-slate-400 mb-4">Une image plein écran qui claque, avec un son fort, une secousse et deux éclairs blancs (jamais de stroboscope). Sans image ni son : un crâne géant et un cri généré. Déclenché par la commande <strong>!screamer</strong> (modos par défaut), par une récompense de points de chaîne, ou par hasard à la place d\'une alerte.</p>'
+      + '<p class="text-xs text-slate-400 mb-4">Une image ou une vidéo plein écran (un WebM avec transparence ne montre que le personnage, sans fond) qui claque, avec un son fort, une secousse et deux éclairs blancs (jamais de stroboscope). Sans image ni son : un crâne géant et un cri généré. Déclenché par la commande <strong>!screamer</strong> (modos par défaut), par une récompense de points de chaîne, ou par hasard à la suite d\'une alerte (l\'alerte s\'affiche d\'abord en entier, puis le screamer claque).</p>'
       + '<div class="grid grid-cols-2 md:grid-cols-4 gap-4">'
-      + '<label class="f">Image<div class="in"><select data-s="image" class="input-dark w-full rounded-lg px-2 py-1.5 text-sm">' + sel(data.images.filter(f => !/\.(mp4|webm)$/i.test(f)), s.image, 'Crâne par défaut 💀') + '</select></div></label>'
+      + '<label class="f">Image ou vidéo (WebM sans fond)<div class="in"><select data-s="image" class="input-dark w-full rounded-lg px-2 py-1.5 text-sm">' + sel(data.images, s.image, 'Crâne par défaut 💀') + '</select><div class="text-[11px] text-amber-400 mt-1 min-h-[1rem]" id="scWarn">' + esc(mediaWarn(s.image)) + '</div></div></label>'
       + '<label class="f">Son<div class="in"><select data-s="sound" class="input-dark w-full rounded-lg px-2 py-1.5 text-sm">' + sel(data.sounds, s.sound, 'Cri généré par défaut') + '</select></div></label>'
       + '<label class="f">Volume<div class="in"><input data-s="volume" type="range" min="0" max="1" step="0.05" value="' + esc(s.volume) + '" class="w-full"></div></label>'
       + '<label class="f">Durée (s)<div class="in"><input data-s="duration" type="number" min="0.5" max="6" step="0.1" value="' + esc(s.duration) + '" class="input-dark w-full rounded-lg px-2 py-1.5 text-sm"></div></label>'
@@ -533,11 +534,11 @@ function renderScreamer() {
       + '<div class="flex flex-col gap-2 justify-end text-xs text-slate-300"><label class="flex items-center gap-2"><input type="checkbox" data-s="flash" ' + (s.flash ? 'checked' : '') + '> Éclairs blancs</label>'
       + '<label class="flex items-center gap-2"><input type="checkbox" data-s="shake" ' + (s.shake ? 'checked' : '') + '> Secousse</label></div></div>'
       + '<div class="mt-5 flex flex-wrap items-end gap-6 text-xs border-t border-slate-700 pt-4">'
-      + '<div><div class="text-slate-400 mb-1">Ajouter une image (png, jpg, gif, webp)</div><input type="file" id="scUpImg" accept=".png,.jpg,.jpeg,.gif,.webp" class="text-slate-300"></div>'
+      + '<div><div class="text-slate-400 mb-1">Ajouter une image ou une vidéo (png, jpg, gif, webp, <strong>webm</strong>, mp4)</div><input type="file" id="scUpImg" accept=".png,.jpg,.jpeg,.gif,.webp,.webm,.mp4" class="text-slate-300"></div>'
       + '<div><div class="text-slate-400 mb-1">Ajouter un son (mp3, wav, ogg)</div><input type="file" id="scUpSnd" accept=".mp3,.wav,.ogg" class="text-slate-300"></div>'
       + '<span id="scUpMsg" class="text-slate-400"></span></div>';
     $('screamer').querySelectorAll('[data-s]').forEach(el => el.addEventListener('input', () => { screamer = collectScreamer(); markDirty(); }));
-    $('screamer').querySelectorAll('select[data-s], input[type=checkbox][data-s]').forEach(el => el.addEventListener('change', () => { screamer = collectScreamer(); markDirty(); }));
+    $('screamer').querySelectorAll('select[data-s], input[type=checkbox][data-s]').forEach(el => el.addEventListener('change', () => { screamer = collectScreamer(); markDirty(); $('scWarn').textContent = mediaWarn(screamer.image); }));
     $('scTest').addEventListener('click', async () => {
         if (!(await save())) return;
         const res = await fetch('/admin/api/alerts/test_screamer', { method: 'POST' });
@@ -563,7 +564,7 @@ async function scUpload(type, input) {
     const res = await fetch('/admin/api/alerts/upload?type=' + type, { method: 'POST', body: fd });
     const j = await res.json().catch(() => ({}));
     if (!res.ok) { $('scUpMsg').className = 'text-amber-400'; $('scUpMsg').textContent = j.detail || ('Erreur ' + res.status); return; }
-    if (type === 'media') { data.images.push(j.name); screamer = collectScreamer(); screamer.image = j.name; }
+    if (type === 'media') { data.images.push(j.name); data.images.sort(); data.media_info[j.name] = j.info || {}; screamer = collectScreamer(); screamer.image = j.name; }
     else { data.sounds.push(j.name); screamer = collectScreamer(); screamer.sound = j.name; }
     renderScreamer(); markDirty();
     $('scUpMsg').className = 'text-emerald-400'; $('scUpMsg').textContent = '« ' + j.name + ' » ajouté et sélectionné.';

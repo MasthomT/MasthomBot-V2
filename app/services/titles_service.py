@@ -53,7 +53,7 @@ def default_config(slug: str) -> dict:
                   for t, f in DEFAULT_LINES[slug]],
         "uppercase": True, "gap": 14, "glow": True, "ridge": True, "stagger": 0,
         "base_color": "#4682b4", "outline": "#f0f8ff", "hue_rotate": True, "hue_speed": 40,
-        "font": "", "accent": "", "halloween_decor": False, "halloween_look": True,
+        "font": "", "accent": "", "halloween_decor": False, "halloween_look": True, "hw_font": "Kanit", "hw_font_text": "Kanit",
         "frame": True, "frame_color": "#ff7a18",
         "zoom": 1.4,
         "x": 50, "y": 50, "w": 90,
@@ -140,6 +140,10 @@ def clean_config(slug: str, raw: dict, images: set) -> dict:
     font = str(raw.get("font", "")).strip()
     if not _FONT_RE.match(font):
         raise ValueError("nom de police invalide")
+    hw_font = str(raw.get("hw_font", "Kanit")).strip()
+    hw_font_text = str(raw.get("hw_font_text", "Kanit")).strip()
+    if not _FONT_RE.match(hw_font) or not _FONT_RE.match(hw_font_text):
+        raise ValueError("nom de police Halloween invalide")
     image = raw.get("image") or ""
     if image and image not in images:
         raise ValueError("image introuvable")
@@ -170,6 +174,8 @@ def clean_config(slug: str, raw: dict, images: set) -> dict:
         "accent": color(raw.get("accent", ""), "couleur d'accent", allow_empty=True),
         "halloween_decor": bool(raw.get("halloween_decor", raw.get("decor", False))),
         "halloween_look": bool(raw.get("halloween_look", True)),
+        "hw_font": hw_font,
+        "hw_font_text": hw_font_text,
         "frame": bool(raw.get("frame", True)),
         "frame_color": color(raw.get("frame_color", "#ff7a18"), "couleur du cadre"),
         "x": _num(raw.get("x", 50), 0, 100, "position X"),

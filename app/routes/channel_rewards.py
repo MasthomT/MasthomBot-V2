@@ -44,6 +44,8 @@ async def admin_rewards_overview():
     _, mine_data = await podium_service._helix(
         "GET", "/channel_points/custom_rewards", {"broadcaster_id": broadcaster, "only_manageable_rewards": "true"})
     manageable = {r["id"] for r in mine_data.get("data", [])}
+    from app.services import aura_service
+    aura_cfg = await aura_service.get_config()
     podium_ids = {c["reward_id"]: f"Podium · {c['title']}" for c in await podium_service.get_config() if c["reward_id"]}
 
     rewards = []
@@ -53,7 +55,8 @@ async def admin_rewards_overview():
         cd = r.get("global_cooldown_setting") or {}
         img = r.get("image") or r.get("default_image") or {}
         handler = (podium_ids.get(r["id"]) or KNOWN_BY_ID.get(r["id"])
-                   or KNOWN_BY_TITLE.get((r.get("title") or "").lower()))
+                   or KNOWN_BY_TITLE.get((r.get("title") or "").lower())
+                   or ("Aura (bot)" if aura_cfg["enabled"] and (r["id"] == aura_cfg["reward_id"] or (not aura_cfg["reward_id"] and (r.get("title") or "").strip().lower() == aura_cfg["reward_title"].strip().lower())) else None))
         rewards.append({
             "id": r["id"],
             "title": r.get("title", ""),

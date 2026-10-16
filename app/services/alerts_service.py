@@ -65,7 +65,7 @@ DEFAULT_SCREAMER = {
     "duration": 1.8,
     "flash": True,               # deux éclairs blancs rapides (jamais de stroboscope)
     "shake": True,
-    "chance": 0.0,               # % de chance qu'un événement déclenche un screamer à la place de l'alerte
+    "chance": 0.0,               # % de chance qu'un événement déclenche un screamer juste après l'alerte
     "reward_title": "Screamer",  # récompense de points de chaîne qui le déclenche ('' = aucune)
     "cooldown": 60,
 }
@@ -586,9 +586,8 @@ async def fire_alert(kind: str, user: str, force: bool = False, variant: dict | 
         return False
 
     sc = cfg["screamer"]
-    if not force and sc["enabled"] and float(sc["chance"]) > 0 and random.random() * 100 < float(sc["chance"]):
-        if await fire_screamer(source="hasard", user=user, config=cfg):
-            return True
+    scream_after = (not force and sc["enabled"] and float(sc["chance"]) > 0
+                    and random.random() * 100 < float(sc["chance"]))
 
     vars_ = {"user": user, "months": values.get("months", 1), "count": values.get("count", 1),
              "bits": values.get("bits", 0), "viewers": values.get("viewers", 0),
@@ -599,6 +598,9 @@ async def fire_alert(kind: str, user: str, force: bool = False, variant: dict | 
     # Message dans le t'chat (pas pour un simple test d'affichage depuis l'admin)
     if not force and chosen.get("chat_enabled", True):
         await send_chat(render_chat(chosen, vars_))
+    # L'ALERTE NORMALE passe en premier ; le screamer n'arrive qu'après (même file côté overlay : il attend la fin de l'alerte)
+    if scream_after:
+        await fire_screamer(source="hasard", user=user, config=cfg)
     return True
 
 

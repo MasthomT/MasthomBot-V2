@@ -1,0 +1,12 @@
+/* Barres de défilement du site : fines, arrondies, discrètes (au lieu de la grosse barre claire du navigateur).
+   Chargé par toutes les pages d'administration et les pages publiques. */
+* { scrollbar-width: thin; scrollbar-color: #475569 transparent; }
+
+/* Anciens navigateurs (sans scrollbar-color) */
+@supports not (scrollbar-color: auto) {
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+    ::-webkit-scrollbar-corner { background: transparent; }
+}

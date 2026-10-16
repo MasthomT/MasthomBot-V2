@@ -356,6 +356,13 @@ async def eventsub_routine():
                                 except Exception as e:
                                     logger.error(f"❌ [SCREAMER] Récompense : {e}")
 
+                                # Récompense « Aura » : le viewer écrit une couleur, le cadre des écrans la prend
+                                try:
+                                    from app.services import aura_service
+                                    await aura_service.handle_redemption(event)
+                                except Exception as e:
+                                    logger.error(f"❌ [AURA] Récompense : {e}")
+
                                 # Récompenses du podium First / Deuz / Troiz : gérées par le bot
                                 try:
                                     from app.services import podium_service

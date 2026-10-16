@@ -17,6 +17,7 @@
         .panel { display: none; }
         .panel.active { display: block; }
     </style>
+    <link rel="stylesheet" href="/static/scrollbar.css">
 </head>
 <body class="font-sans antialiased flex min-h-screen">
 
@@ -31,6 +32,7 @@
         <nav class="flex flex-wrap gap-2 mb-6" id="tabs">
             <div class="tab" data-tab="overview"><i class="fas fa-list mr-2"></i>Vue d'ensemble</div>
             <div class="tab" data-tab="podium"><i class="fas fa-ranking-star mr-2"></i>First / Deuz / Troiz</div>
+            <div class="tab" data-tab="aura"><i class="fas fa-palette mr-2"></i>Aura</div>
         </nav>
 
         <!-- Vue d'ensemble -->
@@ -55,6 +57,11 @@
         <!-- First / Deuz / Troiz -->
         <section class="panel" id="panel-podium">
             {% include 'admin/partials/podium_panel.html' %}
+        </section>
+
+        <!-- Aura (couleur du cadre choisie par un viewer) -->
+        <section class="panel" id="panel-aura">
+            {% include 'admin/partials/aura_panel.html' %}
         </section>
     </main>
 

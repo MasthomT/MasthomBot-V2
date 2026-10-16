@@ -40,6 +40,7 @@
         .row:hover { background: #334155; }
         .row.sel { background: rgba(99,102,241,.25); }
     </style>
+    <link rel="stylesheet" href="/static/scrollbar.css">
 </head>
 <body class="font-sans antialiased flex min-h-screen">
 
@@ -94,7 +95,7 @@
             <button id="delSceneBtn" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-red-600 text-xs font-bold"><i class="fas fa-trash mr-1"></i>Supprimer</button>
             <label class="flex items-center gap-2 text-xs font-bold text-slate-300 ml-2" title="Un cadre en marge de l'écran avec une aura colorée, derrière tous les widgets de cette scène">
                 <input type="checkbox" id="frameOn"> Cadre aura</label>
-            <input type="color" id="frameColor" value="#ff7a18" class="h-8 w-12 rounded bg-transparent" title="Couleur de l'aura">
+            <a href="/admin/rewards#aura" target="_top" class="text-[11px] text-indigo-300 hover:underline" title="La couleur est la même partout et se règle à un seul endroit">couleur : page Aura</a>
             <span id="sceneMsg" class="text-xs text-slate-400"></span>
         </div>
         <div class="config-card rounded-2xl p-4 mb-6 flex flex-wrap items-center gap-3">
@@ -175,17 +176,16 @@ async function load() {
 
 function syncFrame() {
     const sc = scenes.find(x => x.slug === sceneSlug) || {};
-    $('frameOn').checked = !!sc.frame; $('frameColor').value = sc.frame_color || '#ff7a18';
+    $('frameOn').checked = !!sc.frame;
 }
 async function saveFrame() {
     const sc = scenes.find(x => x.slug === sceneSlug); if (!sc) return;
-    sc.frame = $('frameOn').checked; sc.frame_color = $('frameColor').value;
+    sc.frame = $('frameOn').checked;
     const r = await fetch('/admin/api/scenes/' + encodeURIComponent(sceneSlug) + '/frame', { method: 'PUT',
         headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ frame: sc.frame, frame_color: sc.frame_color }) });
     $('sceneMsg').textContent = r.ok ? 'Cadre enregistré ✓ (visible dans OBS en ~5 s)' : 'Erreur ' + r.status;
 }
 $('frameOn').addEventListener('change', saveFrame);
-$('frameColor').addEventListener('change', saveFrame);
 
 function renderAll() { renderCanvas(); renderLayers(); renderList(); renderProps(); }
 

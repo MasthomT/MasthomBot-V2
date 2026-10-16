@@ -37,7 +37,7 @@ from slowapi.errors import RateLimitExceeded
 from app.core.rate_limit import limiter
 
 # --- IMPORT DES ROUTES ---
-from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes, partners, admin_commands, wheel, scene, podium, channel_rewards, label_style, alerts_admin, overlays_hub, titles
+from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes, partners, admin_commands, wheel, scene, podium, channel_rewards, label_style, alerts_admin, overlays_hub, titles, aura
 from app.routes.credits import router as credits_router
 from app.routes.premium import router as premium_router
 from app.routes.games import router as games_router, init_games_tables
@@ -271,6 +271,8 @@ app.include_router(label_style.admin_router)
 app.include_router(overlays_hub.router)
 app.include_router(titles.public_router)
 app.include_router(titles.admin_router)
+app.include_router(aura.public_router)
+app.include_router(aura.admin_router)
 app.include_router(alerts_admin.public_router)
 app.include_router(alerts_admin.admin_router)
 app.include_router(scene.router)

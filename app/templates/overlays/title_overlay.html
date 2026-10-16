@@ -39,19 +39,20 @@
             text-shadow: 0 0 10px rgba(240,248,255,.8), 0 0 20px var(--base); animation: pulse-light 8s infinite alternate ease-in-out; }
   .look-theme .cd-num { text-shadow: 0 0 .5vw var(--accent), 0 0 1.4vw var(--accent); }
 
-  /* ── habillage Halloween : actif seulement tant que le thème Halloween l'est (retour auto au style classique après la date de fin).
-        Tailles, graisses et hiérarchie des lignes ne changent pas : seuls la police, les couleurs, les contours et les lueurs changent (aucun élément ajouté). ── */
-  .hw .l-main { -webkit-text-stroke: .16vw #1b0630; text-shadow: none; letter-spacing: 3px;
-                background-image: linear-gradient(to bottom, #ffd27a 0%, var(--hw1) 42%, #c2410c 72%, var(--hw2) 100%);
-                filter: drop-shadow(0 0 .35vw var(--hw1)) drop-shadow(0 .25vw 0 #1b0630) drop-shadow(0 0 1.3vw var(--hw2));
-                animation: none; }
-  .hw.hue .l-main { animation: none; }
-  .hw .l-sub { -webkit-text-stroke: .1vw var(--hw1); filter: drop-shadow(0 0 .35vw var(--hw2)) drop-shadow(0 0 .9vw var(--hw2)); animation: none; letter-spacing: 2px; }
-  .hw .l-message { color: #efe3c8; text-shadow: 0 0 .5vw var(--hw1), 0 .1vw .2vw #000; }
-  .hw .l-plain { color: #efe3c8; text-shadow: 0 0 .6vw var(--hw1), 0 .1vw .2vw #000; }
-  .hw .cd-label { color: #efe3c8; text-shadow: 0 0 .4vw var(--hw1); }
-  .hw .cd-num { color: var(--hw1); text-shadow: 0 0 .5vw var(--hw1), 0 0 1.4vw var(--hw2), 0 .15vw 0 #1b0630; }
-  .hw .ln .em { color: var(--hw1); -webkit-text-fill-color: var(--hw1); text-shadow: 0 0 .5vw var(--hw1); }
+  /* ── habillage Halloween : le texte d'origine (Kanit, contour, grand titre plein) passé dans un « filtre » orange.
+        Actif seulement tant que le thème Halloween l'est (retour auto au style classique ensuite).
+        Rien ne change dans les tailles, graisses et positions : seules les couleurs (orange, crème) et les lueurs changent. ── */
+  .hw .l-main { animation: hw-warm 8s ease-in-out infinite alternate; }
+  .hw.hue .l-main { animation: hw-warm 8s ease-in-out infinite alternate; }
+  .hw .l-sub { filter: drop-shadow(0 0 .35vw rgba(255, 122, 24, .75)); }
+  .hw .l-message, .hw .l-plain { text-shadow: 0 0 .5vw rgba(255, 122, 24, .8), 0 .1vw .25vw rgba(0, 0, 0, .7); }
+  .hw .cd-label { text-shadow: 0 0 .4vw rgba(255, 122, 24, .8); }
+  .hw .cd-num { text-shadow: 0 0 .5vw rgba(255, 122, 24, .9), 0 0 1.4vw rgba(255, 90, 0, .65); }
+  /* « flamme » : l'orange respire doucement entre rouge-orangé et ambre (au lieu de faire tout le tour des couleurs) */
+  @keyframes hw-warm {
+    from { filter: hue-rotate(-12deg) drop-shadow(0 0 .35vw rgba(255, 122, 24, .8)) drop-shadow(0 0 1.1vw rgba(255, 90, 0, .5)); }
+    to   { filter: hue-rotate(14deg)  drop-shadow(0 0 .35vw rgba(255, 170, 40, .8)) drop-shadow(0 0 1.1vw rgba(255, 122, 24, .5)); }
+  }
 
   .noglow .l-sub { filter: none !important; }
   .noglow .l-message, .noglow .l-plain, .noglow .cd-num, .noglow .ln .em { text-shadow: none !important; }
@@ -112,7 +113,7 @@
     const add = (spec) => { const l = document.createElement('link'); l.rel = 'stylesheet';
       l.href = 'https://fonts.googleapis.com/css2?family=' + fam + spec + '&display=swap'; document.head.appendChild(l); return l; };
     // polices à une seule graisse : la demande avec graisses est refusée, on redemande sans
-    add(':wght@300;700;900').onerror = () => add('');
+    add(':wght@300;700;900').onerror = () => add(':wght@400;700').onerror = () => add('');
   }
   const halloween = () => theme.icon_set === 'halloween' || theme.preset === 'halloween';
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
@@ -162,25 +163,44 @@
 
   function hexA(hex, a) { const n = parseInt(hex.replace('#', ''), 16); return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + a + ')'; }
 
+  // Couleur de l'aura : celle choisie par un viewer (récompense « Aura ») sinon celle de l'écran
+  let auraColor = null, auraBase = '#ff7a18';
+  function applyFrameColor() {
+    if (!cfg) return;
+    const c = auraColor || auraBase, root = document.documentElement.style;
+    root.setProperty('--frame', c); root.setProperty('--frame-a', hexA(c, .55)); root.setProperty('--frame-b', hexA(c, .28));
+  }
+  function pollAura() {
+    fetch('/api/aura?t=' + Date.now(), { cache: 'no-store' }).then(r => r.json())
+      .then(j => {
+        const c = (j && /^#[0-9a-fA-F]{6}$/.test(j.color || '')) ? j.color : null;
+        const b = (j && /^#[0-9a-fA-F]{6}$/.test(j.base || '')) ? j.base : auraBase;
+        if (c !== auraColor || b !== auraBase) { auraColor = c; auraBase = b; applyFrameColor(); }
+      })
+      .catch(() => {});
+  }
+
   // ── rendu ──
   function render() {
     if (!cfg) return;
     const themed = cfg.look === 'theme';
     const accent = cfg.accent || (themed ? theme.w_accent : '') || cfg.base_color || '#ff7a18';
-    const base = themed ? (cfg.accent || theme.w_accent || cfg.base_color) : cfg.base_color;
-    const outline = cfg.outline;
+    const hwTint = !!cfg.halloween_look && halloween();
+    const base = hwTint ? (theme.w_accent || '#ff7a18') : themed ? (cfg.accent || theme.w_accent || cfg.base_color) : cfg.base_color;
+    const outline = hwTint ? '#fff1dc' : cfg.outline;
     const hwOn = !!cfg.halloween_look && halloween();
-    const font = cfg.font || ((themed || hwOn) ? theme.w_font : '') || 'Kanit';
+    const font = (hwOn && cfg.hw_font) || cfg.font || (themed ? theme.w_font : '') || 'Kanit';
+    const fontText = (hwOn && cfg.hw_font_text) || font;
     const root = document.documentElement.style;
     root.setProperty('--accent', accent); root.setProperty('--base', base); root.setProperty('--outline', outline);
     root.setProperty('--hue-speed', cfg.hue_speed + 's');
     root.setProperty('--k', cfg.zoom);
-    root.setProperty('--frame', cfg.frame_color);
-    root.setProperty('--frame-a', hexA(cfg.frame_color, .55)); root.setProperty('--frame-b', hexA(cfg.frame_color, .28));
+    applyFrameColor();
     const hw = hwOn;
     root.setProperty('--hw1', theme.w_accent || '#ff7a18'); root.setProperty('--hw2', theme.w_accent2 || '#7b2cbf');
     root.setProperty('--font', "'" + font.replace(/'/g, '') + "', sans-serif");
-    loadFont(font);
+    root.setProperty('--font-text', "'" + fontText.replace(/'/g, '') + "', sans-serif");
+    loadFont(font); loadFont(fontText);
     document.body.className = (themed ? 'look-theme' : 'look-original') + (cfg.hue_rotate ? ' hue' : '') + (cfg.glow ? '' : ' noglow') + (hw ? ' hw' : '') + (cfg.frame ? ' has-frame' : '');
 
     const bd = $('backdrop');
@@ -306,20 +326,20 @@
     window.parent.postMessage({ type: 'title-ready' }, '*');
   } else {
     if (AUTO) {
-      // la scène OBS en cours : directement (source navigateur), ou relayée par la page « Scène OBS » (le widget est dans un cadre)
-      const o = window.obsstudio;
-      if (o && o.getCurrentScene) o.getCurrentScene((s) => setScene(s && s.name));
-      // source fiable : le serveur lit la scène en cours via obs-websocket (marche aussi après F9 / actualisation des sources)
-      const poll = () => fetch('/api/titres/auto/scene?t=' + Date.now(), { cache: 'no-store' }).then(r => r.json())
-        .then(j => { if (j && j.scene) setScene(j.scene); }).catch(() => {});
-      poll(); setInterval(poll, 1500);
-      window.addEventListener('obsSceneChanged', (e) => setScene(e.detail && e.detail.name));
-      window.addEventListener('message', (e) => { const d = e.data || {}; if (d.type === 'obs-scene') setScene(d.name); });
+      // Une seule source de vérité : la scène OBS lue par le serveur (obs-websocket). Les événements du navigateur OBS
+      // ne sont pas utilisés : une source cachée garde l'ancien nom de scène et le renvoyait (l'écran sautait de « début » à « fin »).
       if (QS.get('scene')) obsScene = QS.get('scene');
-      try { window.parent.postMessage({ type: 'obs-scene-request' }, '*'); } catch (e) {}
+      else {
+        const poll = () => fetch('/api/titres/auto/scene?t=' + Date.now(), { cache: 'no-store' }).then(r => r.json())
+          .then(j => { if (j && j.scene) setScene(j.scene); }).catch(() => {});
+        poll(); setInterval(poll, 1000);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+        window.addEventListener('obsSourceVisibleChanged', () => poll());
+      }
     }
     refresh();
     setInterval(refresh, 8000);
+    pollAura(); setInterval(pollAura, 2000);
     const again = () => { cfgSig = ''; localTarget = null; refresh().then(() => startLocal()); };
     window.addEventListener('obsSourceVisibleChanged', (e) => { if (e.detail && e.detail.visible) again(); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) again(); });

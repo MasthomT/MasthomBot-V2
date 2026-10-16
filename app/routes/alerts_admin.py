@@ -178,6 +178,17 @@ async def admin_alerts_test_chat(payload: TestPayload):
     return {"status": "ok", "message": "Message envoyé dans le t'chat : " + text}
 
 
+@public_router.post("/api/alerts/audio_error")
+async def audio_error(request: Request):
+    """Signalé par l'overlay quand un son d'alerte / de screamer n'a pas pu être lu (navigateur OBS)."""
+    try:
+        body = (await request.body()).decode("utf-8", "replace")[:300]
+    except Exception:
+        body = "?"
+    logger.warning(f"🔇 [ALERTES] Son non lu dans l'overlay : {body}")
+    return {}
+
+
 @admin_router.post("/admin/api/alerts/test_screamer")
 async def admin_screamer_test():
     await A.fire_screamer(source="test admin", force=True)

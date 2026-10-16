@@ -61,13 +61,11 @@
   @keyframes flashGo { 0% { opacity: 0 } 8% { opacity: .85 } 18% { opacity: 0 } 30% { opacity: .55 } 100% { opacity: 0 } }
 
   /* ───────── SCREAMER ───────── */
-  #scream { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: #000; z-index: 20; }
+  #scream { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: transparent; z-index: 20; }
   #scream.on { display: flex; }
   #scream .face { font-size: 78vh; line-height: 1; animation: snap .12s ease-out forwards; }
-  #scream img { width: 100vw; height: 100vh; object-fit: contain; animation: snap .12s ease-out forwards; }
-  #scream.shake .face, #scream.shake img { animation: snap .12s ease-out forwards, tremble .07s .12s infinite; }
-  #scream::after { content: ''; position: absolute; inset: 0; pointer-events: none;
-                   background: radial-gradient(ellipse at center, rgba(0,0,0,0) 35%, rgba(150,0,0,.75) 100%); }
+  #scream img, #scream video { width: 100vw; height: 100vh; object-fit: contain; background: transparent; animation: snap .12s ease-out forwards; }
+  #scream.shake .face, #scream.shake img, #scream.shake video { animation: snap .12s ease-out forwards, tremble .07s .12s infinite; }
   @keyframes snap { from { transform: scale(.35) } to { transform: scale(1.12) } }
   @keyframes tremble { 0% { transform: translate(0,0) scale(1.12) } 25% { transform: translate(-1.2vw,.8vw) scale(1.14) }
                        50% { transform: translate(1vw,-1vw) scale(1.12) } 75% { transform: translate(-.8vw,-.6vw) scale(1.15) } 100% { transform: translate(0,0) scale(1.12) } }
@@ -111,9 +109,39 @@
   }
   if (!PREVIEW) { const lt = () => fetch('/api/labels/style?t=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).then(applyTheme).catch(() => {}); lt(); setInterval(lt, 15000); }
 
-  function playSound(file, volume) {
-    if (!file) return;
-    try { const a = new Audio(media('sounds', file)); a.volume = Math.max(0, Math.min(1, volume == null ? 0.8 : volume)); a.play().catch(() => {}); } catch (e) {}
+  let audioCtx = null;
+  // Les sons en cours de lecture sont gardés en référence (un lecteur détaché peut être ramassé en pleine lecture).
+  // Si le son ne peut pas être lu (refusé / introuvable), on le signale au bot et on joue `fallback` (le cri généré pour le screamer).
+  const playing = new Set();
+  function reportAudio(file, why) {
+    try { navigator.sendBeacon('/api/alerts/audio_error', JSON.stringify({ file, why, page: location.pathname })); } catch (e) {}
+  }
+  function playSound(file, volume, fallback) {
+    if (!file) { if (fallback) fallback(); return; }
+    let failed = false;
+    // 2e chance : décodage par WebAudio (même fichier) ; 3e chance : le fallback (cri généré)
+    const viaWebAudio = async () => {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
+      const buf = await audioCtx.decodeAudioData(await (await fetch(media('sounds', file))).arrayBuffer());
+      const src = audioCtx.createBufferSource(), g = audioCtx.createGain();
+      src.buffer = buf; g.gain.value = Math.max(0, Math.min(1, volume == null ? 0.8 : volume));
+      src.connect(g); g.connect(audioCtx.destination); src.start();
+    };
+    const fail = (why) => {
+      if (failed) return; failed = true; reportAudio(file, why);
+      viaWebAudio().catch((e) => { reportAudio(file, 'WebAudio aussi : ' + e); if (fallback) fallback(); });
+    };
+    try {
+      const a = new Audio(media('sounds', file));
+      a.preload = 'auto'; a.volume = Math.max(0, Math.min(1, volume == null ? 0.8 : volume));
+      playing.add(a);
+      const done = () => playing.delete(a);
+      a.addEventListener('ended', done); a.addEventListener('pause', () => { if (a.ended) done(); });
+      a.addEventListener('error', () => { done(); fail('erreur de lecture (code ' + (a.error && a.error.code) + ')'); });
+      a.play().catch((e) => { done(); fail('lecture refusée : ' + (e && e.name)); });
+      setTimeout(done, 30000);
+    } catch (e) { fail('exception : ' + e); }
   }
 
   // ── Texte : variables, pseudo coloré, lettres animées ──
@@ -212,7 +240,10 @@
     const it = queue.shift();
     if (!it) { busy = false; return; }
     busy = true;
-    try { await showAlert(it.variant, it.vars); } catch (e) { console.error(e); }
+    try {
+      if (it.screamer) await showScreamer(it.screamer);
+      else await showAlert(it.variant, it.vars);
+    } catch (e) { console.error(e); }
     next();
   }
 
@@ -320,8 +351,7 @@
     if (current === root) current = null;
   }
 
-  // ── Screamer : prioritaire, par-dessus tout ──
-  let audioCtx = null;
+  // ── Screamer : passe dans la même file que les alertes (jamais par-dessus une alerte ni à sa place) ──
   function synthScream(volume) {
     try {
       audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
@@ -351,22 +381,31 @@
   }
   let screamTimer = null;
   function showScreamer(p) {
+    return new Promise((resolve) => {
     clearTimeout(screamTimer);
     scream.className = 'on' + (p.shake ? ' shake' : '');
-    scream.innerHTML = p.image ? '<img src="' + media('images', p.image) + '" alt="">' : '<div class="face">💀</div>';
+    if (p.image && isVideo(p.image)) {
+      // vidéo (WebM avec transparence possible) : le son se règle à part (champ « Son »), la vidéo boucle pendant la durée choisie
+      scream.innerHTML = '<video src="' + media('images', p.image) + '" autoplay muted loop playsinline></video>';
+      const vid = scream.querySelector('video'); vid.play().catch(() => {});
+    } else {
+      scream.innerHTML = p.image ? '<img src="' + media('images', p.image) + '" alt="">' : '<div class="face">💀</div>';
+    }
     if (p.flash) { flash.classList.remove('go'); void flash.offsetWidth; flash.classList.add('go'); }
-    if (p.sound) playSound(p.sound, p.volume); else synthScream(p.volume == null ? 1 : p.volume);
+    const cry = () => synthScream(p.volume == null ? 1 : p.volume);
+    if (p.sound) playSound(p.sound, p.volume, cry); else cry();
     const dur = Math.max(0.5, p.duration || 1.8);
     screamTimer = setTimeout(() => {
       scream.classList.add('out');
-      setTimeout(() => { scream.className = ''; scream.innerHTML = ''; }, 280);
+      setTimeout(() => { scream.className = ''; scream.innerHTML = ''; resolve(); }, 280);
     }, dur * 1000);
+    });
   }
 
   // ── Réception : bus d'overlay (OBS) ou postMessage de l'éditeur (aperçu) ──
   function handleAlert(data) {
     if (data.type === 'stream_alert' && data.variant) enqueue({ variant: data.variant, vars: data.vars || {} });
-    else if (data.type === 'screamer') showScreamer(data);
+    else if (data.type === 'screamer') enqueue({ screamer: data });
   }
   if (PREVIEW) {
     window.addEventListener('message', (e) => {

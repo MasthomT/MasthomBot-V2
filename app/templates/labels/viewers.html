@@ -10,6 +10,7 @@
             margin: 0; background: transparent; color: white;
             font-family: 'Montserrat', sans-serif; font-weight: 100; font-size: 40px;
             display: flex; align-items: center; overflow: hidden;
+            padding: 4px 0; /* marge haut/bas : le logo qui bat (zoom 1.2) ne doit pas être coupé */
             text-shadow: 0px 0px 8px rgba(255, 255, 255, 0.5), 2px 2px 4px rgba(0, 0, 0, 0.8);
         }
         .container { display: flex; align-items: center; gap: 15px; padding-left: 20px; }
@@ -26,6 +27,7 @@
             100% { transform: scale(1); }
         }
         #chiffre { letter-spacing: 2px; }
+        .logo { line-height: 1; } /* logo centré dans la ligne : son zoom ne dépasse plus en haut */
     </style>
     {% include 'labels/_style.html' %}
 </head>

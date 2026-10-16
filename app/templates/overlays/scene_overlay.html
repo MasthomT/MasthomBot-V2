@@ -28,7 +28,23 @@
   const stage = document.getElementById('stage');
   const frames = new Map(); // key -> { el, sig }
   const $frame = document.getElementById('frame');
-  let frameCfg = null;
+  let frameCfg = null, auraColor = null, auraBase = '#ff7a18';
+  // Couleur de l'aura : celle choisie par un viewer (récompense « Aura ») sinon celle de la scène
+  function applyFrame() {
+    if (!frameCfg) return;
+    const c = auraColor || auraBase, h = (a) => c + Math.round(a * 255).toString(16).padStart(2, '0');
+    $frame.style.setProperty('--frame', c); $frame.style.setProperty('--frame-a', h(.55)); $frame.style.setProperty('--frame-b', h(.28));
+    $frame.style.display = frameCfg.on ? 'block' : 'none';
+  }
+  function pollAura() {
+    fetch('/api/aura?t=' + Date.now(), { cache: 'no-store' }).then(r => r.json())
+      .then(j => {
+        const c = (j && /^#[0-9a-fA-F]{6}$/.test(j.color || '')) ? j.color : null;
+        const b = (j && /^#[0-9a-fA-F]{6}$/.test(j.base || '')) ? j.base : auraBase;
+        if (c !== auraColor || b !== auraBase) { auraColor = c; auraBase = b; applyFrame(); }
+      })
+      .catch(() => {});
+  }
 
   function resolveUrl(u) { return u.replace('{NODE}', NODE); }
 
@@ -53,11 +69,7 @@
     } catch (e) { return; }
 
     const fr = $frame;
-    if (frameCfg) {
-      const c = frameCfg.color, h = (a) => c + Math.round(a * 255).toString(16).padStart(2, '0');
-      fr.style.setProperty('--frame', c); fr.style.setProperty('--frame-a', h(.55)); fr.style.setProperty('--frame-b', h(.28));
-      fr.style.display = frameCfg.on ? 'block' : 'none';
-    }
+    applyFrame();
     const wanted = new Set(layout.map(w => w.key));
     for (const [key, f] of frames) {
       if (!wanted.has(key)) { f.el.remove(); frames.delete(key); }
@@ -80,21 +92,9 @@
     }
   }
 
-  // La scène OBS en cours est relayée aux widgets (les événements OBS n'arrivent que dans la page principale,
-  // pas dans les cadres) : le widget « Titre automatique » s'en sert pour choisir début / pause / fin.
-  let obsScene = '';
-  function relay() {
-    for (const f of frames.values()) { try { f.el.contentWindow.postMessage({ type: 'obs-scene', name: obsScene }, '*'); } catch (e) {} }
-  }
-  window.addEventListener('message', (e) => { if (e.data && e.data.type === 'obs-scene-request') relay(); });
-  if (window.obsstudio && window.obsstudio.getCurrentScene) {
-    window.obsstudio.getCurrentScene((s) => { obsScene = (s && s.name) || ''; relay(); });
-  }
-  window.addEventListener('obsSceneChanged', (e) => { obsScene = (e.detail && e.detail.name) || ''; relay(); });
-
   refresh();
   setInterval(refresh, 5000);
-  setInterval(relay, 4000);
+  pollAura(); setInterval(pollAura, 2000);
 </script>
 </body>
 </html>
