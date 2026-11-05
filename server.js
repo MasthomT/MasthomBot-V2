@@ -195,9 +195,10 @@ obs.on('ConnectionClosed', () => {
 // qu'UNE FOIS, au moment de la connexion — si on basculait sur "ON BREAK" pendant que
 // Node était déjà connecté (le cas normal en plein stream), le BRB ne se déclenchait
 // jamais. Constaté le 07/07/2026 : le BRB n'apparaissait plus du tout.
-obs.on('CurrentProgramSceneChanged', (data) => {
-    obsProgramScene = data.sceneName || '';
-    const isBrbScene = data.sceneName === CONFIG.BRB_SCENE_NAME;
+// Traitement d'un changement de scène (événement OBS OU relevé régulier ci-dessous)
+function onProgramScene(sceneName) {
+    obsProgramScene = sceneName || '';
+    const isBrbScene = sceneName === CONFIG.BRB_SCENE_NAME;
     if (isBrbScene) {
         if (!brbLoopActive) {
             currentScene = 'brb';
@@ -213,7 +214,31 @@ obs.on('CurrentProgramSceneChanged', (data) => {
             console.log('🛑 [OBS] Sortie de la scène "ON BREAK" détectée en direct : arrêt du BRB.');
         }
     }
-});
+}
+obs.on('CurrentProgramSceneChanged', (data) => onProgramScene(data.sceneName));
+
+// Filet de sécurité : la connexion à OBS peut rester « ouverte » sans plus recevoir d'événements (constaté le 03/11/2026 :
+// la scène connue du serveur restait figée, donc l'écran de titre automatique n'affichait plus rien). On relève donc
+// la scène toutes les 2 s ; si OBS ne répond plus, on coupe pour déclencher la reconnexion automatique.
+let obsPollBusy = false;
+setInterval(async () => {
+    if (!obsConnected || obsPollBusy) return;
+    obsPollBusy = true;
+    try {
+        const d = await Promise.race([
+            obs.call('GetCurrentProgramScene'),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('délai dépassé')), 4000)),
+        ]);
+        if ((d.currentProgramSceneName || '') !== obsProgramScene) onProgramScene(d.currentProgramSceneName);
+    } catch (e) {
+        console.log(`🔌 [OBS] Relevé de scène impossible (${e.message}) : reconnexion forcée.`);
+        obsConnected = false;
+        try { await obs.disconnect(); } catch (e2) { /* déjà coupé */ }
+        scheduleObsReconnect('Connexion inactive');
+    } finally {
+        obsPollBusy = false;
+    }
+}, 2000);
 
 app.get('/api/obs-scene', (req, res) => {
     res.json({ scene: obsProgramScene, connected: obsConnected });

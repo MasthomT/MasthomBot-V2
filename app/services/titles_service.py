@@ -17,7 +17,7 @@ logger = logging.getLogger("masthbot.titles")
 
 SCREENS = {"start": "Début de live", "brk": "Pause", "end": "Fin de live"}
 EFFECTS = {"none": "Aucun", "bats": "Chauves-souris", "confetti": "Confettis / bonbons", "snow": "Neige",
-           "hearts": "Cœurs", "ghost": "Fantôme qui passe"}
+           "hearts": "Cœurs", "ghost": "Fantôme qui passe", "fairy": "Fée qui passe (Navi)"}
 ANIMS = {"perspective": "Apparition en profondeur (comme avant)", "zoom": "Zoom", "fade": "Fondu", "bounce": "Rebond",
          "slide-up": "Glisse du bas", "none": "Aucune"}
 LINE_ANIMS = {"": "Comme le reste", **ANIMS}
@@ -54,6 +54,7 @@ def default_config(slug: str) -> dict:
         "uppercase": True, "gap": 14, "glow": True, "ridge": True, "stagger": 0,
         "base_color": "#4682b4", "outline": "#f0f8ff", "hue_rotate": True, "hue_speed": 40,
         "font": "", "accent": "", "halloween_decor": False, "halloween_look": True, "hw_font": "Kanit", "hw_font_text": "Kanit",
+        "zl_font": "Charlemagne Std", "zl_font_text": "Cinzel", "zelda_fairy": True,
         "frame": True, "frame_color": "#ff7a18",
         "zoom": 1.4,
         "x": 50, "y": 50, "w": 90,
@@ -142,6 +143,10 @@ def clean_config(slug: str, raw: dict, images: set) -> dict:
         raise ValueError("nom de police invalide")
     hw_font = str(raw.get("hw_font", "Kanit")).strip()
     hw_font_text = str(raw.get("hw_font_text", "Kanit")).strip()
+    zl_font = str(raw.get("zl_font", "Charlemagne Std")).strip()
+    zl_font_text = str(raw.get("zl_font_text", "Cinzel")).strip()
+    if not _FONT_RE.match(zl_font) or not _FONT_RE.match(zl_font_text):
+        raise ValueError("nom de police Zelda invalide")
     if not _FONT_RE.match(hw_font) or not _FONT_RE.match(hw_font_text):
         raise ValueError("nom de police Halloween invalide")
     image = raw.get("image") or ""
@@ -176,6 +181,9 @@ def clean_config(slug: str, raw: dict, images: set) -> dict:
         "halloween_look": bool(raw.get("halloween_look", True)),
         "hw_font": hw_font,
         "hw_font_text": hw_font_text,
+        "zl_font": zl_font,
+        "zl_font_text": zl_font_text,
+        "zelda_fairy": bool(raw.get("zelda_fairy", True)),
         "frame": bool(raw.get("frame", True)),
         "frame_color": color(raw.get("frame_color", "#ff7a18"), "couleur du cadre"),
         "x": _num(raw.get("x", 50), 0, 100, "position X"),

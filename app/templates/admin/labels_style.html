@@ -152,7 +152,7 @@
                             <input id="f-spacing" type="number" step="0.5" placeholder="Origine" class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm"></label>
                         <label class="block"><span class="text-slate-400">Jeu d'icônes</span>
                             <select id="f-icon_set" class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm">
-                                <option value="default">Classique</option><option value="halloween">Halloween (fantôme, crâne, araignée…)</option>
+                                <option value="default">Classique</option><option value="halloween">Halloween (fantôme, crâne, araignée…)</option><option value="zelda">Zelda (cœur, rubis, sablier, bouclier…)</option>
                             </select></label>
                         <div class="col-span-2 grid grid-cols-3 gap-4" id="colors"></div>
                     </div>
@@ -341,7 +341,7 @@ async function load() {
     const j = await res.json();
     presets = j.presets;
     $('fontList').innerHTML = j.fonts.filter(Boolean).map(f => '<option value="' + esc(f) + '">').join('');
-    $('presets').innerHTML = Object.keys(presets).map(p => '<button class="preset" data-p="' + p + '">' + (p === 'halloween' ? '🎃 Halloween' : 'Classique') + '</button>').join('');
+    $('presets').innerHTML = Object.keys(presets).map(p => '<button class="preset" data-p="' + p + '">' + (p === 'halloween' ? '🎃 Halloween' : p === 'zelda' ? '🧚 Zelda' : 'Classique') + '</button>').join('');
     document.querySelectorAll('.preset').forEach(b => b.addEventListener('click', () => {
         const keepLabels = true;
         fillGlobal(presets[b.dataset.p]); globalPreset = b.dataset.p;

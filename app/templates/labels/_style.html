@@ -10,6 +10,61 @@
         follow: 'fa-solid fa-ghost', sub: 'fa-solid fa-skull', subgift: 'fa-solid fa-hat-wizard',
         bits: 'fa-solid fa-gem', raid: 'fa-solid fa-spider'
     };
+    // Zelda : cœur (followers), œil de vérité (viewers), rubis (subs), sablier (heure — Chant du Temps), bouclier hylien (raid)…
+    var ZELDA_ICONS = {
+        followers: 'fa-solid fa-heart', viewers: 'fa-solid fa-eye', subs: 'fa-solid fa-gem' /* remplacé par la triforce (SVG) */, heure: 'fa-solid fa-hourglass-half',
+        follow: 'fa-solid fa-heart', sub: 'fa-solid fa-gem', subgift: 'fa-solid fa-gift',
+        bits: 'fa-solid fa-coins', raid: 'fa-solid fa-shield-halved'
+    };
+    // Thème Zelda : vraies icônes dessinées en SVG (pas d'icône gratuite pour ça) — cœur, rubis vert / bleu / rouge, triforce,
+    // œil de vérité, ocarina du Temps, Master Sword. Elles gardent leurs couleurs d'origine (le thème ne les recolore pas).
+    var Z = function (inner, tilt) {
+        return '<svg viewBox="0 0 100 100" width="1.08em" height="1.08em" style="display:block;overflow:visible;filter:drop-shadow(0 0 3px rgba(0,0,0,.55))" aria-hidden="true">'
+            + (tilt ? '<g transform="translate(50 50) rotate(' + tilt + ') scale(1.18) translate(-50 -50)">' + inner + '</g>' : inner) + '</svg>';
+    };
+    var rupee = function (main, light, dark) {
+        return Z('<polygon points="50,3 80,24 80,76 50,97 20,76 20,24" fill="' + main + '" stroke="' + dark + '" stroke-width="5" stroke-linejoin="round"/>'
+            + '<polygon points="50,3 20,24 20,76 50,97" fill="' + light + '" opacity=".55"/>'
+            + '<polygon points="50,3 80,24 50,40 20,24" fill="#fff" opacity=".35"/>'
+            + '<polyline points="20,24 50,40 80,24 M50,40 L50,97" fill="none" stroke="' + dark + '" stroke-width="3" opacity=".7"/>');
+    };
+    var ZELDA_SVG = {
+        heart: function () {
+            return Z('<path d="M50 91C20 67 5 50 5 31 5 16 17 7 30 7c8 0 15 4 20 12 5-8 12-12 20-12 13 0 25 9 25 24 0 19-15 36-45 60z" fill="#e8262b" stroke="#6b0f12" stroke-width="5" stroke-linejoin="round"/>'
+                + '<ellipse cx="28" cy="27" rx="9" ry="6" transform="rotate(-35 28 27)" fill="#fff" opacity=".75"/>');
+        },
+        eye: function () {          // œil de vérité (Sheikah) : amande dorée, iris, larme
+            return Z('<path d="M4 46Q50 4 96 46Q50 88 4 46Z" fill="#13203d" stroke="#f2c94c" stroke-width="6" stroke-linejoin="round"/>'
+                + '<circle cx="50" cy="46" r="19" fill="#f2c94c"/><circle cx="50" cy="46" r="8" fill="#0b1220"/>'
+                + '<circle cx="44" cy="40" r="3.5" fill="#fff" opacity=".85"/>'
+                + '<path d="M50 74 L50 90 M50 90 q-6 6 0 9 q6-3 0-9z" fill="#f2c94c" stroke="#f2c94c" stroke-width="4" stroke-linecap="round"/>');
+        },
+        triforce: function (fill) {
+            return Z('<g fill="' + fill + '" stroke="#7a5a08" stroke-width="3" stroke-linejoin="round"><polygon points="50,6 27.5,45 72.5,45"/>'
+                + '<polygon points="27.5,48 5,87 50,87"/><polygon points="72.5,48 50,87 95,87"/></g>');
+        },
+        ocarina: function () {      // Ocarina du Temps : corps bleu, embouchure, trous, emblème doré
+            return Z('<rect x="8" y="14" width="22" height="13" rx="5" transform="rotate(32 19 20)" fill="#2c57b8" stroke="#10265e" stroke-width="4"/>'
+                + '<path d="M16 60C8 42 22 26 42 29l22 9c16 6 32 22 26 38-6 15-26 17-42 9C34 79 23 74 16 60z" fill="#3a6fd8" stroke="#10265e" stroke-width="5" stroke-linejoin="round"/>'
+                + '<circle cx="46" cy="52" r="5" fill="#0d1f4d"/><circle cx="62" cy="60" r="5" fill="#0d1f4d"/><circle cx="74" cy="70" r="4.5" fill="#0d1f4d"/><circle cx="38" cy="66" r="4.5" fill="#0d1f4d"/>'
+                + '<polygon points="54,40 47,50 61,50" fill="#f2c94c"/><ellipse cx="32" cy="42" rx="7" ry="4" transform="rotate(-30 32 42)" fill="#fff" opacity=".4"/>');
+        },
+        sword: function () {        // Master Sword
+            return Z('<polygon points="46,10 54,10 56,62 44,62" fill="#dfe9f4" stroke="#5f738a" stroke-width="3" stroke-linejoin="round"/>'
+                + '<polygon points="46,10 50,0 54,10" fill="#dfe9f4" stroke="#5f738a" stroke-width="3" stroke-linejoin="round"/>'
+                + '<line x1="50" y1="14" x2="50" y2="58" stroke="#9db3c8" stroke-width="2"/>'
+                + '<path d="M20 62Q50 50 80 62L75 71Q50 62 25 71Z" fill="#3b4fc4" stroke="#1a2468" stroke-width="3" stroke-linejoin="round"/>'
+                + '<circle cx="50" cy="63" r="4" fill="#f2c94c" stroke="#7a5a08" stroke-width="1.5"/>'
+                + '<rect x="45" y="70" width="10" height="17" rx="2" fill="#243b9a" stroke="#101a55" stroke-width="2.5"/>'
+                + '<circle cx="50" cy="92" r="5.5" fill="#f2c94c" stroke="#7a5a08" stroke-width="2"/>', 40);
+        },
+        green: function () { return rupee('#2ec94a', '#9bf5a8', '#0e6a22'); },
+        blue: function () { return rupee('#2f7bff', '#a9caff', '#102f96'); },
+        red: function () { return rupee('#ff3b3b', '#ffb4b4', '#8f1010'); }
+    };
+    // quelle icône pour quel label (cœur = followers, rubis vert = sub, bleu = subgift, rouge = bits, triforce = nombre d'abonnés…)
+    var ZELDA_SVG_FOR = { followers: 'heart', follow: 'heart', viewers: 'eye', subs: 'triforce', heure: 'ocarina',
+                          sub: 'green', subgift: 'blue', bits: 'red', raid: 'sword' };
     var root = document.documentElement;
     root.classList.add('lbl-wait');                       // évite d'afficher l'ancien style une fraction de seconde
     setTimeout(function () { root.classList.remove('lbl-wait'); }, 1500);
@@ -25,13 +80,21 @@
     var ANIMS = { pulse: 'lbl-pulse 1.5s ease-in-out infinite', spin: 'lbl-spin 3s linear infinite',
                   bounce: 'lbl-bounce 1s ease-in-out infinite', shake: 'lbl-shake .6s ease-in-out infinite', none: 'none' };
 
+    // Polices hors Google Fonts : utilisées si elles sont installées sur le PC d'OBS, sinon la police proche (Charlemagne → Metamorphous)
+    var LOCAL_FONTS = { 'Charlemagne Std': 'Metamorphous', 'Charlemagne': 'Metamorphous' };
     function loadFont(name) {
         if (fontLink) { fontLink.remove(); fontLink = null; }
         if (!name) return;
-        fontLink = document.createElement('link');
-        fontLink.rel = 'stylesheet';
-        fontLink.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(name).replace(/%20/g, '+') + '&display=swap';
-        document.head.appendChild(fontLink);
+        if (LOCAL_FONTS[name]) name = LOCAL_FONTS[name];
+        // avec les graisses 400 et 700 (gras net) ; polices à une seule graisse : on redemande sans
+        var fam = encodeURIComponent(name).replace(/%20/g, '+');
+        var add = function (spec) {
+            var l = document.createElement('link'); l.rel = 'stylesheet';
+            l.href = 'https://fonts.googleapis.com/css2?family=' + fam + spec + '&display=swap';
+            document.head.appendChild(l); return l;
+        };
+        fontLink = add(':wght@400;700');
+        fontLink.onerror = function () { fontLink = add(''); };
     }
 
     // Réglages effectifs : thème global, puis réglages propres à ce label (un champ vide ne change rien)
@@ -62,7 +125,7 @@
         var s = effective(raw);
 
         var body = [], text = [], logo = [], logoI = [];
-        if (s.font)   body.push("font-family:'" + s.font.replace(/'/g, '') + "','Montserrat',sans-serif !important");
+        if (s.font)   body.push("font-family:'" + s.font.replace(/'/g, '') + "'," + (LOCAL_FONTS[s.font] ? "'" + LOCAL_FONTS[s.font] + "'," : '') + "'Montserrat',sans-serif !important");
         if (s.weight) body.push('font-weight:' + s.weight + ' !important');
         if (s.size)   body.push('font-size:' + parseInt(s.size, 10) + 'px !important');
         if (s.spacing !== '' && s.spacing != null) text.push('letter-spacing:' + parseFloat(s.spacing) + 'px !important');
@@ -114,12 +177,15 @@
             if (icon && origIcon === null) origIcon = icon.className;
             if (s.icon_text) {
                 logoEl.innerHTML = '<span style="font-style:normal">' + s.icon_text.replace(/</g, '&lt;') + '</span>';
+            } else if (s.icon_set === 'zelda' && ZELDA_SVG_FOR[KEY] && !s.icon) {
+                logoEl.innerHTML = ZELDA_SVG[ZELDA_SVG_FOR[KEY]](s.icon_color || '#f2c94c');
             } else {
                 if (logoEl.innerHTML !== origLogoHtml) logoEl.innerHTML = origLogoHtml;
                 icon = document.querySelector('.logo i');
                 if (icon) {
                     icon.className = s.icon ? s.icon
-                        : ((s.icon_set === 'halloween' && HALLOWEEN_ICONS[KEY]) ? HALLOWEEN_ICONS[KEY] : origIcon);
+                        : ((s.icon_set === 'halloween' && HALLOWEEN_ICONS[KEY]) ? HALLOWEEN_ICONS[KEY]
+                        : (s.icon_set === 'zelda' && ZELDA_ICONS[KEY]) ? ZELDA_ICONS[KEY] : origIcon);
                 }
             }
         }

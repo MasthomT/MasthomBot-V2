@@ -40,7 +40,7 @@ AMOUNT_LABEL = {"sub": "mois cumulés", "subgift": "subs offerts", "bits": "bits
                 "hype_end": "niveau", "hype_record": "niveau", "goal_start": "cible de l'objectif", "goal_end": "cible de l'objectif"}
 ALL_VARS = ["user", "months", "count", "bits", "viewers", "level", "total", "goal", "description", "current", "target", "type"]
 
-EFFECTS = {"none": "Aucun", "ghost": "Fantôme qui passe", "bats": "Nuée de chauves-souris",
+EFFECTS = {"none": "Aucun", "fairy": "Fée qui passe (Navi)", "ghost": "Fantôme qui passe", "bats": "Nuée de chauves-souris",
            "lightning": "Éclair", "confetti": "Confettis / bonbons", "snow": "Neige", "hearts": "Cœurs"}
 ANIM_IN = {"none": "Aucune", "fade": "Fondu", "zoom": "Zoom", "bounce": "Rebond", "slide-up": "Glisse du bas",
            "slide-down": "Glisse du haut", "slide-left": "Glisse de la droite", "slide-right": "Glisse de la gauche",

@@ -54,6 +54,29 @@
     to   { filter: hue-rotate(14deg)  drop-shadow(0 0 .35vw rgba(255, 170, 40, .8)) drop-shadow(0 0 1.1vw rgba(255, 122, 24, .5)); }
   }
 
+  .l-message, .l-plain, .cd-label, .cd-num { font-family: var(--font-text, var(--font)); }
+
+  /* ── habillage Zelda (Ocarina of Time) : or d'Hyrule, contour vert sombre, lueur dorée ; sous-titre vert Kokiri, message parchemin.
+        Actif tant que le thème « Zelda » l'est (réglé dans /admin/labels) ; tailles, graisses et positions ne changent pas. ── */
+  .zl { --zgold: #f2c94c; --zgold2: #fff1b8; --zdark: #1d3a1a; --zgreen: #7be08a; --zparch: #f6ecc9; }
+  /* contour du grand titre : 4 ombres nettes autour de la forme (le -webkit-text-stroke laissait voir les recoupements internes de la police) */
+  .zl { --zol: drop-shadow(.12vw 0 0 var(--zdark)) drop-shadow(-.12vw 0 0 var(--zdark)) drop-shadow(0 .12vw 0 var(--zdark)) drop-shadow(0 -.12vw 0 var(--zdark)); }
+  .zl .l-main { font-weight: 400; -webkit-text-stroke: 0; text-shadow: none; letter-spacing: .04em;
+                background-image: linear-gradient(to bottom, var(--zgold2) 0%, var(--zgold) 46%, #b8860b 100%);
+                filter: var(--zol) drop-shadow(.22vw .22vw 0 var(--zdark)) drop-shadow(0 0 1.1vw rgba(242, 201, 76, .65));
+                animation: zl-glow 4.5s ease-in-out infinite alternate; }
+  .zl.hue .l-main { animation: zl-glow 4.5s ease-in-out infinite alternate; }
+  .zl .l-sub { font-weight: 400; color: var(--zparch); -webkit-text-fill-color: var(--zparch); -webkit-text-stroke: .09vw var(--zdark); paint-order: stroke fill; letter-spacing: .05em;
+               filter: drop-shadow(0 0 .4vw rgba(123, 224, 138, .85)) drop-shadow(0 0 1vw rgba(47, 158, 68, .6)); animation: none; }
+  .zl .l-message, .zl .l-plain { color: var(--zparch); letter-spacing: .06em; text-shadow: 0 .1vw .25vw rgba(0, 0, 0, .8), 0 0 .6vw rgba(242, 201, 76, .55); }
+  .zl .cd-label { color: var(--zparch); text-shadow: 0 0 .5vw rgba(242, 201, 76, .6); }
+  .zl .cd-num { color: var(--zgold2); text-shadow: .15vw .15vw 0 var(--zdark), 0 0 .7vw rgba(242, 201, 76, .9), 0 0 1.5vw rgba(242, 201, 76, .5); }
+  .zl .ln .em { color: #9fe8ff; -webkit-text-fill-color: #9fe8ff; text-shadow: 0 0 .6vw rgba(120, 210, 255, .9); -webkit-text-stroke: 0; }
+  @keyframes zl-glow {
+    from { filter: var(--zol) drop-shadow(.22vw .22vw 0 var(--zdark)) drop-shadow(0 0 .8vw rgba(242, 201, 76, .5)); }
+    to   { filter: var(--zol) drop-shadow(.22vw .22vw 0 var(--zdark)) drop-shadow(0 0 1.5vw rgba(255, 224, 120, .85)); }
+  }
+
   .noglow .l-sub { filter: none !important; }
   .noglow .l-message, .noglow .l-plain, .noglow .cd-num, .noglow .ln .em { text-shadow: none !important; }
   .noglow.look-theme .l-main { filter: none !important; }
@@ -90,6 +113,7 @@
 <div id="fx"></div>
 <div id="screen"></div>
 
+<script src="/static/fairy.js"></script>
 <script>
   const PATH_SLUG = decodeURIComponent(location.pathname.split('/').filter(Boolean).pop() || 'start');
   const AUTO = PATH_SLUG === 'auto';
@@ -106,7 +130,12 @@
   let cfg = null, cfgSig = '', theme = {}, offset = 0, serverTarget = null, localTarget = null, ambientTimer = null, tick = null;
   const loadedFonts = new Set();
 
+  // Polices qui n'existent pas chez Google Fonts : utilisées si elles sont INSTALLÉES sur le PC d'OBS, sinon on prend la police proche
+  // (Charlemagne = police des logos « The Legend of » ; licence Adobe, non diffusable : Metamorphous est son équivalent libre : lettres anguleuses de fantasy, sans arrondis ni fioritures)
+  const LOCAL_FONTS = { 'Charlemagne Std': 'Metamorphous', 'Charlemagne': 'Metamorphous' };
+  const stack = (name) => "'" + name.replace(/'/g, '') + "'" + (LOCAL_FONTS[name] ? ", '" + LOCAL_FONTS[name] + "'" : '') + ', serif';
   function loadFont(name) {
+    if (LOCAL_FONTS[name]) { loadFont(LOCAL_FONTS[name]); return; }
     if (!name || loadedFonts.has(name)) return;
     loadedFonts.add(name);
     const fam = encodeURIComponent(name).replace(/%20/g, '+');
@@ -116,6 +145,7 @@
     add(':wght@300;700;900').onerror = () => add(':wght@400;700').onerror = () => add('');
   }
   const halloween = () => theme.icon_set === 'halloween' || theme.preset === 'halloween';
+  const zelda = () => theme.icon_set === 'zelda' || theme.preset === 'zelda';
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 
   // texte d'une ligne : retours à la ligne conservés, *mot* mis en couleur d'accent
@@ -156,9 +186,10 @@
       else if (effect === 'snow') for (let i = 0; i < 10; i++) mk('fall', '❄', { left: rnd(0, 98) + 'vw', 'font-size': rnd(1.4, 3) + 'vw', color: '#dff3ff', '--d': rnd(4, 7) + 's', '--rot': rnd(-180, 180) + 'deg', 'animation-delay': rnd(0, 2) + 's' });
       else if (effect === 'hearts') for (let i = 0; i < 6; i++) mk('floatup', '❤️', { left: rnd(2, 94) + 'vw', 'font-size': rnd(2.5, 5) + 'vw', '--d': rnd(3, 5) + 's', 'animation-delay': rnd(0, 1.5) + 's' });
       else if (effect === 'ghost') mk('ghost', '👻', {});
+      else if (effect === 'fairy' && window.NaviFairy) NaviFairy.fly(fx, { duration: rnd(5200, 7600) });
     };
     burst();
-    ambientTimer = setInterval(burst, effect === 'ghost' ? 14000 : 3500);
+    ambientTimer = setInterval(burst, effect === 'ghost' ? 14000 : effect === 'fairy' ? 9500 : 3500);
   }
 
   function hexA(hex, a) { const n = parseInt(hex.replace('#', ''), 16); return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + a + ')'; }
@@ -189,24 +220,25 @@
     const base = hwTint ? (theme.w_accent || '#ff7a18') : themed ? (cfg.accent || theme.w_accent || cfg.base_color) : cfg.base_color;
     const outline = hwTint ? '#fff1dc' : cfg.outline;
     const hwOn = !!cfg.halloween_look && halloween();
-    const font = (hwOn && cfg.hw_font) || cfg.font || (themed ? theme.w_font : '') || 'Kanit';
-    const fontText = (hwOn && cfg.hw_font_text) || font;
+    const zlOn = !!cfg.halloween_look && zelda();      // la même case « style du thème » commande Halloween ET Zelda
+    const font = (zlOn && cfg.zl_font) || (hwOn && cfg.hw_font) || cfg.font || (themed ? theme.w_font : '') || 'Kanit';
+    const fontText = (zlOn && cfg.zl_font_text) || (hwOn && cfg.hw_font_text) || font;
     const root = document.documentElement.style;
     root.setProperty('--accent', accent); root.setProperty('--base', base); root.setProperty('--outline', outline);
     root.setProperty('--hue-speed', cfg.hue_speed + 's');
-    root.setProperty('--k', cfg.zoom);
+    root.setProperty('--k', cfg.zoom * ((!!cfg.halloween_look && zelda()) ? 0.8 : 1));   // Zelda : lettres plus larges que Kanit
     applyFrameColor();
     const hw = hwOn;
     root.setProperty('--hw1', theme.w_accent || '#ff7a18'); root.setProperty('--hw2', theme.w_accent2 || '#7b2cbf');
-    root.setProperty('--font', "'" + font.replace(/'/g, '') + "', sans-serif");
-    root.setProperty('--font-text', "'" + fontText.replace(/'/g, '') + "', sans-serif");
+    root.setProperty('--font', stack(font));
+    root.setProperty('--font-text', stack(fontText));
     loadFont(font); loadFont(fontText);
-    document.body.className = (themed ? 'look-theme' : 'look-original') + (cfg.hue_rotate ? ' hue' : '') + (cfg.glow ? '' : ' noglow') + (hw ? ' hw' : '') + (cfg.frame ? ' has-frame' : '');
+    document.body.className = (themed ? 'look-theme' : 'look-original') + (cfg.hue_rotate ? ' hue' : '') + (cfg.glow ? '' : ' noglow') + (hw ? ' hw' : '') + (zlOn ? ' zl' : '') + (cfg.frame ? ' has-frame' : '');
 
     const bd = $('backdrop');
     bd.style.background = cfg.backdrop === 'none' ? 'transparent'
       : cfg.backdrop === 'dim' ? 'rgba(6,8,18,' + cfg.backdrop_opacity + ')' : hexA(cfg.backdrop_color, cfg.backdrop_opacity);
-    ambient(cfg.effect);
+    ambient(zlOn && cfg.zelda_fairy !== false ? 'fairy' : cfg.effect);     // thème Zelda : Navi traverse l'écran
 
     const anim = (cfg.anim_in && cfg.anim_in !== 'none') ? 'in-' + cfg.anim_in + ' ' + cfg.anim_dur + 's ease-out both' : 'none';
     const deco = cfg.halloween_decor && halloween();

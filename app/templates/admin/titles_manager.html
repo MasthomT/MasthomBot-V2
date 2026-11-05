@@ -81,7 +81,7 @@
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 const FONTS = ['Montserrat','Poppins','Roboto','Inter','Oswald','Bebas Neue','Orbitron','Audiowide','Press Start 2P','Righteous','Bangers','Fredoka','Pacifico','Lobster',
-               'Permanent Marker','Jacquard 24','Jacquard 12','Pixelify Sans','Silkscreen','VT323','Pirata One','New Rocker','Butcherman','Nosifer','Caveat','Special Elite','Creepster','Mystery Quest','Metal Mania','Butcherman','Jolly Lodger','Pirata One'];
+               'Permanent Marker','Charlemagne Std','Cinzel','Cinzel Decorative','MedievalSharp','Uncial Antiqua','Jacquard 24','Jacquard 12','Pixelify Sans','Silkscreen','VT323','Pirata One','New Rocker','Butcherman','Nosifer','Caveat','Special Elite','Creepster','Mystery Quest','Metal Mania','Butcherman','Jolly Lodger','Pirata One'];
 $('fontList').innerHTML = FONTS.map(f => '<option value="' + f + '">').join('');
 
 let data = null, slug = 'start', theme = {}, pvReady = false, dirty = false;
@@ -150,9 +150,12 @@ function renderForm() {
       + fld('Tout en majuscules', 'uppercase', 'check')
       + fld('Lueur autour des textes', 'glow', 'check')
       + fld('Léger balancement 3D du bloc', 'ridge', 'check')
-      + fld('Style Halloween : police du thème + couleurs orange/violet et lueur, tant que le thème Halloween est actif (retour au style normal ensuite). Tailles et formats des lignes inchangés.', 'halloween_look', 'check', { span: 2 })
+      + fld('Style du thème : Halloween (orange) ou Zelda (or d\'Hyrule + fée Navi) tant que ce thème est actif (réglé dans Labels). Retour au style normal ensuite. Tailles et formats des lignes inchangés.', 'halloween_look', 'check', { span: 2 })
       + fld('Police des titres (style Halloween — Kanit = celle d\'origine)', 'hw_font', 'text', { list: 'fontList', placeholder: 'Kanit', max: 40 })
       + fld('Police des textes et du décompte (style Halloween)', 'hw_font_text', 'text', { list: 'fontList', placeholder: 'Kanit', max: 40 })
+      + fld('Police des titres (thème Zelda) — « Charlemagne Std » = la police des logos Zelda, utilisée si elle est installée sur le PC d\'OBS, sinon Metamorphous', 'zl_font', 'text', { list: 'fontList', placeholder: 'Charlemagne Std', max: 40, span: 2 })
+      + fld('Police des textes et du décompte (thème Zelda)', 'zl_font_text', 'text', { list: 'fontList', placeholder: 'Cinzel', max: 40 })
+      + fld('Fée Navi qui traverse l\'écran (thème Zelda)', 'zelda_fairy', 'check', { span: 2 })
       + fld('Citrouilles 🎃 autour du grand titre (thème Halloween actif)', 'halloween_decor', 'check', { span: 2 })
       + '</div>'
 

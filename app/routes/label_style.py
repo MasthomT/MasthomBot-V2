@@ -32,13 +32,18 @@ PRESETS = {
                   "color": "#ffa24d", "glow": "#ff5a00", "icon_color": "#b266ff", "icon_set": "halloween",
                   "w_accent": "#ff7a18", "w_accent2": "#7b2cbf", "w_font": "Special Elite",
                   "until": "2026-10-31"},
+    # The Legend of Zelda : Ocarina of Time (or d'Hyrule, vert Kokiri, bleu de Navi) — thème permanent, sans date de fin
+    "zelda": {"preset": "zelda", "font": "Charlemagne Std", "weight": "400", "size": "", "spacing": "1",
+              "color": "#f7ecc4", "glow": "#d4a017", "icon_color": "#f2c94c", "icon_set": "zelda",
+              "w_accent": "#f2c94c", "w_accent2": "#2f9e44", "w_font": "Cinzel", "until": ""},
 }
 
 # Suggestions (n'importe quelle police Google Fonts peut être saisie à la main)
 FONTS = ["", "Montserrat", "Poppins", "Roboto", "Inter", "Oswald", "Bebas Neue", "Orbitron", "Audiowide",
          "Press Start 2P", "Righteous", "Bangers", "Fredoka", "Pacifico", "Lobster", "Permanent Marker", "Caveat",
          "Special Elite", "Creepster", "Nosifer", "Eater", "Butcherman", "Metal Mania", "Jolly Lodger",
-         "Mystery Quest", "Rubik Wet Paint", "Frijole", "Pirata One"]
+         "Mystery Quest", "Rubik Wet Paint", "Frijole", "Pirata One", "Cinzel", "Cinzel Decorative", "MedievalSharp",
+         "Uncial Antiqua", "Almendra", "Charlemagne Std"]
 
 LABEL_KEYS = ["followers", "viewers", "subs", "heure", "follow", "sub", "subgift", "bits", "raid"]
 
@@ -222,7 +227,7 @@ async def admin_label_style_save(payload: StylePayload):
             date.fromisoformat(data["until"])
         except ValueError:
             raise HTTPException(status_code=400, detail="La date de fin doit être au format AAAA-MM-JJ.")
-    if data["icon_set"] not in ("default", "halloween"):
+    if data["icon_set"] not in ("default", "halloween", "zelda"):
         raise HTTPException(status_code=400, detail="Jeu d'icônes inconnu.")
     await _ensure()
     async with get_db_connection() as db:
