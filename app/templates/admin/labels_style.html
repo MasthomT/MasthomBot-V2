@@ -169,6 +169,14 @@
                             <input id="f-w_font" list="fontList" placeholder="Origine" class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm"></label>
                         <div class="col-span-2 grid grid-cols-2 gap-4" id="wcolors"></div>
                     </div>
+
+                    <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest mt-8 mb-3">Teinte de l'overlay</h2>
+                    <p class="text-xs text-slate-500 mb-3">Un filtre transparent posé sur toute la Scène OBS (par exemple vert pour Zelda). Décoche la couleur pour ne pas en mettre.</p>
+                    <div class="grid grid-cols-2 gap-4 text-xs">
+                        <div><span class="text-slate-400">Couleur de la teinte</span><div class="mt-1" id="g-tintCtl"></div></div>
+                        <label class="block"><span class="text-slate-400">Intensité (0 à 60 %)</span>
+                            <input id="f-tint_opacity" type="number" min="0" max="60" step="1" placeholder="15" class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm"></label>
+                    </div>
                 </section>
 
                 <section class="config-card rounded-2xl p-5">
@@ -198,7 +206,7 @@ const ICONS = [
     'gamepad', 'tv', 'comment-dots', 'face-smile', 'hand-peace', 'rocket', 'bomb', 'wand-magic-sparkles', 'snowflake', 'leaf',
     'candy-cane', 'cake-candles', 'champagne-glasses', 'flag', 'shield-halved', 'circle-check', 'fire-flame-curved', 'meteor', 'ring', 'masks-theater',
 ];
-const GLOBAL_COLORS = [['color', 'Texte'], ['glow', 'Lueur'], ['icon_color', 'Icône'], ['w_accent', 'Accent'], ['w_accent2', 'Accent 2']];
+const GLOBAL_COLORS = [['color', 'Texte'], ['glow', 'Lueur'], ['icon_color', 'Icône'], ['w_accent', 'Accent'], ['w_accent2', 'Accent 2'], ['tint', 'Teinte']];
 
 let presets = {};
 let labels = {};          // { followers: {font:..., ...}, ... }
@@ -227,14 +235,15 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
 // ───────── Style complet (global + par label) ─────────
 function collectGlobal() {
     const o = { preset: globalPreset, font: $('f-font').value.trim(), weight: $('f-weight').value, size: $('f-size').value,
-                spacing: $('f-spacing').value, icon_set: $('f-icon_set').value, w_font: $('f-w_font').value.trim(), until: $('f-until').value };
+                spacing: $('f-spacing').value, icon_set: $('f-icon_set').value, w_font: $('f-w_font').value.trim(), until: $('f-until').value,
+                tint_opacity: $('f-tint_opacity').value };
     GLOBAL_COLORS.forEach(([k]) => { o[k] = getColor('g-' + k); });
     return o;
 }
 function fillGlobal(s) {
     $('f-font').value = s.font || ''; $('f-weight').value = s.weight || ''; $('f-size').value = s.size || '';
     $('f-spacing').value = s.spacing || ''; $('f-icon_set').value = s.icon_set || 'default'; $('f-w_font').value = s.w_font || '';
-    $('f-until').value = s.until || '';
+    $('f-until').value = s.until || ''; $('f-tint_opacity').value = s.tint_opacity || '';
     GLOBAL_COLORS.forEach(([k]) => setColor('g-' + k, s[k]));
     globalPreset = s.preset || 'classique';
     document.querySelectorAll('.preset').forEach(b => b.classList.toggle('active', b.dataset.p === globalPreset));
@@ -382,7 +391,7 @@ function buildColors() {
     FIELDS_COLOR.forEach(f => colorCtl('L-' + f + 'Ctl', 'L-' + f, '#ffffff'));
     const html = ([k]) => '<div class="text-xs"><span class="text-slate-400">' + ({color:'Texte',glow:'Lueur',icon_color:'Icône',w_accent:'Accent',w_accent2:'Accent 2'})[k] + '</span><div class="mt-1" id="g-' + k + 'Ctl"></div></div>';
     $('colors').innerHTML = GLOBAL_COLORS.slice(0, 3).map(html).join('');
-    $('wcolors').innerHTML = GLOBAL_COLORS.slice(3).map(html).join('');
+    $('wcolors').innerHTML = GLOBAL_COLORS.slice(3, 5).map(html).join('');
     GLOBAL_COLORS.forEach(([k]) => colorCtl('g-' + k + 'Ctl', 'g-' + k, '#ffffff'));
 }
 buildColors();

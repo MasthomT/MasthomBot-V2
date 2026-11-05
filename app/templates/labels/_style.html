@@ -18,9 +18,9 @@
     };
     // Thème Zelda : vraies icônes dessinées en SVG (pas d'icône gratuite pour ça) — cœur, rubis vert / bleu / rouge, triforce,
     // œil de vérité, ocarina du Temps, Master Sword. Elles gardent leurs couleurs d'origine (le thème ne les recolore pas).
-    var Z = function (inner, tilt) {
+    var Z = function (inner, tilt, zoom) {
         return '<svg viewBox="0 0 100 100" width="1.08em" height="1.08em" style="display:block;overflow:visible;filter:drop-shadow(0 0 3px rgba(0,0,0,.55))" aria-hidden="true">'
-            + (tilt ? '<g transform="translate(50 50) rotate(' + tilt + ') scale(1.18) translate(-50 -50)">' + inner + '</g>' : inner) + '</svg>';
+            + (tilt ? '<g transform="translate(50 50) rotate(' + tilt + ') scale(' + (zoom || 1.18) + ') translate(-50 -50)">' + inner + '</g>' : inner) + '</svg>';
     };
     var rupee = function (main, light, dark) {
         return Z('<polygon points="50,3 80,24 80,76 50,97 20,76 20,24" fill="' + main + '" stroke="' + dark + '" stroke-width="5" stroke-linejoin="round"/>'
@@ -43,27 +43,48 @@
             return Z('<g fill="' + fill + '" stroke="#7a5a08" stroke-width="3" stroke-linejoin="round"><polygon points="50,6 27.5,45 72.5,45"/>'
                 + '<polygon points="27.5,48 5,87 50,87"/><polygon points="72.5,48 50,87 95,87"/></g>');
         },
-        ocarina: function () {      // Ocarina du Temps : corps bleu, embouchure, trous, emblème doré
-            return Z('<rect x="8" y="14" width="22" height="13" rx="5" transform="rotate(32 19 20)" fill="#2c57b8" stroke="#10265e" stroke-width="4"/>'
-                + '<path d="M16 60C8 42 22 26 42 29l22 9c16 6 32 22 26 38-6 15-26 17-42 9C34 79 23 74 16 60z" fill="#3a6fd8" stroke="#10265e" stroke-width="5" stroke-linejoin="round"/>'
-                + '<circle cx="46" cy="52" r="5" fill="#0d1f4d"/><circle cx="62" cy="60" r="5" fill="#0d1f4d"/><circle cx="74" cy="70" r="4.5" fill="#0d1f4d"/><circle cx="38" cy="66" r="4.5" fill="#0d1f4d"/>'
-                + '<polygon points="54,40 47,50 61,50" fill="#f2c94c"/><ellipse cx="32" cy="42" rx="7" ry="4" transform="rotate(-30 32 42)" fill="#fff" opacity=".4"/>');
+        ocarina: function () {      // Ocarina du Temps : corps bleu-violet allongé, 7 trous, bec sur le dessus à gauche avec son anneau gris et sa triforce
+            var hole = function (x, y, rx, ry, rot) {
+                return '<ellipse cx="' + x + '" cy="' + y + '" rx="' + rx + '" ry="' + ry + '" transform="rotate(' + rot + ' ' + x + ' ' + y + ')" fill="#141a4a" stroke="#2c3170" stroke-width="5"/>';
+            };
+            return Z('<g transform="translate(0 6) scale(0.1988)">'
+                // bec : court tube dessiné droit puis posé sur le bord du corps, perpendiculaire à lui (axe = vers le haut gauche)
+                + '<g transform="translate(150 172) rotate(-47)">'
+                + '<path d="M-42 0L-28 -84Q0 -108 28 -84L42 0Z" fill="#7f84d8" stroke="#2d3178" stroke-width="7" stroke-linejoin="round"/>'
+                + '<ellipse cx="-13" cy="-66" rx="7" ry="17" fill="#fff" opacity=".35"/></g>'
+                // corps
+                + '<path d="M430 14C340 30 220 100 140 185 75 255 35 330 75 385 125 440 235 410 320 335 420 250 478 125 430 14Z" fill="#6d71cc" stroke="#2d3178" stroke-width="8" stroke-linejoin="round"/>'
+                + '<path d="M405 36C335 70 235 135 165 215 110 280 85 340 105 372 145 408 225 372 295 312 375 240 440 130 405 36Z" fill="#8c90e4" opacity=".5"/>'
+                // trous
+                + hole(396, 66, 26, 21, -35) + hole(354, 114, 28, 23, -35) + hole(284, 136, 31, 25, -35)
+                + hole(166, 284, 31, 27, -20) + hole(262, 268, 29, 26, -20) + hole(220, 354, 29, 25, -20) + hole(138, 372, 27, 25, -20)
+                // anneau gris du bec + triforce (même repère que le bec : parfaitement dans son axe)
+                + '<g transform="translate(150 172) rotate(-47)">'
+                + '<rect x="-52" y="-24" width="104" height="48" rx="9" fill="#8d93a0" stroke="#3c4252" stroke-width="7"/>'
+                + '<g fill="#f2c94c" stroke="#7a5a08" stroke-width="2.5" stroke-linejoin="round"><polygon points="0,-17 -9,-1 9,-1"/><polygon points="-10,1 -19,17 -1,17"/><polygon points="10,1 1,17 19,17"/></g></g>'
+                + '</g>');
         },
-        sword: function () {        // Master Sword
-            return Z('<polygon points="46,10 54,10 56,62 44,62" fill="#dfe9f4" stroke="#5f738a" stroke-width="3" stroke-linejoin="round"/>'
-                + '<polygon points="46,10 50,0 54,10" fill="#dfe9f4" stroke="#5f738a" stroke-width="3" stroke-linejoin="round"/>'
-                + '<line x1="50" y1="14" x2="50" y2="58" stroke="#9db3c8" stroke-width="2"/>'
-                + '<path d="M20 62Q50 50 80 62L75 71Q50 62 25 71Z" fill="#3b4fc4" stroke="#1a2468" stroke-width="3" stroke-linejoin="round"/>'
-                + '<circle cx="50" cy="63" r="4" fill="#f2c94c" stroke="#7a5a08" stroke-width="1.5"/>'
-                + '<rect x="45" y="70" width="10" height="17" rx="2" fill="#243b9a" stroke="#101a55" stroke-width="2.5"/>'
-                + '<circle cx="50" cy="92" r="5.5" fill="#f2c94c" stroke="#7a5a08" stroke-width="2"/>', 40);
+        sword: function () {        // Master Sword : longue lame fine, garde bleue courte aux pointes relevées, poignée, pommeau doré
+            return Z('<polygon points="46,9 54,9 55.5,63 44.5,63" fill="#e4edf7" stroke="#5f738a" stroke-width="2.5" stroke-linejoin="round"/>'
+                + '<polygon points="46,9 50,0 54,9" fill="#e4edf7" stroke="#5f738a" stroke-width="2.5" stroke-linejoin="round"/>'
+                + '<line x1="50" y1="12" x2="50" y2="60" stroke="#a9bdd1" stroke-width="2"/>'
+                + '<path d="M31 59Q40 56 50 59Q60 56 69 59L66 68Q50 63 34 68Z" fill="#3b4fc4" stroke="#1a2468" stroke-width="2.5" stroke-linejoin="round"/>'
+                + '<circle cx="50" cy="62" r="3.4" fill="#f2c94c" stroke="#7a5a08" stroke-width="1.3"/>'
+                + '<rect x="46.5" y="67" width="7" height="16" rx="2" fill="#243b9a" stroke="#101a55" stroke-width="2"/>'
+                + '<circle cx="50" cy="88" r="5" fill="#f2c94c" stroke="#7a5a08" stroke-width="2"/>', 45, 1.4);
+        },
+        navi: function () {         // Navi : boule de lumière bleue et ses deux ailes (« Hé ! Écoute ! » = nouveau follower)
+            return Z('<path d="M43 50C30 38 12 40 5 22 22 17 40 28 47 44Z" fill="#fff" opacity=".85" stroke="#8fe3ff" stroke-width="2.5" stroke-linejoin="round"/>'
+                + '<path d="M57 50C70 38 88 40 95 22 78 17 60 28 53 44Z" fill="#fff" opacity=".85" stroke="#8fe3ff" stroke-width="2.5" stroke-linejoin="round"/>'
+                + '<circle cx="50" cy="56" r="27" fill="#7fd8ff" opacity=".28"/><circle cx="50" cy="56" r="20" fill="#a9ecff" opacity=".5"/>'
+                + '<circle cx="50" cy="56" r="13" fill="#f2fcff" stroke="#8fe3ff" stroke-width="2"/>');
         },
         green: function () { return rupee('#2ec94a', '#9bf5a8', '#0e6a22'); },
         blue: function () { return rupee('#2f7bff', '#a9caff', '#102f96'); },
         red: function () { return rupee('#ff3b3b', '#ffb4b4', '#8f1010'); }
     };
-    // quelle icône pour quel label (cœur = followers, rubis vert = sub, bleu = subgift, rouge = bits, triforce = nombre d'abonnés…)
-    var ZELDA_SVG_FOR = { followers: 'heart', follow: 'heart', viewers: 'eye', subs: 'triforce', heure: 'ocarina',
+    // quelle icône pour quel label (cœur = nombre de followers, Navi = dernier follow, rubis vert = sub, bleu = subgift, rouge = bits, triforce = nombre d'abonnés…)
+    var ZELDA_SVG_FOR = { followers: 'heart', follow: 'navi', viewers: 'eye', subs: 'triforce', heure: 'ocarina',
                           sub: 'green', subgift: 'blue', bits: 'red', raid: 'sword' };
     var root = document.documentElement;
     root.classList.add('lbl-wait');                       // évite d'afficher l'ancien style une fraction de seconde

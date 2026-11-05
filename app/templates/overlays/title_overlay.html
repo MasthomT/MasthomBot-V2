@@ -63,9 +63,9 @@
   .zl { --zol: drop-shadow(.12vw 0 0 var(--zdark)) drop-shadow(-.12vw 0 0 var(--zdark)) drop-shadow(0 .12vw 0 var(--zdark)) drop-shadow(0 -.12vw 0 var(--zdark)); }
   .zl .l-main { font-weight: 400; -webkit-text-stroke: 0; text-shadow: none; letter-spacing: .04em;
                 background-image: linear-gradient(to bottom, var(--zgold2) 0%, var(--zgold) 46%, #b8860b 100%);
-                filter: var(--zol) drop-shadow(.22vw .22vw 0 var(--zdark)) drop-shadow(0 0 1.1vw rgba(242, 201, 76, .65));
-                animation: zl-glow 4.5s ease-in-out infinite alternate; }
-  .zl.hue .l-main { animation: zl-glow 4.5s ease-in-out infinite alternate; }
+                filter: var(--zol) drop-shadow(.22vw .22vw 0 var(--zdark)) drop-shadow(0 0 1.1vw rgba(242, 201, 76, .7));
+                animation: none; }
+  .zl.hue .l-main { animation: none; }
   .zl .l-sub { font-weight: 400; color: var(--zparch); -webkit-text-fill-color: var(--zparch); -webkit-text-stroke: .09vw var(--zdark); paint-order: stroke fill; letter-spacing: .05em;
                filter: drop-shadow(0 0 .4vw rgba(123, 224, 138, .85)) drop-shadow(0 0 1vw rgba(47, 158, 68, .6)); animation: none; }
   .zl .l-message, .zl .l-plain { color: var(--zparch); letter-spacing: .06em; text-shadow: 0 .1vw .25vw rgba(0, 0, 0, .8), 0 0 .6vw rgba(242, 201, 76, .55); }
@@ -284,7 +284,7 @@
 
     let html = '';
     if (cfg.image) html += '<div class="logo" data-img="1" style="animation:' + animOf('', 0) + ';left:' + (cfg.image_x != null ? cfg.image_x : cfg.x) + '%;top:' + cfg.image_y + '%;width:' + cfg.image_w + 'vw"><img src="' + NODE + '/static/commands/images/' + encodeURIComponent(cfg.image) + '" alt=""></div>';
-    if (lines || cdHtml) html += '<div class="blk" style="left:' + cfg.x + '%;top:' + cfg.y + '%;width:' + (cfg.w / cfg.zoom) + 'vw"><div class="in' + (cfg.ridge ? ' ridge' : '') + '">' + lines + cdHtml + '</div></div>';
+    if (lines || cdHtml) html += '<div class="blk" style="left:' + cfg.x + '%;top:' + cfg.y + '%;width:' + (cfg.w / cfg.zoom) + 'vw"><div class="in' + (cfg.ridge && !zlOn ? ' ridge' : '') + '">' + lines + cdHtml + '</div></div>';
     html += free.join('');
     $('screen').innerHTML = html;
     clearInterval(tick);

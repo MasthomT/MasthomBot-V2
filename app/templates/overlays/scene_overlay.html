@@ -7,6 +7,8 @@
   html, body { margin: 0; padding: 0; width: 1920px; height: 1080px; overflow: hidden; background: transparent; }
   /* Rien ne doit dépasser du cadre 1920x1080, quelle que soit la taille de la source OBS. */
   #stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: hidden; contain: paint; }
+  /* teinte transparente de tout l'écran (thème : ex. vert Zelda), tout en bas : sous le cadre et sous les widgets */
+  #tint { position: absolute; inset: 0; z-index: 0; pointer-events: none; display: none; }
   /* cadre aura en marge (réglé dans /admin/scene) : sous les widgets */
   #frame { position: absolute; inset: 0; z-index: 0; pointer-events: none; display: none; box-sizing: border-box;
            border: 3px solid var(--frame, #ff7a18);
@@ -18,7 +20,7 @@
 </style>
 </head>
 <body>
-<div id="stage"><div id="frame"></div></div>
+<div id="stage"><div id="tint"></div><div id="frame"></div></div>
 <script>
   // Cette page ne contient que des cadres transparents ; chaque widget est une page d'overlay existante.
   // Le placement est géré dans /admin/scene et rechargé toutes les 5 s sans toucher aux cadres inchangés.
@@ -95,6 +97,16 @@
   refresh();
   setInterval(refresh, 5000);
   pollAura(); setInterval(pollAura, 2000);
+
+  // Teinte du thème (réglée dans /admin/labels › Teinte de l'overlay) : relue toutes les 15 s
+  function pollTint() {
+    fetch('/api/labels/style?t=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).then(t => {
+      const el = document.getElementById('tint'), op = parseFloat(t.tint_opacity);
+      if (/^#[0-9a-fA-F]{6}$/.test(t.tint || '') && op > 0) { el.style.background = t.tint; el.style.opacity = String(Math.min(60, op) / 100); el.style.display = 'block'; }
+      else el.style.display = 'none';
+    }).catch(() => {});
+  }
+  pollTint(); setInterval(pollTint, 15000);
 </script>
 </body>
 </html>

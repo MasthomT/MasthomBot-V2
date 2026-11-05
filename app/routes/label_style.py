@@ -23,6 +23,8 @@ BLANK = {"preset": "classique", "font": "", "weight": "", "size": "", "spacing":
          "icon_color": "", "icon_set": "default",
          # widgets de la scène (sondages, trophées, roues, lecteur, chrono, BRB…)
          "w_accent": "", "w_accent2": "", "w_font": "",
+         # teinte transparente posée sur toute la Scène OBS (couleur + opacité en %), ex. vert pour Zelda
+         "tint": "", "tint_opacity": "",
          # date (AAAA-MM-JJ, incluse) après laquelle le style revient tout seul au thème classique
          "until": ""}
 
@@ -35,7 +37,8 @@ PRESETS = {
     # The Legend of Zelda : Ocarina of Time (or d'Hyrule, vert Kokiri, bleu de Navi) — thème permanent, sans date de fin
     "zelda": {"preset": "zelda", "font": "Charlemagne Std", "weight": "400", "size": "", "spacing": "1",
               "color": "#f7ecc4", "glow": "#d4a017", "icon_color": "#f2c94c", "icon_set": "zelda",
-              "w_accent": "#f2c94c", "w_accent2": "#2f9e44", "w_font": "Cinzel", "until": ""},
+              "w_accent": "#f2c94c", "w_accent2": "#2f9e44", "w_font": "Cinzel", "until": "",
+              "tint": "#1f9d4a", "tint_opacity": "14"},
 }
 
 # Suggestions (n'importe quelle police Google Fonts peut être saisie à la main)
@@ -175,6 +178,8 @@ class StylePayload(BaseModel):
     w_accent: str = ""
     w_accent2: str = ""
     w_font: str = ""
+    tint: str = ""
+    tint_opacity: str = ""
     until: str = ""
     labels: dict = {}
 
@@ -214,7 +219,14 @@ async def admin_label_style_save(payload: StylePayload):
             except ValueError:
                 raise HTTPException(status_code=400, detail=f"« {key} » doit être un nombre.")
         data[key] = v
-    for key in ("color", "glow", "icon_color", "w_accent", "w_accent2"):
+    data["tint_opacity"] = data["tint_opacity"].strip()
+    if data["tint_opacity"]:
+        try:
+            if not 0 <= float(data["tint_opacity"]) <= 60:
+                raise ValueError
+        except ValueError:
+            raise HTTPException(status_code=400, detail="L'opacité de la teinte doit être un nombre entre 0 et 60 (%).")
+    for key in ("color", "glow", "icon_color", "w_accent", "w_accent2", "tint"):
         v = data[key].strip()
         if v and not (v.startswith("#") and len(v) in (4, 7)):
             raise HTTPException(status_code=400, detail=f"« {key} » doit être une couleur (#rrggbb).")
