@@ -619,33 +619,90 @@ app.post('/api/shoutout', (req, res) => {
     res.json({ status: "success" });
 });
 
+// ⚙️ Exécute une action OBS d'une commande du site (/admin/commands). Le mapping des sources est relu
+// automatiquement quand une source est introuvable : une source ajoutée dans OBS après le démarrage marche tout de suite.
+async function findSceneItemId(scene, source) {
+    const key = `${scene}|${source}`;
+    if (!sourceMap.has(key)) await refreshSourceMap();
+    const id = sourceMap.get(key);
+    if (!id) { const e = new Error(`Source introuvable : « ${source} » dans la scène « ${scene} »`); e.notFound = true; throw e; }
+    return id;
+}
+
+async function runObsAction(action, p) {
+    switch (action) {
+        case 'scene_switch':
+            await obs.call('SetCurrentProgramScene', { sceneName: p.scene });
+            return;
+        case 'source_show':
+        case 'source_hide':
+        case 'source_toggle': {
+            const sceneItemId = await findSceneItemId(p.scene, p.source);
+            let enabled = action === 'source_show';
+            if (action === 'source_toggle') {
+                const cur = await obs.call('GetSceneItemEnabled', { sceneName: p.scene, sceneItemId });
+                enabled = !cur.sceneItemEnabled;
+            }
+            await obs.call('SetSceneItemEnabled', { sceneName: p.scene, sceneItemId, sceneItemEnabled: enabled });
+            return enabled ? 'affichée' : 'masquée';
+        }
+        case 'filter_enable':
+        case 'filter_disable':
+        case 'filter_toggle': {
+            let enabled = action === 'filter_enable';
+            if (action === 'filter_toggle') {
+                const cur = await obs.call('GetSourceFilter', { sourceName: p.source, filterName: p.filter });
+                enabled = !cur.filterEnabled;
+            }
+            await obs.call('SetSourceFilterEnabled', { sourceName: p.source, filterName: p.filter, filterEnabled: enabled });
+            return enabled ? 'activé' : 'désactivé';
+        }
+        case 'media_play':
+            await obs.call('TriggerMediaInputAction', { inputName: p.source, mediaAction: 'OBS_WEBSOCKET_MEDIA_INPUT_ACTION_PLAY' }); return;
+        case 'media_stop':
+            await obs.call('TriggerMediaInputAction', { inputName: p.source, mediaAction: 'OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP' }); return;
+        case 'media_restart':
+            await obs.call('TriggerMediaInputAction', { inputName: p.source, mediaAction: 'OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART' }); return;
+        case 'mute_source':
+            await obs.call('SetInputMute', { inputName: p.source, inputMuted: true }); return;
+        case 'unmute_source':
+            await obs.call('SetInputMute', { inputName: p.source, inputMuted: false }); return;
+        case 'toggle_mute':
+            await obs.call('ToggleInputMute', { inputName: p.source }); return;
+        case 'stream_start': await obs.call('StartStream'); return;
+        case 'stream_stop': await obs.call('StopStream'); return;
+        case 'record_start': await obs.call('StartRecord'); return;
+        case 'record_stop': await obs.call('StopRecord'); return;
+        case 'record_pause': await obs.call('PauseRecord'); return;
+        case 'record_resume': await obs.call('ResumeRecord'); return;
+        case 'text_update': {
+            const cur = await obs.call('GetInputSettings', { inputName: p.source });
+            await obs.call('SetInputSettings', { inputName: p.source, inputSettings: { ...cur.inputSettings, text: p.text || '' } });
+            return;
+        }
+        default:
+            throw new Error(`Action OBS inconnue : ${action}`);
+    }
+}
+
 app.post('/api/trigger', async (req, res) => {
     const data = req.body;
     
     // Si c'est une commande OBS venant de Python
     if (data.type === 'obs_command') {
-        const { action, scene, source } = data.details;
-        const key = `${scene}|${source}`;
-        const sourceId = sourceMap.get(key);
-
-        if (!sourceId) {
-            console.error(`❌ [OBS] Source non trouvée : ${key}`);
-            return res.status(404).json({ status: "error", message: "Source introuvable" });
-        }
-
+        const d = data.details || {};
+        const { action, scene, source, filter, text } = d;
         try {
-            if (action === 'source_show') {
-                await obs.call('SetSceneItemEnabled', { sceneName: scene, sceneItemId: sourceId, sceneItemEnabled: true });
-            } else if (action === 'source_hide') {
-                await obs.call('SetSceneItemEnabled', { sceneName: scene, sceneItemId: sourceId, sceneItemEnabled: false });
-            }
-            console.log(`✅ [OBS] Action ${action} exécutée sur ${source}`);
+            if (!obsConnected) throw new Error('OBS non connecté');
+            const r = await runObsAction(action, { scene, source, filter, text });
+            console.log(`✅ [OBS] Action ${action} exécutée${source ? ' sur ' + source : ''}${r ? ' (' + r + ')' : ''}`);
             res.json({ status: "success" });
         } catch (err) {
-            console.error("❌ Erreur exécution OBS :", err);
-            res.status(500).json({ status: "error" });
+            const msg = (err && err.message) || String(err);
+            console.error(`❌ [OBS] Action ${action} (${scene || ''}|${source || ''}) : ${msg}`);
+            res.status(err && err.notFound ? 404 : 500).json({ status: "error", message: msg });
         }
-    } 
+    }
     // Si c'est une commande pour l'overlay (image, son, brb)
     else {
         if (data.type === 'change_scene') {
