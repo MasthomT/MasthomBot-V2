@@ -31,6 +31,7 @@
   const frames = new Map(); // key -> { el, sig }
   const $frame = document.getElementById('frame');
   let frameCfg = null, auraColor = null, auraBase = '#ff7a18';
+  let sceneTint = false, themeTint = null;       // la teinte ne s'applique qu'aux scènes où elle est cochée (début, pause, fin)
   // Couleur de l'aura : celle choisie par un viewer (récompense « Aura ») sinon celle de la scène
   function applyFrame() {
     if (!frameCfg) return;
@@ -67,6 +68,7 @@
       if (!res.ok) return;
       const j = await res.json();
       layout = j.widgets;
+      sceneTint = !!j.tint; applyTint();
       frameCfg = { on: !!j.frame, color: /^#[0-9a-fA-F]{6}$/.test(j.frame_color) ? j.frame_color : '#ff7a18' };
     } catch (e) { return; }
 
@@ -99,12 +101,14 @@
   pollAura(); setInterval(pollAura, 2000);
 
   // Teinte du thème (réglée dans /admin/labels › Teinte de l'overlay) : relue toutes les 15 s
+  function applyTint() {
+    const el = document.getElementById('tint'), t = themeTint;
+    const op = t ? parseFloat(t.tint_opacity) : 0;
+    if (sceneTint && t && /^#[0-9a-fA-F]{6}$/.test(t.tint || '') && op > 0) { el.style.background = t.tint; el.style.opacity = String(Math.min(60, op) / 100); el.style.display = 'block'; }
+    else el.style.display = 'none';
+  }
   function pollTint() {
-    fetch('/api/labels/style?t=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).then(t => {
-      const el = document.getElementById('tint'), op = parseFloat(t.tint_opacity);
-      if (/^#[0-9a-fA-F]{6}$/.test(t.tint || '') && op > 0) { el.style.background = t.tint; el.style.opacity = String(Math.min(60, op) / 100); el.style.display = 'block'; }
-      else el.style.display = 'none';
-    }).catch(() => {});
+    fetch('/api/labels/style?t=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).then(t => { themeTint = t; applyTint(); }).catch(() => {});
   }
   pollTint(); setInterval(pollTint, 15000);
 </script>

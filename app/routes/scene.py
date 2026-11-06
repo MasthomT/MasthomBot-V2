@@ -111,6 +111,7 @@ async def _ensure_table():
         """)
         await db.execute("ALTER TABLE scenes ADD COLUMN IF NOT EXISTS frame BOOLEAN NOT NULL DEFAULT FALSE")
         await db.execute("ALTER TABLE scenes ADD COLUMN IF NOT EXISTS frame_color TEXT NOT NULL DEFAULT '#ff7a18'")
+        await db.execute("ALTER TABLE scenes ADD COLUMN IF NOT EXISTS tint BOOLEAN NOT NULL DEFAULT FALSE")
         await db.execute("""
             CREATE TABLE IF NOT EXISTS scene_widgets (
                 scene_slug TEXT NOT NULL DEFAULT 'scene',
@@ -263,7 +264,7 @@ async def _scene_or_404(slug: str | None) -> dict:
 async def admin_scenes_list():
     await _ensure_table()
     async with get_db_connection() as db:
-        c = await db.execute("SELECT slug, name, frame, frame_color FROM scenes ORDER BY created_at, slug")
+        c = await db.execute("SELECT slug, name, frame, frame_color, tint FROM scenes ORDER BY created_at, slug")
         rows = [dict(r) for r in await c.fetchall()]
     scenes = []
     for r in rows:
@@ -320,6 +321,19 @@ async def admin_scenes_rename(slug: str, payload: SceneName, request: Request):
         else:
             await db.execute("UPDATE scenes SET name = $1 WHERE slug = $2", (name, scene["slug"]))
     return {"status": "ok", "slug": new_slug, "name": name, "path": f"/overlay/{new_slug}"}
+
+
+class TintPayload(BaseModel):
+    tint: bool = False
+
+
+@router.put("/admin/api/scenes/{slug}/tint", dependencies=[Depends(require_admin)])
+async def admin_scene_tint(slug: str, payload: TintPayload):
+    """Teinte transparente du thème (couleur réglée dans /admin/labels) : active ou non pour cette scène."""
+    scene = await _scene_or_404(slug)
+    async with get_db_connection() as db:
+        await db.execute("UPDATE scenes SET tint = $1 WHERE slug = $2", (payload.tint, scene["slug"]))
+    return {"status": "ok", "tint": payload.tint}
 
 
 class FramePayload(BaseModel):
@@ -803,10 +817,11 @@ async def scene_layout(scene: str = "scene"):
     widgets = [{k: w[k] for k in keys} for w in await _all_widgets(scene.lower())
                if w["enabled"] and w["embed"] not in ("local", "blocked")]
     async with get_db_connection() as db:
-        c = await db.execute("SELECT frame, frame_color FROM scenes WHERE slug = $1", (scene.lower(),))
+        c = await db.execute("SELECT frame, frame_color, tint FROM scenes WHERE slug = $1", (scene.lower(),))
         row = await c.fetchone()
     return {"widgets": sorted(widgets, key=lambda w: w["z"]),
-            "frame": bool(row["frame"]) if row else False, "frame_color": row["frame_color"] if row else "#ff7a18"}
+            "frame": bool(row["frame"]) if row else False, "frame_color": row["frame_color"] if row else "#ff7a18",
+            "tint": bool(row["tint"]) if row else False}
 
 
 # Doit rester le DERNIER chemin /overlay/... déclaré : les overlays du bot (déclarés avant) l'emportent,

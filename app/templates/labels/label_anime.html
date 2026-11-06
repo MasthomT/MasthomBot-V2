@@ -17,7 +17,7 @@
             color: white;
             font-family: 'Montserrat', sans-serif;
             font-weight: 200; /* ExtraLight */
-            font-size: 36px; /* Taille du texte, modifiable ici */
+            font-size: 26px; /* Taille du texte, modifiable ici */
             height: 100vh;
             display: flex;
             align-items: center; /* Centre verticalement */
@@ -131,6 +131,7 @@
                 // Si le fichier texte a changé (un nouvel événement !)
                 if (data.texte !== texteActuel) {
                     texteActuel = data.texte;
+                    window.lblFullText = texteActuel; if (window.lblFit) window.lblFit();
                     typeWriter(texteActuel); // On lance l'animation
                 }
             } catch (erreur) {
@@ -161,6 +162,7 @@
                     const payload = enveloppe.data;
                     if (payload.type === typeLabel && payload.texte !== texteActuel) {
                         texteActuel = payload.texte;
+                        window.lblFullText = texteActuel; if (window.lblFit) window.lblFit();
                         typeWriter(texteActuel);
                     }
                 };

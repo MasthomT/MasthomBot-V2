@@ -1,5 +1,11 @@
 {# Style des labels (thème global + réglages propres à chaque label) réglé dans /admin/labels. Inclus avant </head>. #}
-<style>html.lbl-wait { visibility: hidden; }</style>
+<style>
+html.lbl-wait { visibility: hidden; }
+/* Un pseudo trop long ne doit jamais sauter à la ligne : le texte rétrécit (voir fit() plus bas) */
+body, .container, #chiffre, #horloge, #text-container, .cursor, #lbl-measure { white-space: nowrap; }
+#chiffre, #horloge, #text-container, .cursor, #lbl-measure { font-size: calc(1em * var(--fit, 1)); }
+#lbl-measure { position: absolute; left: 0; top: 0; visibility: hidden; pointer-events: none; }
+</style>
 <style id="lbl-style"></style>
 <script>
 (function () {
@@ -184,7 +190,7 @@
 
         styleEl.textContent = KEYFRAMES +
             'body{' + body.join(';') + '}' +
-            '#chiffre,#horloge,#text-container,.cursor{' + text.join(';') + '}' +
+            '#chiffre,#horloge,#text-container,.cursor,#lbl-measure{' + text.join(';') + '}' +
             '.logo{' + logo.join(';') + '}' +
             '.logo i,.logo span{' + logoI.join(';') + '}';
 
@@ -210,8 +216,43 @@
                 }
             }
         }
+        fitKey = null;
+        whenReady(function () { fit(); if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { fitKey = null; fit(); }); });
         root.classList.remove('lbl-wait');
     }
+
+    // ── Ajustement automatique : le texte rétrécit pour tenir dans la largeur de la source (jamais de saut de ligne) ──
+    var fitKey = null, fitObs = null;
+    function textEl() { return document.getElementById('chiffre') || document.getElementById('horloge') || document.getElementById('text-container'); }
+    function fit() {
+        var el = textEl();
+        if (!el || !document.body) return;
+        // la machine à écrire (label_anime) publie le texte complet à l'avance : on mesure celui-là, pas le texte à moitié tapé
+        var full = (el.id === 'text-container' && window.lblFullText != null) ? String(window.lblFullText) : (el.textContent || '');
+        var key = full + '|' + window.innerWidth;
+        if (key === fit.last && fitKey !== null) return;     // rien n'a changé depuis la dernière mesure
+        fit.last = key; fitKey = 1;
+        var m = document.getElementById('lbl-measure');
+        if (!m) { m = document.createElement('span'); m.id = 'lbl-measure'; document.body.appendChild(m); }
+        m.textContent = full;
+        var avail = window.innerWidth - el.getBoundingClientRect().left - 14;   // 14 px : curseur / lueur à droite
+        // l'espacement des lettres ne rétrécit pas avec la police : on affine en 3 passes
+        var f = 1;
+        for (var i = 0; i < 3; i++) {
+            root.style.setProperty('--fit', f.toFixed(3));
+            var w = m.getBoundingClientRect().width;
+            if (w <= avail && i > 0) break;
+            if (w <= avail) break;
+            f = Math.max(0.35, f * avail / w * 0.98);
+        }
+        root.style.setProperty('--fit', f.toFixed(3));
+    }
+    window.lblFit = fit;
+    whenReady(function () {
+        var el = textEl();
+        if (el && window.MutationObserver) { fitObs = new MutationObserver(function () { fit(); }); fitObs.observe(el, { childList: true, characterData: true, subtree: true }); }
+        window.addEventListener('resize', function () { fit.last = null; fit(); });
+    });
 
     // Aperçu depuis l'admin : ?preview=<style encodé en base64> (pas de relecture du serveur)
     var preview = new URLSearchParams(location.search).get('preview');
