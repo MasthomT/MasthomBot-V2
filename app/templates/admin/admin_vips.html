@@ -130,7 +130,11 @@
                                 </div>
                                 <span class="text-sm font-black text-white block">{{ m.username }}</span>
                             </div>
-                            <!-- Pas de bouton supprimer : on gère les vrais modos sur Twitch ! -->
+                            <button type="button" onclick="removeMod('{{ m.twitch_id }}', this.dataset.name, this)" data-name="{{ m.username }}"
+                                    class="px-3 py-2 rounded-lg bg-slate-700 hover:bg-red-600 text-[11px] font-bold transition-all"
+                                    title="Retire le statut de modérateur sur Twitch (le bot ne le remettra pas)">
+                                <i class="fas fa-user-minus mr-1"></i>Retirer le modo
+                            </button>
                         </div>
                         {% else %}
                         <div class="col-span-full text-center py-6 opacity-30 italic text-sm font-bold bg-slate-900/30 rounded-2xl border border-dashed border-slate-700">Aucun modérateur aspiré.</div>
@@ -221,6 +225,16 @@
     </main>
 
     <script>
+        async function removeMod(id, name, btn) {
+            if (!confirm('Retirer le statut de modérateur à ' + name + ' sur Twitch ?\nLe bot ne le remettra pas.')) return;
+            btn.disabled = true;
+            try {
+                const r = await fetch('/admin/api/modguard/' + id + '/demote', { method: 'POST' });
+                const j = await r.json().catch(() => ({}));
+                if (j.ok) { btn.closest('.group').remove(); }
+                else { alert(j.message || 'Twitch a refusé le retrait.'); btn.disabled = false; }
+            } catch (e) { alert('Erreur réseau.'); btn.disabled = false; }
+        }
         function toggleExactDate() {
             const select = document.getElementById('durationSelect');
             const dateGroup = document.getElementById('exactDateGroup');
