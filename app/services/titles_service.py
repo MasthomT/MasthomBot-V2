@@ -17,7 +17,9 @@ logger = logging.getLogger("masthbot.titles")
 
 SCREENS = {"start": "Début de live", "brk": "Pause", "end": "Fin de live"}
 EFFECTS = {"none": "Aucun", "bats": "Chauves-souris", "confetti": "Confettis / bonbons", "snow": "Neige",
-           "hearts": "Cœurs", "ghost": "Fantôme qui passe", "fairy": "Fée qui passe (Navi)"}
+           "hearts": "Cœurs", "ghost": "Fantôme qui passe", "fairy": "Fée qui passe (Navi)",
+           "pixels": "Pixels néon (Cyberpunk)", "coins": "Pièces et étoiles (Arcade)",
+           "bubbles": "Bulles (Océan)", "stars": "Étoiles qui scintillent (Espace)", "petals": "Pétales de sakura", "doubloons": "Doublons (Pirate)", "blood": "Gouttes de sang (Horreur)"}
 ANIMS = {"perspective": "Apparition en profondeur (comme avant)", "zoom": "Zoom", "fade": "Fondu", "bounce": "Rebond",
          "slide-up": "Glisse du bas", "none": "Aucune"}
 LINE_ANIMS = {"": "Comme le reste", **ANIMS}
@@ -54,7 +56,7 @@ def default_config(slug: str) -> dict:
         "uppercase": True, "gap": 14, "glow": True, "ridge": True, "stagger": 0,
         "base_color": "#4682b4", "outline": "#f0f8ff", "hue_rotate": True, "hue_speed": 40,
         "font": "", "accent": "", "halloween_decor": False, "halloween_look": True, "hw_font": "Kanit", "hw_font_text": "Kanit",
-        "zl_font": "Charlemagne Std", "zl_font_text": "Cinzel", "zelda_fairy": True,
+        "zl_font": "Triforce", "zl_font_text": "Cinzel", "zelda_fairy": True,
         "frame": True, "frame_color": "#ff7a18",
         "zoom": 1.4,
         "x": 50, "y": 50, "w": 90,
@@ -143,7 +145,7 @@ def clean_config(slug: str, raw: dict, images: set) -> dict:
         raise ValueError("nom de police invalide")
     hw_font = str(raw.get("hw_font", "Kanit")).strip()
     hw_font_text = str(raw.get("hw_font_text", "Kanit")).strip()
-    zl_font = str(raw.get("zl_font", "Charlemagne Std")).strip()
+    zl_font = str(raw.get("zl_font", "Triforce")).strip()
     zl_font_text = str(raw.get("zl_font_text", "Cinzel")).strip()
     if not _FONT_RE.match(zl_font) or not _FONT_RE.match(zl_font_text):
         raise ValueError("nom de police Zelda invalide")

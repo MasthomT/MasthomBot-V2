@@ -77,6 +77,27 @@
     to   { filter: var(--zol) drop-shadow(.22vw .22vw 0 var(--zdark)) drop-shadow(0 0 1.5vw rgba(255, 224, 120, .85)); }
   }
 
+  /* ── autres thèmes (Noël, Cyberpunk, Arcade) : un seul habillage piloté par des variables CSS posées par le script (table TX) ── */
+  .tx .l-main { padding: 0 .12em; font-weight: var(--xw, 400); -webkit-text-stroke: 0; text-shadow: none; letter-spacing: var(--xls, .03em);
+                background-image: var(--xgrad); filter: var(--xfilter); animation: none; }
+  .tx.hue .l-main { animation: none; }
+  .tx .l-sub { font-weight: var(--xw, 400); color: var(--xsub); -webkit-text-fill-color: var(--xsub); -webkit-text-stroke: var(--xsubstroke); paint-order: stroke fill;
+               letter-spacing: var(--xls, .03em); filter: var(--xsubfilter); animation: none; }
+  .tx .l-message, .tx .l-plain { color: var(--xmsg); font-weight: var(--xw, 400); letter-spacing: var(--xls, .03em); text-shadow: var(--xmsgsh); }
+  .tx .cd-label { color: var(--xmsg); text-shadow: var(--xmsgsh); font-weight: var(--xw, 400); }
+  .tx .cd-num { color: var(--xnum); text-shadow: var(--xnumsh); font-weight: var(--xw, 400); }
+  .tx .ln .em { color: var(--xem); -webkit-text-fill-color: var(--xem); text-shadow: var(--xemsh); -webkit-text-stroke: 0; }
+  /* Cyberpunk : léger scintillement du néon (opacité seule, très léger pour OBS) */
+  .tx-cyber .l-main { animation: neon-flick 7s steps(1, end) infinite; }
+  @keyframes neon-flick { 0%, 92%, 96%, 100% { opacity: 1 } 93% { opacity: .55 } 94% { opacity: 1 } 95% { opacity: .7 } }
+  /* Horreur : le titre vacille comme une lampe qui meurt (opacité seule) */
+  .tx-horror .l-main { animation: horror-flick 5.5s steps(1, end) infinite; }
+  @keyframes horror-flick { 0%, 40%, 46%, 100% { opacity: 1 } 41% { opacity: .35 } 42% { opacity: .9 } 43% { opacity: .2 } 44% { opacity: 1 } 45% { opacity: .6 } }
+  .pix { top: -6vh; font-size: 1.6vw; animation: fall var(--d) linear forwards; text-shadow: 0 0 .6vw currentColor; }
+  .twinkle { animation: twinkle var(--d) ease-in-out forwards; text-shadow: 0 0 .7vw currentColor; }
+  @keyframes twinkle { 0% { opacity: 0; transform: scale(.4) } 50% { opacity: 1; transform: scale(1) } 100% { opacity: 0; transform: scale(.4) } }
+  .coin { bottom: -10vh; animation: floatUp var(--d) ease-out forwards; }
+
   .noglow .l-sub { filter: none !important; }
   .noglow .l-message, .noglow .l-plain, .noglow .cd-num, .noglow .ln .em { text-shadow: none !important; }
   .noglow.look-theme .l-main { filter: none !important; }
@@ -114,6 +135,7 @@
 <div id="screen"></div>
 
 <script src="/static/fairy.js"></script>
+<script src="/static/passers.js"></script>
 <script>
   const PATH_SLUG = decodeURIComponent(location.pathname.split('/').filter(Boolean).pop() || 'start');
   const AUTO = PATH_SLUG === 'auto';
@@ -132,7 +154,7 @@
 
   // Polices qui n'existent pas chez Google Fonts : utilisées si elles sont INSTALLÉES sur le PC d'OBS, sinon on prend la police proche
   // (Charlemagne = police des logos « The Legend of » ; licence Adobe, non diffusable : Metamorphous est son équivalent libre : lettres anguleuses de fantasy, sans arrondis ni fioritures)
-  const LOCAL_FONTS = { 'Charlemagne Std': 'Metamorphous', 'Charlemagne': 'Metamorphous' };
+  const LOCAL_FONTS = { 'Triforce': 'Metamorphous', 'Charlemagne Std': 'Metamorphous', 'Charlemagne': 'Metamorphous' };
   const stack = (name) => "'" + name.replace(/'/g, '') + "'" + (LOCAL_FONTS[name] ? ", '" + LOCAL_FONTS[name] + "'" : '') + ', serif';
   function loadFont(name) {
     if (LOCAL_FONTS[name]) { loadFont(LOCAL_FONTS[name]); return; }
@@ -144,6 +166,59 @@
     // polices à une seule graisse : la demande avec graisses est refusée, on redemande sans
     add(':wght@300;700;900').onerror = () => add(':wght@400;700').onerror = () => add('');
   }
+  // Habillages des thèmes « génériques » : couleurs, polices, effet d'ambiance. k = facteur de taille (polices plus larges que Kanit).
+  const _ol = (c, w) => ['1,0', '-1,0', '0,1', '0,-1'].map(d => { const [x, y] = d.split(','); return 'drop-shadow(' + (x * w) + 'vw ' + (y * w) + 'vw 0 ' + c + ')'; }).join(' ');
+  const TX = {
+    noel: { font: 'Mountains of Christmas', text: 'Fredoka', w: 700, ls: '.03em', k: 1.0, subk: .78, fx: 'snow', pass: ['sleigh'],
+      grad: 'linear-gradient(to bottom,#ffffff 0%,#ffe9e9 55%,#ffb3b9 100%)',
+      filter: _ol('#7a0c1a', .13) + ' drop-shadow(.2vw .2vw 0 #5c0a16) drop-shadow(0 0 1.1vw rgba(232,40,60,.75))',
+      sub: '#ffffff', substroke: '.09vw #0b4d2a', subfilter: 'drop-shadow(0 0 .45vw rgba(60,200,120,.85)) drop-shadow(0 0 1vw rgba(30,158,87,.6))',
+      msg: '#fff7ee', msgsh: '0 .1vw .25vw rgba(0,0,0,.8), 0 0 .6vw rgba(232,40,60,.7)',
+      num: '#ffd54a', numsh: '.14vw .14vw 0 #7a0c1a, 0 0 .7vw rgba(255,213,74,.85)', em: '#ffd54a', emsh: '0 0 .6vw rgba(255,213,74,.9)' },
+    cyber: { font: 'Orbitron', text: 'Orbitron', w: 800, ls: '.06em', k: 0.8, fx: 'pixels', pass: ['drone'],
+      grad: 'linear-gradient(to bottom,#f4ffff 0%,#8ff8ff 50%,#00c8ff 100%)',
+      filter: 'drop-shadow(.14vw 0 0 #ff2bd6) drop-shadow(-.14vw 0 0 #00f0ff) drop-shadow(0 0 1.1vw rgba(0,240,255,.8))',
+      sub: '#ffe3fa', substroke: '.06vw #7a0a6a', subfilter: 'drop-shadow(0 0 .45vw rgba(255,43,214,.9)) drop-shadow(0 0 1.1vw rgba(255,43,214,.55))',
+      msg: '#dffbff', msgsh: '0 0 .5vw rgba(0,240,255,.9), 0 .1vw .25vw rgba(0,0,0,.8)',
+      num: '#7ffbff', numsh: '0 0 .6vw rgba(0,240,255,.95), 0 0 1.5vw rgba(255,43,214,.6)', em: '#ff2bd6', emsh: '0 0 .6vw rgba(255,43,214,.95)' },
+    arcade: { font: 'Press Start 2P', text: 'Press Start 2P', w: 400, ls: '.02em', k: 0.53, fx: 'coins', pass: ['pacman'],
+      grad: 'linear-gradient(to bottom,#fffbb0 0%,#ffd23f 50%,#ff8a00 100%)',
+      filter: _ol('#1b1464', .14) + ' drop-shadow(.28vw .28vw 0 #ff3d81)',
+      sub: '#ffffff', substroke: '.1vw #1b1464', subfilter: 'drop-shadow(.16vw .16vw 0 #ff3d81)',
+      msg: '#ffffff', msgsh: '.12vw .12vw 0 #1b1464, .24vw .24vw 0 #ff3d81',
+      num: '#fff36b', numsh: '.15vw .15vw 0 #1b1464, .3vw .3vw 0 #ff3d81', em: '#ff3d81', emsh: '.1vw .1vw 0 #1b1464' },
+    ocean: { font: 'Pacifico', text: 'Fredoka', w: 400, ls: '.02em', k: 0.9, subk: .85, fx: 'bubbles', pass: ['whale', 'fish'],
+      grad: 'linear-gradient(to bottom,#ffffff 0%,#b8f4ff 52%,#3cc9f0 100%)',
+      filter: _ol('#04465e', .13) + ' drop-shadow(.2vw .2vw 0 #022d3e) drop-shadow(0 0 1.1vw rgba(0,200,255,.7))',
+      sub: '#e8fcff', substroke: '.08vw #04465e', subfilter: 'drop-shadow(0 0 .45vw rgba(0,200,255,.9)) drop-shadow(0 0 1vw rgba(0,150,200,.6))',
+      msg: '#e6fbff', msgsh: '0 .1vw .25vw rgba(2,45,62,.9), 0 0 .6vw rgba(0,180,216,.7)',
+      num: '#ffe08a', numsh: '.14vw .14vw 0 #04465e, 0 0 .7vw rgba(255,224,138,.8)', em: '#ffe08a', emsh: '0 0 .6vw rgba(255,224,138,.9)' },
+    space: { font: 'Exo 2', text: 'Exo 2', w: 800, ls: '.07em', k: 0.88, fx: 'stars', pass: ['ufo', 'comet'],
+      grad: 'linear-gradient(to bottom,#ffffff 0%,#dccdff 50%,#8b5cf6 100%)',
+      filter: _ol('#1c0d4d', .12) + ' drop-shadow(.2vw .2vw 0 #12082e) drop-shadow(0 0 1.2vw rgba(139,92,246,.85))',
+      sub: '#f3ecff', substroke: '.07vw #1c0d4d', subfilter: 'drop-shadow(0 0 .45vw rgba(167,139,250,.95)) drop-shadow(0 0 1.1vw rgba(139,92,246,.6))',
+      msg: '#efe7ff', msgsh: '0 .1vw .25vw rgba(0,0,0,.85), 0 0 .6vw rgba(139,92,246,.8)',
+      num: '#ffd166', numsh: '.14vw .14vw 0 #1c0d4d, 0 0 .7vw rgba(255,209,102,.85)', em: '#ffd166', emsh: '0 0 .6vw rgba(255,209,102,.9)' },
+    pirate: { font: 'Pirata One', text: 'Pirata One', w: 400, ls: '.04em', k: 1.15, subk: .85, fx: 'doubloons', pass: ['ship'],
+      grad: 'linear-gradient(to bottom,#fff1c9 0%,#e0b44c 52%,#8b5a1b 100%)',
+      filter: _ol('#2a1608', .14) + ' drop-shadow(.22vw .22vw 0 #1a0d04) drop-shadow(0 0 .9vw rgba(224,180,76,.5))',
+      sub: '#f5deb3', substroke: '.09vw #2a1608', subfilter: 'drop-shadow(0 0 .4vw rgba(179,38,30,.7))',
+      msg: '#f5deb3', msgsh: '.1vw .1vw .25vw rgba(26,13,4,.95), 0 0 .5vw rgba(224,180,76,.5)',
+      num: '#ffd166', numsh: '.15vw .15vw 0 #2a1608, 0 0 .6vw rgba(255,209,102,.8)', em: '#ff6b57', emsh: '0 0 .5vw rgba(255,107,87,.9)' },
+    sakura: { font: 'Zen Maru Gothic', text: 'Zen Maru Gothic', w: 700, ls: '.05em', k: 0.9, fx: 'petals', pass: ['butterfly'],
+      grad: 'linear-gradient(to bottom,#ffffff 0%,#ffdce9 50%,#ff8fb8 100%)',
+      filter: _ol('#7a1e4a', .12) + ' drop-shadow(.2vw .2vw 0 #5a1236) drop-shadow(0 0 1.1vw rgba(255,111,165,.7))',
+      sub: '#fff0f6', substroke: '.08vw #7a1e4a', subfilter: 'drop-shadow(0 0 .45vw rgba(255,111,165,.9)) drop-shadow(0 0 1vw rgba(255,111,165,.55))',
+      msg: '#fff0f6', msgsh: '0 .1vw .25vw rgba(90,18,54,.9), 0 0 .6vw rgba(255,111,165,.7)',
+      num: '#ffd1e3', numsh: '.14vw .14vw 0 #7a1e4a, 0 0 .7vw rgba(255,143,184,.85)', em: '#7dd3a8', emsh: '0 0 .6vw rgba(125,211,168,.9)' },
+    horror: { font: 'Creepster', text: 'Special Elite', w: 400, ls: '.05em', k: 0.95, subk: .9, fx: 'blood', pass: ['crow', 'eyes'],
+      grad: 'linear-gradient(to bottom,#ff6a5c 0%,#c1121f 48%,#4a0000 100%)',
+      filter: _ol('#000000', .13) + ' drop-shadow(.2vw .25vw 0 #1a0000) drop-shadow(0 0 1.2vw rgba(193,18,31,.85))',
+      sub: '#eadbd2', substroke: '.09vw #2a0000', subfilter: 'drop-shadow(0 0 .45vw rgba(193,18,31,.9)) drop-shadow(0 0 1.1vw rgba(138,3,3,.65))',
+      msg: '#eadbd2', msgsh: '.1vw .12vw .2vw rgba(0,0,0,.95), 0 0 .6vw rgba(193,18,31,.75)',
+      num: '#ff3b3b', numsh: '.14vw .14vw 0 #1a0000, 0 0 .8vw rgba(255,59,59,.85)', em: '#ff3b3b', emsh: '0 0 .6vw rgba(255,59,59,.95)' }
+  };
+  const txTheme = () => TX[theme.preset] || TX[theme.icon_set] || null;
   const halloween = () => theme.icon_set === 'halloween' || theme.preset === 'halloween';
   const zelda = () => theme.icon_set === 'zelda' || theme.preset === 'zelda';
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
@@ -185,11 +260,28 @@
       else if (effect === 'confetti') { const b = ['🎃', '🍬', '🍭', '🕷️', '👻', '⭐']; for (let i = 0; i < 8; i++) mk('fall', b[i % b.length], { left: rnd(1, 96) + 'vw', 'font-size': '3vw', '--d': rnd(3, 5) + 's', '--rot': rnd(-360, 360) + 'deg', 'animation-delay': rnd(0, 1.5) + 's' }); }
       else if (effect === 'snow') for (let i = 0; i < 10; i++) mk('fall', '❄', { left: rnd(0, 98) + 'vw', 'font-size': rnd(1.4, 3) + 'vw', color: '#dff3ff', '--d': rnd(4, 7) + 's', '--rot': rnd(-180, 180) + 'deg', 'animation-delay': rnd(0, 2) + 's' });
       else if (effect === 'hearts') for (let i = 0; i < 6; i++) mk('floatup', '❤️', { left: rnd(2, 94) + 'vw', 'font-size': rnd(2.5, 5) + 'vw', '--d': rnd(3, 5) + 's', 'animation-delay': rnd(0, 1.5) + 's' });
+      else if (effect === 'pixels') { const c = ['#00f0ff', '#ff2bd6', '#7ffbff']; for (let i = 0; i < 12; i++) mk('pix', '■', { left: rnd(0, 98) + 'vw', color: c[i % 3], '--d': rnd(3, 6) + 's', '--rot': '0deg', 'animation-delay': rnd(0, 2) + 's' }); }
+      else if (effect === 'coins') { const c = ['🪙', '⭐', '🍄', '🪙']; for (let i = 0; i < 6; i++) mk('coin', c[i % c.length], { left: rnd(2, 94) + 'vw', 'font-size': rnd(2.2, 4) + 'vw', '--d': rnd(3, 5) + 's', 'animation-delay': rnd(0, 1.5) + 's' }); }
+      else if (effect === 'bubbles') for (let i = 0; i < 9; i++) mk('floatup', '○', { left: rnd(1, 96) + 'vw', 'font-size': rnd(1, 2.6) + 'vw', color: '#bdf3ff', '--d': rnd(4, 7) + 's', 'animation-delay': rnd(0, 2.5) + 's' });
+      else if (effect === 'stars') for (let i = 0; i < 10; i++) mk('twinkle', '✦', { left: rnd(1, 97) + 'vw', top: rnd(2, 90) + 'vh', 'font-size': rnd(1, 2.4) + 'vw', color: ['#fff3b0', '#e9ddff', '#ffffff'][i % 3], '--d': rnd(2, 4.5) + 's', 'animation-delay': rnd(0, 2) + 's' });
+      else if (effect === 'petals') for (let i = 0; i < 10; i++) mk('fall', '🌸', { left: rnd(0, 98) + 'vw', 'font-size': rnd(1.4, 2.6) + 'vw', '--d': rnd(5, 8) + 's', '--rot': rnd(-300, 300) + 'deg', 'animation-delay': rnd(0, 2.5) + 's' });
+      else if (effect === 'doubloons') for (let i = 0; i < 5; i++) mk('coin', '🪙', { left: rnd(2, 94) + 'vw', 'font-size': rnd(2.2, 3.6) + 'vw', '--d': rnd(3, 5) + 's', 'animation-delay': rnd(0, 1.5) + 's' });
+      else if (effect === 'blood') for (let i = 0; i < 8; i++) mk('fall', '🩸', { left: rnd(1, 97) + 'vw', 'font-size': rnd(1.3, 2.4) + 'vw', '--d': rnd(4, 7) + 's', '--rot': rnd(-25, 25) + 'deg', 'animation-delay': rnd(0, 3) + 's' });
       else if (effect === 'ghost') mk('ghost', '👻', {});
       else if (effect === 'fairy' && window.NaviFairy) NaviFairy.fly(fx, { duration: rnd(5200, 7600) });
     };
     burst();
     ambientTimer = setInterval(burst, effect === 'ghost' ? 14000 : effect === 'fairy' ? 9500 : 3500);
+  }
+
+  // Personnages qui traversent l'écran selon le thème (traîneau, drone, Pac-Man, baleine…) : un passage toutes les ~11 s, en alternant
+  let passTimer = null, passIdx = 0;
+  function startPass(kinds) {
+    clearInterval(passTimer); clearTimeout(startPass.first);
+    if (!kinds || !kinds.length || !window.Passers) return;
+    const go = () => Passers.fly($('fx'), kinds[passIdx++ % kinds.length]);
+    startPass.first = setTimeout(go, 2200);
+    passTimer = setInterval(go, 11000);
   }
 
   function hexA(hex, a) { const n = parseInt(hex.replace('#', ''), 16); return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + a + ')'; }
@@ -216,29 +308,38 @@
     if (!cfg) return;
     const themed = cfg.look === 'theme';
     const accent = cfg.accent || (themed ? theme.w_accent : '') || cfg.base_color || '#ff7a18';
-    const hwTint = !!cfg.halloween_look && halloween();
+    const hwTint = halloween();
     const base = hwTint ? (theme.w_accent || '#ff7a18') : themed ? (cfg.accent || theme.w_accent || cfg.base_color) : cfg.base_color;
     const outline = hwTint ? '#fff1dc' : cfg.outline;
-    const hwOn = !!cfg.halloween_look && halloween();
-    const zlOn = !!cfg.halloween_look && zelda();      // la même case « style du thème » commande Halloween ET Zelda
-    const font = (zlOn && cfg.zl_font) || (hwOn && cfg.hw_font) || cfg.font || (themed ? theme.w_font : '') || 'Kanit';
-    const fontText = (zlOn && cfg.zl_font_text) || (hwOn && cfg.hw_font_text) || font;
+    const hwOn = halloween();
+    const zlOn = zelda();      // le style des titres suit toujours le thème actif (boutons de la page Titres)
+    const tx = (!hwOn && !zlOn) ? txTheme() : null;      // Noël / Cyberpunk / Arcade
+    // Halloween garde la police normale de l'écran (celle du thème classique) : seuls les thèmes Zelda / Noël / Cyberpunk / Arcade imposent la leur
+    const font = (tx && tx.font) || (zlOn && cfg.zl_font) || cfg.font || (themed && !hwOn ? theme.w_font : '') || 'Kanit';
+    const fontText = (tx && tx.text) || (zlOn && cfg.zl_font_text) || font;
     const root = document.documentElement.style;
     root.setProperty('--accent', accent); root.setProperty('--base', base); root.setProperty('--outline', outline);
     root.setProperty('--hue-speed', cfg.hue_speed + 's');
-    root.setProperty('--k', cfg.zoom * ((!!cfg.halloween_look && zelda()) ? 0.8 : 1));   // Zelda : lettres plus larges que Kanit
+    root.setProperty('--k', cfg.zoom * (zelda() ? 0.8 : tx ? tx.k : 1));   // polices des thèmes plus larges que Kanit
     applyFrameColor();
     const hw = hwOn;
+    if (tx) {
+      const m = { xw: tx.w, xls: tx.ls, xgrad: tx.grad, xfilter: tx.filter, xsub: tx.sub, xsubstroke: tx.substroke, xsubfilter: tx.subfilter,
+                  xmsg: tx.msg, xmsgsh: tx.msgsh, xnum: tx.num, xnumsh: tx.numsh, xem: tx.em, xemsh: tx.emsh };
+      Object.entries(m).forEach(([k, v]) => root.setProperty('--' + k, v));
+    }
     root.setProperty('--hw1', theme.w_accent || '#ff7a18'); root.setProperty('--hw2', theme.w_accent2 || '#7b2cbf');
     root.setProperty('--font', stack(font));
     root.setProperty('--font-text', stack(fontText));
     loadFont(font); loadFont(fontText);
-    document.body.className = (themed ? 'look-theme' : 'look-original') + (cfg.hue_rotate ? ' hue' : '') + (cfg.glow ? '' : ' noglow') + (hw ? ' hw' : '') + (zlOn ? ' zl' : '') + (cfg.frame ? ' has-frame' : '');
+    document.body.className = (themed ? 'look-theme' : 'look-original') + (cfg.hue_rotate ? ' hue' : '') + (cfg.glow ? '' : ' noglow') + (hw ? ' hw' : '') + (zlOn ? ' zl' : '') + (tx ? ' tx tx-' + (theme.preset || theme.icon_set) : '') + (cfg.frame ? ' has-frame' : '');
 
     const bd = $('backdrop');
     bd.style.background = cfg.backdrop === 'none' ? 'transparent'
       : cfg.backdrop === 'dim' ? 'rgba(6,8,18,' + cfg.backdrop_opacity + ')' : hexA(cfg.backdrop_color, cfg.backdrop_opacity);
-    ambient(zlOn && cfg.zelda_fairy !== false ? 'fairy' : cfg.effect);     // thème Zelda : Navi traverse l'écran
+    const noFx = !cfg.effect || cfg.effect === 'none';
+    ambient(zlOn && cfg.zelda_fairy !== false ? 'fairy' : (tx && noFx) ? tx.fx : (hwOn && noFx) ? 'ghost' : cfg.effect);     // chaque thème a son élément qui passe (fée, fantôme, traîneau…)
+    startPass(tx ? tx.pass : null);     // thème Zelda : Navi traverse l'écran
 
     const anim = (cfg.anim_in && cfg.anim_in !== 'none') ? 'in-' + cfg.anim_in + ' ' + cfg.anim_dur + 's ease-out both' : 'none';
     const deco = cfg.halloween_decor && halloween();
@@ -252,8 +353,9 @@
     let firstMain = true, order = 0;
     const free = [];                                   // éléments positionnés librement (lignes, décompte)
     const lines = cfg.lines.map((l, idx) => ({ l, idx })).filter(o => o.l.text.trim() !== '').map(({ l, idx }) => {
-      const size = l.size > 0 ? l.size : DEF_SIZE[l.format];
-      let st = 'font-size:' + vw(size) + ';margin-bottom:' + vw(cfg.gap) + ';' + upper;
+      const size = (l.size > 0 ? l.size : DEF_SIZE[l.format]) * ((tx && l.format === 'sub' && tx.subk) || 1);
+      const gapCss = 'margin-bottom:' + vw(tx ? cfg.gap * 0.4 : cfg.gap) + ';';     // thèmes Noël/Cyber/Arcade : lignes plus serrées
+      let st = 'font-size:' + vw(size) + ';' + gapCss + upper;
       if (l.color) {
         if (l.format === 'main' && hw) st += 'background-image:linear-gradient(to bottom,color-mix(in srgb,' + l.color + ' 55%,#ffe9b0),' + l.color + ' 45%,color-mix(in srgb,' + l.color + ' 60%,#1b0630));';
         else if (l.format === 'main') st += 'background-image:linear-gradient(' + l.color + ',' + l.color + ');text-shadow:0 0 1px ' + l.color + ';';
@@ -266,7 +368,7 @@
       const el = '<div class="ln l-' + l.format + '" data-i="' + idx + '" style="' + st + '">' + html + '</div>';
       if (l.x != null && l.y != null) {              // ligne placée à la main : hors du bloc, à sa position
         free.push('<div class="blk" style="left:' + l.x + '%;top:' + l.y + '%;width:' + (cfg.w / cfg.zoom) + 'vw"><div class="lw" style="animation:' + animOf(l.anim, delay) + '">'
-                  + el.replace('margin-bottom:' + vw(cfg.gap) + ';', '') + '</div></div>');
+                  + el.replace(gapCss, '') + '</div></div>');
         return '';
       }
       return '<div class="lw" style="animation:' + animOf(l.anim, delay) + '">' + el + '</div>';
@@ -289,8 +391,41 @@
     $('screen').innerHTML = html;
     clearInterval(tick);
     if (cfg.countdown.enabled) { renderCountdown(); tick = setInterval(renderCountdown, 250); }
+    declutter(tx);
     if (PREVIEW) { setTimeout(reportRects, 250); setTimeout(reportRects, cfg.anim_dur * 1000 + 400); }
   }
+
+  // Anti-chevauchement : les lignes sont placées à la main pour la police d'origine ; avec une autre police (plus haute / plus basse) elles pouvaient se superposer.
+  // On repousse vers le bas les blocs qui se recouvrent (jamais sur le côté). Thèmes Noël / Cyberpunk / Arcade : les blocs sont empilés serrés, centrés sur la même zone.
+  let lastTx = null;
+  function declutter(tx) {
+    if (arguments.length) lastTx = tx;
+    const blks = [...document.querySelectorAll('#screen > .blk')];
+    if (blks.length < 2) return;
+    const W = innerWidth, H = innerHeight;
+    const k = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--k')) || 1;
+    const items = blks.map(el => {
+      if (el.dataset.t0 === undefined) el.dataset.t0 = parseFloat(el.style.top);
+      let w = 0; el.querySelectorAll('.ln, .cd').forEach(n => { w = Math.max(w, n.offsetWidth); });
+      return { el, cx: parseFloat(el.style.left) / 100 * W, cy0: +el.dataset.t0 / 100 * H, w: (w || el.offsetWidth) * k, h: el.offsetHeight * k + H * 0.012 };
+    }).sort((a, b) => a.cy0 - b.cy0);
+    const gap = W * (lastTx ? 0.006 : 0.003);
+    items.forEach((it, i) => {
+      it.cy = it.cy0;
+      let need = null;
+      for (let j = 0; j < i; j++) {
+        const o = items[j];
+        if (Math.abs(it.cx - o.cx) < (it.w + o.w) / 2) { const m = o.cy + (o.h + it.h) / 2 + gap; need = need === null ? m : Math.max(need, m); }
+      }
+      if (need !== null) it.cy = lastTx ? need : Math.max(it.cy0, need);
+    });
+    if (lastTx) {                                         // recentre le groupe empilé sur sa zone d'origine
+      const shift = items.reduce((a, it) => a + it.cy0 - it.cy, 0) / items.length;
+      items.forEach(it => { it.cy += shift; });
+    }
+    items.forEach(it => { it.el.style.top = (it.cy / H * 100) + '%'; });
+  }
+  if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => { declutter(); if (PREVIEW) setTimeout(reportRects, 200); });
 
   // L'éditeur dessine ses poignées de déplacement sur la position réelle de chaque élément
   function reportRects() {

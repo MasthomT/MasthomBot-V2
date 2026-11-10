@@ -16,6 +16,26 @@ body, .container, #chiffre, #horloge, #text-container, .cursor, #lbl-measure { w
         follow: 'fa-solid fa-ghost', sub: 'fa-solid fa-skull', subgift: 'fa-solid fa-hat-wizard',
         bits: 'fa-solid fa-gem', raid: 'fa-solid fa-spider'
     };
+    // Autres thèmes : jeux d'icônes FontAwesome (mêmes clés que ci-dessus)
+    var EXTRA_ICONS = {
+        noel:   { followers: 'fa-solid fa-snowman', viewers: 'fa-solid fa-snowflake', subs: 'fa-solid fa-tree', heure: 'fa-solid fa-bell',
+                  follow: 'fa-solid fa-snowman', sub: 'fa-solid fa-gift', subgift: 'fa-solid fa-gifts', bits: 'fa-solid fa-star', raid: 'fa-solid fa-sleigh' },
+        cyber:  { followers: 'fa-solid fa-users', viewers: 'fa-solid fa-eye', subs: 'fa-solid fa-microchip', heure: 'fa-solid fa-clock',
+                  follow: 'fa-solid fa-robot', sub: 'fa-solid fa-bolt', subgift: 'fa-solid fa-satellite-dish', bits: 'fa-solid fa-database', raid: 'fa-solid fa-jet-fighter' },
+        arcade: { followers: 'fa-solid fa-heart', viewers: 'fa-solid fa-gamepad', subs: 'fa-solid fa-star', heure: 'fa-solid fa-clock',
+                  follow: 'fa-solid fa-ghost', sub: 'fa-solid fa-trophy', subgift: 'fa-solid fa-gift', bits: 'fa-solid fa-coins', raid: 'fa-solid fa-rocket' },
+        ocean:  { followers: 'fa-solid fa-fish', viewers: 'fa-solid fa-water', subs: 'fa-solid fa-anchor', heure: 'fa-solid fa-clock',
+                  follow: 'fa-solid fa-fish-fins', sub: 'fa-solid fa-shrimp', subgift: 'fa-solid fa-gift', bits: 'fa-solid fa-gem', raid: 'fa-solid fa-ship' },
+        space:  { followers: 'fa-solid fa-user-astronaut', viewers: 'fa-solid fa-satellite', subs: 'fa-solid fa-star', heure: 'fa-solid fa-moon',
+                  follow: 'fa-solid fa-user-astronaut', sub: 'fa-solid fa-meteor', subgift: 'fa-solid fa-gift', bits: 'fa-solid fa-sun', raid: 'fa-solid fa-rocket' },
+        pirate: { followers: 'fa-solid fa-skull', viewers: 'fa-solid fa-binoculars', subs: 'fa-solid fa-anchor', heure: 'fa-solid fa-hourglass-half',
+                  follow: 'fa-solid fa-skull-crossbones', sub: 'fa-solid fa-coins', subgift: 'fa-solid fa-gem', bits: 'fa-solid fa-sack-dollar', raid: 'fa-solid fa-flag' },
+        sakura: { followers: 'fa-solid fa-heart', viewers: 'fa-solid fa-eye', subs: 'fa-solid fa-spa', heure: 'fa-solid fa-clock',
+                  follow: 'fa-solid fa-seedling', sub: 'fa-solid fa-spa', subgift: 'fa-solid fa-gift', bits: 'fa-solid fa-star', raid: 'fa-solid fa-dove' },
+        horror: { followers: 'fa-solid fa-skull', viewers: 'fa-solid fa-eye', subs: 'fa-solid fa-biohazard', heure: 'fa-solid fa-hourglass-end',
+                  follow: 'fa-solid fa-skull-crossbones', sub: 'fa-solid fa-droplet', subgift: 'fa-solid fa-bone', bits: 'fa-solid fa-syringe', raid: 'fa-solid fa-bug' }
+    };
+    var OUTLINE = { ocean: '#04283a', space: '#120a2e', pirate: '#2a1608', sakura: '#5a1236', horror: '#1a0000' };
     // Zelda : cœur (followers), œil de vérité (viewers), rubis (subs), sablier (heure — Chant du Temps), bouclier hylien (raid)…
     var ZELDA_ICONS = {
         followers: 'fa-solid fa-heart', viewers: 'fa-solid fa-eye', subs: 'fa-solid fa-gem' /* remplacé par la triforce (SVG) */, heure: 'fa-solid fa-hourglass-half',
@@ -108,7 +128,7 @@ body, .container, #chiffre, #horloge, #text-container, .cursor, #lbl-measure { w
                   bounce: 'lbl-bounce 1s ease-in-out infinite', shake: 'lbl-shake .6s ease-in-out infinite', none: 'none' };
 
     // Polices hors Google Fonts : utilisées si elles sont installées sur le PC d'OBS, sinon la police proche (Charlemagne → Metamorphous)
-    var LOCAL_FONTS = { 'Charlemagne Std': 'Metamorphous', 'Charlemagne': 'Metamorphous' };
+    var LOCAL_FONTS = { 'Triforce': 'Metamorphous', 'Charlemagne Std': 'Metamorphous', 'Charlemagne': 'Metamorphous' };
     function loadFont(name) {
         if (fontLink) { fontLink.remove(); fontLink = null; }
         if (!name) return;
@@ -156,7 +176,8 @@ body, .container, #chiffre, #horloge, #text-container, .cursor, #lbl-measure { w
         if (s.weight) body.push('font-weight:' + s.weight + ' !important');
         if (s.size)   body.push('font-size:' + parseInt(s.size, 10) + 'px !important');
         if (s.spacing !== '' && s.spacing != null) text.push('letter-spacing:' + parseFloat(s.spacing) + 'px !important');
-        if (s.uppercase) text.push('text-transform:uppercase !important');
+        // Triforce / Zelda : les minuscules de la police sont des petites capitales très petites → on passe tout en capitales
+        if (s.uppercase || s.preset === 'zelda' || s.preset === 'cyber') text.push('text-transform:uppercase !important');
 
         // Texte : dégradé ou couleur unie
         var tg = s.text_mode === 'gradient' ? gradient(s.grad_angle, [s.grad1, s.grad2, s.grad3]) : '';
@@ -170,6 +191,18 @@ body, .container, #chiffre, #horloge, #text-container, .cursor, #lbl-measure { w
             if (s.color) body.push('color:' + s.color + ' !important');
             if (s.glow) {
                 var shadow = '0 0 6px ' + s.glow + ',0 0 16px ' + s.glow + ',2px 2px 4px rgba(0,0,0,.85)';
+                if (s.preset === 'arcade') {
+                    // Arcade : ombre dure façon pixel, sans flou
+                    shadow = '-2px -2px 0 #1b1464,2px -2px 0 #1b1464,-2px 2px 0 #1b1464,2px 2px 0 #1b1464,4px 4px 0 ' + s.glow;
+                } else if (s.preset === 'noel') {
+                    shadow = '-1px -1px 0 #5c0a16,1px -1px 0 #5c0a16,-1px 1px 0 #5c0a16,1px 1px 0 #5c0a16,0 0 8px ' + s.glow + ',0 2px 5px rgba(0,0,0,.8)';
+                } else if (OUTLINE[s.preset]) {
+                    var oc = OUTLINE[s.preset];
+                    shadow = '-1px -1px 0 ' + oc + ',1px -1px 0 ' + oc + ',-1px 1px 0 ' + oc + ',1px 1px 0 ' + oc + ',0 0 8px ' + s.glow + ',0 2px 5px rgba(0,0,0,.8)';
+                } else if (s.preset === 'zelda') {
+                    // Zelda : contour sombre net + halo sombre (la lueur dorée sur texte doré le rendait flou sur fond clair)
+                    shadow = '-1px -1px 0 #1a1204,1px -1px 0 #1a1204,-1px 1px 0 #1a1204,1px 1px 0 #1a1204,0 0 4px #000,0 2px 6px rgba(0,0,0,.95),0 0 10px rgba(0,0,0,.7)';
+                }
                 body.push('text-shadow:' + shadow + ' !important');
                 text.push('text-shadow:' + shadow + ' !important');
             }
@@ -212,7 +245,8 @@ body, .container, #chiffre, #horloge, #text-container, .cursor, #lbl-measure { w
                 if (icon) {
                     icon.className = s.icon ? s.icon
                         : ((s.icon_set === 'halloween' && HALLOWEEN_ICONS[KEY]) ? HALLOWEEN_ICONS[KEY]
-                        : (s.icon_set === 'zelda' && ZELDA_ICONS[KEY]) ? ZELDA_ICONS[KEY] : origIcon);
+                        : (s.icon_set === 'zelda' && ZELDA_ICONS[KEY]) ? ZELDA_ICONS[KEY]
+                        : (EXTRA_ICONS[s.icon_set] && EXTRA_ICONS[s.icon_set][KEY]) ? EXTRA_ICONS[s.icon_set][KEY] : origIcon);
                 }
             }
         }
@@ -243,7 +277,7 @@ body, .container, #chiffre, #horloge, #text-container, .cursor, #lbl-measure { w
             var w = m.getBoundingClientRect().width;
             if (w <= avail && i > 0) break;
             if (w <= avail) break;
-            f = Math.max(0.35, f * avail / w * 0.98);
+            f = Math.max(0.28, f * avail / w * 0.98);
         }
         root.style.setProperty('--fit', f.toFixed(3));
     }

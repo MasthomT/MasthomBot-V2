@@ -49,6 +49,11 @@
         </header>
 
         <div id="offsetWarn" class="hidden mb-4 rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-xs text-amber-200"></div>
+        <div class="flex flex-wrap items-center gap-2 mb-4">
+            <span class="text-[11px] font-black uppercase tracking-widest text-slate-500 mr-1">Thème</span>
+            <div class="flex flex-wrap gap-2" id="themeBar"></div>
+            <span id="themeMsg" class="text-xs text-slate-400"></span>
+        </div>
         <nav class="flex flex-wrap gap-2 mb-4" id="tabs"></nav>
 
         <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px] gap-5">
@@ -81,7 +86,7 @@
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 const FONTS = ['Montserrat','Poppins','Roboto','Inter','Oswald','Bebas Neue','Orbitron','Audiowide','Press Start 2P','Righteous','Bangers','Fredoka','Pacifico','Lobster',
-               'Permanent Marker','Charlemagne Std','Cinzel','Cinzel Decorative','MedievalSharp','Uncial Antiqua','Jacquard 24','Jacquard 12','Pixelify Sans','Silkscreen','VT323','Pirata One','New Rocker','Butcherman','Nosifer','Caveat','Special Elite','Creepster','Mystery Quest','Metal Mania','Butcherman','Jolly Lodger','Pirata One'];
+               'Permanent Marker','Triforce','Charlemagne Std','Cinzel','Cinzel Decorative','MedievalSharp','Uncial Antiqua','Jacquard 24','Jacquard 12','Pixelify Sans','Silkscreen','VT323','Pirata One','New Rocker','Butcherman','Nosifer','Caveat','Special Elite','Creepster','Mystery Quest','Metal Mania','Butcherman','Jolly Lodger','Pirata One'];
 $('fontList').innerHTML = FONTS.map(f => '<option value="' + f + '">').join('');
 
 let data = null, slug = 'start', theme = {}, pvReady = false, dirty = false;
@@ -150,10 +155,7 @@ function renderForm() {
       + fld('Tout en majuscules', 'uppercase', 'check')
       + fld('Lueur autour des textes', 'glow', 'check')
       + fld('Léger balancement 3D du bloc', 'ridge', 'check')
-      + fld('Style du thème : Halloween (orange) ou Zelda (or d\'Hyrule + fée Navi) tant que ce thème est actif (réglé dans Labels). Retour au style normal ensuite. Tailles et formats des lignes inchangés.', 'halloween_look', 'check', { span: 2 })
-      + fld('Police des titres (style Halloween — Kanit = celle d\'origine)', 'hw_font', 'text', { list: 'fontList', placeholder: 'Kanit', max: 40 })
-      + fld('Police des textes et du décompte (style Halloween)', 'hw_font_text', 'text', { list: 'fontList', placeholder: 'Kanit', max: 40 })
-      + fld('Police des titres (thème Zelda) — « Charlemagne Std » = la police des logos Zelda, utilisée si elle est installée sur le PC d\'OBS, sinon Metamorphous', 'zl_font', 'text', { list: 'fontList', placeholder: 'Charlemagne Std', max: 40, span: 2 })
+      + fld('Police des titres (thème Zelda) — « Triforce » (ou « Charlemagne Std ») = polices Zelda, utilisées si elles sont installées sur le PC d\'OBS, sinon Metamorphous', 'zl_font', 'text', { list: 'fontList', placeholder: 'Triforce', max: 40, span: 2 })
       + fld('Police des textes et du décompte (thème Zelda)', 'zl_font_text', 'text', { list: 'fontList', placeholder: 'Cinzel', max: 40 })
       + fld('Fée Navi qui traverse l\'écran (thème Zelda)', 'zelda_fairy', 'check', { span: 2 })
       + fld('Citrouilles 🎃 autour du grand titre (thème Halloween actif)', 'halloween_decor', 'check', { span: 2 })
@@ -361,10 +363,28 @@ function renderRules() {
 $('addRule').addEventListener('click', () => { rules.push({ match: '', screen: 'start' }); markDirty(); renderRules(); });
 $('dbgHint').textContent = location.origin + '/overlay/titre/auto?debug=1';
 
+// ── thème : un clic = titres + labels + widgets (même réglage que la page Labels) ──
+const THEMES = [['classique', 'Classique'], ['halloween', '🎃 Halloween'], ['zelda', '🧚 Zelda'], ['noel', '❄️ Noël'], ['cyber', '🌃 Cyberpunk'], ['arcade', '🕹️ Arcade'], ['ocean', '🌊 Océan'], ['space', '🚀 Espace'], ['pirate', '🏴‍☠️ Pirate'], ['sakura', '🌸 Sakura'], ['horror', '🩸 Horreur']];
+function renderThemeBar() {
+    const cur = theme.preset || 'classique';
+    $('themeBar').innerHTML = THEMES.map(([k, l]) => '<button class="tab' + (cur === k ? ' active' : '') + '" data-th="' + k + '">' + l + '</button>').join('');
+    $('themeBar').querySelectorAll('button').forEach(b => b.addEventListener('click', async () => {
+        $('themeMsg').textContent = 'Application…';
+        try {
+            const r = await fetch('/admin/api/labels/theme/' + b.dataset.th, { method: 'PUT' });
+            if (!r.ok) throw new Error(r.status);
+            theme = (await r.json()).style || {};
+            renderThemeBar(); preview(true);
+            $('themeMsg').textContent = 'Thème appliqué (OBS le reprend en quelques secondes).';
+            setTimeout(() => { $('themeMsg').textContent = ''; }, 4000);
+        } catch (e) { $('themeMsg').textContent = 'Échec : ' + e.message; }
+    }));
+}
+
 async function load() {
     const [res, th] = await Promise.all([fetch('/admin/api/titres'), fetch('/api/labels/style').then(r => r.json()).catch(() => ({}))]);
     if (!res.ok) { $('msg').textContent = 'Chargement impossible (' + res.status + ')'; return; }
-    data = await res.json(); theme = th || {};
+    data = await res.json(); theme = th || {}; renderThemeBar();
     Object.entries(data.screens).forEach(([k, v]) => { cfgs[k] = JSON.parse(JSON.stringify(v.config)); });
     rules = JSON.parse(JSON.stringify(data.auto_rules || [])); renderRules();
     renderOffsets(data.scene_offsets);
