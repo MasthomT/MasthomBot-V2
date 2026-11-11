@@ -46,11 +46,12 @@ SYSTEM_COMMANDS_DEFINITION = [
     },
     {
         "command_key": "play",
-        "label": "Lecteur (clip ou TikTok)",
+        "label": "Lecteur (clip, TikTok, YouTube, Instagram)",
         "description": (
-            "Affiche sur l'overlay un clip Twitch ou un TikTok, selon ce qu'on lui donne : "
-            "!play <lien TikTok> · !play <lien de clip ou mots du titre> · !play clip (dernier clip) · "
-            "!play tiktok (dernier TikTok). !replay et !showtiktok sont des alias de cette commande."
+            "Affiche sur l'overlay ce qu'on lui donne : !play (seul) = le dernier clip de la chaîne · "
+            "!play <mots du titre d'un de tes clips> · !play <lien de clip Twitch> · !play <lien TikTok> · "
+            "!play <lien YouTube> · !play <lien Instagram> · !play tiktok (dernier TikTok). "
+            "Vidéos limitées à 5 minutes. !replay et !showtiktok sont des alias de cette commande."
         ),
         "default_name": "play",
         "default_aliases": ["lecteur", "replay", "showtiktok"],
@@ -62,6 +63,9 @@ SYSTEM_COMMANDS_DEFINITION = [
             "tiktok_none":           [],
             "tiktok_download_error": [],
             "tiktok_wrong_account":  ["{broadcaster}", "{tiktok_account}"],
+            "video_success":         ["{title}", "{url}"],
+            "video_download_error":  [],
+            "video_too_long":        ["{duration}", "{max}"],
         },
         "messages": {
             "clip_playing":          "🎬 Replay : {title} — twitch.tv/{broadcaster} ({url})",
@@ -70,6 +74,9 @@ SYSTEM_COMMANDS_DEFINITION = [
             "tiktok_none":           "❌ Aucune vidéo TikTok connue pour le moment.",
             "tiktok_download_error": "❌ Impossible de récupérer cette vidéo TikTok. Vérifie le lien !",
             "tiktok_wrong_account":  "❌ Seul @{broadcaster} peut afficher un TikTok d'un autre compte. Les modérateurs sont limités au compte @{tiktok_account}.",
+            "video_success":         "🎬 Vidéo affichée à l'écran ! — {title} {url}",
+            "video_download_error":  "❌ Impossible de récupérer cette vidéo. Vérifie le lien (YouTube / Instagram) !",
+            "video_too_long":        "❌ Vidéo trop longue ({duration}) : {max} maximum.",
         },
     },
     {

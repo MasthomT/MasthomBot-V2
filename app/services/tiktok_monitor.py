@@ -13,6 +13,7 @@ si TikTok change significativement son site, une mise à jour de yt-dlp peut
 import asyncio
 import logging
 import os
+import shutil
 import tempfile
 import uuid
 from datetime import datetime, timezone
@@ -201,20 +202,45 @@ TIKTOK_DOWNLOAD_DIR = os.path.join(tempfile.gettempdir(), "masthbot_tiktok")
 os.makedirs(TIKTOK_DOWNLOAD_DIR, exist_ok=True)
 
 
+MAX_PLAY_SECONDS = 300      # au-delà, on refuse de lire la vidéo (YouTube / Instagram / TikTok) à l'écran
+
+
+def _find_node() -> str | None:
+    """Node.js, dont yt-dlp a besoin pour déchiffrer les liens YouTube (sinon : erreur 403)."""
+    import glob
+    found = shutil.which("node")
+    if found:
+        return found
+    candidates = sorted(glob.glob(os.path.expanduser("~/.nvm/versions/node/*/bin/node")))
+    return candidates[-1] if candidates else None
+
+
 def _download_video(url: str) -> dict | None:
     """Appel bloquant (yt-dlp) — à exécuter via asyncio.to_thread.
     Télécharge réellement la vidéo plutôt que de juste extraire son URL CDN directe :
     rejouer l'URL CDN telle quelle (même avec les bons en-têtes capturés) renvoie un 403,
     le CDN TikTok faisant visiblement aussi une vérification d'empreinte de requête que
-    yt-dlp seul sait satisfaire. Le fichier téléchargé est ensuite servi via /api/v1/tiktok_proxy."""
+    yt-dlp seul sait satisfaire. Le fichier téléchargé est ensuite servi via /api/v1/tiktok_proxy.
+    Marche aussi pour YouTube / Instagram (yt-dlp les gère). Vidéo trop longue → {"too_long": durée}."""
     file_id = uuid.uuid4().hex
     outtmpl = os.path.join(TIKTOK_DOWNLOAD_DIR, f"{file_id}.%(ext)s")
     # OBS Browser Source (Chromium embarqué) ne supporte pas H.265/HEVC — on force H.264.
-    ydl_opts = {"quiet": True, "no_warnings": True, "noprogress": True,
-                "format": "bestvideo[vcodec^=h264]+bestaudio/bestvideo[vcodec^=avc]+bestaudio/best[vcodec^=h264]/best",
-                "outtmpl": outtmpl}
+    if shutil.which("ffmpeg"):
+        fmt = "bestvideo[vcodec^=h264][height<=1080]+bestaudio/bestvideo[vcodec^=avc][height<=1080]+bestaudio/best[vcodec^=h264]/best"
+    else:
+        # Sans ffmpeg yt-dlp ne sait pas fusionner image + son (cas de YouTube) : on prend un fichier unique.
+        fmt = "best[vcodec^=avc][ext=mp4][height<=1080]/best[vcodec^=h264][height<=1080]/best[ext=mp4][height<=1080]/best[height<=1080]/best"
+    ydl_opts = {"quiet": True, "no_warnings": True, "noprogress": True, "noplaylist": True,
+                "format": fmt, "outtmpl": outtmpl}
+    node = _find_node()
+    if node:
+        ydl_opts["js_runtimes"] = {"node": {"path": node}}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
+        info = ydl.extract_info(url, download=False)
+        duration = info.get("duration") or 0
+        if duration and duration > MAX_PLAY_SECONDS:
+            return {"too_long": duration}
+        info = ydl.process_ie_result(info, download=True)
         filepath = ydl.prepare_filename(info)
         if not os.path.exists(filepath):
             # yt-dlp may have remuxed to a different extension — find the file by id prefix
@@ -225,7 +251,7 @@ def _download_video(url: str) -> dict | None:
             filepath = candidates[0]
         return {
             "filepath": filepath,
-            "title": info.get("title") or "Vidéo TikTok",
+            "title": info.get("title") or "Vidéo",
             "uploader": (info.get("uploader") or "").lower(),
             "duration": info.get("duration") or 0,
         }

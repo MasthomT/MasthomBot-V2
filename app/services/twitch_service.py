@@ -34,12 +34,15 @@ _send_failure_since: float | None = None
 
 # ── Lecteur unifié (!play, alias !replay / !showtiktok) ─────────────────────────────────
 _TIKTOK_LINK_RE = re.compile(r"https?://\S*tiktok\.com\S*", re.IGNORECASE)   # tiktok.com, vm.tiktok.com, vt.tiktok.com
+# YouTube (vidéo, short, youtu.be) et Instagram (reel, post) : téléchargés puis lus comme un TikTok.
+_VIDEO_LINK_RE = re.compile(r"https?://(?:[\w-]+\.)*(?:youtube\.com|youtu\.be|instagram\.com|instagr\.am)\S*", re.IGNORECASE)
 
 
 def classify_play_input(content):
     """Reconnaît ce que l'on veut lire.
     → ("tiktok", url | None)               url None = dernier TikTok connu
-    → ("clip", {"slug", "query"})          tout à None = dernier clip de la chaîne
+    → ("video", url)                       lien YouTube ou Instagram
+    → ("clip", {"slug", "query"})          lien de clip Twitch ou mots du titre ; tout à None = dernier clip
     Les mots-clés « clip » et « tiktok » (seuls ou devant le reste) forcent le type."""
     text = (content or "").strip()
     forced = None
@@ -50,6 +53,10 @@ def classify_play_input(content):
     link = _TIKTOK_LINK_RE.search(text)
     if forced == "tiktok" or (forced is None and link):
         return "tiktok", (link.group(0) if link else None)
+
+    video_link = _VIDEO_LINK_RE.search(text)
+    if forced is None and video_link:
+        return "video", video_link.group(0)
 
     slug = query = None
     if text:
@@ -845,10 +852,10 @@ class MasthbotTwitch(commands.Bot):
 
     @commands.command(name='play')
     async def cmd_play(self, ctx, *, content: str = None):
-        """Lecteur unifié : un clip Twitch ou un TikTok, reconnu automatiquement.
+        """Lecteur unifié : un clip Twitch (lien, titre, ou rien = le dernier), un TikTok, une vidéo YouTube ou Instagram.
         Le nom, les alias (replay, showtiktok…), le rôle et les messages se règlent dans l'admin (Commandes)."""
         kind, value = classify_play_input(content)
-        if kind == "tiktok":
+        if kind in ("tiktok", "video"):
             await self._play_tiktok(ctx, value)
         else:
             await self._play_clip(ctx, value["slug"], value["query"])
@@ -949,16 +956,22 @@ class MasthbotTwitch(commands.Bot):
                 return await safe_send(ctx.channel, await syscmd_msg("play", "tiktok_none"))
             source_url = last["url"]
 
-        logger.info(f"[PLAY/TIKTOK] Téléchargement en cours : {source_url}")
+        is_tiktok = bool(_TIKTOK_LINK_RE.search(source_url))
+        pre = "tiktok" if is_tiktok else "video"      # clés des messages : tiktok_* ou video_*
+
+        logger.info(f"[PLAY/{pre.upper()}] Téléchargement en cours : {source_url}")
         video = await get_direct_tiktok_video(source_url)
+        if video and video.get("too_long"):
+            minutes = int(video["too_long"] // 60)
+            return await safe_send(ctx.channel, await syscmd_msg("play", "video_too_long", duration=f"{minutes} min", max="5 min"))
         if not video:
-            logger.error(f"[PLAY/TIKTOK] Échec download pour {source_url}")
-            return await safe_send(ctx.channel, await syscmd_msg("play", "tiktok_download_error"))
+            logger.error(f"[PLAY/{pre.upper()}] Échec download pour {source_url}")
+            return await safe_send(ctx.channel, await syscmd_msg("play", f"{pre}_download_error"))
 
         logger.info(f"[PLAY/TIKTOK] Vidéo OK : uploader={video.get('uploader')!r} filepath={video.get('filepath')!r}")
 
         # Les mods/viewers (récompense) sont limités au compte TikTok de la chaîne.
-        if not is_owner and channel_tiktok_username and video.get("uploader") != channel_tiktok_username.lower():
+        if is_tiktok and not is_owner and channel_tiktok_username and video.get("uploader") != channel_tiktok_username.lower():
             try:
                 os.remove(video["filepath"])
             except OSError:
@@ -980,9 +993,9 @@ class MasthbotTwitch(commands.Bot):
             logger.info(f"[PLAY/TIKTOK] Envoyé à la file de l'overlay avec token={token}")
         except Exception as e:
             logger.error(f"❌ [PLAY/TIKTOK] Impossible d'envoyer le TikTok à l'overlay : {e}")
-            return await safe_send(ctx.channel, await syscmd_msg("play", "tiktok_download_error"))
+            return await safe_send(ctx.channel, await syscmd_msg("play", f"{pre}_download_error"))
 
-        reply = await syscmd_msg("play", "tiktok_success", title=video.get("title") or "", url=source_url)
+        reply = await syscmd_msg("play", f"{pre}_success", title=video.get("title") or "", url=source_url)
         if reply:
             await safe_send(ctx.channel, reply)
 
