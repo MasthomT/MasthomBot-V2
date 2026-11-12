@@ -26,6 +26,19 @@ MAX_OBSERVATIONS = 12   # 1 heure (12 × 5 min)
 VISION_INTERVAL  = 300  # secondes entre chaque capture
 
 
+async def _vision_should_run() -> bool:
+    """Vrai seulement si la chaîne est en live et que l'IA est activée dans les réglages."""
+    from app.core.database import get_db_connection
+    try:
+        async with get_db_connection() as conn:
+            cursor = await conn.execute("SELECT ai_enabled, personal_last_live_id FROM settings WHERE id = 1")
+            row = await cursor.fetchone()
+    except Exception as e:
+        logger.error(f"❌ [VISION] Impossible de lire le statut live : {e}")
+        return False
+    return bool(row and row["ai_enabled"] and row["personal_last_live_id"])
+
+
 async def felix_vision_loop():
     """Prend une capture OBS toutes les 5 min, la décrit en 1 phrase et la mémorise."""
     from app.services.obs_service import obs_service as _obs
@@ -35,6 +48,10 @@ async def felix_vision_loop():
     while True:
         await asyncio.sleep(VISION_INTERVAL)
         try:
+            # 💸 On n'appelle gpt-4o que pendant un live ET si l'IA est activée :
+            # avant, une capture partait toutes les 5 min dès qu'OBS était ouvert.
+            if not await _vision_should_run():
+                continue
             screenshot = await asyncio.to_thread(_obs.take_screenshot)
             if not screenshot:
                 continue
