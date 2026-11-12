@@ -20,6 +20,7 @@ import dotenv
 
 from app.core.config import settings
 from app.core.database import get_db_connection
+from app.core import settings_cache
 
 logger = logging.getLogger("masthbot.podium")
 
@@ -106,10 +107,7 @@ async def _save_state(live_id: str, stage: int, winners: dict):
 
 
 async def _current_live_id() -> str:
-    async with get_db_connection() as db:
-        c = await db.execute("SELECT personal_last_live_id FROM settings WHERE id = 1")
-        r = await c.fetchone()
-    return (r["personal_last_live_id"] if r else "") or ""
+    return await settings_cache.current_live_id()
 
 
 # ── API Twitch ───────────────────────────────────────────────────────────────

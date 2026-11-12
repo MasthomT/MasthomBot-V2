@@ -6,6 +6,7 @@ from fastapi.templating import Jinja2Templates
 from app.repositories import viewer_repo
 from app.models.viewer import ViewerResponse
 from app.core.database import get_db_connection
+from app.core import settings_cache
 from app.services.twitch_service import twitch_bot
 from app.core.security import require_admin
 from app.core.viewer_auth import ViewerIdentity, require_viewer, ensure_self
@@ -176,6 +177,7 @@ async def update_exp_settings(request: Request):
             int(form_data.get("exp_raid_per_viewer") or 10), int(form_data.get("exp_bits_multiplier") or 1),
             int(form_data.get("exp_per_message") or 2), int(form_data.get("exp_per_watchtime") or 5)
         ))
+    settings_cache.invalidate_settings()
     return RedirectResponse(url="/admin/viewer_manager.html?settings_saved=1", status_code=303)
 
 @router.post("/admin/viewer/update_exp", dependencies=[Depends(require_admin)])

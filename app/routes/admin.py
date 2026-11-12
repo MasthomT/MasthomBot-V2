@@ -11,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel # Ajout pour la messagerie Discord
 
 from app.core.database import get_db_connection
+from app.core import settings_cache
 from app.core.config import settings
 from app.core.security import require_admin
 from app.services.shoutout_service import shoutout_service
@@ -78,10 +79,7 @@ async def read_admin(request: Request):
     bot_connected = bool(getattr(twitch_bot, "_connection", None))
     is_live = False
     try:
-        async with get_db_connection() as conn:
-            cursor = await conn.execute("SELECT personal_last_live_id FROM settings WHERE id = 1")
-            row = await cursor.fetchone()
-            is_live = bool(row and row["personal_last_live_id"])
+        is_live = await settings_cache.is_live()
     except Exception as e:
         logger.error(f"❌ [DASHBOARD] Impossible de vérifier le statut live : {e}")
 
@@ -207,6 +205,7 @@ async def save_notifications_settings(
                 notif_live_channel_id=$3, streamers_channel_id=$4
             WHERE id=1
         """, (notif_val, discord_notify_message, notif_live_channel_id, streamers_channel_id))
+    settings_cache.invalidate_settings()
     return RedirectResponse(url="/admin/notifications?saved=true", status_code=303)
 
 @router.post("/notifications/streamer/add")
@@ -300,6 +299,7 @@ async def save_felix_ai(
                 discord_link=$5, youtube_link=$6, planning=$7
             WHERE id=1
         """, (ai_val, twitch_val, tone_selector, str(response_length), discord_link, youtube_link, planning))
+    settings_cache.invalidate_settings()
 
     return RedirectResponse(url="/admin/felix_ai?saved=true", status_code=303)
 

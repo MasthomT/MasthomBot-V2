@@ -13,6 +13,7 @@ eventsub_connected: bool = False
 eventsub_last_event_at: float = 0.0
 
 from app.core.database import get_db_connection
+from app.core import settings_cache
 from app.repositories import viewer_repo
 from app.services.credits_service import credits_service
 from app.routes.overlays import trigger_overlay_event
@@ -142,12 +143,9 @@ async def update_viewer_stat(user_id, username, stat_column, value, increment=Tr
 
 async def get_current_xp_settings():
     try:
-        async with get_db_connection() as conn:
-            cur = await conn.execute("SELECT * FROM settings WHERE id=1")
-            row = await cur.fetchone()
-            if row:
-                d = dict(row)
-                return {k: (v if v is not None else 0) for k, v in d.items()}
+        d = await settings_cache.get_settings()
+        if d:
+            return {k: (v if v is not None else 0) for k, v in d.items()}
     except Exception as e:
         logger.error(f"❌ [SETTINGS ERROR] : {e}")
 

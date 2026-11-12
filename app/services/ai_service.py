@@ -28,11 +28,9 @@ VISION_INTERVAL  = 300  # secondes entre chaque capture
 
 async def _vision_should_run() -> bool:
     """Vrai seulement si la chaîne est en live et que l'IA est activée dans les réglages."""
-    from app.core.database import get_db_connection
+    from app.core import settings_cache
     try:
-        async with get_db_connection() as conn:
-            cursor = await conn.execute("SELECT ai_enabled, personal_last_live_id FROM settings WHERE id = 1")
-            row = await cursor.fetchone()
+        row = await settings_cache.get_settings()
     except Exception as e:
         logger.error(f"❌ [VISION] Impossible de lire le statut live : {e}")
         return False

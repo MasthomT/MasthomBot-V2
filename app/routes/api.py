@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from app.core.database import get_db_connection
+from app.core import settings_cache
 from app.core.viewer_auth import require_viewer, ensure_self
 
 logger = logging.getLogger("masthbot.api")
@@ -174,10 +175,8 @@ async def claim_podium_reward(request: Request):
 
         t_id = str(t_id)
 
+        stream_key = (await settings_cache.current_live_id()) or "no_stream"
         async with get_db_connection() as conn:
-            c_live = await conn.execute("SELECT personal_last_live_id FROM settings WHERE id = 1")
-            live_row = await c_live.fetchone()
-            stream_key = (live_row["personal_last_live_id"] if live_row else None) or "no_stream"
 
             if stream_key not in _podium_awarded_by_stream:
                 _podium_awarded_by_stream.clear()  # nouveau stream : on oublie l'ancien

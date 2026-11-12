@@ -2,6 +2,7 @@ import asyncio
 import aiohttp
 import logging
 from app.core.database import get_db_connection
+from app.core import settings_cache
 from app.core.config import settings
 
 logger = logging.getLogger("masthbot.shoutout")
@@ -9,10 +10,7 @@ logger = logging.getLogger("masthbot.shoutout")
 class ShoutoutService:
     async def get_config(self):
         """Récupère la config depuis PostgreSQL."""
-        async with get_db_connection() as conn:
-            c = await conn.execute("SELECT * FROM settings LIMIT 1")
-            row = await c.fetchone()
-            return dict(row) if row else {}
+        return await settings_cache.get_settings()
 
     async def trigger_replay(self, slug=None, query=None):
         payload = {"slug": slug, "query": query}

@@ -19,6 +19,7 @@ from app.services.credits_service import credits_service
 from app.services.obs_service import obs_service
 from app.routes.overlays import trigger_overlay_event
 from app.core.database import init_db, get_db_connection
+from app.core import settings_cache
 from app.routes.clips import start_clips_poll
 from app.services.label_service import write_label, lire_fichier_label
 
@@ -129,15 +130,9 @@ class MasthbotTwitch(commands.Bot):
 
     async def get_db_config(self):
         try:
-            async with get_db_connection() as conn:
-                c1 = await conn.execute("SELECT * FROM personality LIMIT 1")
-                p_row = await c1.fetchone()
-                
-                c2 = await conn.execute("SELECT * FROM settings LIMIT 1")
-                s_row = await c2.fetchone()
-
-                p = dict(p_row) if p_row else {}
-                s = dict(s_row) if s_row else {}
+            if True:  # (bloc conservé pour garder l'indentation du dict ci-dessous)
+                p = await settings_cache.get_personality()
+                s = await settings_cache.get_settings()
 
                 return {
                     'system_prompt': p.get('system_prompt', "Tu es Félix."),

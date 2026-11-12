@@ -5,6 +5,7 @@ import dotenv
 import os
 from app.services.notification_service import notification_service
 from app.core.database import get_db_connection
+from app.core import settings_cache
 
 logger = logging.getLogger("masthbot.monitor")
 
@@ -101,6 +102,7 @@ async def check_twitch_lives_routine():
                                         )
                                         if msg_id:
                                             await conn.execute("UPDATE settings SET personal_last_live_id=$1, personal_last_message_id=$2 WHERE id=1", (live_id, str(msg_id)))
+                                            settings_cache.invalidate_settings()
                                     except Exception as e:
                                         logger.error(f"❌ [DISCORD ERROR] Impossible d'envoyer ta notif : {e}")
 
@@ -108,6 +110,7 @@ async def check_twitch_lives_routine():
                                 # --- 3. FIN DU LIVE ---
                                 if settings_row.get("personal_last_live_id") != "":
                                     await conn.execute("UPDATE settings SET personal_last_live_id='' WHERE id=1")
+                                    settings_cache.invalidate_settings()
                                     try:
                                         from app.services import podium_service
                                         asyncio.create_task(podium_service.on_stream_end())
