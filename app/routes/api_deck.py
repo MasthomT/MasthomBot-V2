@@ -5,7 +5,6 @@ import asyncio
 import time
 import aiohttp
 import httpx # Ajouté pour la requête Twitch
-import obsws_python as obs
 from fastapi import APIRouter, Request, Form, UploadFile, File, Depends
 from app.core.security import require_admin
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
@@ -17,7 +16,6 @@ from app.services.twitch_service import twitch_bot
 from app.services.obs_service import obs_service
 from app.routes.overlays import trigger_overlay_event
 
-logging.getLogger("obsws_python").setLevel(logging.CRITICAL)
 
 logger = logging.getLogger("masthbot.deck")
 router = APIRouter(tags=["deck"])
@@ -28,6 +26,18 @@ UPLOAD_DIR = "/home/thomas/masthom/BOT_V2/app/static/uploads"
 # Cache 10s pour le statut chat Twitch (pollé toutes les 2s par le deck)
 _chat_cache: dict = {"data": {"emote_only": False, "follower_only": False, "slow_mode": False}, "ts": 0.0}
 _CHAT_CACHE_TTL = 10.0
+
+_chat_status_cache: dict = {"at": 0.0, "value": None}
+
+
+async def _cached_chat_status(b_id: str, token: str, client_id: str) -> dict:
+    """Statut du chat (emote/follow/slow) gardé 10 s : /api/deck/status est interrogée chaque seconde."""
+    now = time.time()
+    if _chat_status_cache["value"] is None or now - _chat_status_cache["at"] > 10:
+        _chat_status_cache["value"] = await _get_twitch_chat_status(b_id, token, client_id)
+        _chat_status_cache["at"] = now
+    return dict(_chat_status_cache["value"])
+
 
 async def _get_twitch_chat_status(b_id: str, token: str, client_id: str) -> dict:
     now = time.monotonic()
@@ -137,51 +147,16 @@ async def toggle_felix_twitch():
 
 @router.get("/api/deck/status")
 async def deck_status():
-    def fetch_obs_status():
-        cl = None
-        try:
-            # ⚠️ Cette route est pollée toutes les 1-2s par deck.html/deck_page2.html (Stream
-            # Deck web). Sans le disconnect() explicite ci-dessous, chaque poll laissait une
-            # connexion websocket vers OBS ouverte indéfiniment (obsws_python ne la ferme pas
-            # tout seul quand `cl` sort de portée) — plusieurs centaines de connexions
-            # fantômes accumulées en quelques minutes, cause du "OBS ne répond plus" observé.
-            cl = obs.ReqClient(host=obs_service.host, port=obs_service.port, password=obs_service.password, timeout=1)
-            scene_name = cl.get_current_program_scene().current_program_scene_name
-            is_muted = cl.get_input_mute("Micro").input_muted
-
-            cam_visible = True
-            for item in cl.get_scene_item_list(scene_name).scene_items:
-                if item['sourceName'] == "WEBCAM":
-                    cam_visible = item['sceneItemEnabled']
-                    break
-
-            # 🎥 STATUT FÉLICAM OBS
-            felicam_visible = False
-            try:
-                for item in cl.get_scene_item_list("SI - ALERTES").scene_items:
-                    if item['sourceName'] == "FELI'CAM":
-                        felicam_visible = item['sceneItemEnabled']
-                        break
-            except Exception:
-                pass
-
-            return {"scene": scene_name, "mic_muted": is_muted, "cam_visible": cam_visible, "felicam_visible": felicam_visible}
-        except Exception:
-            return {"scene": "main", "mic_muted": False, "cam_visible": True, "felicam_visible": False}
-        finally:
-            if cl is not None:
-                try:
-                    cl.disconnect()
-                except Exception:
-                    pass
-
-    obs_status = await asyncio.to_thread(fetch_obs_status)
+    # État OBS lu par server.js (connexion permanente) : plus de connexion OBS neuve à chaque appel
+    # (cette route est interrogée chaque seconde par l'overlay Félix et le Stream Deck).
+    obs_status = await asyncio.to_thread(obs_service.get_status)
+    obs_status.pop("connected", None)
 
     b_id = getattr(twitch_bot, 'broadcaster_id', None)
     token = getattr(twitch_bot, 'master_token', None)
     client_id = os.getenv("TWITCH_CLIENT_ID", getattr(twitch_bot._http, 'client_id', ''))
     if b_id and token:
-        chat_st = await _get_twitch_chat_status(b_id, token, client_id)
+        chat_st = await _cached_chat_status(b_id, token, client_id)
     else:
         chat_st = {"emote_only": False, "follower_only": False, "slow_mode": False}
     twitch_status = {"brb_active": False, **chat_st}
@@ -224,68 +199,19 @@ async def deck_action(data: DeckAction):
 
     # --- 2. ACTION FÉLICAM OBS (Pour afficher la caméra) ---
     if data.action == "toggle_felicam_obs":
-        def execute_felicam():
-            cl = obs.ReqClient(host=obs_service.host, port=obs_service.port, password=obs_service.password)
-            try:
-                scene = "SI - ALERTES"
-                source = "FELI'CAM"
-
-                items = cl.get_scene_item_list(scene).scene_items
-                item_id = None
-                is_visible = False
-                for item in items:
-                    if item['sourceName'] == source:
-                        item_id = item['sceneItemId']
-                        is_visible = item['sceneItemEnabled']
-                        break
-
-                if item_id is not None:
-                    if not is_visible:
-                        try: cl.set_source_filter_enabled(scene, "FELICAM_IN", True)
-                        except: pass
-                        cl.set_scene_item_enabled(scene, item_id, True)
-                    else:
-                        cl.set_scene_item_enabled(scene, item_id, False)
-                        try: cl.set_source_filter_enabled(scene, "FELICAM_OUT", True)
-                        except: pass
-            finally:
-                try:
-                    cl.disconnect()
-                except Exception:
-                    pass
-
-        try:
-            await asyncio.to_thread(execute_felicam)
-        except Exception as e:
-            logger.error(f"❌ Erreur Toggle FeliCam : {e}")
+        await asyncio.to_thread(obs_service.run_action, "felicam_toggle")
         return {"status": "success"}
 
-    # --- RESTE DES ACTIONS OBS CLASSIQUES ---
+    # --- RESTE DES ACTIONS OBS CLASSIQUES (exécutées par server.js) ---
     if data.action.startswith("obs_") or data.action.startswith("mode_"):
-        def execute_obs():
-            cl = obs.ReqClient(host=obs_service.host, port=obs_service.port, password=obs_service.password)
-            try:
-                if data.action in ["obs_change_scene", "mode_chatting_filters", "mode_gaming_filters"]:
-                    cl.set_current_program_scene(data.param)
-                elif data.action == "obs_hotkey":
-                    cl.trigger_hotkey_by_key_sequence(data.param)
-                elif data.action == "obs_toggle_mute":
-                    cl.toggle_input_mute(data.param or "Micro")
-                elif data.action == "obs_toggle_source":
-                    scene_name = cl.get_current_program_scene().current_program_scene_name
-                    for item in cl.get_scene_item_list(scene_name).scene_items:
-                        if item['sourceName'] == (data.param or "WEBCAM"):
-                            cl.set_scene_item_enabled(scene_name, item['sceneItemId'], not item['sceneItemEnabled'])
-                            break
-            finally:
-                try:
-                    cl.disconnect()
-                except Exception:
-                    pass
-        try:
-            await asyncio.to_thread(execute_obs)
-        except Exception as e:
-            pass
+        if data.action in ["obs_change_scene", "mode_chatting_filters", "mode_gaming_filters"]:
+            await asyncio.to_thread(obs_service.run_action, "scene_switch", scene=data.param)
+        elif data.action == "obs_hotkey":
+            await asyncio.to_thread(obs_service.run_action, "hotkey_sequence", text=data.param)
+        elif data.action == "obs_toggle_mute":
+            await asyncio.to_thread(obs_service.run_action, "toggle_mute", source=data.param or "Micro")
+        elif data.action == "obs_toggle_source":
+            await asyncio.to_thread(obs_service.run_action, "source_toggle_current", source=data.param or "WEBCAM")
         return {"status": "success"}
 
     # --- ACTIONS TWITCH ---

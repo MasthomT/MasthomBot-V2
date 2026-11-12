@@ -689,10 +689,80 @@ async function runObsAction(action, p) {
             await obs.call('SetInputSettings', { inputName: p.source, inputSettings: { ...cur.inputSettings, text: p.text || '' } });
             return;
         }
+        // --- Actions du Stream Deck (avant : connexion OBS ouverte par le bot Python à chaque clic) ---
+        case 'hotkey_sequence':
+            await obs.call('TriggerHotkeyByKeySequence', { keyId: p.text });
+            return;
+        case 'source_toggle_current': {
+            const { currentProgramSceneName } = await obs.call('GetCurrentProgramScene');
+            return runObsAction('source_toggle', { scene: currentProgramSceneName, source: p.source });
+        }
+        case 'felicam_toggle': {
+            // FELI'CAM (scène « SI - ALERTES ») avec ses filtres d'entrée / sortie
+            const scene = "SI - ALERTES", source = "FELI'CAM";
+            const sceneItemId = await findSceneItemId(scene, source);
+            const cur = await obs.call('GetSceneItemEnabled', { sceneName: scene, sceneItemId });
+            const show = !cur.sceneItemEnabled;
+            if (show) await obs.call('SetSourceFilterEnabled', { sourceName: scene, filterName: 'FELICAM_IN', filterEnabled: true }).catch(() => {});
+            await obs.call('SetSceneItemEnabled', { sceneName: scene, sceneItemId, sceneItemEnabled: show });
+            if (!show) await obs.call('SetSourceFilterEnabled', { sourceName: scene, filterName: 'FELICAM_OUT', filterEnabled: true }).catch(() => {});
+            return show ? 'affichée' : 'masquée';
+        }
         default:
             throw new Error(`Action OBS inconnue : ${action}`);
     }
 }
+
+// =================================================================
+// 📸 OBS POUR LE BOT PYTHON : server.js est le SEUL client OBS
+// (avant, le bot Python ouvrait ses propres connexions : écouteur de scène,
+//  capture pour la vision IA / le polaroïd, état du Stream Deck à chaque seconde…)
+// =================================================================
+// Lecture seule et légère (pas de rechargement du mapping des sources) : null si la source est absente.
+async function sceneItemEnabled(scene, source) {
+    try {
+        const { sceneItems } = await obs.call('GetSceneItemList', { sceneName: scene });
+        const it = sceneItems.find(i => i.sourceName === source);
+        return it ? it.sceneItemEnabled : null;
+    } catch (e) { return null; }
+}
+
+// Capture d'écran : ?source=<nom> (par défaut la scène en cours) &width= &height= &quality=
+app.get('/api/obs/screenshot', async (req, res) => {
+    if (!obsConnected) return res.status(503).json({ error: 'OBS non connecté' });
+    try {
+        const sourceName = req.query.source || (await obs.call('GetCurrentProgramScene')).currentProgramSceneName;
+        const r = await obs.call('GetSourceScreenshot', {
+            sourceName, imageFormat: 'jpeg',
+            imageWidth: Number(req.query.width) || 1280,
+            imageHeight: Number(req.query.height) || 720,
+            imageCompressionQuality: Number(req.query.quality) || 70,
+        });
+        const data = r.imageData || '';
+        res.json({ image: data.includes(',') ? data.split(',')[1] : data, source: sourceName });
+    } catch (e) {
+        res.status(500).json({ error: (e && e.message) || String(e) });
+    }
+});
+
+// État d'OBS pour le Stream Deck et l'overlay Félix (lu via la connexion permanente, sans en ouvrir de nouvelle)
+app.get('/api/obs/status', async (req, res) => {
+    if (!obsConnected) return res.json({ connected: false });
+    try {
+        const scene = (await obs.call('GetCurrentProgramScene')).currentProgramSceneName;
+        const mic = await obs.call('GetInputMute', { inputName: 'Micro' }).catch(() => null);
+        const cam = await sceneItemEnabled(scene, 'WEBCAM');
+        const felicam = await sceneItemEnabled('SI - ALERTES', "FELI'CAM");
+        res.json({
+            connected: true, scene,
+            mic_muted: mic ? mic.inputMuted : false,
+            cam_visible: cam === null ? true : cam,
+            felicam_visible: !!felicam,
+        });
+    } catch (e) {
+        res.json({ connected: false, error: (e && e.message) || String(e) });
+    }
+});
 
 app.post('/api/trigger', async (req, res) => {
     const data = req.body;

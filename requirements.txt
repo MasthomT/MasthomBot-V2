@@ -25,10 +25,10 @@ asyncpg==0.31.0
 aiohttp==3.13.5
 httpx==0.28.1
 
-# --- Twitch / Discord / OBS ---
+# --- Twitch / Discord ---
+# (OBS : piloté uniquement par server.js — obs-websocket-js)
 twitchio==2.10.0
 discord.py==2.7.1
-obsws-python==1.8.0
 
 # --- IA / médias ---
 openai==2.32.0

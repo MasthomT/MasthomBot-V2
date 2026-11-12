@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import io
 import logging
@@ -85,9 +86,9 @@ async def send_polaroid(user_name: str, caption: str):
 
     # On demande le screenshot au ratio natif de la webcam (16:9) : si on demande directement
     # un cadre portrait (4:5) à OBS, OBS ÉTIRE l'image pour remplir exactement ces dimensions
-    # (constaté en pratique malgré la doc obsws_python) — le recadrage centré ci-dessous doit
+    # (constaté en pratique) — le recadrage centré ci-dessous doit
     # donc se faire APRÈS coup, sur une image dont le ratio d'origine est encore intact.
-    screenshot_b64 = obs_service.take_source_screenshot("WebCam", width=1920, height=1080)
+    screenshot_b64 = await asyncio.to_thread(obs_service.take_source_screenshot, "WebCam", 1920, 1080)
     if not screenshot_b64:
         logger.error("❌ [POLAROID] Capture webcam impossible (OBS injoignable ou source absente).")
         return
