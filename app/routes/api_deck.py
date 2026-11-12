@@ -4,7 +4,6 @@ import shutil
 import asyncio
 import time
 import aiohttp
-import httpx # Ajouté pour la requête Twitch
 from fastapi import APIRouter, Request, Form, UploadFile, File, Depends
 from app.core.security import require_admin
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
@@ -98,52 +97,6 @@ async def serve_upload(file_name: str):
 # ========================================================
 # ⚙️ GESTION DES ACTIONS OBS & TWITCH
 # ========================================================
-
-# --- FONCTION TWITCH POUR FÉLIX ---
-async def toggle_felix_twitch():
-    global felix_est_la
-    felix_est_la = not felix_est_la 
-    
-    b_id = getattr(twitch_bot, 'broadcaster_id', None)
-    token = getattr(twitch_bot, 'master_token', None)
-    client_id = os.getenv("TWITCH_CLIENT_ID", getattr(twitch_bot._http, 'client_id', ''))
-
-    if not b_id or not token:
-        logger.error("❌ Impossible de modifier Féli'Cam : Identifiants Twitch manquants.")
-        return False
-
-    headers = {
-        "Client-ID": client_id,
-        "Authorization": f"Bearer {token}"
-    }
-    
-    payload = {
-        "is_enabled": felix_est_la
-    }
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.patch(
-                f"https://api.twitch.tv/helix/channel_points/custom_rewards?broadcaster_id={b_id}&id={FELICAM_REWARD_ID}",
-                headers=headers,
-                json=payload
-            )
-            
-            if resp.status_code == 200:
-                etat = "ACTIVÉE" if felix_est_la else "DÉSACTIVÉE"
-                logger.info(f"🐱 Féli'Cam {etat} avec succès sur Twitch.")
-                return True
-            else:
-                logger.error(f"❌ Erreur Twitch ({resp.status_code}) lors de la modification de Féli'Cam: {resp.text}")
-                # En cas d'erreur de Twitch (ex: mauvais ID, pas les droits), on annule le changement local
-                felix_est_la = not felix_est_la 
-                return False
-                
-    except Exception as e:
-        logger.error(f"❌ Erreur de connexion Twitch pour Félix : {e}")
-        felix_est_la = not felix_est_la 
-        return False
-
 
 @router.get("/api/deck/status")
 async def deck_status():
