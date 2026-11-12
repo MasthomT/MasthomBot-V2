@@ -62,6 +62,7 @@ async def _validate_token(token: str) -> Optional[ViewerIdentity]:
             async with session.get("https://id.twitch.tv/oauth2/validate",
                                    headers={"Authorization": f"OAuth {token}"}) as resp:
                 if resp.status != 200:
+                    logger.warning(f"⚠️ [VIEWER AUTH] Jeton refusé par Twitch (HTTP {resp.status}).")
                     return None
                 data = await resp.json()
     except Exception as e:
@@ -69,6 +70,8 @@ async def _validate_token(token: str) -> Optional[ViewerIdentity]:
         return None
 
     if data.get("client_id") not in _allowed_client_ids() or not data.get("user_id"):
+        logger.warning(f"⚠️ [VIEWER AUTH] Jeton d'une autre application Twitch (client_id={data.get('client_id')}, "
+                       f"user_id={data.get('user_id')}) : refusé.")
         return None
 
     identity = ViewerIdentity(user_id=str(data["user_id"]), login=data.get("login") or "")
