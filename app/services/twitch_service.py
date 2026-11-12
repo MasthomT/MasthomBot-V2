@@ -613,7 +613,7 @@ class MasthbotTwitch(commands.Bot):
                 
                 # On l'ajoute au cache pour éviter que le chat re-vérifie juste après
                 self.role_checked_users.add(str(twitch_id))
-                logger.info(f"🔄 [API SYNC] Rôles synchronisés pour le Twitch ID {twitch_id}")
+                logger.debug(f"🔄 [API SYNC] Rôles synchronisés pour le Twitch ID {twitch_id}")
         except Exception as e:
             logger.error(f"❌ [DB ERROR] Erreur lors de sync_user_roles : {e}")
 
@@ -1473,7 +1473,7 @@ class MasthbotTwitch(commands.Bot):
                             logger.warning(f"⚠️ Erreur isolée pour {u_name}: {e}")
 
                     if count > 0:
-                        logger.info(f"💎 Watchtime distribué à {count} personnes.")
+                        logger.debug(f"💎 Watchtime distribué à {count} personnes.")
                 api_success = True
 
             elif chatters_status in [401, 403]:

@@ -153,9 +153,17 @@ async function refreshSourceMap() {
 // connexion ratée ET sur une vraie coupure : on centralise donc la planification de
 // reconnexion ici pour n'avoir qu'un seul timer et un seul log par coupure (au lieu
 // de deux messages dupliqués pour le même événement).
+// OBS fermé = une tentative toutes les 10 s, mais on ne l'écrit dans les logs qu'à la
+// 1re coupure puis toutes les 10 min (avant : ~3 300 lignes/jour quand OBS était éteint).
+let obsFailCount = 0;
 function scheduleObsReconnect(reason) {
     if (obsReconnectTimeout) return; // déjà programmé, on ignore les doublons
-    console.log(`🔌 [OBS] ${reason}. Reconnexion automatique dans 10s...`);
+    obsFailCount++;
+    if (obsFailCount === 1) {
+        console.log(`🔌 [OBS] ${reason}. Nouvelle tentative toutes les 10s (log toutes les 10 min).`);
+    } else if (obsFailCount % 60 === 0) {
+        console.log(`🔌 [OBS] Toujours injoignable (${obsFailCount} tentatives).`);
+    }
     obsReconnectTimeout = setTimeout(() => {
         obsReconnectTimeout = null;
         connectOBS();
@@ -166,6 +174,7 @@ async function connectOBS() {
     try {
         await obs.connect(CONFIG.OBS_ADDRESS, CONFIG.OBS_PASSWORD);
         obsConnected = true;
+        obsFailCount = 0;
         console.log(`🎬 [OBS] Connecté ! Surveillance de la scène "${CONFIG.BRB_SCENE_NAME}".`);
 
         // ⚡ On vérifie sur quelle scène on est au moment même de la connexion

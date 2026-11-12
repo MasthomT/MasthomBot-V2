@@ -4,8 +4,6 @@ try:
     asyncio.get_running_loop()
 except RuntimeError:
     asyncio.set_event_loop(asyncio.new_event_loop())
-import subprocess
-import json
 import contextlib
 import os
 import logging
@@ -14,12 +12,10 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
-from pydantic import BaseModel
-from typing import List
 
 # --- IMPORT CORE ---
 from app.core.config import settings
-from app.core.database import init_db, get_db_connection
+from app.core.database import init_db
 from app.core.security import require_admin
 
 # --- MONITORING ERREURS (SENTRY) ---
@@ -66,30 +62,6 @@ from app.services.vip_sound_service import init_vip_sound_tables, sync_vip_comma
 
 # --- IMPORT DES REPERTOIRES ---
 from app.repositories import viewer_repo
-
-# ==========================================
-# MODÈLES DE DONNÉES (POUR PAGE INFOS)
-# ==========================================
-class RuleItem(BaseModel):
-    emoji: str
-    text: str
-    is_danger: bool = False
-
-class ScheduleItem(BaseModel):
-    day_index: int
-    day_name: str
-    time: str
-    event: str
-
-class ChannelInfoUpdate(BaseModel):
-    about_text: str
-    social_discord: str
-    social_youtube: str
-    social_twitch: str
-    social_tiktok: str
-    social_tips: str
-    rules: List[RuleItem]
-    schedule: List[ScheduleItem]
 
 # --- CONFIGURATION DU LOGGING ---
 logger = logging.getLogger("masthbot.fastapi")
@@ -247,32 +219,6 @@ app.include_router(automations.router)
 app.include_router(alerts_admin.public_router)
 app.include_router(alerts_admin.admin_router)
 app.include_router(scene.router)
-
-# ==========================================
-# ROUTES API : INFORMATIONS DE LA CHAÎNE (DASHBOARD ADMIN)
-# ==========================================
-# NOTE : GET /api/v1/channel-info vivait ici en double avec app/routes/api.py (même route).
-# Cette version-ci était silencieusement morte (routeur api.py enregistré avant ce fichier),
-# mais c'était la SEULE des deux à renvoyer `rules` — ce que l'admin (admin/channel.html)
-# utilise pour afficher le règlement. Fusionné dans api.py, supprimé d'ici.
-
-@app.post("/api/v1/channel-info")
-async def update_channel_info(info: ChannelInfoUpdate):
-    async with get_db_connection() as conn:
-        await conn.execute("""
-            UPDATE channel_info SET 
-                about_text = $1, social_discord = $2, social_youtube = $3, 
-                social_twitch = $4, social_tiktok = $5, social_tips = $6, 
-                rules_json = $7, schedule_json = $8
-            WHERE id = 1
-        """, (
-            info.about_text, info.social_discord, info.social_youtube,
-            info.social_twitch, info.social_tiktok, info.social_tips,
-            json.dumps([r.model_dump() if hasattr(r, "model_dump") else r.dict() for r in info.rules]), 
-            json.dumps([s.model_dump() if hasattr(s, "model_dump") else s.dict() for s in info.schedule])
-        ))
-    return {"status": "success", "message": "Informations de la chaîne mises à jour !"}
-
 
 # ==========================================
 # ROUTES API : AUTRES
