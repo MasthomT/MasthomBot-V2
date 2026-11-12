@@ -19,7 +19,7 @@ from app.core.config import settings
 
 logger = logging.getLogger("masthbot.obs")
 
-DEFAULT_STATUS = {"connected": False, "scene": "main", "mic_muted": False, "cam_visible": True, "felicam_visible": False}
+DEFAULT_STATUS = {"connected": False, "scene": "main", "mic_muted": False, "cam_visible": True}
 
 
 class OBSService:
@@ -63,7 +63,7 @@ class OBSService:
 
     def run_action(self, action: str, **params) -> bool:
         """Exécute une action OBS (mêmes noms que les commandes du site : scene_switch,
-        source_toggle, toggle_mute, hotkey_sequence, felicam_toggle…)."""
+        source_toggle, toggle_mute, hotkey_sequence…)."""
         body = json.dumps({"type": "obs_command", "details": {"action": action, **params}}).encode("utf-8")
         req = urllib.request.Request(f"{self.node_url}/api/trigger", data=body, method="POST",
                                      headers={"Content-Type": "application/json"})

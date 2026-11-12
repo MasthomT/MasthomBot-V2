@@ -150,11 +150,6 @@ async def deck_action(data: DeckAction):
             f.write("1" if nouvel_etat else "0")
         return {"status": "success"}
 
-    # --- 2. ACTION FÉLICAM OBS (Pour afficher la caméra) ---
-    if data.action == "toggle_felicam_obs":
-        await asyncio.to_thread(obs_service.run_action, "felicam_toggle")
-        return {"status": "success"}
-
     # --- RESTE DES ACTIONS OBS CLASSIQUES (exécutées par server.js) ---
     if data.action.startswith("obs_") or data.action.startswith("mode_"):
         if data.action in ["obs_change_scene", "mode_chatting_filters", "mode_gaming_filters"]:

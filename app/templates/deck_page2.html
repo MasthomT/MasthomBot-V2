@@ -214,9 +214,6 @@
         <div class="deck-btn btn-neutral" onclick="sendAction('obs_hotkey', 'OBS_KEY_F9')">
             <i class="fa-solid fa-rotate"></i><span>Refresh F9</span>
         </div>
-        <div class="deck-btn btn-danger" id="felicam-btn" onclick="sendAction('toggle_felicam_obs')">
-            <i class="fa-solid fa-cat"></i><span>FéliCam Off</span>
-        </div>
         <div class="deck-btn btn-danger" id="btn-felix" onclick="sendAction('toggle_felix')">
            <i class="fa-solid fa-cat"></i><span>Félix: Absent</span>
         </div>
@@ -321,19 +318,6 @@
                     if(gameBtn) gameBtn.className = "deck-btn btn-indigo";
                 }
 
-                // 5. BOUTON FÉLICAM (Lecture directe depuis OBS)
-                const felicamBtn = document.getElementById('felicam-btn');
-                if (felicamBtn && status.obs && status.obs.hasOwnProperty('felicam_visible')) {
-                    if (status.obs.felicam_visible) {
-                        // QUAND LA SOURCE EST ALLUMÉE DANS OBS
-                        felicamBtn.className = "deck-btn active-success";
-                        felicamBtn.innerHTML = '<i class="fa-solid fa-cat"></i><span>FéliCam On</span>';
-                    } else {
-                        // QUAND LA SOURCE EST CACHÉE DANS OBS
-                        felicamBtn.className = "deck-btn btn-danger";
-                        felicamBtn.innerHTML = '<i class="fa-solid fa-cat"></i><span>FéliCam Off</span>';
-                    }
-                }
 
             } catch (e) {}
         }

@@ -697,17 +697,6 @@ async function runObsAction(action, p) {
             const { currentProgramSceneName } = await obs.call('GetCurrentProgramScene');
             return runObsAction('source_toggle', { scene: currentProgramSceneName, source: p.source });
         }
-        case 'felicam_toggle': {
-            // FELI'CAM (scène « SI - ALERTES ») avec ses filtres d'entrée / sortie
-            const scene = "SI - ALERTES", source = "FELI'CAM";
-            const sceneItemId = await findSceneItemId(scene, source);
-            const cur = await obs.call('GetSceneItemEnabled', { sceneName: scene, sceneItemId });
-            const show = !cur.sceneItemEnabled;
-            if (show) await obs.call('SetSourceFilterEnabled', { sourceName: scene, filterName: 'FELICAM_IN', filterEnabled: true }).catch(() => {});
-            await obs.call('SetSceneItemEnabled', { sceneName: scene, sceneItemId, sceneItemEnabled: show });
-            if (!show) await obs.call('SetSourceFilterEnabled', { sourceName: scene, filterName: 'FELICAM_OUT', filterEnabled: true }).catch(() => {});
-            return show ? 'affichée' : 'masquée';
-        }
         default:
             throw new Error(`Action OBS inconnue : ${action}`);
     }
@@ -752,12 +741,10 @@ app.get('/api/obs/status', async (req, res) => {
         const scene = (await obs.call('GetCurrentProgramScene')).currentProgramSceneName;
         const mic = await obs.call('GetInputMute', { inputName: 'Micro' }).catch(() => null);
         const cam = await sceneItemEnabled(scene, 'WEBCAM');
-        const felicam = await sceneItemEnabled('SI - ALERTES', "FELI'CAM");
         res.json({
             connected: true, scene,
             mic_muted: mic ? mic.inputMuted : false,
             cam_visible: cam === null ? true : cam,
-            felicam_visible: !!felicam,
         });
     } catch (e) {
         res.json({ connected: false, error: (e && e.message) || String(e) });
