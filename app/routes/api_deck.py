@@ -6,7 +6,8 @@ import time
 import aiohttp
 import httpx # Ajouté pour la requête Twitch
 import obsws_python as obs
-from fastapi import APIRouter, Request, Form, UploadFile, File
+from fastapi import APIRouter, Request, Form, UploadFile, File, Depends
+from app.core.security import require_admin
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -60,15 +61,15 @@ class DeckAction(BaseModel):
 # ========================================================
 # 📱 AFFICHAGE DES PAGES HTML
 # ========================================================
-@router.get("/deck", response_class=HTMLResponse)
+@router.get("/deck", response_class=HTMLResponse, dependencies=[Depends(require_admin)])
 async def deck_home(request: Request):
     return templates.TemplateResponse(request=request, name="deck.html")
 
-@router.get("/deck/2", response_class=HTMLResponse)
+@router.get("/deck/2", response_class=HTMLResponse, dependencies=[Depends(require_admin)])
 async def deck_page2(request: Request):
     return templates.TemplateResponse(request=request, name="deck_page2.html")
 
-@router.get("/deck/3", response_class=HTMLResponse)
+@router.get("/deck/3", response_class=HTMLResponse, dependencies=[Depends(require_admin)])
 async def deck_page3(request: Request):
     return templates.TemplateResponse(request=request, name="deck_page3.html")
 
@@ -201,7 +202,7 @@ async def deck_status():
         "felix_present": felix_present # LES DEUX SONT ENVOYÉS AU DECK !
     }
 
-@router.post("/api/deck/action")
+@router.post("/api/deck/action", dependencies=[Depends(require_admin)])
 async def deck_action(data: DeckAction):
     logger.info(f"📱 [DECK] Clic reçu : {data.action} ({data.param})")
 
@@ -343,7 +344,7 @@ async def deck_action(data: DeckAction):
 
     return {"status": "success"}
 
-@router.post("/api/instant-replay")
+@router.post("/api/instant-replay", dependencies=[Depends(require_admin)])
 async def deck_replay():
     await shoutout_service.trigger_replay()
     return {"status": "success"}
@@ -394,7 +395,7 @@ async def deck_buttons():
         logger.error(f"❌ Erreur chargement deck_buttons : {e}")
         return []
 
-@router.post("/api/deck/edit_button")
+@router.post("/api/deck/edit_button", dependencies=[Depends(require_admin)])
 async def edit_deck_button(
     request: Request,
     id: int = Form(...),
@@ -441,7 +442,7 @@ async def edit_deck_button(
 
     return RedirectResponse(url="/deck/3", status_code=303)
 
-@router.post("/api/trigger-effect")
+@router.post("/api/trigger-effect", dependencies=[Depends(require_admin)])
 async def trigger_effect(payload: dict):
     try:
         await trigger_overlay_event({"type": "play_sound", "details": payload})
@@ -449,7 +450,7 @@ async def trigger_effect(payload: dict):
         logger.error(f"Erreur Overlay (Play) : {e}")
     return {"status": "success"}
 
-@router.post("/api/stop-effect")
+@router.post("/api/stop-effect", dependencies=[Depends(require_admin)])
 async def stop_effect(payload: dict):
     try:
         await trigger_overlay_event({"type": "stop_sound", "details": payload})

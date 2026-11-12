@@ -26,11 +26,15 @@ def test_admin_routes_require_auth_without_cookie(client):
         assert resp.status_code == 401, f"{path} devrait être protégé (401), reçu {resp.status_code}"
 
 
-def test_deck_routes_stay_public_by_design(client):
-    # Le Stream Deck est volontairement laissé sans authentification (choix assumé) :
-    # usage réseau local uniquement, piloté par un appareil qui ne gère pas de cookie de session.
-    resp = client.get("/deck")
-    assert resp.status_code != 401
+def test_deck_and_sensitive_routes_require_auth(client):
+    # Le port 8000 est exposé publiquement (tunnel) : le deck (qui pilote OBS, le chat,
+    # les pubs…) et les routes d'écriture sensibles exigent désormais la session admin.
+    assert client.get("/deck", headers={"accept": "application/json"}).status_code == 401
+    assert client.post("/api/deck/action", json={"action": "clear"}).status_code == 401
+    assert client.post("/api/instant-replay").status_code == 401
+    assert client.post("/api/trigger-effect", json={}).status_code == 401
+    assert client.post("/api/stop-effect", json={}).status_code == 401
+    assert client.get("/api/felix/toggle").status_code == 401
 
 
 def test_admin_login_page_renders(client):

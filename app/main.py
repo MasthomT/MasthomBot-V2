@@ -9,7 +9,7 @@ import json
 import contextlib
 import os
 import logging
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,6 +20,7 @@ from typing import List
 # --- IMPORT CORE ---
 from app.core.config import settings
 from app.core.database import init_db, get_db_connection
+from app.core.security import require_admin
 
 # --- MONITORING ERREURS (SENTRY) ---
 import sentry_sdk
@@ -217,7 +218,7 @@ async def validation_exception_handler(request, exc):
 
 @app.exception_handler(HTTPException)
 async def admin_auth_exception_handler(request: Request, exc: HTTPException):
-    if exc.status_code == 401 and request.url.path.startswith("/admin"):
+    if exc.status_code == 401 and request.url.path.startswith(("/admin", "/deck")):
         if request.headers.get("accept", "").find("text/html") != -1:
             return RedirectResponse(url="/admin/login", status_code=303)
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
@@ -299,7 +300,7 @@ async def update_channel_info(info: ChannelInfoUpdate):
 # ==========================================
 # ROUTES API : AUTRES
 # ==========================================
-@app.get("/api/felix/toggle")
+@app.get("/api/felix/toggle", dependencies=[Depends(require_admin)])
 async def toggle_felix():
     state_file = os.path.join(BASE_DIR, "felix_state.txt")
     actuel = False
