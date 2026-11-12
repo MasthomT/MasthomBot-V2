@@ -109,13 +109,11 @@ logging.basicConfig(
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 logging.getLogger("websockets.server").setLevel(logging.WARNING)
 
-node_process = None
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # --- GESTION DU CYCLE DE VIE (LIFESPAN) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global node_process
     logger.info("🚀 [STARTUP] Démarrage de Masthbot V2...")
 
     # 🔌 LE CÂBLE MAGIQUE ENTRE LE WEB ET TWITCH :
@@ -156,21 +154,14 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(clip_monitor_routine())
     asyncio.create_task(felix_vision_loop())
 
-    # 3. Lancement de l'overlay Node.js
-    server_js_path = os.path.join(BASE_DIR, "server.js")
-    if os.path.exists(server_js_path):
-        try:
-            node_process = subprocess.Popen(["node", server_js_path], cwd=BASE_DIR)
-        except Exception as e:
-            logger.error(f"❌ Impossible de lancer Node.js: {e}")
+    # 3. L'overlay Node.js (server.js) est lancé par son propre service systemd
+    #    (masthbot-overlay.service). Ne PAS le relancer ici : ça créait un 2e process node.
 
     try:
         yield
     finally:
         logger.info("🛑 [SHUTDOWN] Arrêt des services...")
         clear_crash_marker()
-        if node_process:
-            node_process.terminate()
         with contextlib.suppress(Exception):
             if hasattr(twitch_bot, '_connection') and twitch_bot._connection:
                 await twitch_bot.close()
