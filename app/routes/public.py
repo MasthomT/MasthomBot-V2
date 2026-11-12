@@ -2,13 +2,14 @@ import os
 import json
 import aiohttp
 from datetime import datetime
-from fastapi import APIRouter, Request, Response, Form, UploadFile, File
+from fastapi import APIRouter, Depends, Request, Response, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from dotenv import load_dotenv
 
 # --- IMPORT CORE POSTGRESQL ---
 from app.core.database import get_db_connection
+from app.core.viewer_auth import ViewerIdentity, require_viewer, ensure_self, set_viewer_cookie, viewer_id_from_cookie
 
 load_dotenv()
 
@@ -23,7 +24,7 @@ EXCLUSION_LIST = "('masthou', 'felixthebigblackcat', 'vestale7', 'streamelements
 @router.get("/", response_class=HTMLResponse)
 @router.get("/index", response_class=HTMLResponse)
 async def home_page(request: Request):
-    if request.cookies.get("viewer_id"):
+    if viewer_id_from_cookie(request):
         return RedirectResponse(url="/profile")
     return templates.TemplateResponse(request=request, name="public/index.html")
 
@@ -72,7 +73,7 @@ async def auth_callback(request: Request, code: str = None):
         # samesite="none" + secure=True : nécessaire pour que le cookie parte sur les appels
         # fetch/XHR cross-site (ex: profile.html hébergé sur fel-x.icu appelant l'API du bot
         # sur un autre domaine) — en SameSite=Lax par défaut, le cookie n'était jamais envoyé.
-        response.set_cookie("viewer_id", user["id"], max_age=2592000, httponly=True, samesite="none", secure=True)
+        set_viewer_cookie(response, user["id"])  # cookie signé : impossible à falsifier
         response.set_cookie("viewer_name", user["display_name"], max_age=2592000, samesite="none", secure=True)
         response.set_cookie("viewer_avatar", user["profile_image_url"], max_age=2592000, samesite="none", secure=True)
         return response
@@ -91,12 +92,12 @@ async def logout():
 @router.get("/classement", response_class=HTMLResponse)
 async def leaderboard_page(request: Request):
     return templates.TemplateResponse(request=request, name="public/leaderboard.html", context={
-        "is_logged_in": bool(request.cookies.get("viewer_id")),
+        "is_logged_in": bool(viewer_id_from_cookie(request)),
     })
 
 @router.get("/profile", response_class=HTMLResponse)
 async def profile_page(request: Request):
-    viewer_id = request.cookies.get("viewer_id")
+    viewer_id = viewer_id_from_cookie(request)
     if not viewer_id: return RedirectResponse(url="/")
     
     async with get_db_connection() as conn:
@@ -149,7 +150,7 @@ async def profile_page(request: Request):
 
 @router.get("/felix", response_class=HTMLResponse)
 async def felix_page(request: Request):
-    viewer_id = request.cookies.get("viewer_id")
+    viewer_id = viewer_id_from_cookie(request)
     if not viewer_id: return RedirectResponse(url="/")
         
     async with get_db_connection() as conn:
@@ -161,7 +162,7 @@ async def felix_page(request: Request):
 
 @router.post("/felix/save")
 async def felix_save(request: Request):
-    viewer_id = request.cookies.get("viewer_id")
+    viewer_id = viewer_id_from_cookie(request)
     if not viewer_id: return RedirectResponse(url="/")
         
     form = await request.form()
@@ -197,7 +198,9 @@ async def public_infos_page(request: Request):
 # 3. ROUTES API POUR LE FRONTEND (fel-x.icu)
 # ==========================================
 @router.get("/viewer/{twitch_id}")
-async def get_viewer_profile_api(twitch_id: str, username: str = None):
+async def get_viewer_profile_api(twitch_id: str, username: str = None, identity: ViewerIdentity = Depends(require_viewer)):
+    ensure_self(identity, twitch_id)
+    username = identity.login or username
     async with get_db_connection() as conn:
         c = await conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,))
         row = await c.fetchone()
@@ -348,8 +351,10 @@ async def api_public_commands():
 @router.post("/api/auth/session")
 async def create_viewer_session(request: Request):
     from fastapi.responses import JSONResponse
+    identity = await require_viewer(request)
     data = await request.json()
-    twitch_id    = data.get("twitch_id", "").strip()
+    ensure_self(identity, data.get("twitch_id") or None)
+    twitch_id    = identity.user_id
     display_name = data.get("display_name", "").strip()
     avatar_url   = data.get("avatar_url", "").strip()
 
@@ -357,29 +362,28 @@ async def create_viewer_session(request: Request):
         return JSONResponse({"error": "twitch_id manquant"}, status_code=400)
 
     response = JSONResponse({"status": "ok"})
-    response.set_cookie("viewer_id",     twitch_id,    max_age=2592000, httponly=True,  samesite="none", secure=True)
+    set_viewer_cookie(response, twitch_id)
     response.set_cookie("viewer_name",   display_name, max_age=2592000, httponly=False, samesite="none", secure=True)
     response.set_cookie("viewer_avatar", avatar_url,   max_age=2592000, httponly=False, samesite="none", secure=True)
     return response
 
 @router.get("/api/vip-sound/status")
-async def api_vip_sound_status(request: Request, twitch_id: str = None):
+async def api_vip_sound_status(request: Request, twitch_id: str = None, identity: ViewerIdentity = Depends(require_viewer)):
     # Chrome bloque les cookies tiers (fel-x.icu et l'API du bot sont deux domaines
     # différents) : le cookie viewer_id ne peut pas être livré de manière fiable en
     # cross-origin. On accepte donc le twitch_id explicitement (déjà connu du frontend,
     # même principe que /viewer/{twitch_id}), avec le cookie en repli pour l'usage same-origin.
     from app.services.vip_sound_service import get_viewer_vip_status
-    viewer_id = twitch_id or request.cookies.get("viewer_id")
-    if not viewer_id:
-        return JSONResponse(status_code=401, content={"error": "Non connecté."})
+    ensure_self(identity, twitch_id)
+    viewer_id = identity.user_id
     return await get_viewer_vip_status(viewer_id)
 
 @router.post("/api/vip-sound/submit")
-async def api_vip_sound_submit(request: Request, file: UploadFile = File(...), twitch_id: str = Form(None)):
+async def api_vip_sound_submit(request: Request, file: UploadFile = File(...), twitch_id: str = Form(None),
+                               identity: ViewerIdentity = Depends(require_viewer)):
     from app.services.vip_sound_service import submit_vip_sound
-    viewer_id = twitch_id or request.cookies.get("viewer_id")
-    if not viewer_id:
-        return JSONResponse(status_code=401, content={"error": "Non connecté."})
+    ensure_self(identity, twitch_id)
+    viewer_id = identity.user_id
 
     async with get_db_connection() as conn:
         c = await conn.execute("SELECT username FROM viewers WHERE twitch_id = $1", (viewer_id,))

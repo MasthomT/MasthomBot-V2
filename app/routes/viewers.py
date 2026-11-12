@@ -8,6 +8,7 @@ from app.models.viewer import ViewerResponse
 from app.core.database import get_db_connection
 from app.services.twitch_service import twitch_bot
 from app.core.security import require_admin
+from app.core.viewer_auth import ViewerIdentity, require_viewer, ensure_self
 
 
 logger = logging.getLogger("masthbot.viewers")
@@ -214,12 +215,13 @@ async def update_exp(request: Request, twitch_id: str = Form(...), amount: int =
 # 🤖 ROUTES API JSON (FRONTEND / OUTILS EXTERNES)
 # =====================================================================
 
-@router.get("/api/viewers", response_model=list[ViewerResponse])
+@router.get("/api/viewers", response_model=list[ViewerResponse], dependencies=[Depends(require_admin)])
 async def get_all_viewers():
     return await viewer_repo.get_all_viewers()
 
 @router.get("/api/viewers/{twitch_id}")
-async def get_viewer(twitch_id: str):
+async def get_viewer(twitch_id: str, identity: ViewerIdentity = Depends(require_viewer)):
+    ensure_self(identity, twitch_id)  # 🔐 un viewer ne lit que sa propre fiche
     # 1. On récupère d'abord le viewer en BDD (pour avoir son pseudo)
     viewer = dict(await viewer_repo.get_viewer(twitch_id)) # On convertit en dict pour pouvoir le modifier
     if not viewer:
@@ -257,7 +259,7 @@ async def get_viewer(twitch_id: str):
     viewer["exp_history"]    = await viewer_repo.get_exp_events(twitch_id)
     return viewer
 
-@router.get("/api/v1/viewers/{twitch_id}")
+@router.get("/api/v1/viewers/{twitch_id}", dependencies=[Depends(require_admin)])
 async def get_viewer_v1(twitch_id: str, username: str = None):
     viewer = await viewer_repo.get_viewer(twitch_id)
     if not viewer:
@@ -266,7 +268,7 @@ async def get_viewer_v1(twitch_id: str, username: str = None):
     viewer["exp_history"]    = await viewer_repo.get_exp_events(twitch_id)
     return viewer
 
-@router.post("/api/viewers/{twitch_id}/nickname")
+@router.post("/api/viewers/{twitch_id}/nickname", dependencies=[Depends(require_admin)])
 async def update_nickname(twitch_id: str, data: dict):
     nickname = data.get("nickname")
     if not nickname:
@@ -274,7 +276,7 @@ async def update_nickname(twitch_id: str, data: dict):
     await viewer_repo.update_viewer_profile(twitch_id, nickname=nickname)
     return {"status": "success", "nickname": nickname}
 
-@router.post("/api/viewers/{twitch_id}/roast")
+@router.post("/api/viewers/{twitch_id}/roast", dependencies=[Depends(require_admin)])
 async def update_roast_level(twitch_id: str, data: dict):
     level = data.get("level")
     await viewer_repo.update_viewer_profile(twitch_id, roast_level=level)

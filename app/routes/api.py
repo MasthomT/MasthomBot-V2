@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from app.core.database import get_db_connection
+from app.core.viewer_auth import require_viewer, ensure_self
 
 logger = logging.getLogger("masthbot.api")
 router = APIRouter(prefix="/api/v1", tags=["api"])
@@ -102,11 +103,12 @@ async def get_trophies_leaderboard():
 # ==========================================================
 @router.post("/viewer/update_context")
 async def update_viewer_context(request: Request):
+    # 🔐 Le viewer doit prouver son identité (jeton Twitch) : il ne peut modifier QUE sa propre fiche.
+    identity = await require_viewer(request)
+    data = await request.json()
+    ensure_self(identity, data.get("twitch_id"))
+    t_id = identity.user_id
     try:
-        data = await request.json()
-        t_id = data.get("twitch_id")
-        if not t_id:
-            raise HTTPException(status_code=400, detail="ID Twitch manquant")
         async with get_db_connection() as conn:
             c = await conn.execute("SELECT sub_months, is_vip, is_mod FROM viewers WHERE twitch_id = $1", (str(t_id),))
             viewer_check = await c.fetchone()
