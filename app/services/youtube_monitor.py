@@ -1,8 +1,12 @@
 """
 app/services/youtube_monitor.py — Annonce sur Discord chaque nouvelle vidéo YouTube.
 
-Contrairement à TikTok, YouTube propose un flux RSS officiel et stable par
-chaîne (`/feeds/videos.xml?channel_id=...`) — pas de scraping fragile ici.
+Contrairement à TikTok, YouTube propose un flux RSS officiel par chaîne
+(`/feeds/videos.xml?channel_id=...`) — pas de scraping fragile ici.
+
+⚠️ Ce flux renvoie de temps en temps un 404/5xx pendant quelques minutes, même pour
+une chaîne valide (défaut connu côté YouTube). On réessaie donc dans le même cycle,
+et on ne signale une panne que si le flux reste indisponible plus d'une heure.
 """
 
 import asyncio
@@ -17,7 +21,12 @@ from app.core.database import get_db_connection
 from app.services.discord_service import send_message_to_discord
 
 logger = logging.getLogger("masthbot.youtube")
-_last_feed_error_log = 0.0  # horodatage du dernier message d'erreur de flux (anti-spam)
+_feed_failing_since: float | None = None   # début de la panne en cours du flux RSS
+_feed_outage_reported = False              # panne déjà signalée dans les logs ?
+
+FETCH_ATTEMPTS = 3            # essais par cycle quand YouTube répond une erreur passagère
+FETCH_RETRY_DELAY = 20        # secondes entre deux essais
+OUTAGE_REPORT_AFTER = 3600    # on ne signale la panne qu'après 1 h d'échecs continus
 
 CHECK_INTERVAL_SECONDS = 10 * 60  # 10 minutes
 ATOM_NS = "{http://www.w3.org/2005/Atom}"
@@ -46,13 +55,26 @@ async def _get_youtube_settings() -> dict | None:
         return await db.fetchone()
 
 
-async def _fetch_latest_videos(channel_id: str) -> list[dict]:
+async def _fetch_feed(channel_id: str) -> str:
+    """Télécharge le flux RSS, avec quelques essais si YouTube répond une erreur passagère."""
     url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-            if resp.status != 200:
-                raise RuntimeError(f"HTTP {resp.status}")
-            raw = await resp.text()
+    last_error = None
+    for attempt in range(FETCH_ATTEMPTS):
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                    if resp.status == 200:
+                        return await resp.text()
+                    last_error = RuntimeError(f"HTTP {resp.status}")
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            last_error = e
+        if attempt < FETCH_ATTEMPTS - 1:
+            await asyncio.sleep(FETCH_RETRY_DELAY)
+    raise last_error
+
+
+async def _fetch_latest_videos(channel_id: str) -> list[dict]:
+    raw = await _fetch_feed(channel_id)
 
     root = ET.fromstring(raw)
     videos = []
@@ -86,20 +108,25 @@ async def check_new_youtube_video() -> None:
         logger.warning("⚠️ [YOUTUBE] Activé mais ID de chaîne ou salon Discord manquant — configure ça depuis /admin/discord_moderation.")
         return
 
+    global _feed_failing_since, _feed_outage_reported
     try:
         videos = await _fetch_latest_videos(yt_channel_id)
     except Exception as e:
-        # Un 404 persistant = ID de chaîne erroné ou chaîne sans vidéo publique : inutile de
-        # le répéter à chaque cycle (318 erreurs en 10 jours), on le signale 1 fois / 6 h.
-        global _last_feed_error_log
+        # Échec passager = rien à signaler : la vidéo sera rattrapée au cycle suivant.
         now = time.time()
-        if now - _last_feed_error_log > 6 * 3600:
-            _last_feed_error_log = now
+        if _feed_failing_since is None:
+            _feed_failing_since = now
+        if not _feed_outage_reported and now - _feed_failing_since >= OUTAGE_REPORT_AFTER:
+            _feed_outage_reported = True
             logger.error(
-                f"❌ [YOUTUBE] Échec récupération du flux RSS pour la chaîne {yt_channel_id} : {e} "
-                f"(vérifie l'ID de chaîne dans /admin/discord_moderation ; message limité à 1 / 6 h)"
+                f"❌ [YOUTUBE] Flux RSS indisponible depuis plus d'1 h pour la chaîne {yt_channel_id} ({e}). "
+                f"Si ça dure, vérifie l'ID de chaîne dans /admin/discord_moderation."
             )
         return
+
+    if _feed_outage_reported:
+        logger.info("✅ [YOUTUBE] Flux RSS de nouveau disponible.")
+    _feed_failing_since, _feed_outage_reported = None, False
 
     if not videos:
         return

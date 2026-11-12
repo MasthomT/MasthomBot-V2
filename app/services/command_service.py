@@ -420,7 +420,16 @@ async def _trigger_overlay(event_type: str, details: dict):
             if response.status == 200:
                 logger.info("✅ Requête envoyée avec succès à l'overlay !")
             else:
-                logger.error(f"❌ L'overlay a répondu avec une erreur : {response.status}")
+                # server.js explique la cause (ex. 404 = « Source introuvable : X dans la scène Y »)
+                try:
+                    reason = (await response.json()).get("message") or ""
+                except Exception:
+                    reason = ""
+                if event_type == "obs_command" and response.status == 404:
+                    logger.warning(f"⚠️ [OBS] {reason or 'Source introuvable'} — vérifie le nom de la source "
+                                   f"dans OBS ou dans la commande (admin > Commandes).")
+                else:
+                    logger.error(f"❌ L'overlay a répondu avec une erreur {response.status} : {reason}")
                 
     except Exception as e:
         # 4. En cas d'échec de la connexion, on affiche l'erreur exacte
