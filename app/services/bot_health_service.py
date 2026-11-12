@@ -93,7 +93,6 @@ async def _get_db_counts() -> dict:
             await db.execute("SELECT 1")
             for table, key in [
                 ("viewers", "viewers"),
-                ("partners", "partners"),
                 ("wheels", "wheels"),
                 ("custom_commands", "custom_commands"),
                 ("trophy_list", "trophies"),

@@ -1,7 +1,6 @@
 import ast
 import logging
 import json
-from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
@@ -144,101 +143,6 @@ async def update_viewer_context(request: Request):
         logger.error(f"❌ [API ERROR] Impossible de sauvegarder le contexte: {e}")
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=500, content={"error": str(e)})
-
-# ==========================================================
-# 4. SONDAGES
-# ==========================================================
-# NOTE : GET /poll/active vivait ici en double avec app/routes/polls.py (route identique
-# /api/v1/poll/active). Cette version-ci gagnait silencieusement (routeur enregistré plus tôt
-# dans main.py) mais ne renvoyait pas `voters`, alors que polls_faq.html et admin/polls.html
-# en ont besoin pour afficher qui a voté — ce qui cassait l'affichage des votants en direct.
-# Supprimée au profit de l'unique implémentation dans polls.py.
-
-@router.post("/poll/vote")
-async def submit_vote_api(request: Request):
-    data = await request.json()
-    p_id, t_id, opt = data.get("poll_id"), data.get("twitch_id"), data.get("option_index")
-    if not all([p_id, t_id, opt]):
-        return JSONResponse(status_code=400, content={"error": "Données manquantes"})
-    async with get_db_connection() as conn:
-        try:
-            c = await conn.execute(
-                "SELECT 1 FROM poll_votes WHERE poll_id = $1 AND twitch_id = $2", (p_id, str(t_id))
-            )
-            is_new_vote = not await c.fetchone()
-
-            await conn.execute(
-                "INSERT INTO poll_votes (poll_id, twitch_id, option_index) VALUES ($1, $2, $3) "
-                "ON CONFLICT(poll_id, twitch_id) DO UPDATE SET option_index = EXCLUDED.option_index",
-                (p_id, str(t_id), opt)
-            )
-
-            # Compteur de trophée : uniquement sur un vrai NOUVEAU vote, pas un changement d'avis
-            if is_new_vote:
-                await conn.execute(
-                    "UPDATE viewers SET poll_votes_count = COALESCE(poll_votes_count, 0) + 1 WHERE twitch_id = $1",
-                    (str(t_id),)
-                )
-
-            return {"status": "success"}
-        except Exception as e:
-            return JSONResponse(status_code=500, content={"error": str(e)})
-
-# ==========================================================
-# 5. FAQ
-# ==========================================================
-@router.post("/questions/ask")
-async def ask_question_api(request: Request):
-    data = await request.json()
-    t_id = data.get("twitch_id")
-    username = data.get("username")
-    text = data.get("question")
-
-    if not text or len(text) < 5:
-        return JSONResponse(status_code=400, content={"error": "Texte trop court"})
-
-    try:
-        async with get_db_connection() as conn:
-            await conn.execute("""
-                INSERT INTO questions (twitch_id, username, question_text, is_public, created_at)
-                VALUES ($1, $2, $3, 0, NOW())
-            """, (str(t_id), username, text))
-
-            await conn.execute(
-                "INSERT INTO viewers (twitch_id, username) VALUES ($1, $2) ON CONFLICT(twitch_id) DO NOTHING",
-                (str(t_id), username)
-            )
-            await conn.execute(
-                "UPDATE viewers SET questions_asked_count = COALESCE(questions_asked_count, 0) + 1 WHERE twitch_id = $1",
-                (str(t_id),)
-            )
-
-        return {"status": "success"}
-
-    except Exception as e:
-        logger.error(f"❌ [FAQ] Erreur lors de l'insertion de la question : {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-@router.get("/questions/faq")
-async def get_faq_api():
-    async with get_db_connection() as conn:
-        c = await conn.execute(
-            "SELECT question_text, answer_text, answered_at FROM questions "
-            "WHERE is_public = 1 AND answer_text IS NOT NULL ORDER BY answered_at DESC"
-        )
-        rows = await c.fetchall()
-        res = []
-        for r in rows:
-            ans = r["answered_at"]
-            if isinstance(ans, datetime):
-                ans = ans.isoformat()
-            res.append({
-                "username": "Anonyme",
-                "question_text": r["question_text"],
-                "answer_text": r["answer_text"],
-                "answered_at": ans
-            })
-        return res
 
 # ==========================================================
 # 6. STREAMERBOT (Récompenses First/Deuz/Troiz)

@@ -73,7 +73,6 @@ STATIC_WIDGETS = [
     _w("anniversaire", "Anniversaire",              "Écran", "/overlay/anniversaire",  **FULL, z=20),
     _w("emotes",       "Mur d'emotes",              "Écran", "/overlay/emotes",        **FULL, z=3),
     _w("clips",        "Clips du mois (vote)",      "Écran", "/overlay/clips",         **FULL, z=7),
-    _w("poll",         "Sondage du bot",            "Écran", "/overlay/poll",          435, 30, 1050, 240),
     _w("twitch_poll",  "Sondage Twitch",            "Écran", "/overlay/twitch_poll",   30, 890, 800, 160),
     _w("trophies",     "Trophées",                  "Écran", "/overlay/trophies",      40, 40, 360, 100),
     _w("time",         "Chronomètre & minuteur (!timer, !chrono)", "Écran", "/overlay/time",          0, 0, 1920, 105),
@@ -724,12 +723,6 @@ async def admin_scene_test(key: str):
         await trigger_overlay_event({"type": "trophy_unlock", "details": {
             "username": "Testeur_Fou", "trophy_name": "Test de la scène", "icon": "🏆", "tier": "Or"}})
         return {"ok": True, "message": "Trophée de test envoyé."}
-
-    if key == "poll":
-        await trigger_overlay_event({"type": "show_poll", "poll": {
-            "active": True, "question": "Sondage de test : ça marche ?", "total_votes": 10,
-            "options": {"1": "Oui", "2": "Non", "3": "Peut-être"}, "results": {"1": 6, "2": 3, "3": 1}}})
-        return {"ok": True, "message": "Sondage de test affiché (20 s)."}
 
     if key == "twitch_poll":
         ends = (datetime.now(timezone.utc) + timedelta(seconds=60)).isoformat()

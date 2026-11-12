@@ -111,10 +111,6 @@ async def get_time_overlay(request: Request):
 async def get_credits_overlay(request: Request):
     return templates.TemplateResponse(request=request, name="overlays/credits.html", headers=NO_CACHE)
 
-@router.get("/overlay/poll", response_class=HTMLResponse)
-async def get_poll_overlay(request: Request):
-    return templates.TemplateResponse(request=request, name="overlays/poll_overlay.html")
-
 @router.get("/overlay/trophies", response_class=HTMLResponse)
 async def get_trophies_overlay(request: Request):
     return templates.TemplateResponse(request=request, name="overlays/trophy_overlay.html")

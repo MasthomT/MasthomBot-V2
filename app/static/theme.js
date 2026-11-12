@@ -5,7 +5,6 @@
     try { base = new URL(document.currentScript.src).origin; } catch (e) {}
     var path = location.pathname.replace(/\/+$/, '');
     var page = null;
-    if (path === '/overlay/poll') page = 'poll';
     else if (path === '/overlay/twitch_poll') page = 'twitch_poll';
     else if (path === '/overlay/trophies') page = 'trophies';
     else if (path === '/overlay/time') page = 'time';

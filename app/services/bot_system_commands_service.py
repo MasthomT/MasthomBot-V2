@@ -118,19 +118,6 @@ SYSTEM_COMMANDS_DEFINITION = [
         },
     },
     {
-        "command_key": "sondage",
-        "label": "Afficher sondage",
-        "description": "Affiche le sondage actif sur l'overlay + résultats dans le chat",
-        "default_name": "sondage",
-        "default_role": "everyone",
-        "tags": {
-            "no_poll": [],
-        },
-        "messages": {
-            "no_poll": "🐾 Aucun sondage en cours. Crée-en un sur ton interface admin !",
-        },
-    },
-    {
         "command_key": "testpoll",
         "label": "Test sondage overlay",
         "description": "Envoie un faux sondage de test à l'overlay",
@@ -439,15 +426,6 @@ SYSTEM_COMMANDS_DEFINITION = [
         },
     },
     {
-        "command_key": "choix",
-        "label": "Vote sondage overlay",
-        "description": "Le chat vote sur le sondage affiché à l'écran (!choix 1 à 4). Silencieux par défaut : renseigne un message pour confirmer chaque vote.",
-        "default_name": "choix",
-        "default_role": "everyone",
-        "tags": {"confirm": ["{user}", "{choice}"]},
-        "messages": {"confirm": ""},
-    },
-    {
         "command_key": "poll",
         "label": "Vote sondage Twitch",
         "description": "Le chat vote sur un sondage / une prédiction Twitch native (!poll 1 à 4). Silencieux par défaut.",
@@ -596,6 +574,9 @@ async def init_system_commands_table():
                 "UPDATE bot_system_commands SET description = $1 WHERE command_key = $2 AND (description IS NULL OR description = '')",
                 (defn["description"], defn["command_key"]),
             )
+
+        # Sondage interne du bot (page « Sondages & FAQ ») supprimé le 12/11/2026 : !choix et !sondage n'existent plus.
+        await db.execute("DELETE FROM bot_system_commands WHERE command_key IN ('choix', 'sondage')")
 
         try:
             await _migrate_legacy_play(db)

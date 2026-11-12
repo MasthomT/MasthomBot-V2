@@ -38,9 +38,8 @@ from slowapi.errors import RateLimitExceeded
 from app.core.rate_limit import limiter
 
 # --- IMPORT DES ROUTES ---
-from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes, partners, admin_commands, wheel, scene, podium, channel_rewards, label_style, alerts_admin, overlays_hub, titles, aura, mod_guard, automations
+from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, rewards, admin_vips, api_deck, labels_routes, admin_commands, wheel, scene, podium, channel_rewards, label_style, alerts_admin, overlays_hub, titles, aura, mod_guard, automations
 from app.routes.credits import router as credits_router
-from app.routes.premium import router as premium_router
 from app.routes.admin_auth import router as admin_auth_router
 from app.routes.admin_discord_mod import router as admin_discord_mod_router
 
@@ -113,8 +112,6 @@ async def lifespan(app: FastAPI):
 
     # 1. Initialisation Database
     await init_db()
-    from app.services import partners_service
-    await partners_service.run_partners_migrations()
     await viewer_repo.init_tables()
     await init_discord_mod_tables()
     await init_bot_health_table()
@@ -226,7 +223,6 @@ app.include_router(api.router)
 app.include_router(announcements.router)
 app.include_router(stats.router)
 app.include_router(overlays.router)
-app.include_router(polls.router)
 app.include_router(credits_router)
 app.include_router(rewards.router)
 app.include_router(admin_vips.router)
@@ -234,10 +230,8 @@ app.include_router(api_deck.router)
 app.include_router(labels_routes.router)
 app.include_router(clips.router)
 app.include_router(admin_commands.router)
-app.include_router(premium_router)
 app.include_router(admin_auth_router)
 app.include_router(admin_discord_mod_router)
-app.include_router(partners.router)
 app.include_router(wheel.router)
 app.include_router(podium.router)
 app.include_router(channel_rewards.router)

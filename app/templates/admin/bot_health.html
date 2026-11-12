@@ -108,7 +108,6 @@
         <div class="card">
             <h2 class="sec"><i class="fas fa-database"></i> Contenu en base</h2>
             <div class="row"><span class="k">Viewers</span><span class="v" id="c-viewers">—</span></div>
-            <div class="row"><span class="k">Partenaires</span><span class="v" id="c-partners">—</span></div>
             <div class="row"><span class="k">Commandes perso</span><span class="v" id="c-custom_commands">—</span></div>
             <div class="row"><span class="k">Trophées</span><span class="v" id="c-trophies">—</span></div>
             <div class="row"><span class="k">Roues de la fortune</span><span class="v" id="c-wheels">—</span></div>
@@ -252,7 +251,7 @@
 
             // ── Comptes DB ───────────────────────────────────────────────────
             const counts = d.db_counts || {};
-            for (const key of ['viewers','partners','custom_commands','trophies','wheels','discord_warnings',
+            for (const key of ['viewers','custom_commands','trophies','wheels','discord_warnings',
                                 'banned_words_twitch','banned_words_discord','unfollows']) {
                 txt(`c-${key}`, counts[key] ?? '—');
             }

@@ -299,12 +299,12 @@ class MasthbotTwitch(commands.Bot):
         display_name = message.author.display_name or message.author.name
         config = await self.get_db_config()
 
-        # Votes du chat : !choix N (sondage overlay) et !poll N (sondage Twitch). Le nom, l'activation, le rôle
+        # Votes du chat : !poll N (sondage Twitch). Le nom, l'activation, le rôle
         # et un éventuel message de confirmation se règlent dans l'admin (page Commandes).
         if content_lower.startswith("!"):
             from app.services.bot_system_commands_service import get_config_by_name, msg as _vote_msg
             vote_hit = await get_config_by_name(content_lower.split(" ", 1)[0][1:])
-            if vote_hit and vote_hit[0] in ("choix", "poll"):
+            if vote_hit and vote_hit[0] == "poll":
                 vote_key, vote_cfg = vote_hit
                 try:
                     parts = content_clean.split(" ")
@@ -312,10 +312,7 @@ class MasthbotTwitch(commands.Bot):
                         choice_idx = int(parts[1])
                         if not await self._syscmd_allowed(message, vote_key, vote_cfg):
                             return
-                        if vote_key == "choix":
-                            await self._handle_chat_vote(message, choice_idx)
-                        else:
-                            await self._handle_twitch_poll_vote(message, choice_idx)
+                        await self._handle_twitch_poll_vote(message, choice_idx)
                         confirm = await _vote_msg(vote_key, "confirm", user=display_name, choice=choice_idx)
                         if confirm:
                             await safe_send(message.channel, confirm)
@@ -516,7 +513,7 @@ class MasthbotTwitch(commands.Bot):
 
             # Commandes natives twitchio — ne pas intercepter par le routeur custom
             NATIVE_COMMANDS = {
-                'so', 'checkcopains', 'sondage', 'testpoll',
+                'so', 'checkcopains', 'testpoll',
                 'level', 'rang', 'timer', 'chrono', 'voteclips', 'addvip', 'vip',
                 'permit', 'unpermit', 'play', 'screamer', 'renotif',
                 'de', 'uptime', 'counter',
@@ -696,30 +693,6 @@ class MasthbotTwitch(commands.Bot):
 
         except Exception as e:
             logger.error(f"❌ [HELIX ACTION ERROR] : {e}")
-
-    async def _handle_chat_vote(self, message, choice_idx):
-        try:
-            async with get_db_connection() as conn:
-                c = await conn.execute("SELECT id, option1, option2, option3, option4 FROM polls WHERE is_active=1 ORDER BY id DESC LIMIT 1")
-                active_poll = await c.fetchone()
-
-                if not active_poll:
-                    return 
-
-                opt_key = f"option{choice_idx}"
-                if not active_poll[opt_key]:
-                    return 
-
-                await conn.execute("""
-                    INSERT INTO poll_votes (poll_id, twitch_id, option_index)
-                    VALUES ($1, $2, $3)
-                    ON CONFLICT(poll_id, twitch_id) DO UPDATE SET option_index = EXCLUDED.option_index
-                """, (active_poll['id'], str(message.author.id), choice_idx))
-                
-            await trigger_overlay_event({"type": "show_poll"})
-
-        except Exception as e:
-            logger.error(f"Erreur vote chat: {e}")
 
     async def _handle_twitch_poll_vote(self, message, choice_idx):
         """Gère les votes du chat (!poll 1, 2...) pour l'overlay Twitch."""
@@ -1060,46 +1033,6 @@ class MasthbotTwitch(commands.Bot):
                         )
 
         await ctx.send(await syscmd_msg("checkcopains", "done", count=notified_count))
-
-    @commands.command(name='sondage')
-    async def cmd_sondage(self, ctx):
-        try:
-            async with get_db_connection() as conn:
-                c = await conn.execute("SELECT * FROM polls WHERE is_active=1 ORDER BY id DESC LIMIT 1")
-                poll = await c.fetchone()
-
-                from app.services.bot_system_commands_service import msg as syscmd_msg
-                if not poll:
-                    return await ctx.send(await syscmd_msg("sondage", "no_poll"))
-
-                c2 = await conn.execute("SELECT option_index, COUNT(*) as count FROM poll_votes WHERE poll_id=$1 GROUP BY option_index", (poll['id'],))
-                votes = await c2.fetchall()
-                
-                results = {1: 0, 2: 0, 3: 0, 4: 0}
-                total = 0
-                for v in votes:
-                    results[v['option_index']] = v['count']
-                    total += v['count']
-
-            await trigger_overlay_event({"type": "show_poll"})
-
-            msg = f"📊 SONDAGE : {poll['question']} — "
-            options_text = []
-
-            for i in range(1, 5):
-                opt_name = poll[f'option{i}']
-                if opt_name:
-                    count = results[i]
-                    pct = round((count / total) * 100) if total > 0 else 0
-                    options_text.append(f"{i}. {opt_name} ({pct}%)")
-
-            msg += " | ".join(options_text)
-            msg += f" — 🗳️ Vote avec 1, 2, 3... ({total} votes)"
-
-            await ctx.send(msg)
-
-        except Exception as e:
-            logger.error(f"❌ [DB ERROR] Erreur cmd_sondage : {e}")
 
     @commands.command(name='testpoll')
     async def cmd_testpoll(self, ctx):

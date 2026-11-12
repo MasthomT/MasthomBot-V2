@@ -65,10 +65,6 @@
 					<i class="fab fa-discord w-5"></i>
 					Modération Discord
 				</a>
-				<a href="/admin/polls_faq" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'poll' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
-					<i class="fas fa-poll w-5"></i>
-					Sondages & FAQ
-				</a>
 				<a href="/admin/commands" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'commands' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fas fa-terminal w-5"></i>
 					Commandes
@@ -119,10 +115,6 @@
 				<a href="/admin/announcements" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'announcement' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 					<i class="fas fa-bullhorn w-5"></i>
 					Annonces Auto
-				</a>
-				<a href="/admin/partners" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if 'partners' in request.url.path %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
-					<i class="fas fa-handshake w-5"></i>
-					Partenaires
 				</a>
 				<a href="/admin/info" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-slate-700/50 hover:text-white {% if request.url.path == '/admin/info' %}bg-indigo-600/10 text-indigo-400 border border-indigo-500/20{% else %}text-slate-400{% endif %}">
 				        <i class="fas fa-info-circle w-5"></i>
