@@ -73,7 +73,7 @@ class ModerationService:
                         return True
 
             # 2. LIENS
-            from app.services.twitch_service import _permitted_users
+            from app.services.twitch_common import _permitted_users
             if settings.get("links_enabled") and not is_vip and username.lower() not in _permitted_users:
                 if self.link_pattern.search(message):
                     # Récompense de points de chaîne qui ATTEND un lien (ex: "TikTok Replay") :
