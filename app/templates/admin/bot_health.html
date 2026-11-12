@@ -185,12 +185,6 @@
             <div class="row"><span class="k">Dernière vidéo</span><span class="v text-xs truncate max-w-[160px]" id="tt-title">—</span></div>
         </div>
 
-        <!-- JEUX -->
-        <div class="card">
-            <h2 class="sec"><i class="fas fa-gamepad"></i> Jeux du jour</h2>
-            <div id="games-list" class="text-sm text-slate-400">Chargement…</div>
-        </div>
-
         <!-- DERNIER CRASH -->
         <div class="card">
             <h2 class="sec"><i class="fas fa-skull-crossbones"></i> Dernier crash</h2>
@@ -309,15 +303,6 @@
             txt('tt-user',  d.tiktok_username ? `@${d.tiktok_username}` : '—');
             txt('tt-last',  fmtDate(d.last_tiktok_check));
             txt('tt-title', d.last_tiktok_title || '—');
-
-            // ── Jeux ─────────────────────────────────────────────────────────
-            const gEl = document.getElementById('games-list');
-            const lines = [];
-            if (d.felixdle_today) lines.push(`<div class="row"><span class="k">Felixdle</span><span class="v text-xs">${d.felixdle_today}</span></div>`);
-            if (d.games_today && d.games_today.length) {
-                d.games_today.forEach(g => lines.push(`<div class="row"><span class="k">${g.game_type||'Jeu'}</span><span class="v text-xs">${g.name}</span></div>`));
-            }
-            gEl.innerHTML = lines.length ? lines.join('') : '<span class="text-slate-500 text-xs">Aucun jeu programmé aujourd\'hui</span>';
 
             // ── Crash ─────────────────────────────────────────────────────────
             const cEl = document.getElementById('crash-info');

@@ -41,16 +41,8 @@ from app.core.rate_limit import limiter
 from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, polls, rewards, admin_vips, api_deck, labels_routes, partners, admin_commands, wheel, scene, podium, channel_rewards, label_style, alerts_admin, overlays_hub, titles, aura, mod_guard, automations
 from app.routes.credits import router as credits_router
 from app.routes.premium import router as premium_router
-from app.routes.games import router as games_router, init_games_tables
 from app.routes.admin_auth import router as admin_auth_router
-from app.routes.admin_games import router as admin_games_router
 from app.routes.admin_discord_mod import router as admin_discord_mod_router
-from app.routes.felixdle import (
-    public_router as felixdle_public_router,
-    admin_router as felixdle_admin_router,
-    init_felixdle_tables,
-    felixdle_scheduler_routine,
-)
 
 # --- IMPORT DES SERVICES ---
 from app.services.twitch_service import twitch_bot
@@ -59,7 +51,6 @@ from app.services.eventsub_service import start_eventsub
 from app.services.unfollow_monitor import unfollow_monitor_routine
 from app.services.stats_service import update_time_loop, update_twitch_stats_loop
 from app.services.trophy_engine import start_trophy_engine
-from app.services.games_scheduler import games_scheduler_routine
 from app.services.discord_mod_service import discord_mod_bot, start_discord_mod_bot, init_discord_mod_tables, birthday_check_routine
 from app.services.tiktok_monitor import tiktok_monitor_routine
 from app.services.youtube_monitor import youtube_monitor_routine
@@ -125,8 +116,6 @@ async def lifespan(app: FastAPI):
     from app.services import partners_service
     await partners_service.run_partners_migrations()
     await viewer_repo.init_tables()
-    await init_games_tables()
-    await init_felixdle_tables()
     await init_discord_mod_tables()
     await init_bot_health_table()
     await init_wheel_tables()
@@ -146,8 +135,6 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(update_twitch_stats_loop())
     asyncio.create_task(start_trophy_engine())
     asyncio.create_task(sync_vip_command_status_loop())
-    asyncio.create_task(games_scheduler_routine())
-    asyncio.create_task(felixdle_scheduler_routine())
     asyncio.create_task(start_discord_mod_bot())
     asyncio.create_task(tiktok_monitor_routine())
     asyncio.create_task(youtube_monitor_routine())
@@ -248,11 +235,7 @@ app.include_router(labels_routes.router)
 app.include_router(clips.router)
 app.include_router(admin_commands.router)
 app.include_router(premium_router)
-app.include_router(games_router)
 app.include_router(admin_auth_router)
-app.include_router(admin_games_router)
-app.include_router(felixdle_public_router)
-app.include_router(felixdle_admin_router)
 app.include_router(admin_discord_mod_router)
 app.include_router(partners.router)
 app.include_router(wheel.router)

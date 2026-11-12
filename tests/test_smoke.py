@@ -19,7 +19,6 @@ def test_admin_routes_require_auth_without_cookie(client):
         "/admin/stats",
         "/admin/vips",
         "/admin/clips_manager",
-        "/admin/games_manager",
     ]
     for path in protected_paths:
         resp = client.get(path)
@@ -79,13 +78,3 @@ def test_leaderboard_page_open_without_login(client):
     assert "Classement" in resp.text
 
 
-def test_games_daily_write_requires_admin(client):
-    resp = client.post("/api/v1/games/kikece/daily", json={"name": "x", "universe": "y", "category": "jeu vidéo"})
-    assert resp.status_code == 401
-    resp = client.delete("/api/v1/games/kikece/history/2026-01-01")
-    assert resp.status_code == 401
-
-
-def test_games_daily_read_stays_public(client):
-    resp = client.get("/api/v1/games/kikece/daily")
-    assert resp.status_code != 401

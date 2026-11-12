@@ -103,7 +103,6 @@ async def _get_db_counts() -> dict:
                 ("discord_banned_words", "banned_words_discord"),
                 ("unfollows", "unfollows"),
                 ("stream_events", "stream_events"),
-                ("felixdle_words", "felixdle_words"),
             ]:
                 try:
                     await db.execute(f"SELECT COUNT(*) AS n FROM {table}")
@@ -174,12 +173,6 @@ async def get_bot_health_status() -> dict:
         bday_row = await db.fetchone()
         await db.execute("SELECT channel_enabled, dm_enabled FROM discord_welcome_settings WHERE id = 1")
         welcome_row = await db.fetchone()
-
-        # Jeux actifs
-        await db.execute("SELECT game_type, name FROM games_daily WHERE game_date = CURRENT_DATE")
-        games_rows = await db.fetchall()
-        await db.execute("SELECT word FROM felixdle_daily WHERE game_date = CURRENT_DATE")
-        felixdle_row = await db.fetchone()
 
         # Annonces auto
         await db.execute("SELECT COUNT(*) AS n FROM announcements WHERE is_enabled = 1")
@@ -322,8 +315,6 @@ async def get_bot_health_status() -> dict:
         "last_tiktok_title": tt_row["last_video_title"] if tt_row else None,
 
         # ── Jeux ────────────────────────────────────────────────────────────
-        "games_today": [dict(r) for r in games_rows] if games_rows else [],
-        "felixdle_today": felixdle_row["word"] if felixdle_row else None,
 
         # ── Crash ────────────────────────────────────────────────────────────
         "last_crash_at": crash_row["last_crash_at"].isoformat() if crash_row and crash_row["last_crash_at"] else None,
