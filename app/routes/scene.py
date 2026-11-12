@@ -68,7 +68,7 @@ STATIC_WIDGETS = [
     # Lecteur séparé en 3 widgets : une même page, filtrée par ?only= (voir /shoutout dans server.js)
     _w("so",           "Shoutout (clip d'un streamer)", "Écran", "{NODE}/shoutout?only=so",     480, 190, 960, 700, z=5),
     _w("replay",       "Replay (clip de ta chaîne)",    "Écran", "{NODE}/shoutout?only=replay", 480, 190, 960, 700, z=5),
-    _w("tiktok",       "TikTok",                        "Écran", "{NODE}/shoutout?only=tiktok", 1414, 108, 486, 864, z=5),
+    _w("tiktok",       "Vidéo (TikTok / YouTube / Instagram)",                        "Écran", "{NODE}/shoutout?only=tiktok", 1414, 108, 486, 864, z=5),
     _w("alertes",      "Alertes des commandes (images / sons)", "Écran", "{NODE}/alerts",          **FULL, z=6),
     _w("anniversaire", "Anniversaire",              "Écran", "/overlay/anniversaire",  **FULL, z=20),
     _w("emotes",       "Mur d'emotes",              "Écran", "/overlay/emotes",        **FULL, z=3),
@@ -697,7 +697,7 @@ async def admin_scene_test(key: str):
         return {"ok": True, "message": f"Shoutout de test lancé (clip aléatoire de {channel}). Rien n'est écrit dans le chat."}
 
     if key == "tiktok":
-        return {"ok": False, "message": "Pas de test TikTok : lance !play avec un lien TikTok."}
+        return {"ok": False, "message": "Pas de test vidéo : lance !play avec un lien TikTok, YouTube ou Instagram."}
 
     if key == "alertes":
         folder = "static/commands/images"

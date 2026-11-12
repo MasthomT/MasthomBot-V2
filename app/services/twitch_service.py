@@ -32,7 +32,7 @@ _permitted_users: set = set()
 # reconnexion transitoire) — voir le filet de sécurité dans watchdog_timer ci-dessous.
 _send_failure_since: float | None = None
 
-# ── Lecteur unifié (!play, alias !replay / !showtiktok) ─────────────────────────────────
+# ── Lecteur unifié (!play) ─────────────────────────────────
 _TIKTOK_LINK_RE = re.compile(r"https?://\S*tiktok\.com\S*", re.IGNORECASE)   # tiktok.com, vm.tiktok.com, vt.tiktok.com
 # YouTube (vidéo, short, youtu.be) et Instagram (reel, post) : téléchargés puis lus comme un TikTok.
 _VIDEO_LINK_RE = re.compile(r"https?://(?:[\w-]+\.)*(?:youtube\.com|youtu\.be|instagram\.com|instagr\.am)\S*", re.IGNORECASE)
@@ -66,18 +66,6 @@ def classify_play_input(content):
         else:
             query = text
     return "clip", {"slug": slug, "query": query}
-
-
-def play_legacy_input(typed_name, user_input):
-    """Les anciens noms gardent leur comportement d'avant quand on ne donne pas de lien :
-    !showtiktok affichait le dernier TikTok (tout texte qui n'était pas un lien TikTok était ignoré),
-    !replay seul lisait le dernier clip."""
-    typed = (typed_name or "").lower()
-    if typed == "showtiktok":
-        return user_input if _TIKTOK_LINK_RE.search(user_input or "") else "tiktok"
-    if typed == "replay" and not (user_input or "").strip():
-        return "clip"
-    return user_input
 
 
 async def safe_send(channel, content: str) -> bool:
@@ -520,8 +508,6 @@ class MasthbotTwitch(commands.Bot):
                     if syscmd_cfg.get("enabled", True) and "denied" in (definition_of(internal_key) or {}).get("messages", {}):
                         await safe_send(message.channel, await _dmsg(internal_key, "denied"))
                     return
-                if internal_key == "play":
-                    user_input = play_legacy_input(cmd_name, user_input)
                 if internal_key != cmd_name:
                     # Réécriture vers le nom interne
                     new_content = f"!{internal_key}" + (f" {user_input}" if user_input else "")
@@ -853,7 +839,7 @@ class MasthbotTwitch(commands.Bot):
     @commands.command(name='play')
     async def cmd_play(self, ctx, *, content: str = None):
         """Lecteur unifié : un clip Twitch (lien, titre, ou rien = le dernier), un TikTok, une vidéo YouTube ou Instagram.
-        Le nom, les alias (replay, showtiktok…), le rôle et les messages se règlent dans l'admin (Commandes)."""
+        Le nom, les alias, le rôle et les messages se règlent dans l'admin (Commandes)."""
         kind, value = classify_play_input(content)
         if kind in ("tiktok", "video"):
             await self._play_tiktok(ctx, value)
@@ -938,6 +924,7 @@ class MasthbotTwitch(commands.Bot):
             or ctx.author.name.lower() == self.channel_name
             or "broadcaster" in author_badges
         )
+        is_mod = bool(is_owner or ctx.author.is_mod or "moderator" in author_badges)
         # Rôle minimum (et récompense TikTok Replay) contrôlés en amont (admin > Commandes).
 
         async with get_db_connection() as conn:
@@ -970,8 +957,9 @@ class MasthbotTwitch(commands.Bot):
 
         logger.info(f"[PLAY/TIKTOK] Vidéo OK : uploader={video.get('uploader')!r} filepath={video.get('filepath')!r}")
 
-        # Les mods/viewers (récompense) sont limités au compte TikTok de la chaîne.
-        if is_tiktok and not is_owner and channel_tiktok_username and video.get("uploader") != channel_tiktok_username.lower():
+        # Seuls les viewers (récompense « TikTok Replay ») sont limités au compte TikTok de la chaîne :
+        # les modérateurs et le streamer peuvent lire n'importe quel TikTok.
+        if is_tiktok and not is_mod and channel_tiktok_username and video.get("uploader") != channel_tiktok_username.lower():
             try:
                 os.remove(video["filepath"])
             except OSError:
@@ -986,7 +974,8 @@ class MasthbotTwitch(commands.Bot):
             session = await self.get_web_session()
             async with session.post(
                 f"{settings.OVERLAY_NODE_URL}/api/tiktok",
-                json={"url": f"/api/v1/tiktok_proxy/{token}", "duration": video.get("duration") or 0},
+                json={"url": f"/api/v1/tiktok_proxy/{token}", "duration": video.get("duration") or 0,
+                      "source": "tiktok" if is_tiktok else ("instagram" if "instagram" in source_url.lower() or "instagr.am" in source_url.lower() else "youtube")},
             ) as resp:
                 if resp.status != 200:
                     raise RuntimeError(f"HTTP {resp.status}")

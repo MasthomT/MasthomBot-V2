@@ -51,10 +51,10 @@ SYSTEM_COMMANDS_DEFINITION = [
             "Affiche sur l'overlay ce qu'on lui donne : !play (seul) = le dernier clip de la chaîne · "
             "!play <mots du titre d'un de tes clips> · !play <lien de clip Twitch> · !play <lien TikTok> · "
             "!play <lien YouTube> · !play <lien Instagram> · !play tiktok (dernier TikTok). "
-            "Vidéos limitées à 5 minutes. !replay et !showtiktok sont des alias de cette commande."
+            "Vidéos limitées à 5 minutes."
         ),
         "default_name": "play",
-        "default_aliases": ["lecteur", "replay", "showtiktok"],
+        "default_aliases": ["lecteur"],
         "default_role": "mod",
         "tags": {
             "clip_playing":          ["{title}", "{url}", "{broadcaster}"],
@@ -73,7 +73,7 @@ SYSTEM_COMMANDS_DEFINITION = [
             "tiktok_success":        "🎵 TikTok affiché à l'écran ! — {title} {url}",
             "tiktok_none":           "❌ Aucune vidéo TikTok connue pour le moment.",
             "tiktok_download_error": "❌ Impossible de récupérer cette vidéo TikTok. Vérifie le lien !",
-            "tiktok_wrong_account":  "❌ Seul @{broadcaster} peut afficher un TikTok d'un autre compte. Les modérateurs sont limités au compte @{tiktok_account}.",
+            "tiktok_wrong_account":  "❌ Via la récompense, seuls les TikTok de @{tiktok_account} peuvent être affichés.",
             "video_success":         "🎬 Vidéo affichée à l'écran ! — {title} {url}",
             "video_download_error":  "❌ Impossible de récupérer cette vidéo. Vérifie le lien (YouTube / Instagram) !",
             "video_too_long":        "❌ Vidéo trop longue ({duration}) : {max} maximum.",

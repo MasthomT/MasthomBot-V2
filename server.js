@@ -413,7 +413,7 @@ async function processQueue() {
     // TikTok : même file que les clips, donc jamais les deux en même temps à l'écran. La page signale
     // la fin via /api/queue/next ; le minuteur n'est qu'un filet si elle ne répond jamais.
     if (item.mode === 'tiktok') {
-        broadcast({ type: 'play_tiktok', mode: 'tiktok', url: item.extraData.url });
+        broadcast({ type: 'play_tiktok', mode: 'tiktok', url: item.extraData.url, source: item.extraData.source || 'tiktok' });
         if (currentQueueItemTimer) clearTimeout(currentQueueItemTimer);
         const safetyMs = ((item.extraData.duration || 600) + 20) * 1000;
         currentQueueItemTimer = setTimeout(() => {
@@ -608,7 +608,7 @@ app.get('/api/theme-style', async (req, res) => {
 app.post('/api/tiktok', (req, res) => {
     const url = req.body && req.body.url;
     if (!url) return res.status(400).json({ status: "error", message: "url manquante" });
-    shoutoutQueue.push({ mode: 'tiktok', extraData: { url: url, duration: Number(req.body.duration) || 0 } });
+    shoutoutQueue.push({ mode: 'tiktok', extraData: { url: url, duration: Number(req.body.duration) || 0, source: String(req.body.source || 'tiktok') } });
     if (!isProcessing) processQueue();
     res.json({ status: "success" });
 });
@@ -875,15 +875,22 @@ app.get('/shoutout', (req, res) => {
         #title { margin:0; font-style:italic; color:#94a3b8; font-size:0.95vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .twitch-logo { position:absolute; right:1.6vw; font-size:4.4vw; color:#9146FF; opacity:0.2; z-index:1; }
 
-        /* ───────── TIKTOK : collé à droite (marge 20 px), centré verticalement, 80 % de la hauteur ───────── */
-        #tiktok { position:fixed; top:50%; right:20px; height:80vh; width:45vh; display:flex; flex-direction:column;
-                  background:#000; border:3px solid #fe2c55; border-radius:24px; overflow:hidden;
-                  box-shadow:0 25px 50px rgba(0,0,0,0.8), 0 0 30px rgba(254,44,85,0.35);
-                  opacity:0; transform:translateY(-50%) scale(0.85); transform-origin:right center; pointer-events:none;
-                  transition:transform 0.5s cubic-bezier(0.34,1.56,0.64,1), opacity 0.5s ease; }
-        #tiktok.visible { opacity:1; transform:translateY(-50%) scale(1); }
-        .tt-badge { flex:none; display:flex; align-items:center; justify-content:center; gap:8px; padding:0.6vh 0;
-                    background:#fe2c55; color:#fff; font-weight:900; font-size:1.7vh; text-transform:uppercase; letter-spacing:0.08em; }
+        /* ───────── VIDÉO (TikTok / YouTube / Instagram) : le cadre épouse le format de la vidéo ─────────
+           Vertical / carré : collé à droite (marge 20 px), 80 % de la hauteur.
+           Paysage : centré, jusqu'à 50 % de la largeur (comme un clip).
+           La taille exacte est calculée par la page dès que le format de la vidéo est connu (fitTikTok). */
+        #tiktok { --c:#fe2c55; position:fixed; top:50%; right:20px; height:80vh; width:45vh; display:flex; flex-direction:column;
+                  background:#000; border:3px solid var(--c); border-radius:24px; overflow:hidden;
+                  box-shadow:0 25px 50px rgba(0,0,0,0.8), 0 0 30px var(--c);
+                  opacity:0; pointer-events:none; }
+        #tiktok.port { transform:translateY(-50%) scale(0.85); transform-origin:right center;
+                       transition:transform 0.5s cubic-bezier(0.34,1.56,0.64,1), opacity 0.5s ease; }
+        #tiktok.port.visible { opacity:1; transform:translateY(-50%) scale(1); }
+        #tiktok.land { right:auto; left:50%; transform:translate(-50%,-50%) scale(0.85); transform-origin:center center;
+                       transition:transform 0.5s cubic-bezier(0.34,1.56,0.64,1), opacity 0.5s ease; }
+        #tiktok.land.visible { opacity:1; transform:translate(-50%,-50%) scale(1); }
+        .tt-badge { flex:none; height:3.6vh; display:flex; align-items:center; justify-content:center; gap:8px;
+                    background:var(--c); color:#fff; font-weight:900; font-size:1.7vh; text-transform:uppercase; letter-spacing:0.08em; }
         #tt { flex:1; min-height:0; width:100%; object-fit:contain; background:#000; display:block; }
     </style>
     <script>(function(){var s=document.createElement('script');s.src=location.protocol+'//'+location.hostname+':8000/static/theme.js?t='+Date.now();document.head.appendChild(s);})();</script>
@@ -910,7 +917,7 @@ app.get('/shoutout', (req, res) => {
     </div>
 
     <div id="tiktok">
-        <div class="tt-badge">&#127925; TikTok</div>
+        <div class="tt-badge" id="tt-badge">&#127925; TikTok</div>
         <video id="tt" playsinline preload="auto"></video>
     </div>
 
@@ -994,9 +1001,49 @@ app.get('/shoutout', (req, res) => {
             }, 400);
         }
 
-        function showTikTok(url) {
+        // Habillage selon la plateforme (couleur du cadre + bandeau)
+        const TT_SOURCES = {
+            tiktok:    { c: '#fe2c55', label: '&#127925; TikTok' },
+            youtube:   { c: '#ff0000', label: '&#9654; YouTube' },
+            instagram: { c: '#e1306c', label: '&#128247; Instagram' }
+        };
+        function ttSkin(source) {
+            const k = TT_SOURCES[source] || TT_SOURCES.tiktok;
+            ttBox.style.setProperty('--c', k.c);
+            document.getElementById('tt-badge').innerHTML = k.label;
+        }
+
+        // Le cadre prend la forme de la vidéo : vertical/carré = à droite, paysage = centré.
+        function fitTikTok() {
+            const w = tt.videoWidth, h = tt.videoHeight;
+            if (!w || !h) return;
+            const a = w / h, VW = window.innerWidth, VH = window.innerHeight;
+            const badge = 0.036 * VH, bord = 6;
+            const land = a >= 1.1;
+            let vw, vh;
+            if (land) {
+                vw = Math.min(0.5 * VW, (0.8 * VH - badge - bord) * a);
+                vh = vw / a;
+            } else {
+                vh = 0.8 * VH - badge - bord;
+                vw = vh * a;
+                if (vw > 0.45 * VW) { vw = 0.45 * VW; vh = vw / a; }
+            }
+            ttBox.style.width = Math.round(vw + bord) + 'px';
+            ttBox.style.height = Math.round(vh + badge + bord) + 'px';
+            // Changement de disposition SANS animation (la boîte est encore invisible), puis l'entrée en scène.
+            ttBox.style.transition = 'none';
+            ttBox.classList.toggle('land', land);
+            ttBox.classList.toggle('port', !land);
+            void ttBox.offsetWidth;
+            ttBox.style.transition = '';
+        }
+        ttBox.classList.add('port');
+
+        function showTikTok(url, source) {
             if (ttCleanup) { clearTimeout(ttCleanup); ttCleanup = null; }
             ttEnding = false;
+            ttSkin(source);
             // La vidéo est servie sur un PORT SÉPARÉ (8001) : OBS lui alloue son propre pool de connexions
             // (sinon les overlays saturent le quota et la vidéo ne charge jamais).
             let src = url;
@@ -1006,7 +1053,8 @@ app.get('/shoutout', (req, res) => {
             ttPlay();
         }
 
-        tt.addEventListener('loadeddata', function () { ttBox.classList.add('visible'); });
+        tt.addEventListener('loadedmetadata', fitTikTok);
+        tt.addEventListener('loadeddata', function () { fitTikTok(); ttBox.classList.add('visible'); });
         tt.addEventListener('playing', ttStopRetry);
         tt.addEventListener('ended', ttFinish);
         tt.addEventListener('error', function () { if (tt.getAttribute('src')) ttFinish(); });
@@ -1057,7 +1105,7 @@ app.get('/shoutout', (req, res) => {
                 v.play().catch(err => console.error(err));
             }
 
-            if (d.type === 'play_tiktok' && d.url) showTikTok(d.url);
+            if (d.type === 'play_tiktok' && d.url) showTikTok(d.url, d.source);
         }
 
         // 📡 UNE seule connexion SSE partagée entre TOUTES les sources OBS de cette
