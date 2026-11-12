@@ -139,7 +139,7 @@ async def check_new_youtube_video() -> None:
         last_seen_id = row["last_video_id"] if row else None
 
         if last_seen_id is None:
-            await db.execute("UPDATE youtube_state SET last_video_id = ?, updated_at = NOW() WHERE id = 1", latest_id)
+            await db.execute("UPDATE youtube_state SET last_video_id = $1, updated_at = NOW() WHERE id = 1", latest_id)
             logger.info(f"📺 [YOUTUBE] Initialisation : dernière vidéo connue = {latest_id}")
             return
 
@@ -164,7 +164,7 @@ async def check_new_youtube_video() -> None:
                 f"— recalage silencieux sur {latest_id} sans annonce, pour éviter un spam."
             )
             await db.execute(
-                "UPDATE youtube_state SET last_video_id = ?, updated_at = NOW() WHERE id = 1", latest_id
+                "UPDATE youtube_state SET last_video_id = $1, updated_at = NOW() WHERE id = 1", latest_id
             )
             return
 
@@ -186,7 +186,7 @@ async def check_new_youtube_video() -> None:
             except Exception as e:
                 logger.error(f"❌ [YOUTUBE] Échec envoi annonce Discord : {e}")
 
-        await db.execute("UPDATE youtube_state SET last_video_id = ?, updated_at = NOW() WHERE id = 1", latest_id)
+        await db.execute("UPDATE youtube_state SET last_video_id = $1, updated_at = NOW() WHERE id = 1", latest_id)
 
 
 async def youtube_monitor_routine():

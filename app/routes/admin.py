@@ -533,8 +533,8 @@ async def save_admin_info(
     async with get_db_connection() as conn:
         await conn.execute("""
             UPDATE channel_info
-            SET about_text = ?, social_discord = ?, social_youtube = ?,
-                social_twitch = ?, social_tiktok = ?, social_tips = ?, schedule_json = ?
+            SET about_text = $1, social_discord = $2, social_youtube = $3,
+                social_twitch = $4, social_tiktok = $5, social_tips = $6, schedule_json = $7
             WHERE id = 1
         """, about_text, social_discord, social_youtube, social_twitch, social_tiktok, social_tips, schedule_json)
 
@@ -556,7 +556,7 @@ async def save_admin_info(
 
             schedule_key = f"{item.get('date')}|{item.get('title')}"
             cursor = await conn.execute(
-                "SELECT 1 FROM special_live_discord_notifs WHERE schedule_key = ?", schedule_key
+                "SELECT 1 FROM special_live_discord_notifs WHERE schedule_key = $1", schedule_key
             )
             if await cursor.fetchone():
                 continue  # déjà annoncé, on ne spam pas Discord à chaque sauvegarde
@@ -573,7 +573,7 @@ async def save_admin_info(
             try:
                 await send_message_to_discord(settings.PLANNING_CHANNEL_ID, msg)
                 await conn.execute(
-                    "INSERT INTO special_live_discord_notifs (schedule_key) VALUES (?)", schedule_key
+                    "INSERT INTO special_live_discord_notifs (schedule_key) VALUES ($1)", schedule_key
                 )
             except Exception as e:
                 logger.error(f"❌ [INFO] Échec alerte Discord Live Spécial '{title}' : {e}")
@@ -622,7 +622,7 @@ async def send_discord_message(payload: DiscordMessagePayload):
                     )
                 """)
                 await conn.execute(
-                    "INSERT INTO discord_panel_log (channel_name, message_excerpt) VALUES (?, ?)",
+                    "INSERT INTO discord_panel_log (channel_name, message_excerpt) VALUES ($1, $2)",
                     channel_name, excerpt
                 )
         except Exception as e:

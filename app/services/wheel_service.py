@@ -54,7 +54,7 @@ async def get_all_wheels() -> list[dict]:
 
 async def get_wheel(wheel_id: int) -> dict | None:
     async with get_db_connection() as db:
-        await db.execute("SELECT * FROM wheels WHERE id = ?", wheel_id)
+        await db.execute("SELECT * FROM wheels WHERE id = $1", wheel_id)
         row = await db.fetchone()
     if not row:
         return None
@@ -66,7 +66,7 @@ async def get_wheel(wheel_id: int) -> dict | None:
 async def create_wheel(name: str, items: list[dict], twitch_command: str = "") -> int:
     async with get_db_connection() as db:
         cursor = await db.execute(
-            "INSERT INTO wheels (name, items_json, twitch_command) VALUES (?, ?, ?) RETURNING id",
+            "INSERT INTO wheels (name, items_json, twitch_command) VALUES ($1, $2, $3) RETURNING id",
             name.strip() or "Roue sans nom", json.dumps(items), twitch_command.strip().lstrip("!").lower()
         )
         row = await cursor.fetchone()
@@ -76,14 +76,14 @@ async def create_wheel(name: str, items: list[dict], twitch_command: str = "") -
 async def update_wheel(wheel_id: int, name: str, items: list[dict], twitch_command: str = "") -> None:
     async with get_db_connection() as db:
         await db.execute(
-            "UPDATE wheels SET name = ?, items_json = ?, twitch_command = ? WHERE id = ?",
+            "UPDATE wheels SET name = $1, items_json = $2, twitch_command = $3 WHERE id = $4",
             name.strip() or "Roue sans nom", json.dumps(items), twitch_command.strip().lstrip("!").lower(), wheel_id
         )
 
 
 async def delete_wheel(wheel_id: int) -> None:
     async with get_db_connection() as db:
-        await db.execute("DELETE FROM wheels WHERE id = ?", wheel_id)
+        await db.execute("DELETE FROM wheels WHERE id = $1", wheel_id)
 
 
 def pick_winner(items: list[dict]) -> int:

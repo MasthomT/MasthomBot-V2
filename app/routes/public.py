@@ -21,27 +21,27 @@ async def get_viewer_profile_api(twitch_id: str, username: str = None, identity:
     ensure_self(identity, twitch_id)
     username = identity.login or username
     async with get_db_connection() as conn:
-        c = await conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,))
+        c = await conn.execute("SELECT * FROM viewers WHERE twitch_id = $1", (twitch_id,))
         row = await c.fetchone()
         display_name = username if username else f"Visiteur_{twitch_id[:4]}"
 
         if not row:
-            await conn.execute("INSERT INTO viewers (twitch_id, username, points, messages, watchtime) VALUES (?, ?, 0, 0, 0)", (twitch_id, display_name))
-            c = await conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,))
+            await conn.execute("INSERT INTO viewers (twitch_id, username, points, messages, watchtime) VALUES ($1, $2, 0, 0, 0)", (twitch_id, display_name))
+            c = await conn.execute("SELECT * FROM viewers WHERE twitch_id = $1", (twitch_id,))
             row = await c.fetchone()
         else:
             if row['username'].startswith("Visiteur_") and username:
-                await conn.execute("UPDATE viewers SET username = ? WHERE twitch_id = ?", (username, twitch_id))
-                c = await conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,))
+                await conn.execute("UPDATE viewers SET username = $1 WHERE twitch_id = $2", (username, twitch_id))
+                c = await conn.execute("SELECT * FROM viewers WHERE twitch_id = $1", (twitch_id,))
                 row = await c.fetchone()
 
         viewer_data = dict(row)
-        await conn.execute("UPDATE viewers SET last_seen = NOW(), last_web_login = NOW() WHERE twitch_id = ?", (twitch_id,))
+        await conn.execute("UPDATE viewers SET last_seen = NOW(), last_web_login = NOW() WHERE twitch_id = $1", (twitch_id,))
 
         xp = viewer_data.get('points', 0)
         viewer_data['level'] = max(1, int((xp / 100) ** (1 / 2.2))) if xp > 0 else 1
 
-        crank = await conn.execute(f"SELECT COUNT(*) FROM viewers WHERE points > ? AND LOWER(username) NOT IN {EXCLUSION_LIST}", (xp,))
+        crank = await conn.execute(f"SELECT COUNT(*) FROM viewers WHERE points > $1 AND LOWER(username) NOT IN {EXCLUSION_LIST}", (xp,))
         rank_val = await crank.fetchone()
         viewer_data['rank'] = (rank_val[0] if rank_val else 0) + 1
 
@@ -49,7 +49,7 @@ async def get_viewer_profile_api(twitch_id: str, username: str = None, identity:
             SELECT t.label, t.icon, t.description, t.tier, vt.earned_at
             FROM viewer_trophies vt
             JOIN trophy_list t ON vt.trophy_id = t.id
-            WHERE vt.twitch_id = ?
+            WHERE vt.twitch_id = $1
             ORDER BY vt.earned_at DESC
         """, (twitch_id,))
         trophies_raw = await ctrophies.fetchall()
@@ -74,7 +74,7 @@ async def get_viewer_profile_api(twitch_id: str, username: str = None, identity:
         exp_msg = settings_row['exp_per_message'] if settings_row else 2
         exp_wt = settings_row['exp_per_watchtime'] if settings_row else 5
 
-        ctoday = await conn.execute("SELECT messages, watchtime FROM viewer_daily_stats WHERE twitch_id = ? AND day = CURRENT_DATE", (twitch_id,))
+        ctoday = await conn.execute("SELECT messages, watchtime FROM viewer_daily_stats WHERE twitch_id = $1 AND day = CURRENT_DATE", (twitch_id,))
         today_stats = await ctoday.fetchone()
 
         if today_stats:
@@ -93,7 +93,7 @@ async def get_viewer_profile_api(twitch_id: str, username: str = None, identity:
                     "icon": "💬", "color": "#0ea5e9"
                 })
 
-        chist = await conn.execute("SELECT * FROM viewer_exp_log WHERE twitch_id = ? ORDER BY timestamp DESC LIMIT 15", (twitch_id,))
+        chist = await conn.execute("SELECT * FROM viewer_exp_log WHERE twitch_id = $1 ORDER BY timestamp DESC LIMIT 15", (twitch_id,))
         raw_history = await chist.fetchall()
         for r in raw_history:
             log = dict(r)

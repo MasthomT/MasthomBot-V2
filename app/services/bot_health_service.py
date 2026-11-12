@@ -37,7 +37,7 @@ async def check_for_previous_crash_and_alert() -> None:
         logger.warning("⚠️ [HEALTH] Marqueur de démarrage trouvé au boot — le process précédent ne s'est pas arrêté proprement.")
         async with get_db_connection() as db:
             await db.execute(
-                "UPDATE bot_health SET last_crash_at = NOW(), last_crash_note = ? WHERE id = 1",
+                "UPDATE bot_health SET last_crash_at = NOW(), last_crash_note = $1 WHERE id = 1",
                 "Redémarrage inattendu détecté (process tué sans arrêt propre)"
             )
         await _alert_discord_crash()

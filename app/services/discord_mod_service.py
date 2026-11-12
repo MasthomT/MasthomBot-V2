@@ -386,7 +386,7 @@ class DiscordModBot(discord.Client):
             # 2. Rôles auto-attribuables
             async with get_db_connection() as db:
                 await db.execute(
-                    "SELECT * FROM discord_self_roles WHERE message_id = ? AND emoji = ?",
+                    "SELECT * FROM discord_self_roles WHERE message_id = $1 AND emoji = $2",
                     str(payload.message_id), emoji
                 )
                 self_role = await db.fetchone()
@@ -430,7 +430,7 @@ class DiscordModBot(discord.Client):
 
         async with get_db_connection() as db:
             await db.execute(
-                "INSERT INTO discord_birthdays (discord_user_id, username, day, month, year) VALUES (?, ?, ?, ?, ?) "
+                "INSERT INTO discord_birthdays (discord_user_id, username, day, month, year) VALUES ($1, $2, $3, $4, $5) "
                 "ON CONFLICT (discord_user_id) DO UPDATE SET day = EXCLUDED.day, month = EXCLUDED.month, "
                 "year = EXCLUDED.year, username = EXCLUDED.username",
                 str(interaction.user.id), interaction.user.display_name, day, month, year
@@ -523,10 +523,10 @@ class DiscordModBot(discord.Client):
 
         async with get_db_connection() as db:
             await db.execute(
-                "INSERT INTO discord_warnings (discord_user_id, username, reason, moderator) VALUES (?, ?, ?, ?)",
+                "INSERT INTO discord_warnings (discord_user_id, username, reason, moderator) VALUES ($1, $2, $3, $4)",
                 str(membre.id), membre.display_name, raison, moderator.display_name
             )
-            await db.execute("SELECT COUNT(*) AS total FROM discord_warnings WHERE discord_user_id = ?", str(membre.id))
+            await db.execute("SELECT COUNT(*) AS total FROM discord_warnings WHERE discord_user_id = $1", str(membre.id))
             row = await db.fetchone()
         total = row["total"] if row else 1
 
@@ -598,9 +598,9 @@ class DiscordModBot(discord.Client):
             return
 
         async with get_db_connection() as db:
-            await db.execute("SELECT COUNT(*) AS total FROM discord_warnings WHERE discord_user_id = ?", str(membre.id))
+            await db.execute("SELECT COUNT(*) AS total FROM discord_warnings WHERE discord_user_id = $1", str(membre.id))
             warn_row = await db.fetchone()
-            await db.execute("SELECT day, month, year FROM discord_birthdays WHERE discord_user_id = ?", str(membre.id))
+            await db.execute("SELECT day, month, year FROM discord_birthdays WHERE discord_user_id = $1", str(membre.id))
             bday_row = await db.fetchone()
 
         roles = [r.mention for r in membre.roles if r.name != "@everyone"]
@@ -715,7 +715,7 @@ class DiscordModBot(discord.Client):
     async def publish_self_roles_panel(self, channel_id: str) -> str:
         """(Re)génère le panneau de rôles auto-attribuables dans le salon donné, avec une réaction par rôle."""
         async with get_db_connection() as db:
-            await db.execute("SELECT * FROM discord_self_roles WHERE channel_id = ? ORDER BY id ASC", channel_id)
+            await db.execute("SELECT * FROM discord_self_roles WHERE channel_id = $1 ORDER BY id ASC", channel_id)
             roles = await db.fetchall()
 
         if not roles:
@@ -736,7 +736,7 @@ class DiscordModBot(discord.Client):
                 logger.error(f"❌ [SELF-ROLES] Échec ajout réaction {r['emoji']} : {e}")
 
         async with get_db_connection() as db:
-            await db.execute("UPDATE discord_self_roles SET message_id = ? WHERE channel_id = ?", str(msg.id), channel_id)
+            await db.execute("UPDATE discord_self_roles SET message_id = $1 WHERE channel_id = $2", str(msg.id), channel_id)
 
         return str(msg.id)
 
@@ -899,8 +899,8 @@ async def check_birthdays_today():
 
         today = date.today()
         await db.execute(
-            "SELECT * FROM discord_birthdays WHERE day = ? AND month = ? "
-            "AND (last_announced_year IS NULL OR last_announced_year != ?)",
+            "SELECT * FROM discord_birthdays WHERE day = $1 AND month = $2 "
+            "AND (last_announced_year IS NULL OR last_announced_year != $3)",
             today.day, today.month, today.year
         )
         birthdays = await db.fetchall()
@@ -926,7 +926,7 @@ async def check_birthdays_today():
                     msg += f" ({age} ans)"
                 await channel.send(msg)
                 await db.execute(
-                    "UPDATE discord_birthdays SET last_announced_year = ? WHERE id = ?",
+                    "UPDATE discord_birthdays SET last_announced_year = $1 WHERE id = $2",
                     today.year, b["id"]
                 )
                 logger.info(f"🎂 [BIRTHDAY] Anniversaire annoncé pour {b['username']}")

@@ -122,18 +122,18 @@ async def update_viewer_stat(user_id, username, stat_column, value, increment=Tr
             if increment:
                 query = f"""
                     INSERT INTO viewers (twitch_id, username, {stat_column})
-                    VALUES (?, ?, ?)
+                    VALUES ($1, $2, $3)
                     ON CONFLICT(twitch_id) DO UPDATE SET
-                        {stat_column} = COALESCE(viewers.{stat_column}, 0) + ?,
+                        {stat_column} = COALESCE(viewers.{stat_column}, 0) + $4,
                         username = excluded.username
                 """
                 await conn.execute(query, (str(user_id), username, value, value))
             else:
                 query = f"""
                     INSERT INTO viewers (twitch_id, username, {stat_column})
-                    VALUES (?, ?, ?)
+                    VALUES ($1, $2, $3)
                     ON CONFLICT(twitch_id) DO UPDATE SET
-                        {stat_column} = ?,
+                        {stat_column} = $4,
                         username = excluded.username
                 """
                 await conn.execute(query, (str(user_id), username, value, value))

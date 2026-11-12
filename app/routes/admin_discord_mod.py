@@ -116,8 +116,8 @@ async def save_settings(payload: SettingsPayload):
     async with get_db_connection() as db:
         await db.execute("""
             UPDATE discord_moderation_settings SET
-                banned_words_enabled = ?, banned_words_action = ?, banned_words_duration = ?,
-                spam_enabled = ?, spam_limit = ?, spam_timeframe = ?, spam_action = ?, spam_duration = ?
+                banned_words_enabled = $1, banned_words_action = $2, banned_words_duration = $3,
+                spam_enabled = $4, spam_limit = $5, spam_timeframe = $6, spam_action = $7, spam_duration = $8
             WHERE id = 1
         """, payload.banned_words_enabled, payload.banned_words_action, payload.banned_words_duration,
             payload.spam_enabled, payload.spam_limit, payload.spam_timeframe, payload.spam_action, payload.spam_duration)
@@ -139,7 +139,7 @@ async def add_word(payload: WordPayload):
         raise HTTPException(status_code=400, detail="Mot vide.")
     async with get_db_connection() as db:
         await db.execute(
-            "INSERT INTO discord_banned_words (word) VALUES (?) ON CONFLICT (word) DO NOTHING",
+            "INSERT INTO discord_banned_words (word) VALUES ($1) ON CONFLICT (word) DO NOTHING",
             word
         )
     return {"status": "ok"}
@@ -148,7 +148,7 @@ async def add_word(payload: WordPayload):
 @router.delete("/api/discord_mod/words/{word_id}")
 async def delete_word(word_id: int):
     async with get_db_connection() as db:
-        await db.execute("DELETE FROM discord_banned_words WHERE id = ?", word_id)
+        await db.execute("DELETE FROM discord_banned_words WHERE id = $1", word_id)
     return {"status": "ok"}
 
 
@@ -175,17 +175,17 @@ async def list_roles():
 @router.post("/api/discord_mod/roles/{role_id}/toggle")
 async def toggle_role_exempt(role_id: str):
     async with get_db_connection() as db:
-        await db.execute("SELECT id FROM discord_exempt_roles WHERE role_id = ?", role_id)
+        await db.execute("SELECT id FROM discord_exempt_roles WHERE role_id = $1", role_id)
         existing = await db.fetchone()
         if existing:
-            await db.execute("DELETE FROM discord_exempt_roles WHERE role_id = ?", role_id)
+            await db.execute("DELETE FROM discord_exempt_roles WHERE role_id = $1", role_id)
         else:
             role_name = ""
             if discord_mod_bot.is_ready() and discord_mod_bot.guilds:
                 role = discord_mod_bot.guilds[0].get_role(int(role_id))
                 role_name = role.name if role else ""
             await db.execute(
-                "INSERT INTO discord_exempt_roles (role_id, role_name) VALUES (?, ?)",
+                "INSERT INTO discord_exempt_roles (role_id, role_name) VALUES ($1, $2)",
                 role_id, role_name
             )
     return {"status": "ok"}
@@ -218,14 +218,14 @@ async def save_features(payload: FeaturesPayload):
     async with get_db_connection() as db:
         await db.execute("""
             UPDATE discord_features_settings SET
-                tiktok_enabled = ?, tiktok_username = ?, tiktok_channel_id = ?,
-                leave_enabled = ?, leave_channel_id = ?,
-                youtube_enabled = ?, youtube_channel_id = ?, youtube_discord_channel_id = ?,
-                clear_enabled = ?, sondage_enabled = ?,
-                warn_enabled = ?, slowmode_enabled = ?, lock_enabled = ?,
-                userinfo_enabled = ?, giveaway_enabled = ?, annonce_enabled = ?,
-                youtube_announce_message = ?, tiktok_announce_message = ?,
-                showtiktok_enabled = ?, showtiktok_message = ?
+                tiktok_enabled = $1, tiktok_username = $2, tiktok_channel_id = $3,
+                leave_enabled = $4, leave_channel_id = $5,
+                youtube_enabled = $6, youtube_channel_id = $7, youtube_discord_channel_id = $8,
+                clear_enabled = $9, sondage_enabled = $10,
+                warn_enabled = $11, slowmode_enabled = $12, lock_enabled = $13,
+                userinfo_enabled = $14, giveaway_enabled = $15, annonce_enabled = $16,
+                youtube_announce_message = $17, tiktok_announce_message = $18,
+                showtiktok_enabled = $19, showtiktok_message = $20
             WHERE id = 1
         """, payload.tiktok_enabled, payload.tiktok_username.lstrip("@").strip(), payload.tiktok_channel_id,
             payload.leave_enabled, payload.leave_channel_id,
@@ -253,9 +253,9 @@ async def save_welcome(payload: WelcomePayload):
     async with get_db_connection() as db:
         await db.execute("""
             UPDATE discord_welcome_settings SET
-                channel_enabled = ?, channel_id = ?, channel_message = ?,
-                dm_enabled = ?, dm_message = ?,
-                embed_enabled = ?, embed_title = ?, embed_description = ?, embed_color = ?
+                channel_enabled = $1, channel_id = $2, channel_message = $3,
+                dm_enabled = $4, dm_message = $5,
+                embed_enabled = $6, embed_title = $7, embed_description = $8, embed_color = $9
             WHERE id = 1
         """, payload.channel_enabled, payload.channel_id, payload.channel_message,
             payload.dm_enabled, payload.dm_message,
@@ -278,7 +278,7 @@ async def save_gate(payload: GateSettingsPayload):
     async with get_db_connection() as db:
         await db.execute("""
             UPDATE discord_gate_settings SET
-                channel_id = ?, rules_text = ?, emoji = ?, general_role_id = ?
+                channel_id = $1, rules_text = $2, emoji = $3, general_role_id = $4
             WHERE id = 1
         """, payload.channel_id, payload.rules_text, payload.emoji, payload.general_role_id)
     return {"status": "ok"}
@@ -305,7 +305,7 @@ async def publish_gate():
 
     async with get_db_connection() as db:
         await db.execute(
-            "UPDATE discord_gate_settings SET message_id = ?, enabled = TRUE WHERE id = 1",
+            "UPDATE discord_gate_settings SET message_id = $1, enabled = TRUE WHERE id = 1",
             message_id
         )
     return {"status": "ok", "message_id": message_id}
@@ -314,7 +314,7 @@ async def publish_gate():
 @router.post("/api/discord_mod/gate/toggle")
 async def toggle_gate(payload: GateTogglePayload):
     async with get_db_connection() as db:
-        await db.execute("UPDATE discord_gate_settings SET enabled = ? WHERE id = 1", payload.enabled)
+        await db.execute("UPDATE discord_gate_settings SET enabled = $1 WHERE id = 1", payload.enabled)
     return {"status": "ok"}
 
 
@@ -337,7 +337,7 @@ async def add_self_role(payload: SelfRolePayload):
 
     async with get_db_connection() as db:
         await db.execute(
-            "INSERT INTO discord_self_roles (channel_id, emoji, role_id, role_name, label) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO discord_self_roles (channel_id, emoji, role_id, role_name, label) VALUES ($1, $2, $3, $4, $5)",
             payload.channel_id, payload.emoji, payload.role_id, role_name, payload.label or role_name
         )
     return {"status": "ok"}
@@ -352,7 +352,7 @@ async def update_self_role(role_entry_id: int, payload: SelfRolePayload):
 
     async with get_db_connection() as db:
         await db.execute(
-            "UPDATE discord_self_roles SET channel_id = ?, emoji = ?, role_id = ?, role_name = ?, label = ? WHERE id = ?",
+            "UPDATE discord_self_roles SET channel_id = $1, emoji = $2, role_id = $3, role_name = $4, label = $5 WHERE id = $6",
             payload.channel_id, payload.emoji, payload.role_id, role_name, payload.label or role_name, role_entry_id
         )
     return {"status": "ok"}
@@ -361,7 +361,7 @@ async def update_self_role(role_entry_id: int, payload: SelfRolePayload):
 @router.delete("/api/discord_mod/self_roles/{role_entry_id}")
 async def delete_self_role(role_entry_id: int):
     async with get_db_connection() as db:
-        await db.execute("DELETE FROM discord_self_roles WHERE id = ?", role_entry_id)
+        await db.execute("DELETE FROM discord_self_roles WHERE id = $1", role_entry_id)
     return {"status": "ok"}
 
 
@@ -397,7 +397,7 @@ async def get_birthdays_config():
 async def save_birthday_settings(payload: BirthdaySettingsPayload):
     async with get_db_connection() as db:
         await db.execute("""
-            UPDATE discord_birthday_settings SET enabled = ?, channel_id = ?, message_template = ?
+            UPDATE discord_birthday_settings SET enabled = $1, channel_id = $2, message_template = $3
             WHERE id = 1
         """, payload.enabled, payload.channel_id, payload.message_template)
     return {"status": "ok"}
@@ -406,5 +406,5 @@ async def save_birthday_settings(payload: BirthdaySettingsPayload):
 @router.delete("/api/discord_mod/birthdays/{birthday_id}")
 async def delete_birthday(birthday_id: int):
     async with get_db_connection() as db:
-        await db.execute("DELETE FROM discord_birthdays WHERE id = ?", birthday_id)
+        await db.execute("DELETE FROM discord_birthdays WHERE id = $1", birthday_id)
     return {"status": "ok"}

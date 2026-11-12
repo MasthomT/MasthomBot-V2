@@ -84,21 +84,21 @@ async def auto_trophy_routine():
                         query = f"""
                             SELECT twitch_id, username FROM viewers 
                             WHERE {custom_where}
-                            AND twitch_id NOT IN (SELECT twitch_id FROM viewer_trophies WHERE trophy_id = ?)
+                            AND twitch_id NOT IN (SELECT twitch_id FROM viewer_trophies WHERE trophy_id = $1)
                         """
                         c_elig = await conn.execute(query, (t_id,))
                     else:
                         query = f"""
                             SELECT twitch_id, username FROM viewers 
-                            WHERE {target_col} >= ? 
-                            AND twitch_id NOT IN (SELECT twitch_id FROM viewer_trophies WHERE trophy_id = ?)
+                            WHERE {target_col} >= $1 
+                            AND twitch_id NOT IN (SELECT twitch_id FROM viewer_trophies WHERE trophy_id = $2)
                         """
                         c_elig = await conn.execute(query, (target_val, t_id))
                         
                     eligible = await c_elig.fetchall()
                     
                     for v in eligible:
-                        await conn.execute("INSERT INTO viewer_trophies (twitch_id, trophy_id) VALUES (?, ?)", (v['twitch_id'], t_id))
+                        await conn.execute("INSERT INTO viewer_trophies (twitch_id, trophy_id) VALUES ($1, $2)", (v['twitch_id'], t_id))
                         winners.append({"twitch_id": v['twitch_id'], "username": v['username'], "rule": dict(rule)})
 
                 for w in winners:

@@ -1,7 +1,6 @@
 import os
 import dotenv
 import asyncpg
-import re
 import logging
 import asyncio
 import random
@@ -68,25 +67,30 @@ async def close_db_pool() -> None:
         await pool.close()
 
 
-class PostgresCursorWrapper:
+class DBConnection:
+    """Connexion empruntée au pool, avec une interface façon « curseur » :
+
+        cur = await conn.execute("SELECT … WHERE id = $1", (id,))
+        row = await cur.fetchone()
+
+    Les requêtes partent telles quelles à PostgreSQL (marqueurs $1, $2…). L'ancienne
+    couche de traduction SQLite (« ? », datetime('now'), PRAGMA…) a été retirée le
+    12/11/2026 : toutes les requêtes du code sont écrites en SQL PostgreSQL.
     """
-    Le traducteur magique final : 
-    Mémorise correctement la requête pour ne plus perdre les paramètres du bot.
-    """
-    def __init__(self, conn, sql=None, params=()):
+    _WRITE_VERBS = {"INSERT", "UPDATE", "DELETE", "ALTER", "CREATE", "DROP"}
+
+    def __init__(self, conn):
         self.conn = conn
-        self.sql = sql
-        self.params = params
+        self.sql = None
+        self.params = ()
         self._results = []
         self._iter = None
 
     def execute(self, sql: str, *params):
-        # Si on reçoit un tuple unique (ex: (a, b, c)), on le déballe
+        # Accepte execute(sql, (a, b)) comme execute(sql, a, b)
         if len(params) == 1 and isinstance(params[0], (tuple, list)):
-            self.params = params[0]
-        else:
-            self.params = params
-        self.sql = sql
+            params = tuple(params[0])
+        self.sql, self.params = sql, params
         return self
 
     async def __aenter__(self):
@@ -100,63 +104,28 @@ class PostgresCursorWrapper:
         return self._do_execute().__await__()
 
     async def _do_execute(self):
-        if not self.sql: return self
-            
-        upper_sql = self.sql.upper()
-        
-        if "PRAGMA" in upper_sql:
-            self._results = []
-            self._iter = iter(self._results)
+        if not self.sql:
             return self
-
-        count = 0
-        def replace(match):
-            nonlocal count
-            count += 1
-            return f"${count}"
-        fixed_sql = re.sub(r'\?', replace, self.sql)
-
-        fixed_sql = fixed_sql.replace("datetime('now', 'localtime')", "NOW()")
-        fixed_sql = fixed_sql.replace("datetime('now')", "NOW()")
-        fixed_sql = fixed_sql.replace("date('now', 'localtime')", "CURRENT_DATE")
-        fixed_sql = fixed_sql.replace("date('now')", "CURRENT_DATE")
-
-        fixed_sql = re.sub(r'(?i)INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT', 'SERIAL PRIMARY KEY', fixed_sql)
-
-        if "VIEWER_DAILY_STATS" in fixed_sql.upper():
-            fixed_sql = re.sub(r'=\s*messages\s*\+\s*excluded\.messages', '= viewer_daily_stats.messages + excluded.messages', fixed_sql, flags=re.IGNORECASE)
-            fixed_sql = re.sub(r'=\s*watchtime\s*\+\s*excluded\.watchtime', '= viewer_daily_stats.watchtime + excluded.watchtime', fixed_sql, flags=re.IGNORECASE)
-            fixed_sql = re.sub(r'=\s*points_gained\s*\+\s*excluded\.points_gained', '= viewer_daily_stats.points_gained + excluded.points_gained', fixed_sql, flags=re.IGNORECASE)
-        if "INSERT INTO VIEWERS" in fixed_sql.upper() and "ON CONFLICT" in fixed_sql.upper():
-            # Force la table devant 'points' pour lever l'ambiguïté Postgres
-            fixed_sql = re.sub(r'points\s*=\s*points\s*\+\s*excluded\.points', 'points = viewers.points + excluded.points', fixed_sql, flags=re.IGNORECASE)
-
-        upper_fixed = self.sql.upper()
-        # Ici, on utilise *self.params pour envoyer les arguments proprement à asyncpg
-        first_word = upper_fixed.lstrip().split()[0] if upper_fixed.strip() else ""
-        # ⚠️ "RETURNING ..." sur un INSERT/UPDATE/DELETE doit passer par .fetch() (pas .execute())
-        # sinon les lignes renvoyées sont silencieusement perdues et fetchone()/fetchall() renvoient rien.
-        if first_word in ["INSERT", "UPDATE", "DELETE", "ALTER", "CREATE", "DROP"] and "RETURNING" not in upper_fixed:
-            await self.conn.execute(fixed_sql, *self.params)
+        upper = self.sql.upper()
+        first_word = upper.split(None, 1)[0] if upper.strip() else ""
+        # Un INSERT/UPDATE/DELETE … RETURNING doit passer par fetch(), sinon les lignes sont perdues.
+        if first_word in self._WRITE_VERBS and "RETURNING" not in upper:
+            await self.conn.execute(self.sql, *self.params)
             self._results = []
         else:
-            self._results = await self.conn.fetch(fixed_sql, *self.params)
-        
+            self._results = await self.conn.fetch(self.sql, *self.params)
         self._iter = iter(self._results)
         return self
 
     async def commit(self):
-        pass
+        """Sans effet (asyncpg valide chaque requête) ; gardé pour compatibilité."""
 
     async def fetchall(self):
         return self._results
 
     async def fetchone(self):
         if self._iter:
-            try:
-                return next(self._iter)
-            except StopIteration:
-                return None
+            return next(self._iter, None)
         return None
 
 
@@ -165,7 +134,7 @@ async def get_db_connection():
     """Emprunte une connexion au pool pour la durée du bloc `async with`."""
     pool = await get_pool()
     async with pool.acquire(timeout=POOL_ACQUIRE_TIMEOUT) as conn:
-        yield PostgresCursorWrapper(conn)
+        yield DBConnection(conn)
 
 
 async def init_db():

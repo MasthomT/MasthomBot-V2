@@ -103,7 +103,7 @@ async def check_new_tiktok_video() -> None:
             # Premier lancement : on mémorise la dernière vidéo SANS annoncer,
             # pour ne pas spammer Discord avec tout l'historique au démarrage.
             await db.execute(
-                "UPDATE tiktok_state SET last_video_id = ?, last_video_url = ?, last_video_title = ?, updated_at = NOW() WHERE id = 1",
+                "UPDATE tiktok_state SET last_video_id = $1, last_video_url = $2, last_video_title = $3, updated_at = NOW() WHERE id = 1",
                 latest_id, latest_url, latest_title
             )
             logger.info(f"🎵 [TIKTOK] Initialisation : dernière vidéo connue = {latest_id}")
@@ -113,7 +113,7 @@ async def check_new_tiktok_video() -> None:
             # Pas de nouvelle vidéo, mais on rafraîchit quand même l'horodatage de la dernière vérif
             # (affiché sur le dashboard de santé du bot) et l'url/titre au cas où ils auraient changé.
             await db.execute(
-                "UPDATE tiktok_state SET last_video_url = ?, last_video_title = ?, updated_at = NOW() WHERE id = 1",
+                "UPDATE tiktok_state SET last_video_url = $1, last_video_title = $2, updated_at = NOW() WHERE id = 1",
                 latest_url, latest_title
             )
             return
@@ -137,7 +137,7 @@ async def check_new_tiktok_video() -> None:
                 f"— recalage silencieux sur {latest_id} sans annonce, pour éviter un spam."
             )
             await db.execute(
-                "UPDATE tiktok_state SET last_video_id = ?, last_video_url = ?, last_video_title = ?, updated_at = NOW() WHERE id = 1",
+                "UPDATE tiktok_state SET last_video_id = $1, last_video_url = $2, last_video_title = $3, updated_at = NOW() WHERE id = 1",
                 latest_id, latest_url, latest_title
             )
             return
@@ -168,7 +168,7 @@ async def check_new_tiktok_video() -> None:
                 logger.error(f"❌ [TIKTOK] Échec envoi annonce Discord : {e}")
 
         await db.execute(
-            "UPDATE tiktok_state SET last_video_id = ?, last_video_url = ?, last_video_title = ?, updated_at = NOW() WHERE id = 1",
+            "UPDATE tiktok_state SET last_video_id = $1, last_video_url = $2, last_video_title = $3, updated_at = NOW() WHERE id = 1",
             latest_id, latest_url, latest_title
         )
 

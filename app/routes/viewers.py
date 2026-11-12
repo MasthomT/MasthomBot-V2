@@ -68,7 +68,7 @@ async def admin_viewers_page(request: Request):
 @router.get("/admin/viewer/{twitch_id}/history", response_class=HTMLResponse, dependencies=[Depends(require_admin)])
 async def admin_viewer_history(request: Request, twitch_id: str):
     async with get_db_connection() as conn:
-        c1 = await conn.execute("SELECT * FROM viewers WHERE twitch_id = ?", (twitch_id,))
+        c1 = await conn.execute("SELECT * FROM viewers WHERE twitch_id = $1", (twitch_id,))
         viewer_row = await c1.fetchone()
         if not viewer_row:
             return RedirectResponse(url="/admin/viewer_manager.html")
@@ -84,7 +84,7 @@ async def admin_viewer_history(request: Request, twitch_id: str):
         else:
             viewer['last_seen_readable'] = 'Inconnu'
 
-        c2 = await conn.execute("SELECT * FROM viewer_daily_stats WHERE twitch_id = ? ORDER BY day DESC LIMIT 30", (twitch_id,))
+        c2 = await conn.execute("SELECT * FROM viewer_daily_stats WHERE twitch_id = $1 ORDER BY day DESC LIMIT 30", (twitch_id,))
         daily_stats_raw = await c2.fetchall()
         daily_stats = []
         for d in daily_stats_raw:
@@ -94,7 +94,7 @@ async def admin_viewer_history(request: Request, twitch_id: str):
                 day_dict['day'] = day_dict['day'].isoformat()
             daily_stats.append(day_dict)
 
-        c3 = await conn.execute("SELECT * FROM viewer_exp_log WHERE twitch_id = ? ORDER BY timestamp DESC LIMIT 50", (twitch_id,))
+        c3 = await conn.execute("SELECT * FROM viewer_exp_log WHERE twitch_id = $1 ORDER BY timestamp DESC LIMIT 50", (twitch_id,))
         special_events_raw = await c3.fetchall()
         special_events = []
         for e in special_events_raw:
@@ -110,7 +110,7 @@ async def admin_viewer_history(request: Request, twitch_id: str):
             SELECT t.label, t.icon, t.tier, vt.earned_at
             FROM viewer_trophies vt
             JOIN trophy_list t ON vt.trophy_id = t.id
-            WHERE vt.twitch_id = ?
+            WHERE vt.twitch_id = $1
             ORDER BY vt.earned_at DESC
         """, (twitch_id,))
         trophies_raw = await c4.fetchall()
@@ -150,12 +150,12 @@ async def save_viewer_profile(request: Request, twitch_id: str,
     async with get_db_connection() as conn:
         await conn.execute("""
             UPDATE viewers SET 
-                nickname=?, nickname_for_bot=?, birthday=?, sleep_pattern=?, 
-                pronouns=?, vibe=?, favorite_game=?, comfort_game=?, 
-                signature_emote=?, play_style=?, useless_talent=?, 
-                favorite_feature=?, favorite_food=?, favorite_drink=?, 
-                free_message=?, roast_level=?
-            WHERE twitch_id=?
+                nickname=$1, nickname_for_bot=$2, birthday=$3, sleep_pattern=$4, 
+                pronouns=$5, vibe=$6, favorite_game=$7, comfort_game=$8, 
+                signature_emote=$9, play_style=$10, useless_talent=$11, 
+                favorite_feature=$12, favorite_food=$13, favorite_drink=$14, 
+                free_message=$15, roast_level=$16
+            WHERE twitch_id=$17
         """, (nickname, nickname_for_bot, birthday, sleep_pattern, pronouns, vibe, favorite_game, comfort_game, signature_emote, play_style, useless_talent, favorite_feature, favorite_food, favorite_drink, free_message, roast_level, twitch_id))
         
     return RedirectResponse(url=f"/admin/viewer/{twitch_id}/history?saved=1", status_code=303)
@@ -166,10 +166,10 @@ async def update_exp_settings(request: Request):
     async with get_db_connection() as conn:
         await conn.execute("""
             UPDATE settings 
-            SET exp_sub_t1=?, exp_sub_t2=?, exp_sub_t3=?, 
-                exp_subgift_t1=?, exp_subgift_t2=?, exp_subgift_t3=?,
-                exp_raid_per_viewer=?, exp_bits_multiplier=?,
-                exp_per_message=?, exp_per_watchtime=?
+            SET exp_sub_t1=$1, exp_sub_t2=$2, exp_sub_t3=$3, 
+                exp_subgift_t1=$4, exp_subgift_t2=$5, exp_subgift_t3=$6,
+                exp_raid_per_viewer=$7, exp_bits_multiplier=$8,
+                exp_per_message=$9, exp_per_watchtime=$10
             WHERE id=1
         """, (
             int(form_data.get("exp_sub_t1") or 500), int(form_data.get("exp_sub_t2") or 1000), int(form_data.get("exp_sub_t3") or 2500),
@@ -183,7 +183,7 @@ async def update_exp_settings(request: Request):
 @router.post("/admin/viewer/update_exp", dependencies=[Depends(require_admin)])
 async def update_exp(request: Request, twitch_id: str = Form(...), amount: int = Form(...), action: str = Form(...)):
     async with get_db_connection() as conn:
-        c = await conn.execute("SELECT username, points FROM viewers WHERE twitch_id = ?", (twitch_id,))
+        c = await conn.execute("SELECT username, points FROM viewers WHERE twitch_id = $1", (twitch_id,))
         viewer_row = await c.fetchone()
         if not viewer_row:
             return RedirectResponse(url="/admin/viewer_manager.html?error=viewer_not_found", status_code=303)
@@ -192,21 +192,21 @@ async def update_exp(request: Request, twitch_id: str = Form(...), amount: int =
         current_points = viewer_row["points"] or 0
 
         if action == "add":
-            await conn.execute("UPDATE viewers SET points = points + ? WHERE twitch_id = ?", (amount, twitch_id))
+            await conn.execute("UPDATE viewers SET points = points + $1 WHERE twitch_id = $2", (amount, twitch_id))
             log_amount, log_detail = amount, f"Ajustement manuel admin : +{amount} EXP"
         elif action == "remove":
             # GREATEST est l'équivalent Postgres de MAX dans ce contexte
-            await conn.execute("UPDATE viewers SET points = GREATEST(0, points - ?) WHERE twitch_id = ?", (amount, twitch_id))
+            await conn.execute("UPDATE viewers SET points = GREATEST(0, points - $1) WHERE twitch_id = $2", (amount, twitch_id))
             log_amount, log_detail = -amount, f"Ajustement manuel admin : -{amount} EXP"
         elif action == "set":
-            await conn.execute("UPDATE viewers SET points = ? WHERE twitch_id = ?", (amount, twitch_id))
+            await conn.execute("UPDATE viewers SET points = $1 WHERE twitch_id = $2", (amount, twitch_id))
             log_amount, log_detail = amount - current_points, f"Ajustement manuel admin : EXP fixée à {amount}"
         else:
             return RedirectResponse(url="/admin/viewer_manager.html?error=invalid_action", status_code=303)
 
         # Traçabilité : sans ça, l'ajustement manuel était invisible dans l'historique du viewer
         await conn.execute(
-            "INSERT INTO viewer_exp_log (twitch_id, event_type, amount, details) VALUES (?, ?, ?, ?)",
+            "INSERT INTO viewer_exp_log (twitch_id, event_type, amount, details) VALUES ($1, $2, $3, $4)",
             twitch_id, "ADMIN_ADJUST", log_amount, log_detail
         )
         logger.info(f"📈 [EXP ADMIN] {username} : {log_detail}")
