@@ -1661,6 +1661,8 @@ class MasthbotTwitch(commands.Bot):
     @routines.routine(minutes=2)
     async def sync_viewers_timer(self):
         if not self.broadcaster_id: return
+        # Hors live : rien à compter (stats_service écrit « -- » dans le label sans appeler Twitch).
+        if not await settings_cache.is_live(): return
 
         try:
             client_id = os.getenv("TWITCH_CLIENT_ID", getattr(self._http, 'client_id', ''))
@@ -1685,6 +1687,9 @@ class MasthbotTwitch(commands.Bot):
 
     @routines.routine(seconds=60)
     async def announcements_timer(self):
+        # Hors live : pas d'annonce, et surtout pas d'appel à l'API Twitch chaque minute.
+        if not await settings_cache.is_live():
+            return
         try:
             try:
                 streams = await self.fetch_streams(user_logins=[self.channel_name])
@@ -1839,6 +1844,8 @@ class MasthbotTwitch(commands.Bot):
         """Gère les annonces 'Début de Stream' (une fois par session live) et
         'Une seule fois' (une fois pour toujours), qui étaient configurables dans
         le panel admin mais jamais lues par aucune routine jusqu'ici."""
+        if not await settings_cache.is_live():
+            return
         try:
             streams = await self.fetch_streams(user_logins=[self.channel_name])
             if not streams:
@@ -1958,10 +1965,14 @@ class MasthbotTwitch(commands.Bot):
                 import signal as _signal
                 os.kill(os.getpid(), _signal.SIGTERM)
 
-    @routines.routine(seconds=3)
+    @routines.routine(seconds=60)
     async def followers_detector_timer(self):
-        """Détecteur ultra-rapide de followers (Instantané)"""
+        """Filet de sécurité des follows : EventSub (channel.follow) met déjà à jour le label,
+        l'alerte et le générique en direct. Ce relevé ne sert qu'à rattraper un follow manqué
+        si la connexion EventSub tombe : 1 fois par minute pendant le live suffit (avant :
+        toutes les 3 s, 24 h/24, soit ~29 000 appels à l'API Twitch par jour)."""
         if not self.broadcaster_id: return
+        if not await settings_cache.is_live(): return
 
         try:
             client_id = os.getenv("TWITCH_CLIENT_ID", getattr(self._http, 'client_id', ''))

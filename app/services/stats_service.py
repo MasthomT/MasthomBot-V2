@@ -7,6 +7,7 @@ import logging
 from app.services.label_service import write_label
 from app.services.twitch_service import twitch_bot
 from app.core.config import settings
+from app.core import settings_cache
 
 logger = logging.getLogger("masthbot.stats")
 
@@ -33,6 +34,9 @@ async def update_time_loop():
 # ==========================================
 # 2. BOUCLE DES STATISTIQUES TWITCH
 # ==========================================
+OFFLINE_INTERVAL = 300  # secondes entre deux relevés quand la chaîne n'est pas en live
+
+
 async def update_twitch_stats_loop():
     """
     Boucle pour récupérer les Viewers et Followers depuis Twitch.
@@ -45,8 +49,11 @@ async def update_twitch_stats_loop():
 
     while True:
         try:
+            # Hors live : pas d'appel « streams » à Twitch, et un relevé toutes les 5 min au lieu de 1.
+            live = await settings_cache.is_live()
+
             # --- RÉCUPÉRATION DES VIEWERS ---
-            streams = await twitch_bot.fetch_streams(user_logins=[settings.TWITCH_CHANNEL.replace("#", "")])
+            streams = await twitch_bot.fetch_streams(user_logins=[settings.TWITCH_CHANNEL.replace("#", "")]) if live else None
             
             if streams:
                 viewers_count = streams[0].viewer_count
@@ -74,8 +81,8 @@ async def update_twitch_stats_loop():
                         else:
                             logger.error(f"⚠️ Erreur API Followers: Code {resp.status}")
             
-            # Pause de 60 secondes pour ne pas spammer Twitch
-            await asyncio.sleep(60)
+            # Pause : 60 s en live, 5 min hors live
+            await asyncio.sleep(60 if live else OFFLINE_INTERVAL)
             
         except Exception as e:
             logger.error(f"❌ Erreur boucle Twitch stats : {e}")
