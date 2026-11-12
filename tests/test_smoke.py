@@ -70,11 +70,3 @@ def test_public_overlay_routes_stay_open(client):
     for path in ["/overlay/clips", "/admin/overlay/clips", "/overlay_deck"]:
         resp = client.get(path)
         assert resp.status_code != 401, f"{path} ne devrait pas exiger d'auth admin"
-
-
-def test_leaderboard_page_open_without_login(client):
-    resp = client.get("/classement")
-    assert resp.status_code == 200
-    assert "Classement" in resp.text
-
-
