@@ -6,7 +6,6 @@ import logging
 import asyncio
 import random
 from contextlib import asynccontextmanager
-from typing import Optional
 
 logger = logging.getLogger("masthbot.database")
 
@@ -16,16 +15,57 @@ DATABASE_URL = env_vars.get("DATABASE_URL") or os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL est introuvable dans le fichier .env !")
 
-write_queue: Optional[asyncio.Queue] = None
+# ── Pool de connexions ────────────────────────────────────────────────────────
+# Avant : chaque requête ouvrait puis fermait sa propre connexion PostgreSQL (~33 ms),
+# soit des centaines de connexions par minute en live. Le pool garde quelques
+# connexions ouvertes et les réutilise (~0,2 ms par requête).
+# Un pool par boucle asyncio (le bot n'en a qu'une ; les tests en créent d'autres).
+POOL_MIN_SIZE = 1
+POOL_MAX_SIZE = 20
+POOL_ACQUIRE_TIMEOUT = 30          # s : au-delà, erreur explicite plutôt qu'un blocage
+POOL_IDLE_LIFETIME = 300           # s : une connexion inutilisée est refermée
 
-async def get_db_connection():
-    return await asyncpg.connect(DATABASE_URL)
+_pools: dict[int, asyncpg.Pool] = {}
+_pool_locks: dict[int, asyncio.Lock] = {}
 
-def get_write_queue() -> asyncio.Queue:
-    global write_queue
-    if write_queue is None:
-        write_queue = asyncio.Queue()
-    return write_queue
+
+async def _create_pool(max_retries=5, base_delay=0.1) -> asyncpg.Pool:
+    for attempt in range(max_retries):
+        try:
+            return await asyncpg.create_pool(
+                DATABASE_URL, min_size=POOL_MIN_SIZE, max_size=POOL_MAX_SIZE,
+                max_inactive_connection_lifetime=POOL_IDLE_LIFETIME,
+            )
+        except Exception as e:
+            if attempt < max_retries - 1:
+                delay = base_delay * (2 ** attempt) + random.uniform(0, 0.1)
+                logger.warning(f"⚠️ Échec connexion PostgreSQL (Tentative {attempt + 1}/{max_retries}). Réessai dans {delay:.2f}s... (Erreur: {e})")
+                await asyncio.sleep(delay)
+            else:
+                logger.error(f"❌ [DB FATAL] Impossible de joindre PostgreSQL après {max_retries} tentatives : {e}")
+                raise
+
+
+async def get_pool() -> asyncpg.Pool:
+    key = id(asyncio.get_running_loop())
+    pool = _pools.get(key)
+    if pool is not None and not pool._closed:
+        return pool
+    lock = _pool_locks.setdefault(key, asyncio.Lock())
+    async with lock:
+        pool = _pools.get(key)
+        if pool is None or pool._closed:
+            pool = await _create_pool()
+            _pools[key] = pool
+            logger.info(f"🗄️ [DB] Pool PostgreSQL prêt ({POOL_MIN_SIZE}–{POOL_MAX_SIZE} connexions).")
+    return pool
+
+
+async def close_db_pool() -> None:
+    """À appeler à l'arrêt du bot."""
+    pool = _pools.pop(id(asyncio.get_running_loop()), None)
+    if pool is not None and not pool._closed:
+        await pool.close()
 
 
 class PostgresCursorWrapper:
@@ -120,56 +160,12 @@ class PostgresCursorWrapper:
         return None
 
 
-async def db_writer_worker(db_path: str):
-    logger.info("🛠️ [SINGLE WRITER] Bascule de la file d'attente d'écriture sur PostgreSQL.")
-    queue = get_write_queue()
-    conn = await asyncpg.connect(DATABASE_URL)
-    cursor = PostgresCursorWrapper(conn)
-
-    try:
-        while True:
-            sql = None
-            try:
-                sql, params = await queue.get()
-                if sql is None:
-                    queue.task_done()
-                    break
-                await cursor.execute(sql, params)
-                queue.task_done()
-            except Exception as e:
-                sql_str = sql if sql else "Aucune requête lue"
-                logger.error(f"❌ [SINGLE WRITER ERROR] Échec de la requête Postgres : {e} | SQL: {sql_str}")
-    finally:
-        await conn.close()
-
-
-async def queue_write(sql: str, params: tuple = ()):
-    queue = get_write_queue()
-    await queue.put((sql, params))
-
-
 @asynccontextmanager
-async def get_db_connection(max_retries=5, base_delay=0.1):
-    conn = None
-    for attempt in range(max_retries):
-        try:
-            conn = await asyncpg.connect(DATABASE_URL)
-            break
-        except Exception as e:
-            if attempt < max_retries - 1:
-                delay = base_delay * (2 ** attempt) + random.uniform(0, 0.1)
-                logger.warning(f"⚠️ Échec connexion PostgreSQL (Tentative {attempt + 1}/{max_retries}). Réessai dans {delay:.2f}s... (Erreur: {e})")
-                await asyncio.sleep(delay)
-            else:
-                logger.error(f"❌ [DB FATAL] Impossible de joindre PostgreSQL après {max_retries} tentatives : {e}")
-                raise e
-
-    wrapper = PostgresCursorWrapper(conn)
-    try:
-        yield wrapper
-    finally:
-        if conn:
-            await conn.close()
+async def get_db_connection():
+    """Emprunte une connexion au pool pour la durée du bloc `async with`."""
+    pool = await get_pool()
+    async with pool.acquire(timeout=POOL_ACQUIRE_TIMEOUT) as conn:
+        yield PostgresCursorWrapper(conn)
 
 
 async def init_db():

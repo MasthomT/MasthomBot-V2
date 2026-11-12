@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 
 # --- IMPORT CORE ---
 from app.core.config import settings
-from app.core.database import init_db
+from app.core.database import init_db, close_db_pool
 from app.core.security import require_admin
 
 # --- MONITORING ERREURS (SENTRY) ---
@@ -125,6 +125,8 @@ async def lifespan(app: FastAPI):
         with contextlib.suppress(Exception):
             if not discord_mod_bot.is_closed():
                 await discord_mod_bot.close()
+        with contextlib.suppress(Exception):
+            await close_db_pool()
 
 # --- INITIALISATION APP ---
 app = FastAPI(title="MasthomBot V2", version="2.0.0", lifespan=lifespan)
