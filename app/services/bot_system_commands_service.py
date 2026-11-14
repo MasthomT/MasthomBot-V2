@@ -199,16 +199,20 @@ SYSTEM_COMMANDS_DEFINITION = [
     {
         "command_key": "chrono",
         "label": "Chrono OBS",
-        "description": "Lance ou arrête un chronomètre sur l'overlay",
+        "description": "Lance, met en pause (!chrono pause), relance (!chrono play) ou arrête un chronomètre sur l'overlay",
         "default_name": "chrono",
         "default_role": "mod",
         "tags": {
-            "start": ["{label}"],
-            "stop":  [],
+            "start":  ["{label}"],
+            "stop":   [],
+            "pause":  [],
+            "resume": [],
         },
         "messages": {
-            "start": "⏱️ Chronomètre lancé à l'écran : {label}",
-            "stop":  "🛑 Chrono effacé de l'écran !",
+            "start":  "⏱️ Chronomètre lancé à l'écran : {label}",
+            "stop":   "🛑 Chrono effacé de l'écran !",
+            "pause":  "⏸️ Chrono en pause.",
+            "resume": "▶️ Chrono relancé !",
         },
     },
     {

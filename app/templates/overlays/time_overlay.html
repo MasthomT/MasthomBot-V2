@@ -45,6 +45,9 @@
             from { filter: hue-rotate(0deg) drop-shadow(0 0 8px rgba(0, 242, 255, 0.3)); }
             to { filter: hue-rotate(360deg) drop-shadow(0 0 8px rgba(0, 242, 255, 0.3)); }
         }
+        /* chrono en pause : les chiffres clignotent doucement */
+        .timer-widget.paused .display { animation: chronoPause 1.2s ease-in-out infinite; }
+        @keyframes chronoPause { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
     </style>
     <script>(function(){var s=document.createElement('script');s.src='/static/theme.js?t='+Date.now();document.head.appendChild(s);})();</script>
 </head>
@@ -62,6 +65,12 @@
                 }
                 else if (d.action === 'start') {
                     createTimer(d);
+                }
+                else if (d.action === 'pause') {
+                    timers.forEach(tm => tm.pause());
+                }
+                else if (d.action === 'resume' || d.action === 'play') {
+                    timers.forEach(tm => tm.resume());
                 }
             }
         }
@@ -81,6 +90,9 @@
             new EventSource(`http://${ip}:3005/events`).onmessage = (e) => handleEvent(JSON.parse(e.data));
         }
 
+        // chronos/minuteurs affichés : chacun cumule son temps écoulé (pause / reprise)
+        const timers = [];
+
         function createTimer(config) {
             const widget = document.createElement('div');
             widget.className = 'timer-widget next-anim';
@@ -98,10 +110,32 @@
             container.appendChild(widget);
 
             let startTime = Date.now();
-            
+            let elapsedBefore = 0;          // ms accumulées avant la dernière reprise
+            let paused = false;
+            const state = {
+                pause() {
+                    if (paused) return;
+                    elapsedBefore += Date.now() - startTime;
+                    paused = true;
+                    widget.classList.add('paused');
+                },
+                resume() {
+                    if (!paused) return;
+                    startTime = Date.now();
+                    paused = false;
+                    widget.classList.remove('paused');
+                },
+            };
+            timers.push(state);
+
             const interval = setInterval(() => {
-                const now = Date.now();
-                const diff = Math.floor((now - startTime) / 1000);
+                if (!widget.isConnected) {          // effacé par !chrono stop
+                    clearInterval(interval);
+                    timers.splice(timers.indexOf(state), 1);
+                    return;
+                }
+                const elapsedMs = elapsedBefore + (paused ? 0 : Date.now() - startTime);
+                const diff = Math.floor(elapsedMs / 1000);
                 let t = config.mode === 'chrono' ? diff : config.duration - diff;
 
                 if (t <= 0 && config.mode === 'timer') {

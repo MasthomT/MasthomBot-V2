@@ -473,6 +473,19 @@ class ChatCommandsMixin:
                 logger.error(f"Erreur Stop Chrono OBS : {e}")
             return
 
+        # !chrono pause → fige le chrono ; !chrono play → il repart du temps affiché à la pause
+        word = (label or "").strip().lower()
+        if word in ("pause", "play", "reprise", "resume", "go"):
+            action = "pause" if word == "pause" else "resume"
+            payload = {"type": "time_event", "details": {"action": action}}
+            try:
+                async with session.post(f"{settings.OVERLAY_NODE_URL}/api/trigger", json=payload) as _:
+                    pass
+                await ctx.send(await syscmd_msg("chrono", action))
+            except Exception as e:
+                logger.error(f"Erreur {action} Chrono OBS : {e}")
+            return
+
         payload = {
             "type": "time_event",
             "details": { "action": "start", "mode": "chrono", "duration": 0, "label": label.upper() }
