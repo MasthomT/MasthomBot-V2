@@ -215,6 +215,11 @@ def _find_node() -> str | None:
     return candidates[-1] if candidates else None
 
 
+# Cookies d'un compte YouTube (format Netscape « cookies.txt ») : indispensables pour les vidéos
+# soumises à une limite d'âge. Fichier facultatif, à garder privé (chmod 600).
+YTDLP_COOKIES = os.getenv("YTDLP_COOKIES") or os.path.expanduser("~/.config/masthbot/youtube_cookies.txt")
+
+
 def _download_video(url: str) -> dict | None:
     """Appel bloquant (yt-dlp) — à exécuter via asyncio.to_thread.
     Télécharge réellement la vidéo plutôt que de juste extraire son URL CDN directe :
@@ -235,6 +240,8 @@ def _download_video(url: str) -> dict | None:
     node = _find_node()
     if node:
         ydl_opts["js_runtimes"] = {"node": {"path": node}}
+    if os.path.isfile(YTDLP_COOKIES):
+        ydl_opts["cookiefile"] = YTDLP_COOKIES
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
         duration = info.get("duration") or 0
@@ -263,5 +270,9 @@ async def get_direct_tiktok_video(url: str) -> dict | None:
     try:
         return await asyncio.to_thread(_download_video, url)
     except Exception as e:
+        text = str(e).lower()
+        if "confirm your age" in text or "age-restricted" in text or "age restricted" in text:
+            logger.warning(f"🔞 [PLAY] Vidéo soumise à une limite d'âge ({'cookies présents' if os.path.isfile(YTDLP_COOKIES) else 'aucun cookie YouTube'}) : {url}")
+            return {"age_restricted": True}
         logger.error(f"❌ [TIKTOK] Échec téléchargement vidéo pour '{url}' : {e}")
         return None

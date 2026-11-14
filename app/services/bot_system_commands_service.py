@@ -66,6 +66,7 @@ SYSTEM_COMMANDS_DEFINITION = [
             "video_success":         ["{title}", "{url}"],
             "video_download_error":  [],
             "video_too_long":        ["{duration}", "{max}"],
+            "video_age_restricted":  [],
         },
         "messages": {
             "clip_playing":          "🎬 Replay : {title} — twitch.tv/{broadcaster} ({url})",
@@ -77,6 +78,7 @@ SYSTEM_COMMANDS_DEFINITION = [
             "video_success":         "🎬 Vidéo affichée à l'écran ! — {title} {url}",
             "video_download_error":  "❌ Impossible de récupérer cette vidéo. Vérifie le lien (YouTube / Instagram) !",
             "video_too_long":        "❌ Vidéo trop longue ({duration}) : {max} maximum.",
+            "video_age_restricted":  "🔞 Cette vidéo est soumise à une limite d'âge sur YouTube : impossible de l'afficher.",
         },
     },
     {
