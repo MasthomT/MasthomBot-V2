@@ -210,8 +210,11 @@ class ChatCommandsMixin:
         if video and video.get("age_restricted"):
             return await safe_send(ctx.channel, await syscmd_msg("play", "video_age_restricted"))
         if video and video.get("too_long"):
-            minutes = int(video["too_long"] // 60)
-            return await safe_send(ctx.channel, await syscmd_msg("play", "video_too_long", duration=f"{minutes} min", max="5 min"))
+            from app.services.tiktok_monitor import MAX_PLAY_SECONDS
+            d = int(video["too_long"])
+            dur = f"{d} s" if d < 120 else f"{d // 60} min {d % 60:02d}"
+            mx = f"{MAX_PLAY_SECONDS} s" if MAX_PLAY_SECONDS < 120 else f"{MAX_PLAY_SECONDS // 60} min"
+            return await safe_send(ctx.channel, await syscmd_msg("play", "video_too_long", duration=dur, max=mx))
         if not video:
             logger.error(f"[PLAY/{pre.upper()}] Échec download pour {source_url}")
             return await safe_send(ctx.channel, await syscmd_msg("play", f"{pre}_download_error"))

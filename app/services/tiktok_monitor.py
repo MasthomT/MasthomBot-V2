@@ -202,7 +202,7 @@ TIKTOK_DOWNLOAD_DIR = os.path.join(tempfile.gettempdir(), "masthbot_tiktok")
 os.makedirs(TIKTOK_DOWNLOAD_DIR, exist_ok=True)
 
 
-MAX_PLAY_SECONDS = 300      # au-delà, on refuse de lire la vidéo (YouTube / Instagram / TikTok) à l'écran
+MAX_PLAY_SECONDS = 60       # au-delà d'une minute, on refuse de lire la vidéo (YouTube / Instagram / TikTok) à l'écran
 
 
 def _find_node() -> str | None:
