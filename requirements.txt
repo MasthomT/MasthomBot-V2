@@ -33,7 +33,8 @@ discord.py==2.7.1
 # --- IA / médias ---
 openai==2.32.0
 pillow==12.2.0
-yt-dlp==2026.3.17
+yt-dlp==2026.10.26
+yt-dlp-ejs==0.8.0      # résout les calculs de sécurité JavaScript de YouTube (sinon vidéos refusées)
 
 # --- Système ---
 psutil==7.2.2
