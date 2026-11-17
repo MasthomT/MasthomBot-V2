@@ -918,26 +918,23 @@
         '</g>' + wheel(54) + wheel(166);
     } },
 // R.E.P.O. : monstre bossu qui court sur ses longs bras, cornes, pics sur le dos et gueule ouverte (deux positions)
-    monster: { w: 13, vb: '0 0 260 180', draw: function () {
-      var limbs = function (far, near) {
-        return far.map(function (p) { return '<polyline points="' + p + '" fill="none" stroke="#1a1020" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>'; }).join('') +
-          near.map(function (p) { return '<polyline points="' + p + '" fill="none" stroke="#33223f" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>'; }).join('');
-      };
-      var claws = function (pts) { return pts.map(function (q) { return '<path d="M' + q[0] + ' ' + q[1] + ' l10 4 M' + q[0] + ' ' + q[1] + ' l8 -4 M' + q[0] + ' ' + q[1] + ' l4 8" stroke="#e8e0d0" stroke-width="2.6" stroke-linecap="round"/>'; }).join(''); };
-      return '<g class="gallop" style="animation-duration:.42s">' +
-        '<g class="mouth-open" style="animation-duration:.46s">' + limbs(['178,100 186,134 196,166', '96,116 92,146 78,170'], []) + claws([[196, 166]]) + '</g>' +
-        '<g class="mouth-shut" style="animation-duration:.46s">' + limbs(['178,100 200,130 216,162', '96,116 78,142 66,168'], []) + claws([[216, 162]]) + '</g>' +
-        '<path d="M60 100 C56 78 72 60 100 52 C130 42 170 40 196 54 C214 64 222 80 220 96 C216 112 196 120 170 118 C140 126 96 126 74 118 C64 114 60 108 60 100Z" fill="#2a1c34" stroke="#000" stroke-width="3"/>' +
-        '<path d="M86 58 L94 36 L104 52 L116 28 L126 46 L140 24 L150 44 L164 28 L172 48 L186 38 L190 56" fill="#2a1c34" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/>' +
-        '<path d="M80 96 C110 108 160 110 200 100" stroke="#4a3458" stroke-width="3" fill="none" opacity=".7"/>' +
-        '<path d="M62 92 C44 86 28 90 16 102 C30 100 42 100 56 106Z" fill="#2a1c34" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/>' +
-        '<path d="M212 104 L246 100 L240 114 C230 120 218 118 210 112Z" fill="#7a0a14" stroke="#000" stroke-width="2"/>' +
-        '<path d="M216 105 L220 113 L224 104 L228 112 L232 103 L236 110 L240 102" fill="#f2ead8" stroke="#f2ead8" stroke-width="1.5" stroke-linejoin="round"/>' +
-        '<path d="M198 68 C212 60 236 62 246 74 C252 84 250 96 240 100 L212 104 C204 98 198 86 198 68Z" fill="#33223f" stroke="#000" stroke-width="3"/>' +
-        '<path d="M210 66 L202 42 L220 62Z M224 63 L228 38 L236 64Z" fill="#d8ccb0" stroke="#3a2a1a" stroke-width="2" stroke-linejoin="round"/>' +
-        '<circle cx="232" cy="78" r="10" fill="#ff2b2b" opacity=".2"/><circle class="pulse" cx="232" cy="78" r="4.5" fill="#ff3b3b"/><circle class="pulse" cx="244" cy="84" r="3.5" fill="#ff3b3b"/>' +
-        '<g class="mouth-open" style="animation-duration:.46s">' + limbs([], ['190,96 214,128 236,160', '84,112 64,138 46,166']) + claws([[236, 160]]) + '</g>' +
-        '<g class="mouth-shut" style="animation-duration:.46s">' + limbs([], ['190,96 176,130 160,160', '84,112 100,140 114,166']) + claws([[160, 160]]) + '</g>' +
+// R.E.P.O. : spectre en robe déchirée qui flotte au ras du sol, capuche vide, yeux luisants, longs bras griffus tendus en avant
+    monster: { w: 9, vb: '0 0 180 230', draw: function () {
+      return '<defs><linearGradient id="ps-rb2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a2a52"/><stop offset=".6" stop-color="#22183a"/><stop offset="1" stop-color="#120c22"/></linearGradient>' +
+        '<radialGradient id="ps-eye"><stop offset="0" stop-color="#ffffff"/><stop offset=".4" stop-color="#bff6ff"/><stop offset="1" stop-color="#5ad8ff" stop-opacity="0"/></radialGradient></defs>' +
+        '<g class="float" style="animation-duration:1.4s">' +
+        '<g opacity=".45"><path class="tent" d="M30 120 C10 126 0 140 -4 158 C10 150 22 146 34 146Z" fill="#22183a"/><path class="tent" style="animation-delay:-.6s" d="M34 160 C16 170 8 184 6 202 C18 192 28 186 40 184Z" fill="#22183a"/></g>' +
+        '<path d="M110 74 C126 84 140 92 160 96" stroke="#1a1228" stroke-width="10" stroke-linecap="round" fill="none"/>' +
+        '<g stroke="#cfc6dc" stroke-width="3" stroke-linecap="round"><path d="M160 96 L176 92 M160 96 L178 100 M158 98 L172 108"/></g>' +
+        '<path d="M64 42 C44 62 38 120 34 190 L118 190 C116 120 110 62 98 42Z" fill="url(#ps-rb2)" stroke="#6a4a8a" stroke-width="2.5" stroke-linejoin="round"/>' +
+        '<g class="tent" style="animation-duration:1.1s"><path d="M34 188 L42 214 L52 192 L62 222 L72 194 L84 218 L94 194 L104 216 L112 192 L118 188Z" fill="#120c22" stroke="#6a4a8a" stroke-width="2" stroke-linejoin="round"/></g>' +
+        '<path d="M60 70 C58 110 56 150 54 186 M92 70 C96 110 98 150 100 186" stroke="#4a3664" stroke-width="2.5" fill="none" opacity=".8"/>' +
+        '<path d="M50 56 C46 24 64 4 86 6 C108 8 120 28 114 54 C106 46 92 42 80 42 C68 42 58 48 50 56Z" fill="#2e2244" stroke="#6a4a8a" stroke-width="2.5" stroke-linejoin="round"/>' +
+        '<ellipse cx="90" cy="42" rx="18" ry="20" fill="#05030a"/>' +
+        '<circle class="pulse" cx="86" cy="40" r="9" fill="url(#ps-eye)"/><circle class="pulse" cx="100" cy="40" r="8" fill="url(#ps-eye)"/>' +
+        '<circle cx="86" cy="40" r="4.2" fill="#ffffff"/><circle cx="100" cy="40" r="3.8" fill="#ffffff"/>' +
+        '<path d="M100 66 C120 76 140 82 162 82" stroke="#2e2244" stroke-width="12" stroke-linecap="round" fill="none"/><path d="M100 66 C120 76 140 82 162 82" stroke="#6a4a8a" stroke-width="2" fill="none" opacity=".7"/>' +
+        '<g stroke="#e4ddee" stroke-width="3" stroke-linecap="round"><path d="M162 82 L178 76 M162 82 L180 84 M161 84 L176 94"/></g>' +
         '</g>';
     } },
     // Battle Royale : lama piñata violet à franges colorées qui bondit
@@ -1249,7 +1246,7 @@
     whale: { amp: 1.2, dur: 13000 }, butterfly: { waves: 6 }, eyes: { spot: 'fade', dur: 5200, glow: '#ff1a1a', blink: 1 },
     epona: { ground: 1, dur: 6500 }, pumpkin: { ground: 1, dur: 9000 }, snowmansled: { ground: 1, dur: 7000 }, penguin: { ground: 1, dur: 8000 },
     mushroom: { ground: 1, dur: 7000 }, bottle: { ground: 1, dur: 16000 }, shambler: { ground: 1, dur: 17000 }, boat: { ground: 1, dur: 6000 },
-    carry: { ground: 1, dur: 14000 }, cart: { ground: 1, dur: 9000 }, monster: { ground: 1, dur: 8000 }, llama: { ground: 1, dur: 8000 },
+    carry: { ground: 1, dur: 14000 }, cart: { ground: 1, dur: 9000 }, monster: { ground: 1, dur: 13000 }, llama: { ground: 1, dur: 8000 },
     knight: { ground: 1, dur: 7000 }, hunter: { ground: 1, dur: 16000 }, figure: { ground: 1, dur: 20000 }, buggy: { ground: 1, dur: 6000 },
     balls: { ground: 1, dur: 7000 }, cyclist: { ground: 1, dur: 8000 }, fox: { ground: 1, dur: 7000 },
     hologram: { spot: 'fade', dur: 6000, glitch: 1 }, doll: { spot: 'fade', dur: 6500 }, chest: { spot: 'fade', dur: 6000 },
