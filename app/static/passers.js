@@ -1219,38 +1219,47 @@
       };
       return bird(10, 30, 1, 0) + bird(90, 8, .8, .07) + bird(140, 54, 1.1, .03) + bird(220, 22, .9, .12) + bird(70, 70, .7, .1);
     } },
-    // Cosy : petit renard roux qui trotte, queue touffue à bout blanc (deux positions des pattes)
-    fox: { w: 12, vb: '0 0 250 140', draw: function () {
-      var legs = function (pts, c) { return pts.map(function (p) { return '<polyline points="' + p + '" fill="none" stroke="' + c + '" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>'; }).join(''); };
-      var paws = function (pts) { return pts.map(function (p) { var q = p.split(' ').pop().split(','); return '<circle cx="' + q[0] + '" cy="' + q[1] + '" r="5" fill="#2a1a10"/>'; }).join(''); };
-      var A1 = ['170,92 180,112 190,128', '92,94 82,112 70,126'], A2 = ['160,94 152,114 146,130', '102,96 110,114 118,128'];
-      return '<defs><linearGradient id="ps-fx" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff9a3c"/><stop offset="1" stop-color="#d9650f"/></linearGradient></defs>' +
+// Cosy : renard roux au galop — corps fin, chaussettes noires, oreilles au revers noir, joues blanches, queue touffue au bout blanc
+    fox: { w: 13, vb: '0 0 265 145', draw: function () {
+      var leg = function (pts, upper, lower) {
+        var p = pts.split(' '), mid = p[1], d1 = 'M' + p[0] + ' L' + mid, d2 = 'M' + mid + ' L' + p[2];
+        return '<path d="' + d1 + '" stroke="' + upper + '" stroke-width="10" stroke-linecap="round"/><path d="' + d2 + '" stroke="' + lower + '" stroke-width="8" stroke-linecap="round"/>';
+      };
+      var A = function (c1, c2) { return leg('178,96 186,116 194,130', c1, c2) + leg('104,96 98,116 90,130', c1, c2); };
+      var A2 = function (c1, c2) { return leg('188,94 202,112 216,124', c1, c2) + leg('92,94 78,112 62,122', c1, c2); };
+      var B = function (c1, c2) { return leg('178,96 174,116 162,128', c1, c2) + leg('104,96 114,116 122,130', c1, c2); };
+      var B2 = function (c1, c2) { return leg('188,94 182,114 172,128', c1, c2) + leg('92,94 106,112 118,126', c1, c2); };
+      return '<defs><linearGradient id="ps-fx2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff9a3c"/><stop offset=".7" stop-color="#e06a14"/><stop offset="1" stop-color="#b84e0a"/></linearGradient></defs>' +
         '<g class="trot">' +
-        '<g class="mouth-open" style="animation-duration:.4s">' + legs(A1, '#a84a0a') + paws(A1) + '</g><g class="mouth-shut" style="animation-duration:.4s">' + legs(A2, '#a84a0a') + paws(A2) + '</g>' +
-        '<g class="sway" style="transform-origin:86px 80px;animation-duration:.8s"><path d="M88 78 C60 62 30 66 8 84 C24 96 52 98 80 90Z" fill="url(#ps-fx)" stroke="#6a2a04" stroke-width="2.5" stroke-linejoin="round"/>' +
-        '<path d="M28 74 C18 76 10 80 8 84 C16 92 26 94 34 94 C30 86 28 80 28 74Z" fill="#fffaf0"/></g>' +
-        '<path d="M84 84 C84 66 110 58 150 58 C176 58 190 66 192 80 C194 94 176 102 146 102 C110 102 84 98 84 84Z" fill="url(#ps-fx)" stroke="#6a2a04" stroke-width="2.5"/>' +
-        '<path d="M150 98 C166 100 182 96 190 86 C180 84 168 86 160 90Z" fill="#fffaf0"/>' +
-        '<path d="M184 70 C190 54 206 46 222 50 L244 64 C240 70 232 72 224 72 C214 78 196 80 186 78Z" fill="url(#ps-fx)" stroke="#6a2a04" stroke-width="2.5" stroke-linejoin="round"/>' +
-        '<path d="M216 66 L244 64 C240 70 232 72 224 72 C220 72 216 70 216 66Z" fill="#fffaf0"/><circle cx="244" cy="64" r="3" fill="#1a1a1a"/>' +
-        '<path d="M196 52 L196 30 L210 48Z M208 48 L214 28 L222 50Z" fill="#d9650f" stroke="#6a2a04" stroke-width="2" stroke-linejoin="round"/><path d="M200 46 L199 36 L206 46Z" fill="#2a1a10"/>' +
-        '<circle cx="216" cy="58" r="3" fill="#1a1a1a"/><circle cx="217" cy="57" r="1" fill="#fff"/>' +
-        '<g class="mouth-open" style="animation-duration:.4s">' + legs(['176,90 196,108 210,118', '96,92 74,106 58,114'], '#d9650f') + paws(['176,90 196,108 210,118', '96,92 74,106 58,114']) + '</g>' +
-        '<g class="mouth-shut" style="animation-duration:.4s">' + legs(['176,90 172,112 162,128', '96,92 104,112 98,128'], '#d9650f') + paws(['176,90 172,112 162,128', '96,92 104,112 98,128']) + '</g>' +
+        '<g class="mouth-open" style="animation-duration:.42s">' + A('#b8560e', '#2a1a10') + '</g><g class="mouth-shut" style="animation-duration:.42s">' + B('#b8560e', '#2a1a10') + '</g>' +
+        '<g class="sway" style="transform-origin:84px 80px;animation-duration:.9s">' +
+        '<path d="M86 76 C64 58 34 52 12 60 C4 63 2 70 6 75 C26 84 58 90 86 88Z" fill="url(#ps-fx2)" stroke="#6a2a04" stroke-width="2.5" stroke-linejoin="round"/>' +
+        '<path d="M20 60 C11 62 4 67 6 75 C12 80 21 82 30 82 C24 76 21 69 20 60Z" fill="#fffaf0" stroke="#6a2a04" stroke-width="2" stroke-linejoin="round"/>' +
+        '<path d="M40 66 C56 66 70 70 80 76" stroke="#ffb870" stroke-width="3" fill="none" opacity=".7" stroke-linecap="round"/></g>' +
+        '<path d="M80 80 C80 62 112 56 150 58 C176 60 192 66 198 78 C200 92 184 100 152 100 C116 100 86 96 80 80Z" fill="url(#ps-fx2)" stroke="#6a2a04" stroke-width="2.5"/>' +
+        '<path d="M150 98 C170 100 188 94 196 84 C186 82 172 86 160 92Z" fill="#fffaf0"/>' +
+        '<path d="M100 66 C130 60 166 60 190 68" stroke="#ffb870" stroke-width="3" fill="none" opacity=".6" stroke-linecap="round"/>' +
+        '<path d="M188 72 C192 56 206 48 220 50 L236 57 L254 63 C256 67 252 71 246 72 L232 74 C222 80 204 82 194 80Z" fill="url(#ps-fx2)" stroke="#6a2a04" stroke-width="2.5" stroke-linejoin="round"/>' +
+        '<path d="M224 66 L254 64 C252 69 246 72 238 73 C230 74 224 72 224 66Z" fill="#fffaf0"/><path d="M196 78 C206 80 216 78 222 72 C214 70 204 72 196 78Z" fill="#fffaf0"/>' +
+        '<path d="M204 52 L202 26 L220 47Z M218 49 L228 25 L232 52Z" fill="#e06a14" stroke="#6a2a04" stroke-width="2" stroke-linejoin="round"/><path d="M206 48 L204 32 L215 46Z M221 47 L227 31 L229 49Z" fill="#2a1a10"/>' +
+        '<circle cx="254" cy="64" r="3.2" fill="#1a0a04"/>' +
+        '<path d="M218 58 C222 55 228 55 230 58 C228 61 222 61 218 58Z" fill="#1a0a04"/><circle cx="226" cy="57.5" r="1" fill="#fff"/>' +
+        '<g class="mouth-open" style="animation-duration:.42s">' + A2('#e06a14', '#2a1a10') + '</g><g class="mouth-shut" style="animation-duration:.42s">' + B2('#e06a14', '#2a1a10') + '</g>' +
         '</g>';
     } },
-    // Cosy : coccinelle qui vole, élytres ouverts et ailes fines qui vibrent
-    ladybug: { w: 6, vb: '0 0 130 100', draw: function () {
+    // Cosy : coccinelle de profil — carapace bombée rouge à points noirs légèrement soulevée, ailes fines qui battent dessous, tête noire tachée de blanc
+    ladybug: { w: 8.5, vb: '0 0 140 100', draw: function () {
       return '<g class="float" style="animation-duration:.9s">' +
-        '<g class="beat" style="transform-origin:66px 40px"><path d="M66 40 C50 10 26 4 18 16 C12 28 40 40 66 44Z" fill="#e6f6ff" fill-opacity=".7" stroke="#8ab0c8" stroke-width="1.5"/>' +
-        '<path d="M66 40 C82 10 106 4 114 16 C120 28 92 40 66 44Z" fill="#e6f6ff" fill-opacity=".6" stroke="#8ab0c8" stroke-width="1.5"/></g>' +
-        '<g stroke="#1a1a1a" stroke-width="2.5" stroke-linecap="round"><path d="M50 76 L42 88 M64 80 L62 94 M78 76 L84 88"/></g>' +
-        '<ellipse cx="64" cy="62" rx="38" ry="24" fill="#1a1a1a"/>' +
-        '<g transform="rotate(-24 50 54)"><path d="M28 60 C26 40 40 30 60 30 C64 44 64 60 58 76 C42 76 30 70 28 60Z" fill="#e8262b" stroke="#6b0f12" stroke-width="2"/><circle cx="42" cy="50" r="5" fill="#1a1a1a"/><circle cx="50" cy="66" r="4" fill="#1a1a1a"/></g>' +
-        '<g transform="rotate(18 82 54)"><path d="M100 60 C102 40 88 30 68 30 C64 44 64 60 70 76 C86 76 98 70 100 60Z" fill="#e8262b" stroke="#6b0f12" stroke-width="2"/><circle cx="86" cy="48" r="5" fill="#1a1a1a"/><circle cx="80" cy="64" r="4" fill="#1a1a1a"/></g>' +
-        '<circle cx="104" cy="60" r="13" fill="#1a1a1a"/><circle cx="108" cy="56" r="3.5" fill="#fff"/><circle cx="109" cy="56" r="1.8" fill="#1a1a1a"/>' +
-        '<path d="M110 50 C116 40 122 38 126 40 M104 48 C108 36 112 32 118 32" stroke="#1a1a1a" stroke-width="2" fill="none" stroke-linecap="round"/>' +
-        '<ellipse cx="44" cy="40" rx="6" ry="3" fill="#fff" opacity=".5" transform="rotate(-24 44 40)"/>' +
+        '<g class="beat" style="transform-origin:62px 40px"><path d="M62 40 C44 12 20 6 10 18 C4 30 28 40 62 44Z" fill="#e6f6ff" fill-opacity=".7" stroke="#8ab0c8" stroke-width="1.6"/>' +
+        '<path d="M70 38 C60 12 40 4 30 12 C24 22 42 34 70 42Z" fill="#e6f6ff" fill-opacity=".55" stroke="#8ab0c8" stroke-width="1.4"/></g>' +
+        '<g stroke="#1a1a1a" stroke-width="2.6" stroke-linecap="round" fill="none"><path d="M54 74 L48 84 L42 88"/><path d="M72 76 L72 88 L66 92"/><path d="M90 74 L96 86 L102 88"/></g>' +
+        '<ellipse cx="74" cy="66" rx="42" ry="12" fill="#1a1a1a"/>' +
+        '<g transform="rotate(-9 110 60)"><path d="M28 66 C28 40 48 24 74 24 C100 24 116 40 116 64Z" fill="#e8262b" stroke="#6b0f12" stroke-width="2.5" stroke-linejoin="round"/>' +
+        '<g fill="#1a1a1a"><ellipse cx="52" cy="46" rx="7" ry="6"/><ellipse cx="78" cy="36" rx="7" ry="6"/><ellipse cx="98" cy="50" rx="6" ry="5.5"/><ellipse cx="70" cy="56" rx="6" ry="5"/><ellipse cx="42" cy="60" rx="5" ry="4"/></g>' +
+        '<path d="M44 34 C54 28 64 26 72 26" stroke="#ff8a8a" stroke-width="4" fill="none" stroke-linecap="round" opacity=".8"/></g>' +
+        '<path d="M108 58 C112 48 122 46 130 52 C136 58 134 68 126 70 L110 70Z" fill="#1a1a1a"/>' +
+        '<ellipse cx="116" cy="56" rx="4" ry="3" fill="#fff"/><circle cx="129" cy="58" r="2.2" fill="#fff"/><circle cx="129.6" cy="58" r="1.1" fill="#1a1a1a"/>' +
+        '<path d="M128 50 C132 42 136 40 140 40 M124 48 C126 40 128 36 132 34" stroke="#1a1a1a" stroke-width="2" fill="none" stroke-linecap="round"/>' +
         '</g>';
     } },
     // Cosy : montgolfière en tissu patchwork avec coutures, panier en osier
