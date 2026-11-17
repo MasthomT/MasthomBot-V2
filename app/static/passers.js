@@ -648,19 +648,22 @@
         '<path d="M24 34 C30 22 40 16 50 16" stroke="#fff" stroke-width="4" fill="none" opacity=".55" stroke-linecap="round"/>' +
         '<g fill="#ffffff" opacity=".7"><circle cx="40" cy="40" r="3"/><circle cx="58" cy="34" r="2.4"/><circle cx="66" cy="46" r="2"/></g></g>';
     } },
-    // Océan : deux dauphins qui bondissent, gerbe d'eau
-    dolphins: { w: 17, vb: '0 0 320 130', draw: function () {
+// Océan : deux dauphins qui bondissent — melon arrondi, rostre, aileron recourbé, nageoire caudale à deux lobes
+    dolphins: { w: 18, vb: '0 0 345 130', draw: function () {
       var dol = function (x, y, s, dl) {
-        return '<g transform="translate(' + x + ' ' + y + ') scale(' + s + ')"><g class="swim" style="transform-origin:70px 40px;animation-delay:-' + dl + 's">' +
-          '<path d="M8 52 C24 30 60 16 100 18 C118 18 130 22 138 28 L150 30 L138 34 C130 42 112 46 96 46 C70 48 40 52 22 62 L6 72 L10 60 L-2 52Z" fill="#5c8fbf" stroke="#1e3a5a" stroke-width="2.5" stroke-linejoin="round"/>' +
-          '<path d="M30 56 C56 46 90 42 120 40 C110 46 96 48 80 48 C60 50 44 52 30 56Z" fill="#dbe9f5"/>' +
-          '<path d="M74 20 L84 2 L92 20Z" fill="#4a7aa8" stroke="#1e3a5a" stroke-width="2" stroke-linejoin="round"/>' +
-          '<path d="M88 40 L80 56 L98 44Z" fill="#4a7aa8" stroke="#1e3a5a" stroke-width="2" stroke-linejoin="round"/>' +
-          '<circle cx="122" cy="26" r="2.6" fill="#0a1a2a"/><path d="M124 34 Q134 34 140 31" stroke="#1e3a5a" stroke-width="1.6" fill="none"/>' +
-          '<path d="M40 30 C60 22 84 18 104 20" stroke="#9cc4e8" stroke-width="3" fill="none" opacity=".6" stroke-linecap="round"/></g></g>';
+        return '<g transform="translate(' + x + ' ' + y + ') scale(' + s + ')"><g class="swim" style="transform-origin:80px 40px;animation-delay:-' + dl + 's">' +
+          '<defs><linearGradient id="ps-dlg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f6f9f"/><stop offset="1" stop-color="#7aa8d4"/></linearGradient></defs>' +
+          '<path d="M92 17 C88 9 82 3 72 1 C78 8 80 14 80 20Z" fill="#355f8a" stroke="#14304e" stroke-width="2" stroke-linejoin="round"/>' +
+          '<path d="M156 34 C150 30 140 28 132 26 C124 18 108 14 90 16 C66 18 44 28 30 40 C24 45 18 48 12 50 C6 44 0 38 -10 33 C-4 42 -2 48 2 52 C-2 56 -4 62 -10 71 C0 66 6 60 12 56 C26 58 44 56 64 52 C90 48 116 46 134 42 C142 40 150 38 156 36Z" fill="url(#ps-dlg)" stroke="#14304e" stroke-width="2.5" stroke-linejoin="round"/>' +
+          '<path d="M36 54 C64 52 104 46 134 41 C140 41 146 39 152 37 C140 41 120 46 96 50 C76 53 54 56 36 54Z" fill="#e3eef8"/>' +
+          '<path d="M112 46 C108 54 100 60 90 62 C96 56 100 50 102 46Z" fill="#355f8a" stroke="#14304e" stroke-width="2" stroke-linejoin="round"/>' +
+          '<path d="M60 24 C80 18 104 16 122 20" stroke="#a8c8e8" stroke-width="3" fill="none" opacity=".6" stroke-linecap="round"/>' +
+          '<circle cx="137" cy="31" r="2.4" fill="#0a1a2a"/><circle cx="137.8" cy="30.3" r=".8" fill="#fff"/>' +
+          '<path d="M142 36 C147 37 152 36.5 156 35.5" stroke="#14304e" stroke-width="1.6" fill="none" stroke-linecap="round"/>' +
+          '</g></g>';
       };
-      return '<g fill="#bfe6ff" opacity=".85"><circle class="tw" cx="20" cy="108" r="4"/><circle class="tw" style="animation-delay:-.4s" cx="36" cy="118" r="3"/><circle class="tw" style="animation-delay:-.7s" cx="10" cy="120" r="2.5"/></g>' +
-        dol(30, 40, 1, 0) + dol(150, 10, .9, .7);
+      return '<g fill="#bfe6ff" opacity=".85"><circle class="tw" cx="14" cy="108" r="4"/><circle class="tw" style="animation-delay:-.4s" cx="30" cy="118" r="3"/><circle class="tw" style="animation-delay:-.7s" cx="6" cy="120" r="2.5"/></g>' +
+        dol(22, 46, 1, 0) + dol(192, 8, .92, .7);
     } },
 // Espace : astronaute qui flotte en tournant lentement sur lui-même
     astronaut: { w: 8, vb: '0 0 150 160', draw: function () {
