@@ -234,6 +234,8 @@ async def eventsub_routine():
                                 # Début / fin de live (automatisations)
                                 await subscribe_to_event(session, client_id, token, ws_id, "stream.online", "1", c_broad)
                                 await subscribe_to_event(session, client_id, token, ws_id, "stream.offline", "1", c_broad)
+                                # changement de catégorie / titre (même hors live) : thème automatique selon la catégorie
+                                await subscribe_to_event(session, client_id, token, ws_id, "channel.update", "2", c_broad)
                                 # Modérateurs : un modo protégé qui perd son statut est remis par le bot
                                 await subscribe_to_event(session, client_id, token, ws_id, "channel.moderator.remove", "1", c_broad)
                                 await subscribe_to_event(session, client_id, token, ws_id, "channel.moderator.add", "1", c_broad)
@@ -264,6 +266,18 @@ async def eventsub_routine():
                                 asyncio.create_task(automation_service.on_eventsub(sub_type, event, broadcaster_id))
                             except Exception as e:
                                 logger.error(f"❌ [AUTOMATISATION] {e}")
+                            # Thème automatique : nouvelle catégorie, ou début du live (la catégorie a pu changer pendant une déconnexion)
+                            if sub_type in ("channel.update", "stream.online"):
+                                try:
+                                    from app.services import theme_auto_service
+                                    if sub_type == "channel.update":
+                                        asyncio.create_task(theme_auto_service.on_category(event.get("category_name", "")))
+                                    else:
+                                        async def _auto_online():
+                                            await theme_auto_service.on_category(await theme_auto_service.current_category())
+                                        asyncio.create_task(_auto_online())
+                                except Exception as e:
+                                    logger.error(f"❌ [THÈME AUTO] {e}")
 
                             if sub_type in ["channel.subscribe", "channel.subscription.message"]:
                                 user_name = event.get("user_name", "Inconnu")

@@ -272,13 +272,9 @@ async def admin_label_style_get():
     return {"style": await get_style(), "presets": PRESETS, "fonts": FONTS, "label_keys": LABEL_KEYS}
 
 
-@admin_router.put("/admin/api/labels/theme/{preset}")
-async def admin_label_theme_apply(preset: str):
-    """Applique un thème d'un clic (Classique / Halloween / Zelda) : titres, labels et widgets suivent.
-    Les réglages propres à chaque label sont conservés, ainsi que la teinte déjà réglée pour Zelda ;
-    pas de date de fin (c'est un choix volontaire)."""
-    if preset not in PRESETS:
-        raise HTTPException(status_code=404, detail="Thème inconnu.")
+async def apply_preset(preset: str) -> dict:
+    """Applique un thème comme un clic dans /admin/labels : réglages propres à chaque label conservés,
+    teinte déjà réglée conservée pour Zelda, pas de date de fin. Utilisé aussi par le thème automatique."""
     current = await get_style()
     new = {**BLANK, **PRESETS[preset], "until": ""}
     if preset == "zelda" and current.get("tint"):
@@ -288,7 +284,44 @@ async def admin_label_theme_apply(preset: str):
     async with get_db_connection() as db:
         await db.execute("UPDATE label_style SET data = $1 WHERE id = 1", (json.dumps(new, ensure_ascii=False),))
     logger.info(f"🎨 [STYLE] Thème « {preset} » appliqué.")
-    return {"ok": True, "style": new}
+    return new
+
+
+@admin_router.put("/admin/api/labels/theme/{preset}")
+async def admin_label_theme_apply(preset: str):
+    """Applique un thème d'un clic : titres, labels et widgets suivent."""
+    if preset not in PRESETS:
+        raise HTTPException(status_code=404, detail="Thème inconnu.")
+    return {"ok": True, "style": await apply_preset(preset)}
+
+
+# ── Thème automatique selon la catégorie Twitch ──
+@admin_router.get("/admin/api/labels/auto")
+async def admin_theme_auto_get():
+    from app.services import theme_auto_service
+    return {"config": await theme_auto_service.get_config(), "category": await theme_auto_service.current_category()}
+
+
+@admin_router.put("/admin/api/labels/auto")
+async def admin_theme_auto_save(request: Request):
+    from app.services import theme_auto_service
+    try:
+        clean = theme_auto_service.clean(await request.json(), PRESETS)
+    except (ValueError, TypeError, AttributeError) as e:
+        raise HTTPException(status_code=400, detail=str(e) or "Configuration invalide.")
+    cfg = await theme_auto_service.save_config(clean)
+    return {"ok": True, "config": cfg}
+
+
+@admin_router.post("/admin/api/labels/auto/apply")
+async def admin_theme_auto_apply_now():
+    """Applique tout de suite la règle de la catégorie actuelle (bouton « Appliquer maintenant »)."""
+    from app.services import theme_auto_service
+    cat = await theme_auto_service.current_category()
+    if not cat:
+        raise HTTPException(status_code=502, detail="Catégorie Twitch illisible pour le moment.")
+    await theme_auto_service.on_category(cat, force=True)
+    return {"ok": True, "category": cat, "config": await theme_auto_service.get_config()}
 
 
 @admin_router.put("/admin/api/labels/style")
