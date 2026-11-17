@@ -48,7 +48,7 @@
     '@keyframes ps-wobble{0%,100%{transform:rotate(-5deg) translateY(0)}50%{transform:rotate(5deg) translateY(-4px)}}.pass .wobble{transform-box:view-box;animation:ps-wobble 2s ease-in-out infinite}' +
     '@keyframes ps-dart{0%,30%{transform:translateX(0)}40%,65%{transform:translateX(3px)}75%,100%{transform:translateX(-2px)}}.pass .dart{animation:ps-dart 2.4s ease-in-out infinite}' +
     '@keyframes ps-hop{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}.pass .hop{animation:ps-hop .6s cubic-bezier(.3,0,.7,1) infinite}' +
-    '@keyframes ps-batw{from{transform:scaleY(1)}to{transform:scaleY(-.5)}}.pass .batw{transform-box:fill-box;transform-origin:50% 45%;animation:ps-batw .16s ease-in-out infinite alternate}' +
+    '@keyframes ps-batw{from{transform:scaleY(1)}to{transform:scaleY(.3)}}.pass .batw{transform-box:fill-box;transform-origin:50% 45%;animation:ps-batw .16s ease-in-out infinite alternate}' +
     '@keyframes ps-trot{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}.pass .trot{animation:ps-trot .3s ease-in-out infinite}' +
     '@keyframes ps-turn{0%,40%{transform:rotate(0)}55%,80%{transform:rotate(-35deg)}95%,100%{transform:rotate(0)}}.pass .turn{transform-box:fill-box;transform-origin:50% 100%;animation:ps-turn 3.2s ease-in-out infinite}' +
     '@keyframes ps-slow{to{transform:rotate(360deg)}}.pass .slowspin{transform-box:fill-box;transform-origin:50% 50%;animation:ps-slow 9s linear infinite}' +
@@ -1014,16 +1014,25 @@
         '<g class="flagr"><path d="M190 -74 H130 L142 -60 L130 -46 H190Z" fill="#8a1a2a" stroke="#3a0810" stroke-width="2"/><path d="M168 -66 L172 -56 L162 -60 H174 L164 -56Z" fill="#d4b06a"/></g>' +
         '</g>';
     } },
-    // Dark fantasy : chauve-souris géante, ailes membraneuses qui battent
-    giantbat: { w: 14, vb: '0 0 260 140', draw: function () {
-      return '<g class="float"><g class="batw" style="animation-duration:.3s">' +
-        '<path d="M130 60 C116 30 86 12 40 10 C52 20 52 32 46 40 C60 40 70 48 72 58 C84 52 98 56 104 66 C112 60 122 60 130 66 C138 60 148 60 156 66 C162 56 176 52 188 58 C190 48 200 40 214 40 C208 32 208 20 220 10 C174 12 144 30 130 60Z" fill="#2a1a2a" stroke="#6a4a6a" stroke-width="2" stroke-linejoin="round"/>' +
-        '<path d="M130 62 L46 40 M130 62 L72 58 M130 62 L104 66 M130 62 L214 40 M130 62 L188 58 M130 62 L156 66" stroke="#4a3a4a" stroke-width="2"/></g>' +
-        '<ellipse cx="130" cy="70" rx="14" ry="20" fill="#3a2434" stroke="#6a4a6a" stroke-width="2"/>' +
-        '<path d="M120 54 L116 36 L126 50 Z M140 54 L144 36 L134 50Z" fill="#3a2434" stroke="#6a4a6a" stroke-width="2" stroke-linejoin="round"/>' +
-        '<circle cx="124" cy="62" r="3" fill="#ffb347"/><circle cx="136" cy="62" r="3" fill="#ffb347"/>' +
-        '<path d="M124 76 L126 82 L128 76 M132 76 L134 82 L136 76" fill="#fff" stroke="#fff" stroke-width="1"/>' +
-        '<path d="M124 88 L120 100 M136 88 L140 100" stroke="#3a2434" stroke-width="4" stroke-linecap="round"/></g>';
+// Dark fantasy : chauve-souris géante de profil — ailes membraneuses à doigts qui battent depuis l'épaule, grandes oreilles, crocs
+    giantbat: { w: 14, vb: '0 -20 260 170', draw: function () {
+      var wing = function (mem, bone, edge) {
+        return '<path d="M150 66 L130 30 L100 14 L40 6 Q58 28 32 40 Q60 50 48 70 Q82 72 92 86 Q118 80 142 78Z" fill="' + mem + '" stroke="' + edge + '" stroke-width="2.5" stroke-linejoin="round"/>' +
+          '<path d="M150 66 L130 30 L100 14" stroke="' + bone + '" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' +
+          '<path d="M100 14 L40 6 M100 14 L32 40 M100 14 L48 70 M100 14 L92 86" stroke="' + bone + '" stroke-width="2.6" stroke-linecap="round"/>' +
+          '<path d="M100 14 L104 4 L108 14" fill="' + bone + '"/>';
+      };
+      return '<g class="float" style="animation-duration:1.2s">' +
+        '<g class="flap" style="transform-origin:150px 66px;animation-duration:.42s;animation-delay:-.1s"><g transform="translate(14 -6)">' + wing('#3a2236', '#24121f', '#120810') + '</g></g>' +
+        '<path d="M118 86 L104 96 M124 88 L112 100" stroke="#3a2a34" stroke-width="3.5" stroke-linecap="round"/><path d="M104 96 l-5 1 M104 96 l-2 5 M112 100 l-5 1 M112 100 l-2 5" stroke="#d8ccd8" stroke-width="2" stroke-linecap="round"/>' +
+        '<path d="M120 70 C130 58 156 56 170 62 C182 68 184 78 178 84 C166 94 138 94 124 88 C114 84 112 76 120 70Z" fill="#5a3a50" stroke="#1a0c16" stroke-width="2.5"/>' +
+        '<path d="M128 84 C140 90 160 90 172 84" stroke="#8a6a80" stroke-width="3" fill="none" opacity=".7"/>' +
+        '<path d="M174 54 L168 30 L184 50Z M186 52 L194 28 L198 54Z" fill="#5a3a50" stroke="#1a0c16" stroke-width="2.5" stroke-linejoin="round"/><path d="M174 48 L171 36 L180 48Z M188 48 L193 36 L195 50Z" fill="#c88aa8"/>' +
+        '<path d="M170 66 C170 54 180 48 190 52 C198 56 204 64 208 70 C202 76 192 80 182 78 C174 76 170 72 170 66Z" fill="#5a3a50" stroke="#1a0c16" stroke-width="2.5" stroke-linejoin="round"/>' +
+        '<circle cx="207" cy="70" r="2" fill="#1a0c16"/><circle cx="188" cy="62" r="3.4" fill="#ff4a4a"/><circle cx="189" cy="61" r="1.1" fill="#fff"/>' +
+        '<path d="M194 76 L196 84 L199 76 M200 75 L202 82 L204 74" fill="#fff" stroke="#fff" stroke-width="1"/>' +
+        '<g class="flap" style="transform-origin:150px 66px;animation-duration:.42s">' + wing('#6a4462', '#2a1424', '#120810') + '</g>' +
+        '</g>';
     } },
     // Dark fantasy : esprits lumineux (feux follets) qui ondulent en traînée
     wisps: { w: 14, vb: '0 0 280 100', draw: function () {
