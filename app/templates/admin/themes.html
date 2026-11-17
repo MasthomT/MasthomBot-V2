@@ -23,7 +23,7 @@
         .theme.on { border-color: #34d399; box-shadow: 0 0 0 3px rgba(52,211,153,.25); }
         .theme .art { height: 96px; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
         .theme .art .name { font-size: 26px; line-height: 1; padding: 0 .4rem; text-align: center; white-space: nowrap; }
-        .theme .art .pass { position: absolute; right: 6px; bottom: 4px; width: 64px; opacity: .95; pointer-events: none; }
+        .theme .art .pass { position: absolute; right: 6px; bottom: 4px; width: 70px; opacity: .97; pointer-events: none; }
         .theme .art .pass svg { width: 100%; height: auto; display: block; overflow: visible; }
         .theme .foot { padding: .5rem .7rem; display: flex; align-items: center; justify-content: space-between; gap: .5rem; background: #111a2e; }
         .theme .foot b { font-size: .85rem; color: #fff; }
@@ -109,13 +109,13 @@ const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').
 
 // nom, emoji, personnage qui passe sur les titres (passers.js), titre court affiché sur la carte
 const THEMES = {
-    classique:   ['Classique', '✨', null],          halloween: ['Halloween', '🎃', 'witch'],      zelda: ['Zelda', '🧚', 'epona'],
-    noel:        ['Noël', '❄️', 'sleigh'],           cyber: ['Cyberpunk', '🌃', 'drone'],       arcade: ['Arcade', '🕹️', 'pacman'],
-    ocean:       ['Océan', '🌊', 'whale'],           space: ['Espace', '🚀', 'ufo'],            pirate: ['Pirate', '🏴‍☠️', 'ship'],
-    sakura:      ['Sakura', '🌸', 'butterfly'],      horror: ['Horreur', '🩸', 'crow'],         gta6: ['GTA VI', '🌴', 'car'],
-    repo:        ['R.E.P.O.', '🤖', 'robot'],        fortnite: ['Battle Royale', '🪂', 'bus'],   darkfantasy: ['Dark fantasy', '🐉', 'dragon'],
-    werewolf: ['Pleine lune', '🐺', 'wolf'],   fog: ['Brouillard', '🌫️', 'figure'],
-    vault:       ['Post-apo', '☢️', 'supply'],       pokemon: ['Pokémon', '⚡', 'pokeball'],     cosy: ['Cosy', '🍃', 'bee'],
+    classique:   ['Classique', '✨', null],          halloween: ['Halloween', '🎃', 'witch3d'],      zelda: ['Zelda', '🧚', 'horse3d'],
+    noel:        ['Noël', '❄️', 'sleigh3d'],           cyber: ['Cyberpunk', '🌃', 'robot3d'],       arcade: ['Arcade', '🕹️', 'invaders3d'],
+    ocean:       ['Océan', '🌊', 'whale3d'],           space: ['Espace', '🚀', 'ufo3d'],            pirate: ['Pirate', '🏴‍☠️', 'ship3d'],
+    sakura:      ['Sakura', '🌸', 'butterfly3d'],      horror: ['Horreur', '🩸', 'crow3d'],         gta6: ['GTA VI', '🌴', 'car3d'],
+    repo:        ['R.E.P.O.', '🤖', 'loot3d'],        fortnite: ['Battle Royale', '🪂', 'bbus3d'],   darkfantasy: ['Dark fantasy', '🐉', 'dragon3d'],
+    werewolf: ['Pleine lune', '🐺', 'moon3d'],   fog: ['Brouillard', '🌫️', 'flash3d'],
+    vault:       ['Post-apo', '☢️', 'drop3d'],       pokemon: ['Pokémon', '⚡', 'pokeball'],     cosy: ['Cosy', '🍃', 'bee3d'],
 };
 const tName = (k) => THEMES[k] ? THEMES[k][1] + ' ' + THEMES[k][0] : k;
 let presets = {}, style = {}, autoCfg = null, autoCat = '';
