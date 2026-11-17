@@ -25,6 +25,7 @@
     '@keyframes ps-bob{from{transform:translateY(0)}to{transform:translateY(-3px)}}.pass .bob{animation:ps-bob .25s ease-in-out infinite alternate}' +
     '@keyframes ps-gal{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}.pass .gallop{animation:ps-gal .36s ease-in-out infinite}' +
     '@keyframes ps-flapd{from{transform:scaleY(1)}to{transform:scaleY(-.35)}}.pass .flap{transform-box:view-box;animation:ps-flapd .55s ease-in-out infinite alternate}' +
+    '@keyframes ps-sway{from{transform:rotate(-7deg)}to{transform:rotate(7deg)}}.pass .sway{transform-box:view-box;animation:ps-sway 1.8s ease-in-out infinite alternate}' +
     '@keyframes ps-spin{to{transform:rotate(360deg)}}.pass .spin{transform-box:fill-box;transform-origin:50% 50%;animation:ps-spin .9s linear infinite}';
   document.head.appendChild(css);
 
@@ -270,12 +271,24 @@
         '<g filter="url(#ps-fogb)" fill="#d8d4cc" opacity=".55"><ellipse cx="140" cy="90" rx="140" ry="40"/><ellipse cx="320" cy="70" rx="170" ry="50"/><ellipse cx="480" cy="95" rx="120" ry="36"/></g>';
     } },
     // Post-apo : caisse de ravitaillement sous parachute
-    supply: { w: 9, vb: '0 0 140 180', draw: function () {
-      return '<path d="M10 56 C10 10 130 10 130 56 C110 46 90 50 70 56 C50 50 30 46 10 56Z" fill="#ffb000" stroke="#3a2a00" stroke-width="3"/>' +
-        '<path d="M50 52 C56 30 84 30 90 52" fill="#3cff6a" opacity=".35"/>' +
-        '<g stroke="#c8ffd2" stroke-width="2"><line x1="12" y1="56" x2="46" y2="120"/><line x1="128" y1="56" x2="94" y2="120"/><line x1="70" y1="56" x2="70" y2="120"/></g>' +
-        '<rect x="40" y="120" width="60" height="48" rx="4" fill="#3d4a2c" stroke="#0b1a06" stroke-width="3"/><path d="M40 120 L100 168 M100 120 L40 168" stroke="#2a3420" stroke-width="3"/>' +
-        '<circle cx="70" cy="144" r="11" fill="#ffd400" stroke="#0b1a06" stroke-width="2"/><path d="M70 144 L64 135 A11 11 0 0 1 76 135Z M70 144 L80 148 A11 11 0 0 1 74 154Z M70 144 L60 148 A11 11 0 0 0 66 154Z" fill="#0b1a06"/>';
+    supply: { w: 9, vb: '0 0 160 200', draw: function () {
+      var drop = '<defs><linearGradient id="ps-cv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffc24a"/><stop offset="1" stop-color="#d9861a"/></linearGradient>' +
+        '<linearGradient id="ps-cv2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7d8f4e"/><stop offset="1" stop-color="#4f5f2c"/></linearGradient></defs>' +
+        '<g stroke="#d8e8c8" stroke-width="1.3" opacity=".9"><line x1="10" y1="70" x2="80" y2="122"/><line x1="38" y1="70" x2="80" y2="122"/><line x1="66" y1="70" x2="80" y2="122"/><line x1="94" y1="70" x2="80" y2="122"/><line x1="122" y1="70" x2="80" y2="122"/><line x1="150" y1="70" x2="80" y2="122"/></g>' +
+        '<path d="M10 70 C10 22 50 6 80 6 C110 6 150 22 150 70 Q136 60 122 70 Q108 60 94 70 Q80 60 66 70 Q52 60 38 70 Q24 60 10 70Z" fill="url(#ps-cv)"/>' +
+        '<path d="M80 6 C60 18 44 40 38 70 Q52 60 66 70 C68 40 72 20 80 6Z" fill="url(#ps-cv2)"/><path d="M80 6 C88 20 92 40 94 70 Q108 60 122 70 C116 40 100 18 80 6Z" fill="url(#ps-cv2)"/>' +
+        '<path d="M10 70 C10 22 50 6 80 6 C110 6 150 22 150 70 Q136 60 122 70 Q108 60 94 70 Q80 60 66 70 Q52 60 38 70 Q24 60 10 70Z" fill="none" stroke="#3a2a00" stroke-width="2.5" stroke-linejoin="round"/>' +
+        '<g stroke="#3a2a00" stroke-width="1.5" fill="none" opacity=".7"><path d="M80 6 C60 18 44 40 38 70"/><path d="M80 6 C72 20 68 40 66 70"/><path d="M80 6 C88 20 92 40 94 70"/><path d="M80 6 C100 18 116 40 122 70"/></g>' +
+        '<path d="M26 30 C40 16 60 10 76 10" stroke="#fff3c4" stroke-width="3" fill="none" opacity=".6" stroke-linecap="round"/>' +
+        '<g stroke="#9aa88a" stroke-width="2.2"><line x1="80" y1="122" x2="56" y2="137"/><line x1="80" y1="122" x2="104" y2="137"/><line x1="80" y1="122" x2="114" y2="130"/></g><circle cx="80" cy="122" r="2.6" fill="#555"/>' +
+        '<path d="M54 138 L64 130 H116 L106 138Z" fill="#6c7d40" stroke="#1e2610" stroke-width="2" stroke-linejoin="round"/>' +
+        '<path d="M106 138 L116 130 V178 L106 186Z" fill="#343f1c" stroke="#1e2610" stroke-width="2" stroke-linejoin="round"/>' +
+        '<rect x="54" y="138" width="52" height="48" fill="#4b5a2e" stroke="#1e2610" stroke-width="2"/>' +
+        '<g stroke="#3a4622" stroke-width="1.5"><line x1="54" y1="150" x2="106" y2="150"/><line x1="54" y1="174" x2="106" y2="174"/></g>' +
+        '<g fill="#8a8f80"><path d="M54 138 h8 v4 h-4 v4 h-4z"/><path d="M106 138 h-8 v4 h4 v4 h4z"/><path d="M54 186 h8 v-4 h-4 v-4 h-4z"/><path d="M106 186 h-8 v-4 h4 v-4 h4z"/></g>' +
+        '<circle cx="80" cy="162" r="10" fill="#ffd400" stroke="#1a1a1a" stroke-width="1.8"/>' +
+        '<g fill="#1a1a1a" transform="rotate(180 80 162)"><circle cx="80" cy="162" r="2.2"/><path d="M80 162 L75 153.5 A10 10 0 0 1 85 153.5Z"/><path d="M80 162 L89.5 165 A10 10 0 0 1 84.5 170.5Z"/><path d="M80 162 L75.5 170.5 A10 10 0 0 1 70.5 165Z"/></g>';
+      return '<g class="sway" style="transform-origin:80px 6px">' + drop + '</g>';
     } },
     // Pokémon : Poké Ball qui roule
     pokeball: { w: 6, vb: '0 0 100 100', draw: function () {
