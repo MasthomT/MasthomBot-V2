@@ -866,20 +866,25 @@
         '<g class="flap" style="transform-origin:156px 62px;animation-duration:.6s">' + wing('#ff8fb2', '#1a1a1a') + '</g>' +
         '</g>';
     } },
-    // GTA VI : avion de tourisme qui tire une banderole « VICE CITY » au vent
+// GTA VI : avion de tourisme à aile haute qui tire une banderole « VICE CITY » au vent
     plane: { w: 30, vb: '0 0 560 130', draw: function () {
-      return '<path d="M222 60 L246 60" stroke="#c9c3d6" stroke-width="2"/>' +
+      return '<path d="M222 60 C236 62 248 64 262 64" stroke="#c9c3d6" stroke-width="2" fill="none"/>' +
         '<g class="flagr"><path d="M10 34 H222 V86 H10 L22 60Z" fill="#fff1f8" stroke="#ff3fa4" stroke-width="3" stroke-linejoin="round"/>' +
         '<text x="120" y="72" text-anchor="middle" font-family="Bebas Neue,Arial Black,sans-serif" font-weight="900" font-size="34" fill="#ff3fa4" letter-spacing="3">VICE CITY</text></g>' +
-        '<g class="float"><g transform="translate(-178 -22) scale(1.4)">' +
-        '<path d="M300 58 L290 40 H304 L322 58Z" fill="#ff7a18" stroke="#5a2a00" stroke-width="2" stroke-linejoin="round"/>' +
-        '<path d="M300 56 C300 48 330 44 380 44 H450 C476 44 494 50 500 58 C494 66 476 70 450 70 H330 C310 70 300 64 300 56Z" fill="#ffffff" stroke="#2a2a35" stroke-width="3"/>' +
-        '<path d="M310 60 H496" stroke="#ff7a18" stroke-width="5"/>' +
-        '<path d="M430 46 C440 38 456 38 466 46Z" fill="#7ff6ff" stroke="#2a2a35" stroke-width="2.5"/>' +
-        '<path d="M380 56 L360 92 H384 L414 56Z" fill="#ff7a18" stroke="#5a2a00" stroke-width="2.5" stroke-linejoin="round"/><path d="M386 54 L370 28 H388 L410 54Z" fill="#e66a10" stroke="#5a2a00" stroke-width="2" stroke-linejoin="round" opacity=".85"/>' +
-        '<circle cx="502" cy="58" r="5" fill="#2a2a35"/><g transform="translate(506 58)"><ellipse class="rotor" cx="0" cy="0" rx="3" ry="20" fill="#9aa4c0" opacity=".7"/></g>' +
-        '<path d="M440 70 L436 84 M452 70 L456 84" stroke="#2a2a35" stroke-width="3"/><circle cx="436" cy="86" r="4" fill="#2a2a35"/><circle cx="456" cy="86" r="4" fill="#2a2a35"/>' +
-        '</g></g>';
+        '<g class="float">' +
+        '<path d="M264 60 L250 20 H274 L306 56Z" fill="#ff7a18" stroke="#5a2a00" stroke-width="2.5" stroke-linejoin="round"/><path d="M258 30 H274 L290 50" stroke="#fff" stroke-width="3" fill="none"/>' +
+        '<path d="M262 60 L304 53 L470 49 C500 49 522 55 536 63 C541 67 539 74 530 76 L470 82 L304 79 L262 70Z" fill="#ffffff" stroke="#2a2a35" stroke-width="3" stroke-linejoin="round"/>' +
+        '<path d="M268 66 L470 66 L532 66" stroke="#ff7a18" stroke-width="5"/><path d="M300 74 L470 76" stroke="#ff3fa4" stroke-width="2.5"/>' +
+        '<ellipse cx="282" cy="64" rx="26" ry="4.5" fill="#ff7a18" stroke="#5a2a00" stroke-width="2"/>' +
+        '<path d="M436 51 L470 50 C486 50 498 54 508 61 H436Z" fill="#7ff6ff" stroke="#2a2a35" stroke-width="2.5" stroke-linejoin="round"/><path d="M462 51 V61" stroke="#2a2a35" stroke-width="2.5"/>' +
+        '<g fill="#7ff6ff" stroke="#2a2a35" stroke-width="2"><rect x="380" y="54" width="18" height="9" rx="2"/><rect x="404" y="54" width="18" height="9" rx="2"/></g>' +
+        '<path d="M372 44 H486 C492 44 494 50 488 52 H372 C366 52 366 44 372 44Z" fill="#ff7a18" stroke="#5a2a00" stroke-width="2.5" stroke-linejoin="round"/>' +
+        '<path d="M420 52 L442 80" stroke="#6a6a7a" stroke-width="3"/>' +
+        '<path d="M528 60 C538 61 546 65 547 70 C546 75 538 78 528 77Z" fill="#9aa0aa" stroke="#2a2a35" stroke-width="2"/><circle cx="548" cy="69" r="4" fill="#2a2a35"/>' +
+        '<g transform="translate(550 69)"><ellipse class="rotor" cx="0" cy="0" rx="3" ry="26" fill="#9aa4c0" opacity=".65"/></g>' +
+        '<path d="M452 82 L446 98 M470 82 L476 98" stroke="#2a2a35" stroke-width="3.5"/><circle cx="446" cy="100" r="6" fill="#2a2a35"/><circle cx="476" cy="100" r="6" fill="#2a2a35"/>' +
+        '<path d="M276 70 L272 78" stroke="#2a2a35" stroke-width="2.5"/><circle cx="272" cy="80" r="3.5" fill="#2a2a35"/>' +
+        '</g>';
     } },
     // R.E.P.O. : deux petits robots qui portent ensemble un grand vase en or
     carry: { w: 16, vb: '0 0 280 190', draw: function () {
@@ -1253,7 +1258,7 @@
     dolphins: { amp: 7, waves: 4, dur: 9000, y: [30, 55] }, jellyfish: { amp: 3, dur: 16000 }, astronaut: { dur: 16000, amp: 3 },
     satellite: { dur: 15000, amp: 1 }, lantern: { dur: 15000, amp: 2 }, branch: { dur: 13000, amp: 3 }, snowflakes: { dur: 14000, amp: 3 },
     wisps: { dur: 11000, amp: 5, waves: 3 }, turtle: { dur: 13000, amp: 2 }, patchballoon: { dur: 16000, amp: 2, y: [6, 30] },
-    plane: { dur: 12000, amp: 1.5, y: [4, 20] }, glider: { dur: 11000, drift: 18, y: [4, 20] }, assistbot: { dur: 11000, amp: 3 },
+    plane: { dur: 12000, amp: 1.5, y: [12, 26] }, glider: { dur: 11000, drift: 18, y: [4, 20] }, assistbot: { dur: 11000, amp: 3 },
     bats: { dur: 7000, amp: 5, waves: 3 }, birds: { dur: 9000, amp: 3, waves: 2, y: [4, 30] }
   };
   function sizeVh(d, scale) { var p = d.vb.split(' '); return d.w * (scale || 1) * (+p[3] / +p[2]) * 16 / 9; }
