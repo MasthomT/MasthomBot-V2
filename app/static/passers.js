@@ -417,7 +417,7 @@
       return '<defs><linearGradient id="ps-ep" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b8673a"/><stop offset="1" stop-color="#7a3f1e"/></linearGradient></defs>' +
         '<g class="gallop">' +
         '<g class="mouth-open">' + legs(A1, '#6a3518') + hoof(A1) + '</g><g class="mouth-shut">' + legs(B1, '#6a3518') + hoof(B1) + '</g>' +
-        '<path class="billow" d="M86 84 C64 78 44 88 28 108 C44 102 60 100 74 100 C62 112 56 126 54 140 C70 124 84 108 92 96Z" fill="#f5ecd8" stroke="#b8a88a" stroke-width="2" stroke-linejoin="round"/>' +
+        '<path class="billow" d="M88 82 C70 76 52 84 40 98 C30 110 26 124 28 140 C36 130 44 122 54 114 C66 106 80 100 92 96Z" fill="#f5ecd8" stroke="#b8a88a" stroke-width="2" stroke-linejoin="round"/>' +
         '<path d="M80 90 C80 70 110 62 150 62 C180 62 198 64 210 70 C222 52 236 36 250 26 L262 24 C270 30 282 44 292 56 C296 62 294 68 286 70 C276 70 264 64 254 58 C246 68 236 82 228 96 C224 110 210 118 194 118 C170 122 130 122 112 116 C94 116 80 106 80 90Z" fill="url(#ps-ep)" stroke="#3a1a08" stroke-width="3" stroke-linejoin="round"/>' +
         '<path d="M252 26 L255 8 L263 24Z" fill="#7a3f1e" stroke="#3a1a08" stroke-width="2" stroke-linejoin="round"/>' +
         '<path d="M262 30 C270 40 280 50 288 60" stroke="#f5ecd8" stroke-width="5" stroke-linecap="round" fill="none"/>' +
@@ -790,7 +790,8 @@
         '<path d="M40 70 L110 62 L150 76 L100 90Z" fill="#ffd1e3" stroke="#b8406a" stroke-width="2" stroke-linejoin="round"/>' +
         '<path d="M100 90 L150 76 L120 96Z" fill="#f2a8c6" stroke="#b8406a" stroke-width="2" stroke-linejoin="round"/>' +
         '<path d="M40 70 L6 48 L48 78Z" fill="#ffc1d9" stroke="#b8406a" stroke-width="2" stroke-linejoin="round"/>' +
-        '<path d="M146 76 L186 30 L176 50 L156 82Z" fill="#ffc1d9" stroke="#b8406a" stroke-width="2" stroke-linejoin="round"/><path d="M186 30 L206 36 L180 40Z" fill="#ff8fb8" stroke="#b8406a" stroke-width="2" stroke-linejoin="round"/>' +
+        '<path d="M128 68 L180 26 L188 32 L152 82Z" fill="#ffc1d9" stroke="#b8406a" stroke-width="2" stroke-linejoin="round"/><path d="M140 72 L182 30 L152 82Z" fill="#f2a8c6"/>' +
+        '<path d="M178 26 L188 32 L208 40 L184 38Z" fill="#ff8fb8" stroke="#b8406a" stroke-width="2" stroke-linejoin="round"/>' +
         '<g class="flap" style="transform-origin:116px 66px;animation-duration:.7s">' + wing('#ffd1e3', '#f2a8c6') + '</g>' +
         '</g>';
     } },
@@ -851,20 +852,20 @@
         '<path d="M80 120 H330" stroke="#2c9fd0" stroke-width="5" opacity=".6"/>';
     } },
     // GTA VI : flamant rose en vol, cou tendu en avant, pattes à l'arrière
-    flamingo: { w: 17, vb: '0 0 320 120', draw: function () {
+    flamingo: { w: 12, vb: '50 0 210 120', draw: function () {
       var wing = function (a, b) {
         return '<path d="M160 58 C150 30 126 10 92 4 L100 14 L84 14 L94 24 L80 28 L92 36 L82 42 C110 52 132 58 150 64Z" fill="' + a + '" stroke="#8a2a4a" stroke-width="2" stroke-linejoin="round"/>' +
           '<path d="M92 4 L100 14 L84 14 L94 24 L80 28 L92 36 L82 42 C88 28 92 16 92 4Z" fill="' + b + '"/>';
       };
       return '<g class="float">' +
         '<g class="flap" style="transform-origin:156px 62px;animation-duration:.6s;animation-delay:-.1s"><g transform="translate(10 -4)">' + wing('#e8668e', '#1a1a1a') + '</g></g>' +
-        '<path d="M110 66 L20 74 M108 70 L18 82" stroke="#e8668e" stroke-width="4" stroke-linecap="round"/><path d="M20 74 L8 70 M18 82 L6 82" stroke="#e8668e" stroke-width="3" stroke-linecap="round"/>' +
+        '<path d="M108 68 L66 74 M106 72 L64 82" stroke="#e8668e" stroke-width="4" stroke-linecap="round"/><path d="M66 74 L56 70 M64 82 L54 82" stroke="#e8668e" stroke-width="3" stroke-linecap="round"/>' +
         '<path d="M100 66 C110 52 150 48 180 54 C192 56 196 64 190 70 C170 80 130 82 108 76 C100 74 96 70 100 66Z" fill="#ff8fb2" stroke="#8a2a4a" stroke-width="2.5" stroke-linejoin="round"/>' +
         '<path d="M110 70 L96 74 L108 78Z" fill="#ff8fb2" stroke="#8a2a4a" stroke-width="2" stroke-linejoin="round"/>' +
-        '<path d="M186 60 C214 58 240 56 266 58" stroke="#ff8fb2" stroke-width="9" stroke-linecap="round" fill="none"/>' +
-        '<ellipse cx="274" cy="58" rx="12" ry="9" fill="#ff8fb2" stroke="#8a2a4a" stroke-width="2"/>' +
-        '<path d="M282 54 C296 54 306 60 308 68 C300 66 292 66 284 64Z" fill="#fff4e0" stroke="#8a2a4a" stroke-width="1.5"/><path d="M300 62 C304 64 308 68 308 72 C302 70 298 68 296 64Z" fill="#1a1a1a"/>' +
-        '<circle cx="276" cy="55" r="2" fill="#1a1a1a"/>' +
+        '<path d="M184 60 C196 56 206 54 214 56" stroke="#ff8fb2" stroke-width="10" stroke-linecap="round" fill="none"/>' +
+        '<ellipse cx="222" cy="56" rx="12" ry="9" fill="#ff8fb2" stroke="#8a2a4a" stroke-width="2"/>' +
+        '<path d="M230 52 C244 52 254 58 256 66 C248 64 240 64 232 62Z" fill="#fff4e0" stroke="#8a2a4a" stroke-width="1.5"/><path d="M248 60 C252 62 256 66 256 70 C250 68 246 66 244 62Z" fill="#1a1a1a"/>' +
+        '<circle cx="224" cy="53" r="2" fill="#1a1a1a"/>' +
         '<g class="flap" style="transform-origin:156px 62px;animation-duration:.6s">' + wing('#ff8fb2', '#1a1a1a') + '</g>' +
         '</g>';
     } },
@@ -1111,7 +1112,8 @@
     // Brouillard : sirène d'alerte sur son poteau, gyrophare qui tourne et ondes sonores (sur place)
     siren: { w: 9, vb: '0 0 170 230', draw: function () {
       var arc = function (r, dl) { return '<path class="tw" style="animation-delay:-' + dl + 's" d="M' + (110 + r * .5) + ' ' + (60 - r) + ' C' + (110 + r) + ' ' + (60 - r * .4) + ' ' + (110 + r) + ' ' + (60 + r * .4) + ' ' + (110 + r * .5) + ' ' + (60 + r) + '" stroke="#e6e1d8" stroke-width="3" fill="none" stroke-linecap="round"/>'; };
-      return '<path d="M70 90 V230" stroke="#5a4a3a" stroke-width="10"/><path d="M50 230 H90" stroke="#3a2a1a" stroke-width="8"/>' +
+      return '<path d="M70 66 V230" stroke="#5a4a3a" stroke-width="10"/><path d="M50 230 H90" stroke="#3a2a1a" stroke-width="8"/>' +
+        '<rect x="60" y="68" width="20" height="12" rx="2" fill="#3a3f4a" stroke="#1a1f2a" stroke-width="2"/><path d="M56 82 H84" stroke="#3a3f4a" stroke-width="4" stroke-linecap="round"/>' +
         '<path d="M40 50 H100 L120 34 V86 L100 70 H40Z" fill="#8a8f9a" stroke="#2a2f3a" stroke-width="3" stroke-linejoin="round"/>' +
         '<path d="M48 56 H96 M48 64 H96" stroke="#5a606a" stroke-width="2"/>' +
         '<rect x="36" y="44" width="14" height="32" rx="3" fill="#5a606a" stroke="#2a2f3a" stroke-width="2.5"/>' +
@@ -1294,7 +1296,7 @@
   var BASEPX = '/static/passers_px/';
   try { BASEPX = new URL('passers_px/', document.currentScript.src).href; } catch (e) {}
   var ART_VW = 3.5 / 19.2;
-  var PX = {"epona":[12,1200,84,57],"loftwing":[12,1200,112,74],"pinkfairy":[12,1200,41,15],"witch":[12,1200,94,48],"bats":[12,1200,86,28],"pumpkin":[12,1200,36,41],"sleigh":[12,1200,145,43],"snowmansled":[12,1200,65,49],"snowflakes":[12,1200,77,34],"penguin":[12,1200,62,20],"drone":[12,1200,57,31],"flycar":[12,1200,95,33],"hologram":[12,1200,72,60],"pacman":[12,1200,112,20],"invaders":[12,1200,72,41],"mushroom":[12,1200,32,37],"whale":[12,1200,120,51],"turtle":[12,1200,64,36],"fish":[12,1200,61,24],"jellyfish":[12,1200,35,56],"dolphins":[12,1200,99,36],"ufo":[12,1200,60,44],"astronaut":[12,1200,53,53],"comet":[12,1200,85,20],"rocket":[12,1200,79,32],"satellite":[12,1200,78,30],"ship":[12,1200,106,78],"parrot":[12,1200,58,27],"kraken":[12,1200,151,80],"bottle":[12,1200,71,25],"butterfly":[12,1200,27,29],"lantern":[12,1200,36,58],"crane":[12,1200,58,28],"crow":[12,1200,56,29],"shambler":[12,1200,30,61],"eyes":[12,1200,42,14],"hand":[12,1200,41,59],"doll":[12,1200,39,57],"car":[12,1200,116,31],"heli":[12,1200,68,45],"boat":[12,1200,102,28],"flamingo":[12,1200,91,28],"plane":[12,1200,164,31],"robot":[12,1200,36,48],"carry":[12,1200,79,58],"cart":[12,1200,65,43],"monster":[12,1200,54,65],"bus":[12,1200,83,84],"llama":[12,1200,52,64],"glider":[12,1200,55,69],"dragon":[12,1200,131,53],"knight":[12,1200,88,88],"giantbat":[12,1200,56,34],"wisps":[12,1200,71,22],"wolf":[12,1200,91,41],"moon":[12,1200,84,80],"owl":[12,1200,56,32],"hunter":[12,1200,31,61],"figure":[12,1200,52,57],"siren":[12,1200,45,73],"radio":[12,1200,40,58],"supply":[12,1200,51,59],"buggy":[12,1200,98,54],"assistbot":[12,1200,38,42],"pokeball":[12,1200,44,48],"cyclist":[12,1200,61,48],"birds":[12,1200,82,28],"bee":[12,1200,28,23],"fox":[12,1200,71,33],"ladybug":[12,1200,48,33],"patchballoon":[12,1200,51,67],"superball":[12,1200,44,48],"hyperball":[12,1200,44,48],"masterball":[12,1200,44,48]};
+  var PX = {"epona":[12,1200,84,57],"loftwing":[12,1200,112,74],"pinkfairy":[12,1200,41,15],"witch":[12,1200,94,48],"bats":[12,1200,86,28],"pumpkin":[12,1200,36,41],"sleigh":[12,1200,145,43],"snowmansled":[12,1200,65,49],"snowflakes":[12,1200,77,34],"penguin":[12,1200,62,20],"drone":[12,1200,57,31],"flycar":[12,1200,95,33],"hologram":[12,1200,72,60],"pacman":[12,1200,112,20],"invaders":[12,1200,72,41],"mushroom":[12,1200,32,37],"whale":[12,1200,120,51],"turtle":[12,1200,64,36],"fish":[12,1200,61,24],"jellyfish":[12,1200,35,56],"dolphins":[12,1200,99,36],"ufo":[12,1200,60,44],"astronaut":[12,1200,53,53],"comet":[12,1200,85,20],"rocket":[12,1200,79,32],"satellite":[12,1200,78,30],"ship":[12,1200,106,78],"parrot":[12,1200,58,27],"kraken":[12,1200,151,80],"bottle":[12,1200,71,25],"butterfly":[12,1200,27,29],"lantern":[12,1200,36,58],"crane":[12,1200,58,28],"crow":[12,1200,56,29],"shambler":[12,1200,30,61],"eyes":[12,1200,42,14],"hand":[12,1200,41,59],"doll":[12,1200,39,57],"car":[12,1200,116,31],"heli":[12,1200,68,45],"boat":[12,1200,102,28],"flamingo":[12,1200,67,30],"plane":[12,1200,164,31],"robot":[12,1200,36,48],"carry":[12,1200,79,58],"cart":[12,1200,65,43],"monster":[12,1200,54,65],"bus":[12,1200,83,84],"llama":[12,1200,52,64],"glider":[12,1200,55,69],"dragon":[12,1200,131,53],"knight":[12,1200,89,88],"giantbat":[12,1200,56,34],"wisps":[12,1200,71,22],"wolf":[12,1200,91,41],"moon":[12,1200,84,80],"owl":[12,1200,56,32],"hunter":[12,1200,31,61],"figure":[12,1200,52,57],"siren":[12,1200,45,73],"radio":[12,1200,40,58],"supply":[12,1200,51,59],"buggy":[12,1200,98,54],"assistbot":[12,1200,38,42],"pokeball":[12,1200,44,48],"cyclist":[12,1200,61,48],"birds":[12,1200,82,28],"bee":[12,1200,28,23],"fox":[12,1200,71,33],"ladybug":[12,1200,48,33],"patchballoon":[12,1200,51,67],"superball":[12,1200,44,48],"hyperball":[12,1200,44,48],"masterball":[12,1200,44,48]};
   function buildPx(k) {
     var p = PX[k];
     return '<div class="pxs" style="padding-bottom:' + (p[3] / p[2] * 100) + '%;background-image:url(' + BASEPX + k + '.png);background-size:' + (p[0] * 100) + '% 100%;' +
