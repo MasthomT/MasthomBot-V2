@@ -1,4 +1,4 @@
-/* Personnages qui traversent l'écran des titres selon le thème (traîneau, drone, Pac-Man, baleine, soucoupe, bateau pirate, papillons…).
+/* Personnages qui traversent l'écran des titres selon le thème (traîneau, drone, Pac-Man, baleine, soucoupe, bateau pirate, papillons, voiture et hélico GTA VI…).
  * Comme la fée Navi : un petit SVG dessiné tourné vers la droite, déplacé par transform seulement (léger pour OBS), retourné quand il va vers la gauche.
  * Usage : Passers.fly(conteneur, 'sleigh') */
 (function () {
@@ -106,6 +106,25 @@
       return '<g class="wing"><path d="M50 40 C28 6 4 10 10 36 C14 52 34 52 50 44Z" fill="#ff8fb8" stroke="#9c2f63" stroke-width="2"/><path d="M50 44 C36 56 22 70 34 74 C44 76 52 60 50 48Z" fill="#ffb3d1" stroke="#9c2f63" stroke-width="2"/></g>' +
         '<g class="wing"><path d="M50 40 C72 6 96 10 90 36 C86 52 66 52 50 44Z" fill="#ff8fb8" stroke="#9c2f63" stroke-width="2"/><path d="M50 44 C64 56 78 70 66 74 C56 76 48 60 50 48Z" fill="#ffb3d1" stroke="#9c2f63" stroke-width="2"/></g>' +
         '<ellipse cx="50" cy="44" rx="3.4" ry="15" fill="#5a1236"/><path d="M48 30 Q42 18 36 16 M52 30 Q58 18 64 16" stroke="#5a1236" stroke-width="2" fill="none"/>';
+    } },
+    // GTA VI : voiture de sport rose néon (traînée de vitesse) et hélico de police avec projecteur
+    car: { w: 20, vb: '0 0 330 110', draw: function () {
+      return '<g stroke-linecap="round" opacity=".8"><path d="M0 52 H60" stroke="#ff3fa4" stroke-width="4" stroke-dasharray="14 10"/><path d="M10 70 H70" stroke="#00e5ff" stroke-width="3" stroke-dasharray="10 12"/></g>' +
+        '<ellipse cx="200" cy="100" rx="120" ry="7" fill="#ff3fa4" opacity=".35"/>' +
+        '<path d="M78 82 C78 66 92 60 112 58 L160 40 C178 33 214 32 238 40 L276 56 C298 59 316 64 318 76 L318 86 H78Z" fill="#ff3fa4" stroke="#5a0b38" stroke-width="4" stroke-linejoin="round"/>' +
+        '<path d="M166 46 C182 40 210 39 230 44 L258 58 H150Z" fill="#7ff6ff" stroke="#5a0b38" stroke-width="3" stroke-linejoin="round"/><line x1="204" y1="41" x2="204" y2="58" stroke="#5a0b38" stroke-width="3"/>' +
+        '<path d="M90 70 H310" stroke="#ffd1ea" stroke-width="3" opacity=".7"/><rect x="304" y="66" width="12" height="7" rx="2" fill="#fff6b0"/><rect x="80" y="64" width="9" height="8" rx="2" fill="#ff2b4a"/>' +
+        '<path d="M80 58 L74 46 H96 L104 58" fill="#5a0b38"/>' +
+        '<g><circle cx="128" cy="86" r="17" fill="#1a1022"/><circle cx="128" cy="86" r="8" fill="#c9c3d6"/><circle cx="272" cy="86" r="17" fill="#1a1022"/><circle cx="272" cy="86" r="8" fill="#c9c3d6"/></g>';
+    } },
+    heli: { w: 13, vb: '0 0 240 150', draw: function () {
+      return '<path d="M120 64 L60 150 H210 L160 64Z" fill="#fff6c8" opacity=".14"/>' +
+        '<line x1="20" y1="10" x2="210" y2="10" stroke="#2a2a35" stroke-width="5" stroke-linecap="round" class="wing"/><rect x="112" y="10" width="8" height="16" fill="#2a2a35"/>' +
+        '<path d="M14 40 H96" stroke="#1d2a5c" stroke-width="10" stroke-linecap="round"/><path d="M6 26 L18 52" stroke="#2a2a35" stroke-width="5" stroke-linecap="round"/>' +
+        '<path d="M90 30 H170 C196 30 214 46 214 62 C214 76 198 84 176 84 H104 C94 84 88 76 88 66Z" fill="#f2f4fa" stroke="#1d2a5c" stroke-width="4"/>' +
+        '<path d="M88 52 H214" stroke="#1d2a5c" stroke-width="10"/><path d="M172 36 C192 38 206 48 208 60 H172Z" fill="#7ff6ff" stroke="#1d2a5c" stroke-width="3"/>' +
+        '<rect x="122" y="22" width="12" height="8" rx="2" fill="#ff2b4a"/><rect x="136" y="22" width="12" height="8" rx="2" fill="#2b6bff"/>' +
+        '<path d="M100 96 H200 M120 84 V96 M180 84 V96" stroke="#2a2a35" stroke-width="5" stroke-linecap="round"/>';
     } }
   };
 
@@ -120,13 +139,14 @@
       var ea = ey.animate([{ opacity: 0 }, { opacity: 1, offset: .15 }, { opacity: 1, offset: .5 }, { opacity: .1, offset: .54 }, { opacity: 1, offset: .58 }, { opacity: 1, offset: .8 }, { opacity: 0 }], { duration: 5200, fill: 'forwards' });
       ea.onfinish = function () { ey.remove(); }; setTimeout(function () { ey.remove(); }, 6500); return;
     }
-    var rtl = Math.random() < 0.5, dur = opts.duration || (kind === 'comet' ? 4200 : kind === 'ship' ? 15000 : 9500);
+    var rtl = Math.random() < 0.5, dur = opts.duration || (kind === 'comet' ? 4200 : kind === 'car' ? 4800 : kind === 'ship' ? 15000 : 9500);
     var el = document.createElement('div');
     el.className = 'pass' + (rtl ? ' rtl' : '');
     el.style.width = (d.w * (opts.scale || 1)) + 'vw';
     el.innerHTML = '<div class="dir">' + svg(d.vb, d.draw()) + '</div>';
     container.appendChild(el);
-    var y0 = (opts.y != null ? opts.y : 8 + Math.random() * 56), amp = kind === 'ship' || kind === 'whale' ? 1.2 : 4;
+    var y0 = (opts.y != null ? opts.y : kind === 'car' ? 76 + Math.random() * 8 : 8 + Math.random() * 56),
+        amp = kind === 'car' ? 0.3 : kind === 'ship' || kind === 'whale' ? 1.2 : 4;   // la voiture roule en bas, sans tanguer
     var x0 = rtl ? 112 : -(d.w + 6), x1 = rtl ? -(d.w + 6) : 112;
     var frames = [];
     for (var i = 0; i <= 6; i++) {

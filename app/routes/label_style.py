@@ -71,6 +71,10 @@ PRESETS = {
     "horror": {"preset": "horror", "font": "Special Elite", "weight": "400", "size": "", "spacing": "1",
                "color": "#eadbd2", "glow": "#8a0303", "icon_color": "#c1121f", "icon_set": "horror",
                "w_accent": "#c1121f", "w_accent2": "#3b0a0a", "w_font": "Special Elite", "until": ""},
+    # GTA VI : coucher de soleil de Vice City (rose, orange, violet), néons ; billets, voiture et hélico qui passent
+    "gta6": {"preset": "gta6", "font": "Bebas Neue", "weight": "400", "size": "", "spacing": "2",
+             "color": "#fff1f8", "glow": "#ff3fa4", "icon_color": "#ffb347", "icon_set": "gta6",
+             "w_accent": "#ff3fa4", "w_accent2": "#7b5cff", "w_font": "Bebas Neue", "until": ""},
 }
 
 # Suggestions (n'importe quelle police Google Fonts peut être saisie à la main)
@@ -290,7 +294,7 @@ async def admin_label_style_save(payload: StylePayload):
             date.fromisoformat(data["until"])
         except ValueError:
             raise HTTPException(status_code=400, detail="La date de fin doit être au format AAAA-MM-JJ.")
-    if data["icon_set"] not in ("default", "halloween", "zelda", "noel", "cyber", "arcade", "ocean", "space", "pirate", "sakura", "horror"):
+    if data["icon_set"] not in ("default", "halloween", "zelda", "noel", "cyber", "arcade", "ocean", "space", "pirate", "sakura", "horror", "gta6"):
         raise HTTPException(status_code=400, detail="Jeu d'icônes inconnu.")
     await _ensure()
     async with get_db_connection() as db:

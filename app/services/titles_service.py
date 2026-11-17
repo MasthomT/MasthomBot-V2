@@ -19,7 +19,7 @@ SCREENS = {"start": "Début de live", "brk": "Pause", "end": "Fin de live"}
 EFFECTS = {"none": "Aucun", "bats": "Chauves-souris", "confetti": "Confettis / bonbons", "snow": "Neige",
            "hearts": "Cœurs", "ghost": "Fantôme qui passe", "fairy": "Fée qui passe (Navi)",
            "pixels": "Pixels néon (Cyberpunk)", "coins": "Pièces et étoiles (Arcade)",
-           "bubbles": "Bulles (Océan)", "stars": "Étoiles qui scintillent (Espace)", "petals": "Pétales de sakura", "doubloons": "Doublons (Pirate)", "blood": "Gouttes de sang (Horreur)"}
+           "bubbles": "Bulles (Océan)", "stars": "Étoiles qui scintillent (Espace)", "petals": "Pétales de sakura", "doubloons": "Doublons (Pirate)", "blood": "Gouttes de sang (Horreur)", "cash": "Billets (GTA VI)"}
 ANIMS = {"perspective": "Apparition en profondeur (comme avant)", "zoom": "Zoom", "fade": "Fondu", "bounce": "Rebond",
          "slide-up": "Glisse du bas", "none": "Aucune"}
 LINE_ANIMS = {"": "Comme le reste", **ANIMS}
