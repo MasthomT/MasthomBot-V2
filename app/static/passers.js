@@ -11,14 +11,20 @@
     '.pass.rtl .dir{transform:scaleX(-1)}' +
     '@keyframes ps-flap{from{transform:scaleX(1)}to{transform:scaleX(.25)}}' +
     '.pass .wing{transform-box:fill-box;transform-origin:50% 50%;animation:ps-flap .22s ease-in-out infinite alternate}' +
+    '@keyframes ps-hinge{from{transform:scaleX(1)}to{transform:scaleX(.18)}}' +
+    '.pass .hinge{transform-box:view-box;animation:ps-hinge .2s ease-in-out infinite alternate}' +
+    '@keyframes ps-beat{from{transform:scaleY(1)}to{transform:scaleY(.25)}}' +
+    '.pass .beat{transform-box:view-box;animation:ps-beat .07s linear infinite alternate}' +
     '@keyframes ps-flapy{from{transform:scaleY(1)}to{transform:scaleY(.3)}}' +
     '.pass .wingy{transform-box:fill-box;transform-origin:50% 100%;animation:ps-flapy .3s ease-in-out infinite alternate}' +
     '@keyframes ps-chomp{0%,49%{opacity:1}50%,100%{opacity:0}}' +
     '.pass .mouth-open{animation:ps-chomp .36s steps(1) infinite}' +
     '.pass .mouth-shut{animation:ps-chomp .36s steps(1) infinite reverse}' +
-    '@keyframes ps-legA{from{transform:rotate(-18deg)}to{transform:rotate(18deg)}}@keyframes ps-legB{from{transform:rotate(18deg)}to{transform:rotate(-18deg)}}' +
-    '.pass .leg-a,.pass .leg-b{transform-box:fill-box;transform-origin:50% 0}.pass .leg-a{animation:ps-legA .25s ease-in-out infinite alternate}.pass .leg-b{animation:ps-legB .25s ease-in-out infinite alternate}' +
+    '@keyframes ps-legA{from{transform:rotate(-16deg)}to{transform:rotate(16deg)}}@keyframes ps-legB{from{transform:rotate(16deg)}to{transform:rotate(-16deg)}}' +
+    '.pass .leg-a,.pass .leg-b{transform-box:fill-box;transform-origin:50% 0}.pass .leg-a,.pass .leg-b{animation-duration:.32s!important}.pass .leg-a{animation:ps-legA .25s ease-in-out infinite alternate}.pass .leg-b{animation:ps-legB .25s ease-in-out infinite alternate}' +
     '@keyframes ps-bob{from{transform:translateY(0)}to{transform:translateY(-3px)}}.pass .bob{animation:ps-bob .25s ease-in-out infinite alternate}' +
+    '@keyframes ps-gal{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}.pass .gallop{animation:ps-gal .36s ease-in-out infinite}' +
+    '@keyframes ps-flapd{from{transform:scaleY(1)}to{transform:scaleY(-.35)}}.pass .flap{transform-box:view-box;animation:ps-flapd .55s ease-in-out infinite alternate}' +
     '@keyframes ps-spin{to{transform:rotate(360deg)}}.pass .spin{transform-box:fill-box;transform-origin:50% 50%;animation:ps-spin .9s linear infinite}';
   document.head.appendChild(css);
 
@@ -107,9 +113,11 @@
       return e(36) + e(104);
     } },
     butterfly: { w: 6, vb: '0 0 100 80', draw: function () {
-      return '<g class="wing"><path d="M50 40 C28 6 4 10 10 36 C14 52 34 52 50 44Z" fill="#ff8fb8" stroke="#9c2f63" stroke-width="2"/><path d="M50 44 C36 56 22 70 34 74 C44 76 52 60 50 48Z" fill="#ffb3d1" stroke="#9c2f63" stroke-width="2"/></g>' +
-        '<g class="wing"><path d="M50 40 C72 6 96 10 90 36 C86 52 66 52 50 44Z" fill="#ff8fb8" stroke="#9c2f63" stroke-width="2"/><path d="M50 44 C64 56 78 70 66 74 C56 76 48 60 50 48Z" fill="#ffb3d1" stroke="#9c2f63" stroke-width="2"/></g>' +
-        '<ellipse cx="50" cy="44" rx="3.4" ry="15" fill="#5a1236"/><path d="M48 30 Q42 18 36 16 M52 30 Q58 18 64 16" stroke="#5a1236" stroke-width="2" fill="none"/>';
+      return '<g class="hinge" style="transform-origin:50px 44px">' +
+        '<path d="M50 40 C28 6 4 10 10 36 C14 52 34 52 50 44Z" fill="#ff8fb8" stroke="#9c2f63" stroke-width="2"/><path d="M50 44 C36 56 22 70 34 74 C44 76 52 60 50 48Z" fill="#ffb3d1" stroke="#9c2f63" stroke-width="2"/>' +
+        '<path d="M50 40 C72 6 96 10 90 36 C86 52 66 52 50 44Z" fill="#ff8fb8" stroke="#9c2f63" stroke-width="2"/><path d="M50 44 C64 56 78 70 66 74 C56 76 48 60 50 48Z" fill="#ffb3d1" stroke="#9c2f63" stroke-width="2"/>' +
+        '<circle cx="28" cy="28" r="5" fill="#fff" opacity=".55"/><circle cx="72" cy="28" r="5" fill="#fff" opacity=".55"/></g>' +
+        '<ellipse cx="50" cy="44" rx="3.4" ry="15" fill="#5a1236"/><circle cx="50" cy="28" r="4" fill="#5a1236"/><path d="M48 26 Q42 14 36 12 M52 26 Q58 14 64 12" stroke="#5a1236" stroke-width="2" fill="none"/>';
     } },
     // GTA VI : voiture de sport rose néon (traînée de vitesse) et hélico de police avec projecteur
     car: { w: 20, vb: '0 0 330 110', draw: function () {
@@ -131,14 +139,28 @@
         '<path d="M100 96 H200 M120 84 V96 M180 84 V96" stroke="#2a2a35" stroke-width="5" stroke-linecap="round"/>';
     } },
     // R.E.P.O. : petit robot qui trottine en portant un sac de butin
-    robot: { w: 8, vb: '0 0 120 130', draw: function () {
-      return '<g class="bob"><rect x="30" y="30" width="52" height="46" rx="10" fill="#ffd400" stroke="#1a1400" stroke-width="4"/>' +
-        '<rect x="40" y="40" width="32" height="18" rx="5" fill="#1a1400"/><circle cx="50" cy="49" r="4" fill="#6bf0ff"/><circle cx="63" cy="49" r="4" fill="#6bf0ff"/>' +
-        '<line x1="56" y1="30" x2="56" y2="16" stroke="#1a1400" stroke-width="4"/><circle cx="56" cy="13" r="5" fill="#ff5a1f"/>' +
-        '<path d="M82 52 L100 44" stroke="#1a1400" stroke-width="5" stroke-linecap="round"/>' +
-        '<path d="M96 36 C88 24 112 18 112 36 C118 44 116 64 104 66 C90 68 86 50 96 36Z" fill="#c9a04a" stroke="#5a3a10" stroke-width="3"/><text x="98" y="57" font-size="14" font-weight="bold" fill="#5a3a10">$</text></g>' +
-        '<g stroke="#1a1400" stroke-width="6" stroke-linecap="round"><line class="leg-a" x1="44" y1="76" x2="40" y2="104"/><line class="leg-b" x1="68" y1="76" x2="72" y2="104"/></g>' +
-        '<g fill="#1a1400"><rect x="30" y="102" width="20" height="8" rx="3"/><rect x="62" y="102" width="20" height="8" rx="3"/></g>';
+    robot: { w: 8, vb: '0 0 150 160', draw: function () {
+      var leg = function (cls, x) {
+        return '<g class="' + cls + '"><rect x="' + (x - 4) + '" y="104" width="8" height="30" rx="4" fill="#3a3a3a"/>' +
+          '<path d="M' + (x - 9) + ' 132 H' + (x + 13) + ' Q' + (x + 16) + ' 140 ' + (x + 10) + ' 141 H' + (x - 9) + 'Z" fill="#1a1400"/></g>';
+      };
+      return leg('leg-b', 60) +
+        '<g class="bob">' +
+        '<path d="M50 74 L38 92" stroke="#3a3a3a" stroke-width="6" stroke-linecap="round" class="arm"/><circle cx="37" cy="94" r="5" fill="#1a1400"/>' +
+        '<path d="M108 40 C98 36 98 24 108 22 C110 16 120 16 124 22 C134 24 134 36 124 40 C146 50 150 86 128 96 C112 102 90 96 90 76 C90 60 98 48 108 40Z" fill="#c99a3c" stroke="#5a3a10" stroke-width="3.5" stroke-linejoin="round"/>' +
+        '<rect x="104" y="36" width="24" height="7" rx="3" fill="#8a5a1a" stroke="#5a3a10" stroke-width="2"/>' +
+        '<path d="M112 46 C102 56 100 76 106 88" stroke="#e8c070" stroke-width="3" fill="none" opacity=".7" stroke-linecap="round"/>' +
+        '<text x="118" y="80" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="24" fill="#5a3a10">$</text>' +
+        '<rect x="48" y="64" width="40" height="42" rx="10" fill="#ffd400" stroke="#1a1400" stroke-width="3.5"/>' +
+        '<path d="M52 92 L60 84 M60 100 L76 84 M72 102 L86 88" stroke="#1a1400" stroke-width="4" stroke-linecap="round"/>' +
+        '<path d="M84 72 L100 52" stroke="#3a3a3a" stroke-width="6" stroke-linecap="round"/><circle cx="102" cy="48" r="5.5" fill="#1a1400"/>' +
+        '<rect x="62" y="56" width="12" height="10" fill="#3a3a3a"/>' +
+        '<rect x="36" y="8" width="64" height="50" rx="22" fill="#ffd400" stroke="#1a1400" stroke-width="3.5"/>' +
+        '<rect x="50" y="20" width="44" height="26" rx="13" fill="#1a1400"/>' +
+        '<ellipse cx="66" cy="33" rx="5" ry="7" fill="#6bf0ff"/><ellipse cx="82" cy="33" rx="5" ry="7" fill="#6bf0ff"/><circle cx="67.5" cy="30" r="1.8" fill="#fff"/><circle cx="83.5" cy="30" r="1.8" fill="#fff"/>' +
+        '<ellipse cx="50" cy="16" rx="8" ry="4" fill="#fff6a0" opacity=".7"/>' +
+        '<line x1="68" y1="8" x2="68" y2="-2" stroke="#1a1400" stroke-width="3"/><circle cx="68" cy="-4" r="4" fill="#ff5a1f"/>' +
+        '</g>' + leg('leg-a', 76);
     } },
     // Battle Royale : bus volant suspendu à son ballon
     bus: { w: 18, vb: '0 0 300 200', draw: function () {
@@ -150,29 +172,53 @@
         '<g stroke="#9fdcff" stroke-width="3" stroke-linecap="round" opacity=".7"><line x1="10" y1="130" x2="44" y2="130"/><line x1="2" y1="150" x2="40" y2="150"/></g>';
     } },
     // Dark fantasy : dragon qui bat des ailes
-    dragon: { w: 20, vb: '0 0 320 170', draw: function () {
-      return '<path class="wingy" d="M140 78 C110 10 170 -6 214 18 C190 30 178 52 174 80Z" fill="#3a2418" stroke="#120c04" stroke-width="3"/>' +
-        '<path d="M10 92 C40 80 70 92 96 90" stroke="#2a1a10" stroke-width="10" fill="none" stroke-linecap="round"/><path d="M4 92 L18 80 L20 100Z" fill="#2a1a10"/>' +
-        '<path d="M92 92 C100 66 176 62 222 78 C244 86 252 96 244 106 C220 120 130 124 96 108Z" fill="#4a2e1e" stroke="#120c04" stroke-width="4"/>' +
-        '<path d="M224 82 C236 60 262 56 284 66 L306 70 L290 82 L300 90 L276 92 C262 96 246 96 236 92Z" fill="#4a2e1e" stroke="#120c04" stroke-width="4"/>' +
-        '<path d="M262 62 L270 44 L276 64 M276 62 L290 48 L288 68" stroke="#d4b06a" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="276" cy="74" r="4" fill="#ffb347"/>' +
-        '<path d="M306 76 C320 70 330 82 318 86" stroke="#ff7a1a" stroke-width="5" fill="none" opacity=".8"/>' +
-        '<path class="wingy" d="M150 92 C150 140 210 156 240 136 C214 128 196 112 186 92Z" fill="#2a1a10" stroke="#120c04" stroke-width="3"/>';
+    dragon: { w: 22, vb: '0 0 360 200', draw: function () {
+      var wing = function (fill, rib) {
+        return '<path d="M185 95 L205 55 L175 22 L115 2 Q118 28 82 24 Q102 46 70 60 Q104 74 132 96Z" fill="' + fill + '" stroke="#120c04" stroke-width="3" stroke-linejoin="round"/>' +
+          '<path d="M175 22 L115 2 M175 22 L82 24 M175 22 L70 60" stroke="' + rib + '" stroke-width="3" stroke-linecap="round"/>' +
+          '<path d="M185 95 L205 55 L175 22" stroke="' + rib + '" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M175 22 L180 12" stroke="#d4b06a" stroke-width="3" stroke-linecap="round"/>';
+      };
+      return '<g class="flap" style="transform-origin:180px 98px;opacity:.75">' + '<g transform="translate(22 -4)">' + wing('#3a1610', '#1e0c06') + '</g></g>' +
+        '<path d="M130 100 C98 96 66 104 36 116 L30 126 C64 118 98 114 132 118Z" fill="#4a2a1c" stroke="#120c04" stroke-width="3" stroke-linejoin="round"/>' +
+        '<path d="M36 110 L8 104 L22 120 L6 134 L38 124Z" fill="#7a2a14" stroke="#120c04" stroke-width="3" stroke-linejoin="round"/>' +
+        '<path d="M150 116 L138 140 L154 144 L164 120Z M212 116 L222 136 L236 134 L226 114Z" fill="#3a2016" stroke="#120c04" stroke-width="3" stroke-linejoin="round"/>' +
+        '<path d="M120 100 C140 84 190 82 222 92 C242 98 252 108 246 118 C232 130 170 130 130 120 C116 116 112 106 120 100Z" fill="#4a2a1c" stroke="#120c04" stroke-width="3.5"/>' +
+        '<path d="M134 118 C170 126 220 126 240 114" stroke="#b8692e" stroke-width="5" fill="none" stroke-linecap="round"/>' +
+        '<path d="M226 94 C250 82 266 72 284 66 L294 80 C278 86 262 98 246 114Z" fill="#4a2a1c" stroke="#120c04" stroke-width="3.5" stroke-linejoin="round"/>' +
+        '<path d="M240 108 C256 96 270 88 288 80" stroke="#b8692e" stroke-width="4" fill="none"/>' +
+        '<path d="M150 92 L156 82 L162 92 L170 80 L176 90 L186 80 L190 90 L202 82 L206 92" fill="#7a2a14" stroke="#120c04" stroke-width="2" stroke-linejoin="round"/>' +
+        '<path d="M282 62 C296 54 312 56 326 62 L346 68 L330 74 L342 80 L322 84 C308 86 294 84 284 80Z" fill="#4a2a1c" stroke="#120c04" stroke-width="3.5" stroke-linejoin="round"/>' +
+        '<path d="M292 60 L280 36 L302 58 Z M302 58 L300 32 L312 58Z" fill="#d4b06a" stroke="#120c04" stroke-width="2" stroke-linejoin="round"/>' +
+        '<circle cx="310" cy="66" r="3.4" fill="#ffb347"/><circle cx="310" cy="66" r="8" fill="#ff7a1a" opacity=".3"/>' +
+        '<path d="M344 74 C352 70 358 76 356 82 C352 78 348 80 344 78Z" fill="#ff7a1a" opacity=".85"/>' +
+        '<g class="flap" style="transform-origin:180px 98px">' + wing('#6b2a1a', '#2a1008') + '</g>';
     } },
     // Clair Obscur : pinceau qui trace un coup de peinture dorée
-    brush: { w: 22, vb: '0 0 360 80', draw: function () {
-      return '<path d="M0 46 C60 24 120 62 190 40 C220 30 240 34 252 40" stroke="#e8c27a" stroke-width="14" fill="none" stroke-linecap="round" opacity=".85"/>' +
-        '<path d="M0 50 C70 36 130 66 200 46" stroke="#c8102e" stroke-width="4" fill="none" stroke-linecap="round" opacity=".7"/>' +
-        '<path d="M248 30 C262 24 276 30 280 40 C276 50 262 56 248 50 C242 44 242 36 248 30Z" fill="#1a1008"/>' +
-        '<rect x="278" y="34" width="20" height="12" fill="#c9a04a" stroke="#5a3a10" stroke-width="2"/>' +
-        '<path d="M298 36 L356 30 Q360 40 356 50 L298 44Z" fill="#140a06" stroke="#e8c27a" stroke-width="2"/>';
+    brush: { w: 24, vb: '0 0 360 120', draw: function () {
+      return '<path d="M0 92 C60 70 120 108 190 88 C215 81 235 88 250 96 C236 102 214 98 190 102 C120 120 60 92 0 100Z" fill="#e8c27a" opacity=".9"/>' +
+        '<path d="M10 95 C70 80 130 108 200 92 C222 87 238 92 248 97" stroke="#fff3d6" stroke-width="2" fill="none" opacity=".6"/>' +
+        '<path d="M20 99 C80 94 140 112 210 98" stroke="#c8102e" stroke-width="3" fill="none" opacity=".75" stroke-linecap="round"/>' +
+        '<path d="M248 100 C246 86 256 72 268 66 L286 84 C280 96 264 102 248 100Z" fill="#3a2414"/><path d="M254 94 C256 84 262 76 270 72" stroke="#6b4a2a" stroke-width="2" fill="none"/>' +
+        '<path d="M248 100 C248 94 251 88 256 84 L262 91 C258 96 253 99 248 100Z" fill="#c8102e"/>' +
+        '<polygon points="268,66 286,84 302,68 286,52" fill="#d9b25a" stroke="#6b4a14" stroke-width="2" stroke-linejoin="round"/>' +
+        '<path d="M276 60 L294 78" stroke="#fff1c4" stroke-width="1.6" opacity=".7"/>' +
+        '<path d="M286 52 L302 68 L354 16 Q356 8 348 6 Z" fill="#1a1008" stroke="#e8c27a" stroke-width="1.5" stroke-linejoin="round"/>' +
+        '<path d="M318 40 L324 46" stroke="#e8c27a" stroke-width="3"/>';
     } },
     // Pleine lune : loup qui court
-    wolf: { w: 15, vb: '0 0 260 120', draw: function () {
-      return '<path d="M28 60 C10 50 0 62 4 70 C20 66 26 70 34 68Z" fill="#2c3354"/>' +
-        '<path d="M30 62 C40 40 130 34 180 44 C198 34 212 26 222 26 L232 14 L236 30 C246 34 254 42 256 50 L240 54 C232 60 222 62 212 60 C200 74 170 80 120 80 C80 80 46 78 30 62Z" fill="#2c3354" stroke="#0a1030" stroke-width="3"/>' +
-        '<circle cx="236" cy="40" r="3" fill="#ffd54a"/><circle cx="236" cy="40" r="8" fill="#ffd54a" opacity=".25"/>' +
-        '<g stroke="#2c3354" stroke-width="9" stroke-linecap="round"><line class="leg-a" x1="70" y1="76" x2="54" y2="110"/><line class="leg-b" x1="90" y1="76" x2="104" y2="108"/><line class="leg-b" x1="168" y1="74" x2="152" y2="108"/><line class="leg-a" x1="186" y1="72" x2="202" y2="106"/></g>';
+    wolf: { w: 16.5, vb: '0 0 312 140', draw: function () {
+      var body = '<path d="M100 60 C80 48 54 46 30 54 C20 58 14 56 8 52 C16 68 38 76 62 72 C78 70 92 72 106 76Z" fill="#56628f" stroke="#0a1030" stroke-width="3" stroke-linejoin="round"/>' +
+        '<path d="M306 57 C298 61 280 63 266 62 C258 66 250 72 244 80 C238 92 230 102 216 104 C196 104 178 92 160 88 C146 86 136 92 124 98 C110 102 98 96 94 84 C92 72 96 62 104 58 C130 50 170 50 200 46 C214 44 226 38 234 32 L243 26 L247 9 L255 25 L262 11 L266 29 C276 34 286 42 296 46 C302 49 306 53 306 57Z" fill="#56628f" stroke="#0a1030" stroke-width="3" stroke-linejoin="round"/>' +
+        '<path d="M244 82 L236 90 L242 92 L232 100" stroke="#7a86b8" stroke-width="2.5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>' +
+        '<path d="M255 25 L258 32 M248 14 L250 26" stroke="#2a3150" stroke-width="2" stroke-linecap="round"/>' +
+        '<path d="M110 60 C150 52 190 52 228 38" stroke="#9aa6d6" stroke-width="2.5" fill="none" opacity=".7"/>' +
+        '<circle cx="270" cy="42" r="3.2" fill="#ffd54a"/><circle cx="270" cy="42" r="8" fill="#ffd54a" opacity=".25"/><circle cx="304" cy="55" r="3" fill="#0a1030"/>';
+      var leg = function (pts, c) { return '<polygon points="' + pts + '" fill="' + c + '" stroke="#0a1030" stroke-width="2.5" stroke-linejoin="round"/>'; };
+      var A = leg('206,88 218,90 236,114 254,124 252,130 230,122 204,100', '#3c4670') + leg('112,80 138,88 124,110 98,128 80,132 80,126 96,118 108,100', '#3c4670') +
+              leg('214,86 228,86 250,110 272,118 272,124 246,120 220,100', '#56628f') + leg('104,74 132,84 112,106 82,124 62,128 62,122 80,114 96,98', '#56628f');
+      var B = leg('204,88 218,90 210,112 192,124 182,126 182,120 196,114 202,102', '#3c4670') + leg('116,80 140,88 150,110 172,122 180,126 178,132 160,128 140,114 120,96', '#3c4670') +
+              leg('214,86 230,88 226,108 210,124 196,128 194,122 206,116 214,102', '#56628f') + leg('106,74 134,84 140,104 158,120 170,124 168,130 150,126 132,110 112,94', '#56628f');
+      return '<g class="gallop">' + '<g class="mouth-open">' + A + '</g><g class="mouth-shut">' + B + '</g>' + body + '</g>';
     } },
     // Brouillard : nappe de brume qui dérive lentement
     fog: { w: 70, vb: '0 0 600 160', draw: function () {
@@ -194,11 +240,19 @@
         '<ellipse cx="32" cy="28" rx="10" ry="5" transform="rotate(-35 32 28)" fill="#fff" opacity=".5"/></g>';
     } },
     // Cosy : abeille
-    bee: { w: 5, vb: '0 0 100 80', draw: function () {
-      return '<g class="wingy" opacity=".8"><ellipse cx="44" cy="24" rx="14" ry="20" fill="#e8f7ff" stroke="#7aa" stroke-width="2"/><ellipse cx="60" cy="26" rx="12" ry="17" fill="#e8f7ff" stroke="#7aa" stroke-width="2"/></g>' +
-        '<ellipse cx="52" cy="52" rx="32" ry="20" fill="#ffd23f" stroke="#3a2a10" stroke-width="3"/>' +
-        '<path d="M40 34 Q36 52 40 70 M56 33 Q52 52 56 71" stroke="#3a2a10" stroke-width="7" fill="none"/>' +
-        '<path d="M20 52 L8 52" stroke="#3a2a10" stroke-width="3"/><circle cx="76" cy="46" r="3" fill="#3a2a10"/>';
+    bee: { w: 5.5, vb: '0 0 120 90', draw: function () {
+      return '<defs><clipPath id="ps-beeb"><ellipse cx="52" cy="54" rx="30" ry="22"/></clipPath></defs>' +
+        '<path d="M22 58 L8 62 L22 50Z" fill="#3a2a10"/>' +
+        '<g stroke="#3a2a10" stroke-width="2.5" stroke-linecap="round" fill="none"><path d="M46 74 L42 84 M58 75 L58 85 M70 72 L74 82"/></g>' +
+        '<ellipse cx="52" cy="54" rx="30" ry="22" fill="#ffcf33"/>' +
+        '<g clip-path="url(#ps-beeb)" fill="#3a2a10"><rect x="34" y="28" width="9" height="52"/><rect x="52" y="28" width="9" height="52"/><rect x="18" y="28" width="7" height="52"/></g>' +
+        '<ellipse cx="52" cy="54" rx="30" ry="22" fill="none" stroke="#3a2a10" stroke-width="3"/>' +
+        '<ellipse cx="58" cy="46" rx="10" ry="5" fill="#fff" opacity=".35"/>' +
+        '<circle cx="88" cy="50" r="15" fill="#3a2a10"/><circle cx="94" cy="46" r="5" fill="#fff"/><circle cx="95.5" cy="46" r="2.6" fill="#111"/><circle cx="96.5" cy="44.8" r="1" fill="#fff"/>' +
+        '<path d="M92 57 Q97 60 101 56" stroke="#ffcf33" stroke-width="2" fill="none" stroke-linecap="round"/>' +
+        '<g stroke="#3a2a10" stroke-width="2.4" fill="none" stroke-linecap="round"><path d="M86 36 Q84 20 76 16"/><path d="M92 37 Q96 22 104 18"/></g><circle cx="76" cy="16" r="3" fill="#3a2a10"/><circle cx="104" cy="18" r="3" fill="#3a2a10"/>' +
+        '<g class="beat" style="transform-origin:58px 34px"><path d="M58 34 C40 4 18 8 22 24 C26 34 44 36 58 34Z" fill="#e6f6ff" fill-opacity=".8" stroke="#7fa9bd" stroke-width="2"/>' +
+        '<path d="M60 34 C58 10 76 2 82 14 C86 24 72 32 60 34Z" fill="#e6f6ff" fill-opacity=".8" stroke="#7fa9bd" stroke-width="2"/></g>';
     } }
   };
 
