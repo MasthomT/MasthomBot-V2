@@ -39,7 +39,7 @@
 
     <main class="flex-1 {% if embed %}p-4{% else %}p-6 md:p-10{% endif %} min-w-0">
         <header class="mb-6 flex flex-wrap items-start justify-between gap-4">
-            <div>
+            <div{% if only %} class="hidden"{% endif %}>
                 <h1 class="text-3xl font-extrabold text-white tracking-tight">Labels</h1>
                 <p class="text-slate-400 mt-1">Police, couleurs (unies ou dégradées), icône et animation de chaque label OBS, plus un thème global. Un champ vide garde le réglage d'origine.</p>
             </div>
@@ -49,7 +49,7 @@
             </div>
         </header>
 
-        <nav class="flex flex-wrap gap-2 mb-6">
+        <nav class="flex flex-wrap gap-2 mb-6{% if only %} hidden{% endif %}">
             <div class="tab" data-tab="each"><i class="fas fa-pen-ruler mr-2"></i>Chaque label</div>
             <div class="tab" data-tab="global"><i class="fas fa-palette mr-2"></i>Thème global & widgets</div>
         </nav>
@@ -134,8 +134,11 @@
         <section class="panel" id="panel-global">
             <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
                 <section class="config-card rounded-2xl p-5">
+                    <div{% if only %} class="hidden"{% endif %}>
                     <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Thèmes prêts à l'emploi</h2>
                     <div class="flex flex-wrap gap-2 mb-6" id="presets"></div>
+                    </div>
+                    {% if only %}<p class="text-xs text-slate-400 mb-5"><i class="fas fa-circle-info mr-1 text-indigo-300"></i>Ces réglages retouchent le thème actif. Pour changer de thème, utilise l'onglet « Choisir un thème ».</p>{% endif %}
 
                     <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Réglages communs aux labels</h2>
                     <div class="grid grid-cols-2 gap-4 text-xs">
@@ -184,25 +187,6 @@
                     <div class="preview p-3 space-y-1" id="preview"></div>
                 </section>
             </div>
-            <section class="config-card rounded-2xl p-5 mt-6" id="autoCard">
-                <div class="flex flex-wrap items-center justify-between gap-3 mb-2">
-                    <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest">Thème automatique selon la catégorie Twitch</h2>
-                    <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="auto-enabled" data-auto> Activé</label>
-                </div>
-                <p class="text-xs text-slate-500 mb-3">Quand tu changes de catégorie sur Twitch (même hors live), le bot applique le thème de la première règle dont le texte est contenu dans le nom de la catégorie (majuscules ignorées : « Zelda » marche pour tous les Zelda). Tu peux toujours changer de thème à la main : il ne revient que si la catégorie change.</p>
-                <p class="text-xs mb-4"><span class="text-slate-400">Catégorie actuelle :</span> <b id="auto-cat" class="text-white">…</b> <span class="text-slate-400">→</span> <b id="auto-match" class="text-indigo-300">…</b></p>
-                <div id="auto-rules" class="space-y-2 mb-3"></div>
-                <button id="auto-add" class="text-xs px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600">+ Ajouter une règle</button>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5 text-xs">
-                    <label class="block"><span class="text-slate-400">Catégorie sans règle</span>
-                        <select id="auto-fallback" data-auto class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm"></select></label>
-                </div>
-                <div class="flex flex-wrap items-center gap-3 mt-5">
-                    <button id="auto-save" class="text-sm px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 font-bold">Enregistrer les règles</button>
-                    <button id="auto-now" class="text-sm px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600">Appliquer maintenant à la catégorie actuelle</button>
-                    <span id="auto-msg" class="text-xs"></span>
-                </div>
-            </section>
         </section>
     </main>
 
@@ -392,6 +376,7 @@ $('saveBtn').addEventListener('click', async () => {
     const j = await res.json().catch(() => ({}));
     if (!res.ok) { m.className = 'text-xs text-amber-400'; m.textContent = j.detail || ('Erreur ' + res.status); return; }
     dirty = false; m.className = 'text-xs text-emerald-400'; m.textContent = 'Enregistré ✓ (OBS le reprend en moins de 15 s)';
+    try { if (parent !== window) parent.postMessage({ type: 'theme-changed' }, '*'); } catch (e) {}
 });
 
 $('resetBtn').addEventListener('click', () => {
@@ -423,70 +408,16 @@ document.querySelectorAll('[id^="on-L-"]').forEach(el => el.addEventListener('ch
 $('L-icon_text').addEventListener('input', () => {
     if ($('L-icon_text').value) document.querySelectorAll('#iconGrid .ico').forEach(x => x.classList.toggle('sel', x.dataset.icon === ''));
 });
-document.querySelectorAll('#panel-global input:not([data-auto]), #panel-global select:not([data-auto])').forEach(el => {
+document.querySelectorAll('#panel-global input, #panel-global select').forEach(el => {
     el.addEventListener('input', () => { globalPreset = 'perso'; document.querySelectorAll('.preset').forEach(x => x.classList.remove('active')); markDirty(); updatePreview(); });
     el.addEventListener('change', () => { markDirty(); updatePreview(); });
 });
 window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
-showTab(location.hash.replace('#', '') || 'each');
+showTab({{ (only or '')|tojson }} || location.hash.replace('#', '') || 'each');
 load();
+// Page intégrée dans « Thèmes » : un thème choisi ailleurs est repris (sauf modification en cours)
+window.addEventListener('message', (e) => { if (e.data && e.data.type === 'theme-changed' && !dirty) load(); });
 
-// ───────── Thème automatique selon la catégorie ─────────
-const THEME_NAMES = { classique: 'Classique', halloween: '🎃 Halloween', zelda: '🧚 Zelda', noel: '❄️ Noël', cyber: '🌃 Cyberpunk', arcade: '🕹️ Arcade', ocean: '🌊 Océan', space: '🚀 Espace', pirate: '🏴‍☠️ Pirate', sakura: '🌸 Sakura', horror: '🩸 Horreur', gta6: '🌴 GTA VI', repo: '🤖 R.E.P.O.', fortnite: '🪂 Battle Royale', darkfantasy: '🐉 Dark fantasy', clairobscur: '🎨 Clair Obscur', werewolf: '🐺 Pleine lune', fog: '🌫️ Brouillard', vault: '☢️ Post-apo', pokemon: '⚡ Pokémon', cosy: '🍃 Cosy' };
-let autoCfg = null, autoCat = '';
-const themeOpts = (sel) => Object.keys(THEME_NAMES).map(k => '<option value="' + k + '"' + (k === sel ? ' selected' : '') + '>' + THEME_NAMES[k] + '</option>').join('');
-function autoRow(r) {
-    return '<div class="auto-row flex gap-2 items-center">'
-        + '<input data-auto class="a-match input-dark flex-1 rounded-lg px-3 py-1.5 text-sm" placeholder="Texte dans la catégorie (ex. Zelda)" value="' + esc(r.match || '') + '">'
-        + '<span class="text-slate-500">→</span>'
-        + '<select data-auto class="a-theme input-dark rounded-lg px-2 py-1.5 text-sm">' + themeOpts(r.theme || 'classique') + '</select>'
-        + '<button class="a-up text-slate-400 hover:text-white px-1" title="Monter">▲</button>'
-        + '<button class="a-del text-red-400 hover:text-red-300 px-1" title="Supprimer">✕</button></div>';
-}
-function autoRules() { return [...document.querySelectorAll('#auto-rules .auto-row')].map(r => ({ match: r.querySelector('.a-match').value.trim(), theme: r.querySelector('.a-theme').value })).filter(r => r.match); }
-function autoMatch() {
-    const name = autoCat.toLowerCase(); const r = autoRules().find(x => name.includes(x.match.toLowerCase()));
-    const fb = $('auto-fallback').value;
-    $('auto-match').textContent = !autoCat ? '—' : r ? THEME_NAMES[r.theme] : fb ? THEME_NAMES[fb] + ' (sans règle)' : 'aucune règle : thème inchangé';
-}
-function autoRender() {
-    $('auto-enabled').checked = !!autoCfg.enabled;
-    $('auto-rules').innerHTML = autoCfg.rules.map(autoRow).join('');
-    $('auto-fallback').innerHTML = '<option value="">Ne rien changer (garder le thème actuel)</option>' + themeOpts(autoCfg.fallback || '_');
-    $('auto-fallback').value = autoCfg.fallback || '';
-    $('auto-cat').textContent = autoCat || 'illisible';
-    autoMatch();
-}
-async function autoLoad() {
-    const res = await fetch('/admin/api/labels/auto'); if (!res.ok) return;
-    const j = await res.json(); autoCfg = j.config; autoCat = j.category || ''; autoRender();
-}
-$('auto-rules').addEventListener('click', (e) => {
-    const row = e.target.closest('.auto-row'); if (!row) return;
-    if (e.target.classList.contains('a-del')) { row.remove(); autoMsg('Modifications non enregistrées', 'text-amber-400'); autoMatch(); }
-    if (e.target.classList.contains('a-up') && row.previousElementSibling) { row.parentNode.insertBefore(row, row.previousElementSibling); autoMsg('Modifications non enregistrées', 'text-amber-400'); autoMatch(); }
-});
-$('autoCard').addEventListener('input', () => { autoMsg('Modifications non enregistrées', 'text-amber-400'); autoMatch(); });
-$('auto-add').addEventListener('click', () => { $('auto-rules').insertAdjacentHTML('beforeend', autoRow({ match: '', theme: 'classique' })); $('auto-rules').lastElementChild.querySelector('input').focus(); });
-function autoMsg(t, c) { $('auto-msg').className = 'text-xs ' + c; $('auto-msg').textContent = t; }
-$('auto-save').addEventListener('click', async () => {
-    autoMsg('Enregistrement…', 'text-slate-400');
-    const res = await fetch('/admin/api/labels/auto', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: $('auto-enabled').checked, fallback: $('auto-fallback').value, rules: autoRules() }) });
-    const j = await res.json().catch(() => ({}));
-    if (!res.ok) return autoMsg(j.detail || ('Erreur ' + res.status), 'text-amber-400');
-    autoCfg = j.config; autoRender(); autoMsg('Règles enregistrées ✓', 'text-emerald-400');
-});
-$('auto-now').addEventListener('click', async () => {
-    autoMsg('Application…', 'text-slate-400');
-    const res = await fetch('/admin/api/labels/auto/apply', { method: 'POST' });
-    const j = await res.json().catch(() => ({}));
-    if (!res.ok) return autoMsg(j.detail || ('Erreur ' + res.status), 'text-amber-400');
-    autoCat = j.category; autoCfg = j.config; autoRender();
-    autoMsg(j.config.last_applied ? 'Thème ' + THEME_NAMES[j.config.last_applied] + ' appliqué ✓' : 'Aucune règle pour cette catégorie', 'text-emerald-400');
-    load();
-});
-autoLoad();
 </script>
 </body>
 </html>

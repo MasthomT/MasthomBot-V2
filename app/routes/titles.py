@@ -63,7 +63,8 @@ class ScreenPayload(BaseModel):
 @admin_router.get("/admin/titres", response_class=HTMLResponse)
 async def admin_titles_page(request: Request):
     return templates.TemplateResponse(request=request, name="admin/titles_manager.html",
-                                      context={"embed": request.query_params.get("embed") == "1"})
+                                      context={"embed": request.query_params.get("embed") == "1",
+                                               "inner": request.query_params.get("inner") == "1"})
 
 
 @admin_router.get("/admin/api/titres")

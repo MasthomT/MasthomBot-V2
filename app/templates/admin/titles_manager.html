@@ -38,7 +38,7 @@
 
     <main class="flex-1 {% if embed %}p-4{% else %}p-6 md:p-10{% endif %} min-w-0">
         <header class="mb-4 flex flex-wrap items-start justify-between gap-4">
-            <div>
+            <div{% if inner %} class="hidden"{% endif %}>
                 <h1 class="text-3xl font-extrabold text-white tracking-tight">Titres</h1>
                 <p class="text-slate-400 mt-1 max-w-3xl">Les écrans de titre d'OBS : début de live (avec décompte), pause et fin, avec la décoration de ton ancienne page (sous-titre contour, grand titre animé, message). Chaque écran s'affiche via une source navigateur <code class="text-slate-300">/overlay/titre/start</code>, <code class="text-slate-300">/brk</code> ou <code class="text-slate-300">/end</code>, ou via le widget correspondant de la Scène OBS.</p>
             </div>
@@ -49,7 +49,7 @@
         </header>
 
         <div id="offsetWarn" class="hidden mb-4 rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-xs text-amber-200"></div>
-        <div class="flex flex-wrap items-center gap-2 mb-4">
+        <div class="flex flex-wrap items-center gap-2 mb-4{% if inner %} hidden{% endif %}">
             <span class="text-[11px] font-black uppercase tracking-widest text-slate-500 mr-1">Thème</span>
             <div class="flex flex-wrap gap-2" id="themeBar"></div>
             <span id="themeMsg" class="text-xs text-slate-400"></span>
@@ -380,6 +380,12 @@ function renderThemeBar() {
         } catch (e) { $('themeMsg').textContent = 'Échec : ' + e.message; }
     }));
 }
+
+// Page intégrée dans « Thèmes » : le thème choisi là-bas est repris dans l'aperçu
+window.addEventListener('message', async (e) => {
+    if (!e.data || e.data.type !== 'theme-changed') return;
+    try { theme = await fetch('/api/labels/style', { cache: 'no-store' }).then(r => r.json()); renderThemeBar(); preview(true); } catch (err) {}
+});
 
 async function load() {
     const [res, th] = await Promise.all([fetch('/admin/api/titres'), fetch('/api/labels/style').then(r => r.json()).catch(() => ({}))]);

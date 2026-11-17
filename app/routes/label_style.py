@@ -261,10 +261,20 @@ async def api_label_style():
     return await get_style()
 
 
+@admin_router.get("/admin/themes", response_class=HTMLResponse)
+async def admin_themes_page(request: Request):
+    """Page « Thèmes » : choix du thème en un clic, thème automatique par catégorie, et les réglages détaillés
+    (écrans de titre, labels, couleurs) en onglets."""
+    return templates.TemplateResponse(request=request, name="admin/themes.html",
+                                      context={"embed": request.query_params.get("embed") == "1"})
+
+
 @admin_router.get("/admin/labels", response_class=HTMLResponse)
 async def admin_labels_page(request: Request):
+    only = request.query_params.get("only", "")
     return templates.TemplateResponse(request=request, name="admin/labels_style.html",
-                                      context={"embed": request.query_params.get("embed") == "1"})
+                                      context={"embed": request.query_params.get("embed") == "1",
+                                               "only": only if only in ("each", "global") else ""})
 
 
 @admin_router.get("/admin/api/labels/style")

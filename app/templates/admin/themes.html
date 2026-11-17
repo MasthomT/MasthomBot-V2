@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administration - Thèmes</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Metamorphous&family=Mountains+of+Christmas:wght@700&family=Orbitron:wght@700&family=Press+Start+2P&family=Fredoka:wght@600&family=Exo+2:wght@700&family=Pirata+One&family=Zen+Maru+Gothic:wght@700&family=Special+Elite&family=Bebas+Neue&family=Russo+One&family=Luckiest+Guy&family=Cinzel:wght@700&family=Cormorant+Garamond:wght@700&family=Metal+Mania&family=IM+Fell+English&family=VT323&family=Bungee&family=Baloo+2:wght@700&family=Kanit:wght@800&display=swap" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .config-card { background-color: #1e293b; border: 1px solid #334155; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #6366f1; outline: none; }
+        .tab { padding: .6rem 1.1rem; border-radius: .75rem; font-size: .9rem; font-weight: 800; color: #94a3b8; cursor: pointer; border: 1px solid transparent; }
+        .tab:hover { background: rgba(51,65,85,.5); color: #fff; }
+        .tab.active { background: rgba(99,102,241,.14); color: #818cf8; border-color: rgba(99,102,241,.35); }
+        .panel { display: none; } .panel.active { display: block; }
+        .frame { width: 100%; border: 0; height: calc(100vh - 170px); min-height: 560px; background: transparent; }
+        .theme { position: relative; border-radius: 1rem; overflow: hidden; border: 2px solid #334155; cursor: pointer; text-align: left;
+                 transition: transform .12s, border-color .12s; background: #0b1220; }
+        .theme:hover { transform: translateY(-2px); border-color: #818cf8; }
+        .theme.on { border-color: #34d399; box-shadow: 0 0 0 3px rgba(52,211,153,.25); }
+        .theme .art { height: 96px; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .theme .art .name { font-size: 26px; line-height: 1; padding: 0 .4rem; text-align: center; white-space: nowrap; }
+        .theme .art .pass { position: absolute; right: 6px; bottom: 4px; width: 64px; opacity: .95; pointer-events: none; }
+        .theme .art .pass svg { width: 100%; height: auto; display: block; overflow: visible; }
+        .theme .foot { padding: .5rem .7rem; display: flex; align-items: center; justify-content: space-between; gap: .5rem; background: #111a2e; }
+        .theme .foot b { font-size: .85rem; color: #fff; }
+        .theme .foot small { font-size: .68rem; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .badge { position: absolute; top: 8px; left: 8px; background: #059669; color: #fff; font-size: 10px; font-weight: 900; padding: 2px 8px; border-radius: 999px; letter-spacing: .05em; z-index: 2; }
+    </style>
+    <link rel="stylesheet" href="/static/scrollbar.css">
+    <script src="/static/passers.js"></script>
+</head>
+<body class="font-sans antialiased flex min-h-screen">
+
+    {% if not embed %}{% include 'admin/sidebar.html' %}{% endif %}
+
+    <main class="flex-1 {% if embed %}p-4{% else %}p-6 md:p-10{% endif %} min-w-0">
+        <header class="mb-4 flex flex-wrap items-end justify-between gap-3">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">Thèmes</h1>
+                <p class="text-slate-400 mt-1">Un thème habille d'un coup les écrans de titre, les labels et les widgets de la scène.</p>
+            </div>
+            <nav class="flex flex-wrap gap-2" id="tabs">
+                <div class="tab" data-tab="choose"><i class="fas fa-palette mr-2"></i>Choisir un thème</div>
+                <div class="tab" data-tab="titres"><i class="fas fa-heading mr-2"></i>Écrans de titre</div>
+                <div class="tab" data-tab="labels"><i class="fas fa-font mr-2"></i>Labels</div>
+                <div class="tab" data-tab="advanced"><i class="fas fa-sliders mr-2"></i>Couleurs & teinte</div>
+            </nav>
+        </header>
+
+        <!-- ═════════ Choisir un thème ═════════ -->
+        <section class="panel" id="panel-choose">
+            <div class="config-card rounded-2xl p-4 mb-5 flex flex-wrap items-center gap-4">
+                <div class="text-sm"><span class="text-slate-400">Thème actif :</span> <b id="activeName" class="text-emerald-300 text-lg">…</b></div>
+                <div class="text-xs text-slate-400" id="activeWhy"></div>
+                <span id="msg" class="text-xs ml-auto"></span>
+            </div>
+
+            <p class="text-xs text-slate-500 mb-3"><i class="fas fa-hand-pointer mr-1"></i>Clique sur un thème pour l'appliquer tout de suite. OBS le reprend en moins de 15 secondes.</p>
+            <div class="grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))" id="grid"></div>
+
+            <!-- Thème automatique -->
+            <section class="config-card rounded-2xl p-5 mt-8" id="autoCard">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg font-bold text-white"><i class="fas fa-wand-magic-sparkles mr-2 text-indigo-300"></i>Changer de thème tout seul selon le jeu</h2>
+                        <p class="text-xs text-slate-400 mt-1 max-w-3xl">Quand tu changes de catégorie sur Twitch (même hors live), le thème du jeu s'applique. Il suffit qu'un mot de la règle soit dans le nom de la catégorie : « Zelda » marche pour tous les Zelda. Tu peux toujours choisir un thème à la main au-dessus : il reste jusqu'au prochain changement de catégorie.</p>
+                    </div>
+                    <label class="flex items-center gap-3 cursor-pointer select-none">
+                        <span class="text-sm font-bold" id="auto-state">…</span>
+                        <input type="checkbox" id="auto-enabled" class="w-5 h-5 accent-emerald-500">
+                    </label>
+                </div>
+
+                <div class="mt-4 rounded-xl bg-slate-900/60 border border-slate-700 p-3 text-sm flex flex-wrap items-center gap-2">
+                    <span class="text-slate-400">Catégorie actuelle :</span> <b id="auto-cat" class="text-white">…</b>
+                    <span class="text-slate-500">→</span> <b id="auto-match" class="text-indigo-300">…</b>
+                    <button id="auto-now" class="ml-auto text-xs px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold"><i class="fas fa-bolt mr-1"></i>Appliquer maintenant</button>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-2 mt-5 mb-2">
+                    <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest">Règles (la première qui correspond gagne)</h3>
+                    <input id="auto-filter" placeholder="🔍 Chercher un jeu…" class="input-dark rounded-lg px-3 py-1.5 text-sm w-56">
+                </div>
+                <div id="auto-rules" class="grid gap-2" style="grid-template-columns:repeat(auto-fill,minmax(360px,1fr))"></div>
+                <button id="auto-add" class="mt-3 text-xs px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold"><i class="fas fa-plus mr-1"></i>Ajouter un jeu</button>
+
+                <div class="flex flex-wrap items-end gap-4 mt-5">
+                    <label class="block text-xs"><span class="text-slate-400">Pour un jeu sans règle (Just Chatting…)</span>
+                        <select id="auto-fallback" class="input-dark rounded-lg px-3 py-2 mt-1 text-sm block"></select></label>
+                    <button id="auto-save" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold"><i class="fas fa-save mr-2"></i>Enregistrer les règles</button>
+                    <span id="auto-msg" class="text-xs pb-3"></span>
+                </div>
+            </section>
+        </section>
+
+        <!-- ═════════ Pages détaillées (chargées à la première ouverture) ═════════ -->
+        <section class="panel" id="panel-titres"><iframe class="frame" data-src="/admin/titres?embed=1&inner=1" title="Écrans de titre"></iframe></section>
+        <section class="panel" id="panel-labels"><iframe class="frame" data-src="/admin/labels?embed=1&only=each" title="Labels"></iframe></section>
+        <section class="panel" id="panel-advanced"><iframe class="frame" data-src="/admin/labels?embed=1&only=global" title="Couleurs et teinte"></iframe></section>
+    </main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+
+// nom, emoji, personnage qui passe sur les titres (passers.js), titre court affiché sur la carte
+const THEMES = {
+    classique:   ['Classique', '✨', null],          halloween: ['Halloween', '🎃', null],      zelda: ['Zelda', '🧚', null],
+    noel:        ['Noël', '❄️', 'sleigh'],           cyber: ['Cyberpunk', '🌃', 'drone'],       arcade: ['Arcade', '🕹️', 'pacman'],
+    ocean:       ['Océan', '🌊', 'whale'],           space: ['Espace', '🚀', 'ufo'],            pirate: ['Pirate', '🏴‍☠️', 'ship'],
+    sakura:      ['Sakura', '🌸', 'butterfly'],      horror: ['Horreur', '🩸', 'crow'],         gta6: ['GTA VI', '🌴', 'car'],
+    repo:        ['R.E.P.O.', '🤖', 'robot'],        fortnite: ['Battle Royale', '🪂', 'bus'],   darkfantasy: ['Dark fantasy', '🐉', 'dragon'],
+    clairobscur: ['Clair Obscur', '🎨', 'brush'],    werewolf: ['Pleine lune', '🐺', 'wolf'],   fog: ['Brouillard', '🌫️', null],
+    vault:       ['Post-apo', '☢️', 'supply'],       pokemon: ['Pokémon', '⚡', 'pokeball'],     cosy: ['Cosy', '🍃', 'bee'],
+};
+const tName = (k) => THEMES[k] ? THEMES[k][1] + ' ' + THEMES[k][0] : k;
+let presets = {}, style = {}, autoCfg = null, autoCat = '';
+
+function msg(el, t, c) { $(el).className = 'text-xs ' + c; $(el).textContent = t; }
+
+// ───────── Galerie ─────────
+function card(k) {
+    const p = presets[k] || {}, [name, emo, pass] = THEMES[k] || [k, '', null];
+    const a1 = p.w_accent || '#6366f1', a2 = p.w_accent2 || '#1e293b';
+    const font = k === 'zelda' ? 'Metamorphous' : (p.font || 'Kanit');
+    const games = (autoCfg ? autoCfg.rules.filter(r => r.theme === k).map(r => r.match) : []);
+    const art = 'background:radial-gradient(circle at 30% 20%,' + a1 + '55,transparent 60%),linear-gradient(135deg,' + a2 + 'cc,#0b1220 75%)';
+    const nameCss = 'font-family:\'' + font + '\',sans-serif;color:' + (p.color || '#fff') + ';text-shadow:0 0 10px ' + (p.glow || a1) + ',0 2px 0 rgba(0,0,0,.6)' + (k === 'arcade' ? ';font-size:15px' : '');
+    let passHtml = '';
+    try { if (pass && window.Passers) passHtml = '<div class="pass">' + Passers.html(pass) + '</div>'; } catch (e) {}
+    return '<button class="theme' + (style.preset === k ? ' on' : '') + '" data-k="' + k + '">'
+        + (style.preset === k ? '<span class="badge">ACTIF</span>' : '')
+        + '<div class="art" style="' + art + '"><div class="name" style="' + nameCss + '">' + esc(name) + '</div>' + passHtml + '</div>'
+        + '<div class="foot"><b>' + emo + ' ' + esc(name) + '</b><small title="' + esc(games.join(', ')) + '">' + esc(games.slice(0, 3).join(', ')) + (games.length > 3 ? '…' : '') + '</small></div></button>';
+}
+function renderGrid() {
+    $('grid').innerHTML = Object.keys(THEMES).filter(k => presets[k]).map(card).join('');
+    const cur = style.preset || 'classique';
+    $('activeName').textContent = THEMES[cur] ? tName(cur) : 'Personnalisé';
+    $('activeWhy').textContent = style.until ? 'jusqu\'au ' + new Date(style.until).toLocaleDateString('fr-FR') : (autoCfg && autoCfg.enabled && autoCfg.last_applied === cur ? 'choisi automatiquement pour « ' + autoCfg.last_category + ' »' : '');
+}
+$('grid').addEventListener('click', async (e) => {
+    const b = e.target.closest('.theme'); if (!b) return;
+    msg('msg', 'Application…', 'text-slate-400');
+    const r = await fetch('/admin/api/labels/theme/' + b.dataset.k, { method: 'PUT' });
+    if (!r.ok) return msg('msg', 'Échec (' + r.status + ')', 'text-amber-400');
+    style = (await r.json()).style; renderGrid();
+    msg('msg', tName(b.dataset.k) + ' appliqué ✓', 'text-emerald-400');
+    notifyFrames();
+});
+
+// les pages détaillées déjà ouvertes reprennent le nouveau thème (sans perdre une modification en cours)
+function notifyFrames() { document.querySelectorAll('iframe[src]').forEach(f => { try { f.contentWindow.postMessage({ type: 'theme-changed' }, '*'); } catch (e) {} }); }
+window.addEventListener('message', (e) => { if (e.data && e.data.type === 'theme-changed' && e.source !== window) loadStyle(); });
+
+async function loadStyle() {
+    const r = await fetch('/admin/api/labels/style'); if (!r.ok) return msg('msg', 'Chargement impossible (' + r.status + ')', 'text-amber-400');
+    const j = await r.json(); presets = j.presets; style = j.style; renderGrid();
+}
+
+// ───────── Thème automatique ─────────
+const themeOpts = (sel) => Object.keys(THEMES).map(k => '<option value="' + k + '"' + (k === sel ? ' selected' : '') + '>' + tName(k) + '</option>').join('');
+function ruleRow(r) {
+    return '<div class="rule flex items-center gap-2 rounded-xl bg-slate-900/50 border border-slate-700 px-2 py-1.5">'
+        + '<input class="r-match input-dark flex-1 min-w-0 rounded-lg px-2 py-1.5 text-sm" placeholder="Nom du jeu (ou un mot)" value="' + esc(r.match) + '">'
+        + '<i class="fas fa-arrow-right text-slate-500 text-xs"></i>'
+        + '<select class="r-theme input-dark rounded-lg px-2 py-1.5 text-sm">' + themeOpts(r.theme) + '</select>'
+        + '<button class="r-up text-slate-400 hover:text-white px-1" title="Plus prioritaire"><i class="fas fa-arrow-up"></i></button>'
+        + '<button class="r-del text-slate-500 hover:text-red-400 px-1" title="Supprimer"><i class="fas fa-trash"></i></button></div>';
+}
+const rules = () => [...document.querySelectorAll('#auto-rules .rule')].map(d => ({ match: d.querySelector('.r-match').value.trim(), theme: d.querySelector('.r-theme').value })).filter(r => r.match);
+function autoPreview() {
+    const n = autoCat.toLowerCase(), r = rules().find(x => n.includes(x.match.toLowerCase())), fb = $('auto-fallback').value;
+    $('auto-match').textContent = !autoCat ? '—' : r ? tName(r.theme) : fb ? tName(fb) + ' (aucune règle)' : 'aucune règle : le thème ne change pas';
+    const on = $('auto-enabled').checked; $('auto-state').textContent = on ? 'Activé' : 'Désactivé'; $('auto-state').className = 'text-sm font-bold ' + (on ? 'text-emerald-400' : 'text-slate-500');
+}
+function renderAuto() {
+    $('auto-enabled').checked = !!autoCfg.enabled;
+    $('auto-rules').innerHTML = autoCfg.rules.map(ruleRow).join('');
+    $('auto-fallback').innerHTML = '<option value="">Ne rien changer</option>' + themeOpts(autoCfg.fallback);
+    $('auto-fallback').value = autoCfg.fallback || '';
+    $('auto-cat').textContent = autoCat || 'illisible pour le moment';
+    autoPreview();
+}
+const dirtyAuto = () => { msg('auto-msg', 'Modifications non enregistrées', 'text-amber-400'); autoPreview(); };
+$('autoCard').addEventListener('input', (e) => { if (e.target.id === 'auto-filter') return; dirtyAuto(); });
+$('auto-filter').addEventListener('input', () => {
+    const q = $('auto-filter').value.toLowerCase();
+    document.querySelectorAll('#auto-rules .rule').forEach(d => { d.style.display = !q || d.querySelector('.r-match').value.toLowerCase().includes(q) || d.querySelector('.r-theme').selectedOptions[0].textContent.toLowerCase().includes(q) ? '' : 'none'; });
+});
+$('auto-rules').addEventListener('click', (e) => {
+    const row = e.target.closest('.rule'); if (!row) return;
+    if (e.target.closest('.r-del')) { row.remove(); dirtyAuto(); }
+    if (e.target.closest('.r-up') && row.previousElementSibling) { row.parentNode.insertBefore(row, row.previousElementSibling); dirtyAuto(); }
+});
+$('auto-add').addEventListener('click', () => { $('auto-rules').insertAdjacentHTML('afterbegin', ruleRow({ match: '', theme: 'classique' })); $('auto-rules').firstElementChild.querySelector('input').focus(); dirtyAuto(); });
+$('auto-enabled').addEventListener('change', dirtyAuto);
+$('auto-save').addEventListener('click', async () => {
+    msg('auto-msg', 'Enregistrement…', 'text-slate-400');
+    const r = await fetch('/admin/api/labels/auto', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: $('auto-enabled').checked, fallback: $('auto-fallback').value, rules: rules() }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return msg('auto-msg', j.detail || ('Erreur ' + r.status), 'text-amber-400');
+    autoCfg = j.config; renderAuto(); renderGrid(); msg('auto-msg', 'Règles enregistrées ✓', 'text-emerald-400');
+});
+$('auto-now').addEventListener('click', async () => {
+    msg('auto-msg', 'Application…', 'text-slate-400');
+    const r = await fetch('/admin/api/labels/auto/apply', { method: 'POST' });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return msg('auto-msg', j.detail || ('Erreur ' + r.status), 'text-amber-400');
+    autoCat = j.category; autoCfg = j.config; renderAuto(); await loadStyle(); notifyFrames();
+    msg('auto-msg', j.config.last_applied ? tName(j.config.last_applied) + ' appliqué ✓' : 'Aucune règle pour cette catégorie', 'text-emerald-400');
+});
+async function loadAuto() {
+    const r = await fetch('/admin/api/labels/auto'); if (!r.ok) return;
+    const j = await r.json(); autoCfg = j.config; autoCat = j.category || ''; renderAuto(); renderGrid();
+}
+
+// ───────── Onglets ─────────
+const TABS = ['choose', 'titres', 'labels', 'advanced'];
+function show(name) {
+    if (!TABS.includes(name)) name = 'choose';
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+    document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
+    const f = document.querySelector('#panel-' + name + ' iframe');
+    if (f && !f.getAttribute('src')) f.setAttribute('src', f.dataset.src);   // chargée une fois, puis gardée (modifications en cours conservées)
+    if (name === 'choose') loadStyle();
+    if (location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
+}
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => show(t.dataset.tab)));
+window.addEventListener('hashchange', () => show(location.hash.replace('#', '')));
+
+loadStyle().then(loadAuto);
+show(location.hash.replace('#', '') || 'choose');
+</script>
+</body>
+</html>
