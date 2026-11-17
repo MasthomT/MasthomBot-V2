@@ -1128,34 +1128,51 @@
         '<path d="M44 52 l4 -3 4 6 4 -6 4 6 4 -3" stroke="#14180a" stroke-width="1.6" fill="none"/>' +
         '<path class="tw" d="M126 70 C136 80 136 100 126 110" stroke="#e6e1d8" stroke-width="3" fill="none" stroke-linecap="round"/><path class="tw" style="animation-delay:-.5s" d="M134 58 C150 76 150 104 134 122" stroke="#e6e1d8" stroke-width="3" fill="none" stroke-linecap="round"/>';
     } },
-    // Post-apo : buggy rouillé avec arceau, grosses roues qui tournent et nuage de poussière
-    buggy: { w: 17, vb: '0 0 320 160', draw: function () {
-      var wheel = function (cx, r) { return '<g transform="translate(' + cx + ' 126)"><circle r="' + r + '" fill="#1e1e1e"/><g class="spinf"><circle r="' + (r * .55) + '" fill="#6b5a3a"/><path d="M0 -' + (r * .55) + ' V' + (r * .55) + ' M-' + (r * .55) + ' 0 H' + (r * .55) + '" stroke="#2a2a1a" stroke-width="4"/></g>' +
-        '<circle r="' + r + '" fill="none" stroke="#3a3a3a" stroke-width="4" stroke-dasharray="6 5"/></g>'; };
-      return '<g fill="#b8a07a" opacity=".55"><circle class="tw" cx="22" cy="130" r="14"/><circle class="tw" style="animation-delay:-.4s" cx="44" cy="114" r="10"/><circle class="tw" style="animation-delay:-.7s" cx="10" cy="110" r="8"/></g>' +
+    // Post-apo : buggy des terres désolées — grosses roues crantées, châssis rouillé, arceau, pare-chocs à pointes, pot qui fume, pilote à lunettes
+    buggy: { w: 18, vb: '0 0 330 175', draw: function () {
+      var wheel = function (cx) {
+        return '<g transform="translate(' + cx + ' 138)"><circle r="31" fill="#1a1a18"/><circle r="31" fill="none" stroke="#3a3a34" stroke-width="7" stroke-dasharray="7 6"/>' +
+          '<g class="spinf"><circle r="16" fill="#8a5a2a" stroke="#3a2410" stroke-width="2.5"/><g fill="#3a2410"><circle cx="0" cy="-9" r="2.6"/><circle cx="8.5" cy="-2.8" r="2.6"/><circle cx="5.3" cy="7.3" r="2.6"/><circle cx="-5.3" cy="7.3" r="2.6"/><circle cx="-8.5" cy="-2.8" r="2.6"/></g></g>' +
+          '<circle r="4.5" fill="#c8a070"/></g>';
+      };
+      return '<g fill="#a89a80" opacity=".6"><circle class="tw" cx="96" cy="34" r="9"/><circle class="tw" style="animation-delay:-.4s" cx="84" cy="20" r="7"/><circle class="tw" style="animation-delay:-.7s" cx="72" cy="10" r="5"/></g>' +
+        '<g fill="#b8a07a" opacity=".5"><circle class="tw" cx="22" cy="150" r="14"/><circle class="tw" style="animation-delay:-.5s" cx="40" cy="136" r="10"/></g>' +
         '<g class="jig">' +
-        '<path d="M70 104 L90 70 H210 L250 92 L292 100 L296 116 H62Z" fill="#8a5a2a" stroke="#2a1a0a" stroke-width="3" stroke-linejoin="round"/>' +
-        '<g fill="#5a3a1a" opacity=".7"><circle cx="120" cy="94" r="5"/><circle cx="230" cy="104" r="6"/><path d="M160 80 l10 4 -6 6z"/></g>' +
-        '<path d="M110 70 L132 26 H196 L214 70 M132 26 L150 70 M196 26 L180 70" stroke="#4a4e58" stroke-width="6" fill="none" stroke-linejoin="round"/>' +
-        '<circle cx="168" cy="52" r="12" fill="#c8a07a" stroke="#3a2a1a" stroke-width="2"/><rect x="160" y="46" width="22" height="8" rx="4" fill="#3cff6a" stroke="#1a1a1a" stroke-width="2"/>' +
-        '<path d="M156 70 C158 62 178 62 180 70Z" fill="#6b5a3a"/><path d="M180 64 L204 78" stroke="#6b5a3a" stroke-width="5" stroke-linecap="round"/>' +
-        '<rect x="286" y="96" width="10" height="8" rx="2" fill="#ffd36a"/><path d="M62 90 L42 80 V100Z" fill="#4a4e58"/>' +
-        '</g>' + wheel(104, 28) + wheel(256, 28);
+        '<circle cx="58" cy="98" r="22" fill="#1a1a18" stroke="#3a3a34" stroke-width="5" stroke-dasharray="6 5"/><circle cx="58" cy="98" r="10" fill="#6b4a24"/>' +
+        '<path d="M102 88 L98 46" stroke="#4a4e48" stroke-width="7" stroke-linecap="round"/><path d="M94 44 H104" stroke="#2a2a28" stroke-width="5" stroke-linecap="round"/>' +
+        '<path d="M64 114 L76 92 H142 L158 76 H218 L236 92 H290 L306 104 V120 H64Z" fill="#a8642a" stroke="#2a1608" stroke-width="3" stroke-linejoin="round"/>' +
+        '<path d="M160 92 H214 V118 H160Z" fill="#5a6a3a" stroke="#2a1608" stroke-width="2.5"/><path d="M168 100 H206" stroke="#3a4624" stroke-width="2"/>' +
+        '<path d="M70 120 C70 100 112 100 112 120 M228 120 C228 100 272 100 272 120" stroke="#2a1608" stroke-width="7" fill="none"/>' +
+        '<g fill="#6b3a14" opacity=".7"><circle cx="134" cy="104" r="5"/><path d="M246 98 l12 3 -8 7z"/><circle cx="290" cy="112" r="3"/></g>' +
+        '<g fill="#2a1608"><circle cx="150" cy="96" r="2"/><circle cx="150" cy="112" r="2"/><circle cx="222" cy="96" r="2"/><circle cx="222" cy="112" r="2"/></g>' +
+        '<text x="120" y="114" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="15" fill="#f2e2c0" opacity=".85">77</text>' +
+        '<path d="M126 92 L140 40 H200 L218 76 M140 40 L156 76 M200 40 L188 76" stroke="#3a3f44" stroke-width="7" fill="none" stroke-linejoin="round" stroke-linecap="round"/>' +
+        '<path class="flag" d="M160 62 C146 60 134 62 120 68 L124 74 C136 70 148 68 162 68Z" fill="#c8302c"/>' +
+        '<circle cx="172" cy="56" r="13" fill="#c8a07a" stroke="#3a2a1a" stroke-width="2"/><path d="M160 50 C162 40 182 38 186 50Z" fill="#5a4a3a"/>' +
+        '<rect x="164" y="50" width="26" height="9" rx="4" fill="#3cff6a" stroke="#1a1a1a" stroke-width="2.5"/><path d="M162 66 C168 72 178 72 184 66" fill="#c8302c"/>' +
+        '<path d="M184 70 L204 84" stroke="#c8a07a" stroke-width="6" stroke-linecap="round"/>' +
+        '<rect x="294" y="94" width="12" height="9" rx="2" fill="#ffd36a" stroke="#2a1608" stroke-width="1.5"/>' +
+        '<path d="M306 104 L322 108 L306 112Z M306 112 L322 116 L306 120Z" fill="#c9cfd8" stroke="#3a3f44" stroke-width="1.5" stroke-linejoin="round"/>' +
+        '</g>' + wheel(92) + wheel(250);
     } },
-    // Post-apo : robot assistant qui flotte, grand œil, petits bras et réacteur dessous
-    assistbot: { w: 8, vb: '0 0 150 170', draw: function () {
-      return '<defs><radialGradient id="ps-ab" cx=".38" cy=".32" r=".75"><stop offset="0" stop-color="#e8ecf4"/><stop offset=".6" stop-color="#9aa5b8"/><stop offset="1" stop-color="#4a5568"/></radialGradient>' +
-        '<linearGradient id="ps-at" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e6fbff"/><stop offset=".4" stop-color="#3cff6a"/><stop offset="1" stop-color="#3cff6a" stop-opacity="0"/></linearGradient></defs>' +
+// Post-apo : robot sphérique d'après-guerre qui flotte — coque kaki rouillée, rivets, grand objectif, antenne, ailerons, petits réacteurs
+    assistbot: { w: 7, vb: '0 0 150 170', draw: function () {
+      var rv = ''; [[46, 52], [104, 52], [36, 84], [114, 84], [50, 112], [100, 112]].forEach(function (p) { rv += '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="2.4" fill="#2a3018"/>'; });
+      return '<defs><radialGradient id="ps-ab2" cx=".36" cy=".3" r=".8"><stop offset="0" stop-color="#9aa86a"/><stop offset=".6" stop-color="#5f6c38"/><stop offset="1" stop-color="#2f3818"/></radialGradient>' +
+        '<radialGradient id="ps-lens" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#eaffef"/><stop offset=".35" stop-color="#3cff6a"/><stop offset="1" stop-color="#0a4a1a"/></radialGradient></defs>' +
         '<g class="float">' +
-        '<g class="flame"><path d="M64 120 L58 168 H92 L86 120Z" fill="url(#ps-at)"/></g>' +
-        '<rect x="58" y="112" width="34" height="12" rx="4" fill="#4a5568"/>' +
-        '<path d="M30 76 L8 90 L4 104 M120 76 L142 64 L146 50" stroke="#6b778a" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>' +
-        '<path d="M0 104 L8 112 M146 50 L138 42" stroke="#6b778a" stroke-width="4" stroke-linecap="round"/>' +
-        '<circle cx="75" cy="70" r="46" fill="url(#ps-ab)" stroke="#2a2f3a" stroke-width="3"/>' +
-        '<path d="M32 78 H118" stroke="#3cff6a" stroke-width="3" opacity=".6"/>' +
-        '<circle cx="88" cy="62" r="18" fill="#14180a" stroke="#2a2f3a" stroke-width="3"/><circle class="pulse" cx="90" cy="62" r="10" fill="#3cff6a"/><circle cx="94" cy="58" r="3" fill="#eaffef"/>' +
-        '<path d="M44 44 C52 34 64 30 74 30" stroke="#fff" stroke-width="4" fill="none" opacity=".6" stroke-linecap="round"/>' +
-        '<path d="M75 24 V10" stroke="#4a5568" stroke-width="3"/><circle class="blink" cx="75" cy="8" r="4" fill="#ffb000"/>' +
+        '<g class="flame"><path d="M54 126 C50 136 52 146 58 152 C64 146 66 136 62 126Z" fill="#ff8a1a"/><path d="M56 128 C55 134 56 140 58 144 C60 140 61 134 60 128Z" fill="#fff3a0"/></g>' +
+        '<g class="flame" style="animation-delay:-.13s"><path d="M88 126 C84 136 86 146 92 152 C98 146 100 136 96 126Z" fill="#ff8a1a"/><path d="M90 128 C89 134 90 140 92 144 C94 140 95 134 94 128Z" fill="#fff3a0"/></g>' +
+        '<path d="M50 116 H66 L62 128 H54Z M84 116 H100 L96 128 H88Z" fill="#3a3f2a" stroke="#14180a" stroke-width="2"/>' +
+        '<path d="M28 70 L8 60 L12 84 L30 88Z M122 70 L142 60 L138 84 L120 88Z" fill="#4a5628" stroke="#14180a" stroke-width="2.5" stroke-linejoin="round"/>' +
+        '<circle cx="75" cy="78" r="48" fill="url(#ps-ab2)" stroke="#14180a" stroke-width="3"/>' +
+        '<path d="M30 70 C50 64 100 64 120 70 M28 92 C50 98 100 98 122 92" stroke="#2f3818" stroke-width="2.5" fill="none"/>' + rv +
+        '<g fill="#8a4a1a" opacity=".55"><path d="M40 100 l8 2 -2 6z"/><path d="M106 44 l6 4 -6 2z"/><circle cx="58" cy="104" r="3"/></g>' +
+        '<circle cx="84" cy="74" r="20" fill="#2a2f1a" stroke="#14180a" stroke-width="3"/><circle cx="84" cy="74" r="14" fill="url(#ps-lens)"/><circle class="pulse" cx="84" cy="74" r="6" fill="#bfffcf"/><circle cx="79" cy="69" r="3" fill="#fff"/>' +
+        '<g fill="#14180a"><rect x="44" y="70" width="18" height="3" rx="1.5"/><rect x="44" y="76" width="18" height="3" rx="1.5"/><rect x="44" y="82" width="18" height="3" rx="1.5"/></g>' +
+        '<circle cx="62" cy="104" r="7" fill="#ffd400" stroke="#14180a" stroke-width="1.5"/><path d="M62 104 L58 98 A7 7 0 0 1 66 98Z M62 104 L69 106 A7 7 0 0 1 65 110Z M62 104 L59 110 A7 7 0 0 1 55 106Z" fill="#14180a"/>' +
+        '<path d="M50 44 C58 36 68 32 78 32" stroke="#c8d49a" stroke-width="4" fill="none" opacity=".7" stroke-linecap="round"/>' +
+        '<path d="M92 32 L100 8" stroke="#3a3f2a" stroke-width="3"/><circle class="blink" cx="100" cy="7" r="4" fill="#ff3b3b"/>' +
         '</g>';
     } },
     // Pokémon : trois balles différentes qui roulent en rebondissant
