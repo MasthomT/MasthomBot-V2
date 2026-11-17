@@ -998,8 +998,16 @@
       return DRAW.epona.draw().replace(/#b8673a/g, '#9aa0aa').replace(/#7a3f1e/g, '#5a606a').replace(/#f5ecd8/g, '#2a2a30').replace(/#6a3518/g, '#4a4e58').replace(/#8a4a24/g, '#6a707a').replace(/ps-ep/g, 'ps-kn') +
         '<g class="gallop">' +
         '<path d="M110 66 C120 54 190 54 206 66 L212 112 C190 120 130 120 104 112Z" fill="#8a1a2a" stroke="#3a0810" stroke-width="2.5"/><path d="M110 112 L118 104 L126 114 L134 104 L142 114 L150 104 L158 114 L166 104 L174 114 L182 104 L190 114 L198 104 L206 112" stroke="#d4b06a" stroke-width="3" fill="none"/>' +
-        '<path d="M150 70 L136 104" stroke="#8a8f9a" stroke-width="10" stroke-linecap="round"/>' +
-        '<path d="M136 -2 C136 -18 168 -18 168 -2 L172 60 H134Z" fill="#c9cfd8" stroke="#3a3f4a" stroke-width="2.5"/><path d="M140 10 H166 M138 30 H170" stroke="#8a8f9a" stroke-width="2"/>' +
+                '<path d="M136 -2 C136 -18 168 -18 168 -2 L172 60 H134Z" fill="#c9cfd8" stroke="#3a3f4a" stroke-width="2.5"/><path d="M140 10 H166 M138 30 H170" stroke="#8a8f9a" stroke-width="2"/>' +
+        // jambe en armure : cuisse, genouillère, tibia le long du flanc, soleret dans l'étrier
+        '<path d="M164 72 L170 104" stroke="#5a3a1a" stroke-width="2.5"/>' +
+        '<path d="M142 54 L168 74 L164 104" stroke="#2a2f3a" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" fill="none"/>' +
+        '<path d="M142 54 L168 74" stroke="#a8b0bc" stroke-width="19" stroke-linecap="round"/>' +
+        '<path d="M168 74 L164 104" stroke="#98a0ac" stroke-width="15" stroke-linecap="round"/>' +
+        '<path d="M140 52 L170 70 M138 62 L164 80 M162 78 L158 104 M172 76 L170 104" stroke="#3a3f4a" stroke-width="2" fill="none" opacity=".7"/>' +
+        '<circle cx="169" cy="74" r="9" fill="#dfe4ec" stroke="#3a3f4a" stroke-width="2"/>' +
+        '<path d="M158 102 H176 C182 102 184 108 178 110 H158Z" fill="#9aa0aa" stroke="#3a3f4a" stroke-width="2" stroke-linejoin="round"/>' +
+        '<path d="M156 112 H180" stroke="#5a5a62" stroke-width="3" stroke-linecap="round"/>' +
         '<path d="M160 6 L190 20" stroke="#c9cfd8" stroke-width="10" stroke-linecap="round"/>' +
         '<path d="M140 -24 C140 -46 166 -46 166 -24 V-8 H140Z" fill="#c9cfd8" stroke="#3a3f4a" stroke-width="2.5"/><path d="M152 -28 H166" stroke="#1a1a1a" stroke-width="4"/><path d="M148 -44 C152 -60 170 -62 176 -52 C166 -50 158 -46 152 -40" fill="#d62828"/>' +
         '<path d="M192 22 V-76" stroke="#5a3a1a" stroke-width="5" stroke-linecap="round"/>' +
