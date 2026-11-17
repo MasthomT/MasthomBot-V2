@@ -13,7 +13,7 @@
   #frame { position: fixed; inset: 0; pointer-events: none; display: none; box-sizing: border-box;
            border: .18vw solid var(--frame); box-shadow: inset 0 0 .8vw .1vw var(--frame), inset 0 0 3vw .2vw var(--frame-a), inset 0 0 8vw var(--frame-b); }
   .has-frame #frame { display: block; }
-  .blk { position: absolute; transform: translate(-50%, -50%) scale(calc(var(--k, 1) * var(--fit, 1)));   /* --fit : réduit le bloc s'il sortirait de l'écran (fitBlocks) */ display: flex; flex-direction: column; align-items: center;
+  .blk { position: absolute; transform: translate(-50%, -50%) scale(var(--k, 1)); display: flex; flex-direction: column; align-items: center;
          text-align: center; font-family: var(--font); transform-style: preserve-3d; }
   .blk .in { animation-fill-mode: both; display: flex; flex-direction: column; align-items: center; width: 100%; }
   .logo { position: absolute; transform: translate(-50%, -50%) scale(var(--k, 1)); }
@@ -175,7 +175,7 @@
       sub: '#ffffff', substroke: '.09vw #0b4d2a', subfilter: 'drop-shadow(0 0 .45vw rgba(60,200,120,.85)) drop-shadow(0 0 1vw rgba(30,158,87,.6))',
       msg: '#fff7ee', msgsh: '0 .1vw .25vw rgba(0,0,0,.8), 0 0 .6vw rgba(232,40,60,.7)',
       num: '#ffd54a', numsh: '.14vw .14vw 0 #7a0c1a, 0 0 .7vw rgba(255,213,74,.85)', em: '#ffd54a', emsh: '0 0 .6vw rgba(255,213,74,.9)' },
-    cyber: { font: 'Orbitron', text: 'Orbitron', w: 800, ls: '.06em', k: 0.8, fx: 'pixels', pass: ['drone'],
+    cyber: { font: 'Orbitron', text: 'Orbitron', w: 800, ls: '.06em', k: 0.77, fx: 'pixels', pass: ['drone'],
       grad: 'linear-gradient(to bottom,#f4ffff 0%,#8ff8ff 50%,#00c8ff 100%)',
       filter: 'drop-shadow(.14vw 0 0 #ff2bd6) drop-shadow(-.14vw 0 0 #00f0ff) drop-shadow(0 0 1.1vw rgba(0,240,255,.8))',
       sub: '#ffe3fa', substroke: '.06vw #7a0a6a', subfilter: 'drop-shadow(0 0 .45vw rgba(255,43,214,.9)) drop-shadow(0 0 1.1vw rgba(255,43,214,.55))',
@@ -187,7 +187,7 @@
       sub: '#ffffff', substroke: '.1vw #1b1464', subfilter: 'drop-shadow(.16vw .16vw 0 #ff3d81)',
       msg: '#ffffff', msgsh: '.12vw .12vw 0 #1b1464, .24vw .24vw 0 #ff3d81',
       num: '#fff36b', numsh: '.15vw .15vw 0 #1b1464, .3vw .3vw 0 #ff3d81', em: '#ff3d81', emsh: '.1vw .1vw 0 #1b1464' },
-    ocean: { font: 'Pacifico', text: 'Fredoka', w: 400, ls: '.02em', k: 0.9, subk: .85, fx: 'bubbles', pass: ['whale', 'fish'],
+    ocean: { font: 'Pacifico', text: 'Fredoka', w: 400, ls: '.02em', k: 0.87, subk: .85, fx: 'bubbles', pass: ['whale', 'fish'],
       grad: 'linear-gradient(to bottom,#ffffff 0%,#b8f4ff 52%,#3cc9f0 100%)',
       filter: _ol('#04465e', .13) + ' drop-shadow(.2vw .2vw 0 #022d3e) drop-shadow(0 0 1.1vw rgba(0,200,255,.7))',
       sub: '#e8fcff', substroke: '.08vw #04465e', subfilter: 'drop-shadow(0 0 .45vw rgba(0,200,255,.9)) drop-shadow(0 0 1vw rgba(0,150,200,.6))',
@@ -253,13 +253,13 @@
       sub: '#eef2ff', substroke: '.08vw #0a1030', subfilter: 'drop-shadow(0 0 .45vw rgba(157,180,255,.9)) drop-shadow(0 0 1vw rgba(179,18,46,.4))',
       msg: '#eef2ff', msgsh: '0 .1vw .25vw rgba(5,8,24,.95), 0 0 .6vw rgba(157,180,255,.7)',
       num: '#ffffff', numsh: '.14vw .14vw 0 #0a1030, 0 0 .9vw rgba(200,215,255,.9)', em: '#ff3b55', emsh: '0 0 .6vw rgba(179,18,46,.9)' },
-    fog: { font: 'IM Fell English', text: 'IM Fell English', w: 400, ls: '.04em', k: 0.95, subk: .95, fx: 'ash', pass: ['fog'],
+    fog: { font: 'IM Fell English', text: 'IM Fell English', w: 400, ls: '.03em', k: 0.93, subk: .95, fx: 'ash', pass: ['fog'],
       grad: 'linear-gradient(to bottom,#f4f1ea 0%,#c9c4bb 55%,#7d756a 100%)',
       filter: _ol('#1a1714', .11) + ' drop-shadow(.18vw .18vw 0 #000) drop-shadow(0 0 1.4vw rgba(200,200,200,.45))',
       sub: '#e6e1d8', substroke: '.07vw #1a1714', subfilter: 'drop-shadow(0 0 .5vw rgba(181,86,43,.65))',
       msg: '#e6e1d8', msgsh: '0 .1vw .3vw rgba(0,0,0,.9), 0 0 .8vw rgba(180,180,180,.4)',
       num: '#e6e1d8', numsh: '.12vw .12vw 0 #1a1714, 0 0 .8vw rgba(181,86,43,.7)', em: '#d0672f', emsh: '0 0 .6vw rgba(181,86,43,.8)' },
-    vault: { font: 'VT323', text: 'VT323', w: 400, ls: '.06em', k: 1.25, subk: 1.1, fx: 'geiger', pass: ['supply'],
+    vault: { font: 'VT323', text: 'VT323', w: 400, ls: '.06em', k: 1.2, subk: 1.1, fx: 'geiger', pass: ['supply'],
       grad: 'linear-gradient(to bottom,#eaffef 0%,#7dff9a 45%,#1fbf48 100%)',
       filter: 'drop-shadow(0 0 .3vw rgba(60,255,106,.95)) drop-shadow(0 0 1.3vw rgba(60,255,106,.6))',
       sub: '#c8ffd2', substroke: '0', subfilter: 'drop-shadow(0 0 .45vw rgba(60,255,106,.9))',
@@ -461,24 +461,8 @@
     $('screen').innerHTML = html;
     clearInterval(tick);
     if (cfg.countdown.enabled) { renderCountdown(); tick = setInterval(renderCountdown, 250); }
-    fitBlocks(); declutter(tx);
+    declutter(tx);
     if (PREVIEW) { setTimeout(reportRects, 250); setTimeout(reportRects, cfg.anim_dur * 1000 + 400); }
-  }
-
-  // Le titre doit toujours tenir dans l'écran, quelle que soit la police du thème : si un mot est plus large que le bloc,
-  // ou si le bloc agrandi (--k) dépasse un bord, on le réduit juste ce qu'il faut (marge de 2 % autour).
-  function fitBlocks() {
-    const W = innerWidth, H = innerHeight, m = W * 0.02;
-    const k = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--k')) || 1;
-    document.querySelectorAll('#screen > .blk').forEach(b => {
-      b.style.setProperty('--fit', 1);
-      let need = b.offsetWidth;
-      b.querySelectorAll('.ln, .cd').forEach(n => { need = Math.max(need, n.scrollWidth); });
-      const cx = parseFloat(b.style.left) / 100 * W, cy = parseFloat(b.style.top) / 100 * H;
-      const availW = 2 * Math.max(0, Math.min(cx, W - cx) - m), availH = H - 2 * m;
-      const fit = Math.min(1, b.offsetWidth / need, availW / (need * k), availH / (b.offsetHeight * k));
-      if (fit < 1) b.style.setProperty('--fit', Math.max(0.3, fit).toFixed(3));
-    });
   }
 
   // Anti-chevauchement : les lignes sont placées à la main pour la police d'origine ; avec une autre police (plus haute / plus basse) elles pouvaient se superposer.
@@ -493,8 +477,7 @@
     const items = blks.map(el => {
       if (el.dataset.t0 === undefined) el.dataset.t0 = parseFloat(el.style.top);
       let w = 0; el.querySelectorAll('.ln, .cd').forEach(n => { w = Math.max(w, n.offsetWidth); });
-      const kf = k * (parseFloat(el.style.getPropertyValue('--fit')) || 1);
-      return { el, cx: parseFloat(el.style.left) / 100 * W, cy0: +el.dataset.t0 / 100 * H, w: (w || el.offsetWidth) * kf, h: el.offsetHeight * kf + H * 0.012 };
+      return { el, cx: parseFloat(el.style.left) / 100 * W, cy0: +el.dataset.t0 / 100 * H, w: (w || el.offsetWidth) * k, h: el.offsetHeight * k + H * 0.012 };
     }).sort((a, b) => a.cy0 - b.cy0);
     const gap = W * (lastTx ? 0.006 : 0.003);
     items.forEach((it, i) => {
@@ -512,7 +495,7 @@
     }
     items.forEach(it => { it.el.style.top = (it.cy / H * 100) + '%'; });
   }
-  if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => { fitBlocks(); declutter(); if (PREVIEW) setTimeout(reportRects, 200); });
+  if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => { declutter(); if (PREVIEW) setTimeout(reportRects, 200); });
 
   // L'éditeur dessine ses poignées de déplacement sur la position réelle de chaque élément
   function reportRects() {
