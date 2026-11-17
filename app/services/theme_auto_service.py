@@ -29,7 +29,6 @@ DEFAULT_RULES = [
     ("Fortnite", "fortnite"),
     ("Elden Ring", "darkfantasy"), ("Lies of P", "darkfantasy"), ("Witcher", "darkfantasy"),
     ("Baldur's Gate", "darkfantasy"), ("Oblivion", "darkfantasy"),
-    ("Clair Obscur", "clairobscur"),
     ("Fallout", "vault"), ("ARC Raiders", "vault"), ("HELLDIVERS", "vault"), ("Quarantine Zone", "vault"),
     ("No Man's Sky", "space"), ("Outer Wilds", "space"),
     ("Watch_Dogs", "cyber"), ("Watch Dogs", "cyber"), ("Detroit", "cyber"),

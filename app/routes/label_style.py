@@ -87,10 +87,6 @@ PRESETS = {
     "darkfantasy": {"preset": "darkfantasy", "font": "Cinzel", "weight": "700", "size": "", "spacing": "2",
         "color": "#f3e6c4", "glow": "#d48a2a", "icon_color": "#d4b06a", "icon_set": "darkfantasy",
         "w_accent": "#d4b06a", "w_accent2": "#8a1c1c", "w_font": "Cinzel", "until": ""},
-    # Clair Obscur : Expedition 33 : noir et or Belle Époque, pétales rouges
-    "clairobscur": {"preset": "clairobscur", "font": "Cormorant Garamond", "weight": "700", "size": "", "spacing": "2",
-        "color": "#f6ead2", "glow": "#c8102e", "icon_color": "#e8c27a", "icon_set": "clairobscur",
-        "w_accent": "#e8c27a", "w_accent2": "#b3122e", "w_font": "Cormorant Garamond", "until": ""},
     # Pleine lune (Dead by Daylight, Lycans) : bleu nuit, lune, loup qui court
     "werewolf": {"preset": "werewolf", "font": "Metal Mania", "weight": "400", "size": "", "spacing": "1",
         "color": "#eef2ff", "glow": "#7d97ff", "icon_color": "#c9d6ff", "icon_set": "werewolf",
@@ -374,7 +370,7 @@ async def admin_label_style_save(payload: StylePayload):
         except ValueError:
             raise HTTPException(status_code=400, detail="La date de fin doit être au format AAAA-MM-JJ.")
     if data["icon_set"] not in ("default", "halloween", "zelda", "noel", "cyber", "arcade", "ocean", "space", "pirate", "sakura", "horror", "gta6",
-                                 "repo", "fortnite", "darkfantasy", "clairobscur", "werewolf", "fog", "vault", "pokemon", "cosy"):
+                                 "repo", "fortnite", "darkfantasy", "werewolf", "fog", "vault", "pokemon", "cosy"):
         raise HTTPException(status_code=400, detail="Jeu d'icônes inconnu.")
     await _ensure()
     async with get_db_connection() as db:

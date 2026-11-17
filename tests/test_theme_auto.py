@@ -9,7 +9,7 @@ def test_default_rules_point_to_existing_themes():
 def test_matching_real_categories():
     cases = {
         "The Legend of Zelda: Ocarina of Time": "zelda", "Phasmophobia": "horror", "SILENT HILL 2": "fog",
-        "R.E.P.O.": "repo", "ELDEN RING NIGHTREIGN": "darkfantasy", "Clair Obscur: Expedition 33": "clairobscur",
+        "R.E.P.O.": "repo", "ELDEN RING NIGHTREIGN": "darkfantasy", "Clair Obscur: Expedition 33": "",
         "Dead by Daylight": "werewolf", "Sea of Thieves": "pirate", "Pokémon Legends: Z-A": "pokemon",
         "HELLDIVERS 2": "vault", "Grand Theft Auto V": "gta6", "Super Mario Odyssey": "arcade",
         "Just Chatting": "",

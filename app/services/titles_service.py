@@ -21,7 +21,7 @@ EFFECTS = {"none": "Aucun", "bats": "Chauves-souris", "confetti": "Confettis / b
            "pixels": "Pixels néon (Cyberpunk)", "coins": "Pièces et étoiles (Arcade)",
            "bubbles": "Bulles (Océan)", "stars": "Étoiles qui scintillent (Espace)", "petals": "Pétales de sakura", "doubloons": "Doublons (Pirate)", "blood": "Gouttes de sang (Horreur)", "cash": "Billets (GTA VI)",
            "loot": "Butin (R.E.P.O.)", "storm": "Éclairs de la tempête (Battle Royale)", "embers": "Braises (Dark fantasy)",
-           "redpetals": "Pétales rouges (Clair Obscur)", "deadleaves": "Feuilles mortes (Pleine lune)", "ash": "Cendres (Brouillard)",
+           "deadleaves": "Feuilles mortes (Pleine lune)", "ash": "Cendres (Brouillard)",
            "geiger": "Radiations (Post-apo)", "sparks": "Étincelles (Pokémon)", "leaves": "Feuilles (Cosy)"}
 ANIMS = {"perspective": "Apparition en profondeur (comme avant)", "zoom": "Zoom", "fade": "Fondu", "bounce": "Rebond",
          "slide-up": "Glisse du bas", "none": "Aucune"}
