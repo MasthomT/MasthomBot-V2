@@ -109,12 +109,12 @@ const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').
 
 // nom, emoji, personnage qui passe sur les titres (passers.js), titre court affiché sur la carte
 const THEMES = {
-    classique:   ['Classique', '✨', null],          halloween: ['Halloween', '🎃', null],      zelda: ['Zelda', '🧚', null],
+    classique:   ['Classique', '✨', null],          halloween: ['Halloween', '🎃', 'witch'],      zelda: ['Zelda', '🧚', 'epona'],
     noel:        ['Noël', '❄️', 'sleigh'],           cyber: ['Cyberpunk', '🌃', 'drone'],       arcade: ['Arcade', '🕹️', 'pacman'],
     ocean:       ['Océan', '🌊', 'whale'],           space: ['Espace', '🚀', 'ufo'],            pirate: ['Pirate', '🏴‍☠️', 'ship'],
     sakura:      ['Sakura', '🌸', 'butterfly'],      horror: ['Horreur', '🩸', 'crow'],         gta6: ['GTA VI', '🌴', 'car'],
     repo:        ['R.E.P.O.', '🤖', 'robot'],        fortnite: ['Battle Royale', '🪂', 'bus'],   darkfantasy: ['Dark fantasy', '🐉', 'dragon'],
-    werewolf: ['Pleine lune', '🐺', 'wolf'],   fog: ['Brouillard', '🌫️', null],
+    werewolf: ['Pleine lune', '🐺', 'wolf'],   fog: ['Brouillard', '🌫️', 'figure'],
     vault:       ['Post-apo', '☢️', 'supply'],       pokemon: ['Pokémon', '⚡', 'pokeball'],     cosy: ['Cosy', '🍃', 'bee'],
 };
 const tName = (k) => THEMES[k] ? THEMES[k][1] + ' ' + THEMES[k][0] : k;
