@@ -26,26 +26,43 @@
     '@keyframes ps-gal{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}.pass .gallop{animation:ps-gal .36s ease-in-out infinite}' +
     '@keyframes ps-flapd{from{transform:scaleY(1)}to{transform:scaleY(-.35)}}.pass .flap{transform-box:view-box;animation:ps-flapd .55s ease-in-out infinite alternate}' +
     '@keyframes ps-sway{from{transform:rotate(-7deg)}to{transform:rotate(7deg)}}.pass .sway{transform-box:view-box;animation:ps-sway 1.8s ease-in-out infinite alternate}' +
-    '@keyframes ps-spin{to{transform:rotate(360deg)}}.pass .spin{transform-box:fill-box;transform-origin:50% 50%;animation:ps-spin .9s linear infinite}';
+    '@keyframes ps-spin{to{transform:rotate(360deg)}}.pass .spin{transform-box:fill-box;transform-origin:50% 50%;animation:ps-spin .9s linear infinite}' +
+    // mouvements secondaires : flotter, onduler, clignoter, flamme, roulis, drapeau, rotor, roues…
+    '.pass .spinf{transform-box:fill-box;transform-origin:50% 50%;animation:ps-spin .32s linear infinite}' +
+    '@keyframes ps-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}.pass .float{animation:ps-float 1.6s ease-in-out infinite}' +
+    '@keyframes ps-jig{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.5px)}}.pass .jig{animation:ps-jig .18s linear infinite}' +
+    '@keyframes ps-wig{from{transform:rotate(-14deg)}to{transform:rotate(14deg)}}.pass .wig{transform-box:fill-box;animation:ps-wig .28s ease-in-out infinite alternate}' +
+    '@keyframes ps-swim{from{transform:rotate(-2.5deg)}to{transform:rotate(2.5deg)}}.pass .swim{transform-box:view-box;animation:ps-swim 1.4s ease-in-out infinite alternate}' +
+    '@keyframes ps-fluke{from{transform:rotate(-9deg)}to{transform:rotate(9deg)}}.pass .fluke{transform-box:view-box;animation:ps-fluke .7s ease-in-out infinite alternate}' +
+    '@keyframes ps-blink{0%,45%{opacity:1}50%,95%{opacity:.15}100%{opacity:1}}.pass .blink{animation:ps-blink .6s steps(1) infinite}.pass .blink2{animation:ps-blink .6s steps(1) infinite;animation-delay:-.3s}' +
+    '@keyframes ps-flame{0%{transform:scale(1,1)}25%{transform:scale(.85,1.2)}50%{transform:scale(1.1,.85)}75%{transform:scale(.9,1.15)}100%{transform:scale(1,1)}}.pass .flame{transform-box:fill-box;transform-origin:50% 100%;animation:ps-flame .3s linear infinite}' +
+    '.pass .flamel{transform-box:fill-box;transform-origin:0 50%;animation:ps-flame .26s linear infinite}' +
+    '@keyframes ps-roll{from{transform:rotate(-3deg)}to{transform:rotate(3deg)}}.pass .roll{transform-box:view-box;animation:ps-roll 2.2s ease-in-out infinite alternate}' +
+    '@keyframes ps-flag{from{transform:skewY(-8deg) scaleX(.94)}to{transform:skewY(6deg) scaleX(1)}}.pass .flag{transform-box:fill-box;transform-origin:0 50%;animation:ps-flag .45s ease-in-out infinite alternate}' +
+    '@keyframes ps-billow{from{transform:scaleX(1)}to{transform:scaleX(1.06)}}.pass .billow{transform-box:fill-box;transform-origin:0 50%;animation:ps-billow 1.1s ease-in-out infinite alternate}' +
+    '@keyframes ps-rotor{from{transform:scaleX(1)}to{transform:scaleX(-1)}}.pass .rotor{transform-box:fill-box;transform-origin:50% 50%;animation:ps-rotor .09s linear infinite alternate}' +
+    '@keyframes ps-scan{from{transform:rotate(-14deg)}to{transform:rotate(14deg)}}.pass .scan{transform-box:view-box;animation:ps-scan 1.8s ease-in-out infinite alternate}' +
+    '@keyframes ps-pulse{0%,100%{opacity:.55}50%{opacity:1}}.pass .pulse{animation:ps-pulse 1.1s ease-in-out infinite}' +
+    '@keyframes ps-tw{0%,100%{opacity:.2;transform:scale(.5)}50%{opacity:1;transform:scale(1.15)}}.pass .tw{transform-box:fill-box;transform-origin:50% 50%;animation:ps-tw 1s ease-in-out infinite}' +
+    '@keyframes ps-wobble{0%,100%{transform:rotate(-5deg) translateY(0)}50%{transform:rotate(5deg) translateY(-4px)}}.pass .wobble{transform-box:view-box;animation:ps-wobble 2s ease-in-out infinite}' +
+    '@keyframes ps-dart{0%,30%{transform:translateX(0)}40%,65%{transform:translateX(3px)}75%,100%{transform:translateX(-2px)}}.pass .dart{animation:ps-dart 2.4s ease-in-out infinite}' +
+    '@keyframes ps-hop{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}.pass .hop{animation:ps-hop .6s cubic-bezier(.3,0,.7,1) infinite}' +
+    '@keyframes ps-wave{from{transform:translateX(0)}to{transform:translateX(-28px)}}.pass .waves{animation:ps-wave 1.2s linear infinite}';
   document.head.appendChild(css);
 
   var svg = function (vb, inner) { return '<svg viewBox="' + vb + '" xmlns="' + NS + '">' + inner + '</svg>'; };
 
   // ── dessins (tous tournés vers la droite) ──
-  var reindeer = function (x, y) {
-    return '<g transform="translate(' + x + ' ' + y + ')">' +
-      '<g stroke="#5a3a1a" stroke-width="4" stroke-linecap="round"><line x1="14" y1="38" x2="10" y2="56"/><line x1="24" y1="38" x2="26" y2="56"/><line x1="50" y1="38" x2="46" y2="56"/><line x1="60" y1="38" x2="64" y2="56"/></g>' +
-      '<ellipse cx="38" cy="30" rx="30" ry="14" fill="#9a6a38"/><circle cx="72" cy="14" r="10" fill="#9a6a38"/>' +
-      '<circle cx="80" cy="16" r="3.4" fill="#e63946"/><circle cx="74" cy="11" r="1.6" fill="#1a1a1a"/>' +
-      '<path d="M70 6 L66 -8 M66 -8 L60 -12 M66 -8 L70 -14 M75 5 L80 -9 M80 -9 L86 -12 M80 -9 L78 -15" stroke="#5a3a1a" stroke-width="2.6" fill="none" stroke-linecap="round"/></g>';
-  };
   var DRAW = {
     sleigh: { w: 26, vb: '0 0 430 150', draw: function () {
       var deer = function (x, y, lead) {
         return '<g transform="translate(' + x + ' ' + y + ')">' +
-          '<g stroke="#4a2c12" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none">' +
+          '<g class="mouth-open"><g stroke="#4a2c12" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none">' +
             '<polyline points="22,46 12,56 0,58"/><polyline points="28,48 22,60 10,66"/><polyline points="58,46 70,54 84,56"/><polyline points="52,48 62,60 74,66"/></g>' +
-          '<g fill="#2a1a0a"><circle cx="0" cy="58" r="2.6"/><circle cx="10" cy="66" r="2.6"/><circle cx="84" cy="56" r="2.6"/><circle cx="74" cy="66" r="2.6"/></g>' +
+            '<g fill="#2a1a0a"><circle cx="0" cy="58" r="2.6"/><circle cx="10" cy="66" r="2.6"/><circle cx="84" cy="56" r="2.6"/><circle cx="74" cy="66" r="2.6"/></g></g>' +
+          '<g class="mouth-shut"><g stroke="#4a2c12" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none">' +
+            '<polyline points="22,46 30,58 38,66"/><polyline points="28,48 36,58 46,62"/><polyline points="58,46 52,58 44,66"/><polyline points="52,48 46,60 36,64"/></g>' +
+            '<g fill="#2a1a0a"><circle cx="38" cy="66" r="2.6"/><circle cx="46" cy="62" r="2.6"/><circle cx="44" cy="66" r="2.6"/><circle cx="36" cy="64" r="2.6"/></g></g>' +
           '<path d="M12 40 C12 28 30 24 48 26 C62 27 70 32 70 40 C70 50 56 52 40 52 C22 52 12 50 12 40Z" fill="#9a6232" stroke="#4a2c12" stroke-width="2.5"/>' +
           '<path d="M20 48 C34 52 54 52 66 46" stroke="#e8c9a0" stroke-width="4" fill="none" stroke-linecap="round"/>' +
           '<path d="M12 36 L4 30 L10 40Z" fill="#f5efe6"/>' +
@@ -56,7 +73,8 @@
           (lead ? '<circle cx="96" cy="13" r="4" fill="#ff2a2a"/><circle cx="96" cy="13" r="8" fill="#ff4a4a" opacity=".35"/>' : '<circle cx="95" cy="13" r="2.4" fill="#2a1a0a"/>') +
           '<rect x="34" y="27" width="6" height="25" rx="2" fill="#c8102e"/><circle cx="37" cy="40" r="3" fill="#ffd54a"/></g>';
       };
-      return '<g fill="#fff3b0"><circle cx="8" cy="70" r="2.4"/><circle cx="18" cy="88" r="1.6"/><circle cx="4" cy="104" r="2"/><path d="M14 54 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2z"/></g>' +
+      return '<g fill="#fff3b0"><circle class="tw" cx="8" cy="70" r="2.4"/><circle class="tw" style="animation-delay:-.4s" cx="18" cy="88" r="1.8"/><circle class="tw" style="animation-delay:-.7s" cx="4" cy="104" r="2"/><path class="tw" style="animation-delay:-.2s" d="M14 54 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2z"/></g>' +
+        '<g class="float">' +
         '<path d="M150 74 C190 66 210 70 236 70 M150 76 C230 80 270 66 326 70" stroke="#d4af37" stroke-width="2" fill="none"/>' +
         '<path d="M30 132 H176 C200 132 204 110 190 104 C184 102 180 108 184 112" stroke="#d4af37" stroke-width="5" fill="none" stroke-linecap="round"/>' +
         '<path d="M30 132 C18 132 16 122 24 118" stroke="#d4af37" stroke-width="5" fill="none" stroke-linecap="round"/>' +
@@ -68,43 +86,59 @@
         '<path d="M126 70 L148 72" stroke="#d62828" stroke-width="7" stroke-linecap="round"/><circle cx="150" cy="72" r="4.5" fill="#fff"/>' +
         '<circle cx="112" cy="48" r="11" fill="#f5cba7"/><path d="M101 50 C102 64 122 64 123 50 C118 54 106 54 101 50Z" fill="#fff"/><circle cx="117" cy="45" r="1.6" fill="#1a1a1a"/><circle cx="121" cy="50" r="2.4" fill="#f08a7a"/>' +
         '<path d="M100 42 C102 30 114 26 122 34 C116 32 108 34 104 40" fill="#fff"/><path d="M102 40 C104 26 112 22 120 30 L96 26 C94 30 96 36 102 40Z" fill="#d62828"/><path d="M100 41 C108 36 118 36 124 40" stroke="#fff" stroke-width="5" stroke-linecap="round"/><circle cx="94" cy="25" r="4.5" fill="#fff"/>' +
-        deer(226, 40, false) + deer(324, 40, true);
+        deer(226, 40, false) + deer(324, 40, true) + '</g>';
     } },
-    drone: { w: 9, vb: '0 0 200 110', draw: function () {
-      return '<path d="M0 36 H62" stroke="#ff2bd6" stroke-width="3" stroke-dasharray="10 8" opacity=".8"/><path d="M6 50 H56" stroke="#00f0ff" stroke-width="2" stroke-dasharray="6 9" opacity=".7"/>' +
-        '<path d="M92 56 L72 108 H152 L132 56Z" fill="#00f0ff" opacity=".16"/>' +
-        '<line x1="82" y1="18" x2="150" y2="18" stroke="#9fefff" stroke-width="3" stroke-linecap="round"/><line x1="116" y1="18" x2="116" y2="32" stroke="#0c1230" stroke-width="4"/>' +
-        '<rect x="62" y="32" width="108" height="26" rx="13" fill="#0c1230" stroke="#00f0ff" stroke-width="3"/>' +
-        '<rect x="82" y="42" width="68" height="6" rx="3" fill="#ff2bd6"/><circle cx="160" cy="45" r="4" fill="#00f0ff"/>' +
-        '<circle cx="70" cy="62" r="5" fill="#00f0ff"/><circle cx="162" cy="62" r="5" fill="#00f0ff"/>';
+    // Cyberpunk : drone furtif, rotors qui tournent, caméra rouge et rayon de scan
+    drone: { w: 11, vb: '0 0 230 140', draw: function () {
+      return '<defs><linearGradient id="ps-dh" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a3566"/><stop offset="1" stop-color="#070a1c"/></linearGradient>' +
+        '<linearGradient id="ps-db" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff2bd6" stop-opacity=".5"/><stop offset="1" stop-color="#ff2bd6" stop-opacity="0"/></linearGradient></defs>' +
+        '<g opacity=".85" stroke-linecap="round"><path d="M0 52 H58" stroke="#ff2bd6" stroke-width="3" stroke-dasharray="12 9"/><path d="M8 66 H62" stroke="#00f0ff" stroke-width="2.4" stroke-dasharray="7 10"/></g>' +
+        '<g class="float">' +
+        '<g class="scan" style="transform-origin:170px 78px"><path d="M170 78 L138 140 H202Z" fill="url(#ps-db)"/></g>' +
+        '<path d="M86 50 L74 32 M164 46 L178 30" stroke="#5a6aa8" stroke-width="5" stroke-linecap="round"/>' +
+        '<ellipse class="rotor" cx="72" cy="30" rx="30" ry="4.5" fill="#9fefff" opacity=".55"/><ellipse class="rotor" cx="180" cy="28" rx="30" ry="4.5" fill="#9fefff" opacity=".55" style="animation-delay:-.04s"/>' +
+        '<circle cx="72" cy="30" r="4" fill="#00f0ff"/><circle cx="180" cy="28" r="4" fill="#00f0ff"/>' +
+        '<path d="M62 60 L84 42 H160 L190 54 L194 64 L172 78 H86Z" fill="url(#ps-dh)" stroke="#00f0ff" stroke-width="2.5" stroke-linejoin="round"/>' +
+        '<path d="M92 50 H158 L176 57" stroke="#ff2bd6" stroke-width="4" fill="none" stroke-linecap="round"/>' +
+        '<path d="M100 66 H160" stroke="#00f0ff" stroke-width="2" opacity=".6"/>' +
+        '<circle cx="170" cy="76" r="7" fill="#1a0010" stroke="#ff2bd6" stroke-width="2"/><circle class="pulse" cx="170" cy="76" r="3.5" fill="#ff2b4a"/>' +
+        '<circle class="blink" cx="66" cy="62" r="3" fill="#00f0ff"/><circle class="blink2" cx="192" cy="60" r="3" fill="#ff2bd6"/>' +
+        '<ellipse class="pulse" cx="128" cy="84" rx="44" ry="5" fill="#00f0ff" opacity=".35"/></g>';
     } },
-    pacman: { w: 19, vb: '0 0 440 64', draw: function () {
+    // Arcade : Pac-Man poursuivi par les fantômes (jupes qui ondulent, yeux qui regardent devant)
+    pacman: { w: 20, vb: '0 0 470 72', draw: function () {
       var ghost = function (x, c) {
-        return '<g transform="translate(' + x + ' 6)"><path d="M0 46 V22 a22 22 0 0 1 44 0 V46 l-7.3-7 -7.3 7 -7.3-7 -7.3 7 -7.3-7 -7.3 7z" fill="' + c + '"/>' +
-          '<circle cx="14" cy="22" r="6" fill="#fff"/><circle cx="30" cy="22" r="6" fill="#fff"/><circle cx="16.5" cy="22" r="3" fill="#1b3ea8"/><circle cx="32.5" cy="22" r="3" fill="#1b3ea8"/></g>';
+        var eyes = '<ellipse cx="15" cy="22" rx="6" ry="7" fill="#fff"/><ellipse cx="31" cy="22" rx="6" ry="7" fill="#fff"/><circle class="dart" cx="18" cy="23" r="3.2" fill="#1b3ea8"/><circle class="dart" cx="34" cy="23" r="3.2" fill="#1b3ea8"/>';
+        return '<g transform="translate(' + x + ' 8)">' +
+          '<path class="mouth-open" d="M0 48 V22 a22 22 0 0 1 44 0 V48 l-5.5 -6 -5.5 6 -5.5 -6 -5.5 6 -5.5 -6 -5.5 6 -5.5 -6 -5.5 6z" fill="' + c + '"/>' +
+          '<path class="mouth-shut" d="M0 44 V22 a22 22 0 0 1 44 0 V44 l-5.5 6 -5.5 -6 -5.5 6 -5.5 -6 -5.5 6 -5.5 -6 -5.5 6 -5.5 -6z" fill="' + c + '"/>' +
+          '<path d="M8 10 C14 4 24 3 30 6" stroke="#fff" stroke-width="3" fill="none" opacity=".35" stroke-linecap="round"/>' + eyes + '</g>';
       };
-      var dots = ''; for (var i = 0; i < 6; i++) dots += '<circle cx="' + (330 + i * 22) + '" cy="32" r="4.5" fill="#ffe9a8"/>';
-      return ghost(0, '#ff3b30') + ghost(56, '#ff8fd0') + ghost(112, '#25d9e8') +
-        '<g transform="translate(220 0)"><circle class="mouth-shut" cx="32" cy="32" r="30" fill="#ffd400"/>' +
-        '<path class="mouth-open" d="M32 32 L62 14 A34 34 0 1 0 62 50Z" fill="#ffd400"/></g>' + dots;
+      var dots = ''; for (var i = 0; i < 5; i++) dots += '<circle cx="' + (338 + i * 22) + '" cy="36" r="4.5" fill="#ffe9a8"/>';
+      return '<defs><radialGradient id="ps-pm" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#fff27a"/><stop offset="1" stop-color="#ffb800"/></radialGradient></defs>' +
+        ghost(0, '#ff3b30') + ghost(56, '#ff8fd0') + ghost(112, '#25d9e8') + ghost(168, '#ffb347') +
+        '<g transform="translate(240 4)"><circle class="mouth-shut" cx="32" cy="32" r="30" fill="url(#ps-pm)"/>' +
+        '<path class="mouth-open" d="M32 32 L62 12 A35 35 0 1 0 62 52Z" fill="url(#ps-pm)"/><circle cx="34" cy="16" r="3.6" fill="#1a1a1a"/></g>' + dots +
+        '<circle class="pulse" cx="458" cy="36" r="9" fill="#ffe9a8"/>';
     } },
     whale: { w: 22, vb: '0 0 340 150', draw: function () {
       return '<defs><linearGradient id="ps-wh" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a5fa8"/><stop offset=".6" stop-color="#3b7dd8"/><stop offset="1" stop-color="#4f93e6"/></linearGradient></defs>' +
-        '<g stroke="#bdf3ff" stroke-width="4" stroke-linecap="round" fill="none" opacity=".85"><path d="M262 38 Q258 18 244 10"/><path d="M262 38 Q266 18 280 10"/><path d="M262 38 V14"/></g>' +
-        '<g fill="#dff7ff" opacity=".9"><circle cx="242" cy="8" r="3"/><circle cx="282" cy="8" r="3"/><circle cx="262" cy="10" r="3"/></g>' +
-        '<path d="M330 80 C328 52 292 38 240 40 C180 42 120 56 74 72 L42 78 C32 70 20 58 6 52 C12 66 20 76 26 82 C20 88 12 98 8 110 C20 104 32 92 42 86 L74 92 C120 112 190 124 250 120 C296 117 330 104 330 80Z" fill="url(#ps-wh)" stroke="#173e6e" stroke-width="3.5" stroke-linejoin="round"/>' +
+        '<g class="pulse"><g stroke="#bdf3ff" stroke-width="4" stroke-linecap="round" fill="none" opacity=".85"><path d="M262 38 Q258 18 244 10"/><path d="M262 38 Q266 18 280 10"/><path d="M262 38 V14"/></g>' +
+        '<g fill="#dff7ff" opacity=".9"><circle cx="242" cy="8" r="3"/><circle cx="282" cy="8" r="3"/><circle cx="262" cy="10" r="3"/></g></g>' +
+        '<g class="swim" style="transform-origin:200px 82px"><path d="M330 80 C328 52 292 38 240 40 C180 42 120 56 74 72 L42 78 C32 70 20 58 6 52 C12 66 20 76 26 82 C20 88 12 98 8 110 C20 104 32 92 42 86 L74 92 C120 112 190 124 250 120 C296 117 330 104 330 80Z" fill="url(#ps-wh)" stroke="#173e6e" stroke-width="3.5" stroke-linejoin="round"/>' +
         '<path d="M84 95 C130 112 200 122 252 118 C292 115 318 104 327 90 C300 100 262 106 222 104 C164 102 122 99 84 95Z" fill="#d4f0fc"/>' +
         '<g stroke="#9cc9e6" stroke-width="2" fill="none" stroke-linecap="round"><path d="M236 110 C262 108 292 102 316 94"/><path d="M228 114 C258 113 290 107 312 99"/><path d="M244 105 C270 103 296 98 318 90"/></g>' +
         '<path d="M330 84 C314 92 292 96 268 95" stroke="#173e6e" stroke-width="3" fill="none" stroke-linecap="round"/>' +
         '<circle cx="290" cy="76" r="4.5" fill="#0b2a3a"/><circle cx="291.5" cy="74.5" r="1.5" fill="#fff"/>' +
         '<path d="M232 104 C228 122 214 136 194 140 C202 128 208 116 212 104Z" fill="#2f6cbf" stroke="#173e6e" stroke-width="3" stroke-linejoin="round"/>' +
         '<path d="M110 60 L122 48 L130 57Z" fill="#2a5fa8" stroke="#173e6e" stroke-width="2.5" stroke-linejoin="round"/>' +
-        '<path d="M150 56 C190 46 240 44 282 50" stroke="#7fb4ef" stroke-width="3" fill="none" opacity=".6" stroke-linecap="round"/>';
+        '<path d="M150 56 C190 46 240 44 282 50" stroke="#7fb4ef" stroke-width="3" fill="none" opacity=".6" stroke-linecap="round"/></g>';
     } },
     fish: { w: 11, vb: '0 0 200 90', draw: function () {
       var f = function (x, y, c, s) {
         return '<g transform="translate(' + x + ' ' + y + ') scale(' + s + ')">' +
-          '<path d="M66 20 C58 4 36 0 18 10 L2 0 C6 10 6 30 2 40 L18 30 C36 40 58 36 66 20Z" fill="' + c + '" stroke="#06384d" stroke-width="2.4" stroke-linejoin="round"/>' +
+          '<path class="wig" style="transform-origin:100% 50%" d="M20 20 L2 4 C6 12 6 28 2 36Z" fill="' + c + '" stroke="#06384d" stroke-width="2.4" stroke-linejoin="round"/>' +
+          '<path d="M66 20 C58 4 36 0 18 12 C16 16 16 24 18 28 C36 40 58 36 66 20Z" fill="' + c + '" stroke="#06384d" stroke-width="2.4" stroke-linejoin="round"/>' +
           '<path d="M34 8 C40 2 48 2 52 6" stroke="#06384d" stroke-width="2" fill="none"/><path d="M30 12 C26 18 26 24 30 30" stroke="#06384d" stroke-width="1.8" fill="none" opacity=".6"/>' +
           '<circle cx="54" cy="16" r="3" fill="#06384d"/><circle cx="55" cy="15" r="1" fill="#fff"/></g>';
       };
@@ -114,7 +148,8 @@
       return '<defs><linearGradient id="ps-ub" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff6a8" stop-opacity=".55"/><stop offset="1" stop-color="#fff6a8" stop-opacity="0"/></linearGradient>' +
         '<linearGradient id="ps-um" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4f7fb"/><stop offset=".5" stop-color="#b8c2d2"/><stop offset="1" stop-color="#6b778a"/></linearGradient>' +
         '<radialGradient id="ps-ud" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#e8fdff" stop-opacity=".95"/><stop offset="1" stop-color="#6fd3ec" stop-opacity=".55"/></radialGradient></defs>' +
-        '<path d="M66 80 H114 L150 150 H30Z" fill="url(#ps-ub)"/>' +
+        '<path class="pulse" d="M66 80 H114 L150 150 H30Z" fill="url(#ps-ub)"/>' +
+        '<g class="wobble" style="transform-origin:90px 60px">' +
         '<ellipse cx="90" cy="78" rx="34" ry="8" fill="#3a4456"/><ellipse cx="90" cy="78" rx="22" ry="5" fill="#9ff7ff" opacity=".8"/>' +
         '<path d="M54 50 C54 4 126 4 126 50Z" fill="url(#ps-ud)" stroke="#4aa8c9" stroke-width="2.5"/>' +
         '<path d="M80 48 C80 40 100 40 100 48Z" fill="#4fb34f"/><ellipse cx="90" cy="30" rx="11" ry="12" fill="#6bd66b"/><ellipse cx="85" cy="29" rx="3.4" ry="4.6" fill="#111"/><ellipse cx="95" cy="29" rx="3.4" ry="4.6" fill="#111"/>' +
@@ -123,24 +158,32 @@
         '<ellipse cx="90" cy="60" rx="84" ry="18" fill="url(#ps-um)" stroke="#4a5568" stroke-width="2.5"/>' +
         '<path d="M8 62 C40 74 140 74 172 62" stroke="#4a5568" stroke-width="2" fill="none"/>' +
         '<path d="M24 54 C50 46 130 46 156 54" stroke="#fff" stroke-width="2.5" fill="none" opacity=".7"/>' +
-        '<g class="ufo-lights"><circle cx="22" cy="64" r="4" fill="#ff5a5a"/><circle cx="46" cy="69" r="4" fill="#ffd54a"/><circle cx="70" cy="71.5" r="4" fill="#5be37d"/><circle cx="90" cy="72" r="4" fill="#5ab8ff"/><circle cx="110" cy="71.5" r="4" fill="#5be37d"/><circle cx="134" cy="69" r="4" fill="#ffd54a"/><circle cx="158" cy="64" r="4" fill="#ff5a5a"/></g>';
+        '<g class="ufo-lights"><circle class="blink" style="animation-delay:-0.09s" cx="22" cy="64" r="4" fill="#ff5a5a"/><circle class="blink" style="animation-delay:-0.36s" cx="46" cy="69" r="4" fill="#ffd54a"/><circle class="blink" style="animation-delay:-0.00s" cx="70" cy="71.5" r="4" fill="#5be37d"/><circle class="blink" style="animation-delay:-0.54s" cx="90" cy="72" r="4" fill="#5ab8ff"/><circle class="blink" style="animation-delay:-0.45s" cx="110" cy="71.5" r="4" fill="#5be37d"/><circle class="blink" style="animation-delay:-0.09s" cx="134" cy="69" r="4" fill="#ffd54a"/><circle class="blink" style="animation-delay:-0.36s" cx="158" cy="64" r="4" fill="#ff5a5a"/></g></g>';
     } },
-    comet: { w: 16, vb: '0 0 300 70', draw: function () {
-      return '<defs><linearGradient id="ps-cg" x1="0" x2="1"><stop offset="0" stop-color="#8b5cf6" stop-opacity="0"/><stop offset="1" stop-color="#e9ddff" stop-opacity=".95"/></linearGradient></defs>' +
-        '<path d="M0 35 L250 20 Q262 35 250 50Z" fill="url(#ps-cg)"/><circle cx="262" cy="35" r="14" fill="#fff8d6"/><circle cx="262" cy="35" r="24" fill="#ffd166" opacity=".35"/>';
+    // Espace : comète à longue queue lumineuse, étincelles qui scintillent
+    comet: { w: 18, vb: '0 0 330 90', draw: function () {
+      var sp = ''; [[60, 40, .1], [110, 30, .4], [150, 56, .7], [200, 36, .2], [230, 52, .55], [95, 58, .85]].forEach(function (p) {
+        sp += '<path class="tw" style="animation-delay:-' + p[2] + 's" d="M' + p[0] + ' ' + (p[1] - 5) + ' l1.6 3.4 3.4 1.6 -3.4 1.6 -1.6 3.4 -1.6 -3.4 -3.4 -1.6 3.4 -1.6z" fill="#fff6c8"/>';
+      });
+      return '<defs><linearGradient id="ps-ct" x1="0" x2="1"><stop offset="0" stop-color="#8b5cf6" stop-opacity="0"/><stop offset=".6" stop-color="#a78bfa" stop-opacity=".55"/><stop offset="1" stop-color="#e9ddff" stop-opacity=".95"/></linearGradient>' +
+        '<linearGradient id="ps-ct2" x1="0" x2="1"><stop offset="0" stop-color="#5ab8ff" stop-opacity="0"/><stop offset="1" stop-color="#bfe6ff" stop-opacity=".9"/></linearGradient>' +
+        '<radialGradient id="ps-cc"><stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="#fff3b0"/><stop offset="1" stop-color="#ffd166" stop-opacity="0"/></radialGradient></defs>' +
+        '<path d="M0 30 C120 34 220 30 286 38 L288 52 C220 58 120 64 0 66Z" fill="url(#ps-ct)"/>' +
+        '<path d="M40 44 C140 44 230 42 288 45" stroke="url(#ps-ct2)" stroke-width="7" fill="none" stroke-linecap="round"/>' + sp +
+        '<circle class="pulse" cx="292" cy="45" r="30" fill="url(#ps-cc)"/><circle cx="292" cy="45" r="11" fill="#fffdf2"/><circle cx="288" cy="41" r="4" fill="#fff"/>';
     } },
     ship: { w: 19, vb: '0 0 320 270', draw: function () {
       var sail = function (x1, x2, y1, y2, bulge) {
         return '<path d="M' + x1 + ' ' + y1 + ' Q' + ((x1 + x2) / 2) + ' ' + (y1 - 6) + ' ' + x2 + ' ' + y1 + ' Q' + (x2 + bulge) + ' ' + ((y1 + y2) / 2) + ' ' + x2 + ' ' + y2 + ' Q' + ((x1 + x2) / 2) + ' ' + (y2 + 8) + ' ' + x1 + ' ' + y2 + ' Q' + (x1 + bulge) + ' ' + ((y1 + y2) / 2) + ' ' + x1 + ' ' + y1 + 'Z" fill="#efe2c0" stroke="#8b6b3a" stroke-width="2.5" stroke-linejoin="round"/>' +
           '<line x1="' + (x1 - 6) + '" y1="' + y1 + '" x2="' + (x2 + 6) + '" y2="' + y1 + '" stroke="#4a2c12" stroke-width="4" stroke-linecap="round"/>';
       };
-      return '<path d="M232 180 L314 140" stroke="#4a2c12" stroke-width="5" stroke-linecap="round"/><path d="M226 92 L306 142 L232 150Z" fill="#efe2c0" stroke="#8b6b3a" stroke-width="2.5" stroke-linejoin="round"/>' +
+      return '<g class="roll" style="transform-origin:160px 220px"><path d="M232 180 L314 140" stroke="#4a2c12" stroke-width="5" stroke-linecap="round"/><path d="M226 92 L306 142 L232 150Z" fill="#efe2c0" stroke="#8b6b3a" stroke-width="2.5" stroke-linejoin="round"/>' +
         '<g stroke="#4a2c12" stroke-width="7" stroke-linecap="round"><line x1="150" y1="186" x2="150" y2="22"/><line x1="226" y1="182" x2="226" y2="70"/><line x1="66" y1="150" x2="66" y2="64"/></g>' +
         '<g stroke="#6b5030" stroke-width="1.5" opacity=".8"><line x1="150" y1="30" x2="300" y2="140"/><line x1="150" y1="30" x2="26" y2="140"/><line x1="226" y1="76" x2="292" y2="150"/></g>' +
         sail(112, 188, 40, 92, 10) + sail(118, 182, 100, 150, 10) + sail(196, 256, 80, 118, 8) + sail(200, 252, 124, 162, 8) + sail(42, 90, 74, 110, 7) + sail(46, 86, 116, 142, 6) +
         '<g transform="translate(150 124)"><circle cx="0" cy="-4" r="10" fill="#1a1a1a"/><rect x="-6" y="3" width="12" height="7" rx="2" fill="#1a1a1a"/><circle cx="-4" cy="-5" r="3" fill="#efe2c0"/><circle cx="4" cy="-5" r="3" fill="#efe2c0"/>' +
           '<path d="M-14 8 L14 20 M14 8 L-14 20" stroke="#1a1a1a" stroke-width="4" stroke-linecap="round"/></g>' +
-        '<path d="M150 12 L186 8 C180 16 186 22 192 26 L150 30Z" fill="#111"/><circle cx="166" cy="17" r="4" fill="#fff"/><path d="M160 24 L172 24 M161 22 L171 26 M171 22 L161 26" stroke="#fff" stroke-width="1.6"/>' +
+        '<g class="flag"><path d="M150 12 L186 8 C180 16 186 22 192 26 L150 30Z" fill="#111"/><circle cx="166" cy="17" r="4" fill="#fff"/><path d="M160 24 L172 24 M161 22 L171 26 M171 22 L161 26" stroke="#fff" stroke-width="1.6"/></g>' +
         '<path d="M14 132 H72 L76 152 H236 L300 136 C292 182 262 214 222 226 H86 C46 214 26 182 14 132Z" fill="#6b3e1f" stroke="#2e1a0a" stroke-width="4" stroke-linejoin="round"/>' +
         '<path d="M14 132 L10 124 H76 L72 132" fill="#5a3218" stroke="#2e1a0a" stroke-width="3" stroke-linejoin="round"/>' +
         '<g fill="#ffd27a" stroke="#2e1a0a" stroke-width="2"><rect x="24" y="140" width="10" height="10" rx="2"/><rect x="40" y="140" width="10" height="10" rx="2"/><rect x="56" y="140" width="10" height="10" rx="2"/></g>' +
@@ -148,25 +191,32 @@
         '<g fill="#1a0d04"><rect x="92" y="184" width="12" height="10" rx="2"/><rect x="124" y="186" width="12" height="10" rx="2"/><rect x="156" y="186" width="12" height="10" rx="2"/><rect x="188" y="184" width="12" height="10" rx="2"/><rect x="220" y="180" width="12" height="10" rx="2"/></g>' +
         '<g stroke="#2a2a2a" stroke-width="4" stroke-linecap="round"><line x1="98" y1="196" x2="98" y2="200"/><line x1="130" y1="198" x2="130" y2="202"/><line x1="162" y1="198" x2="162" y2="202"/><line x1="194" y1="196" x2="194" y2="200"/></g>' +
         '<path d="M76 150 H236" stroke="#2e1a0a" stroke-width="3"/><g stroke="#2e1a0a" stroke-width="2"><line x1="90" y1="142" x2="90" y2="152"/><line x1="120" y1="142" x2="120" y2="152"/><line x1="180" y1="142" x2="180" y2="152"/><line x1="210" y1="142" x2="210" y2="152"/></g><path d="M76 142 H236" stroke="#2e1a0a" stroke-width="2"/>' +
-        '<g fill="#bfe6ff" opacity=".8"><path d="M40 226 q14 -10 28 0 q14 10 28 0 q14 -10 28 0 q14 10 28 0 q14 -10 28 0 q14 10 28 0 q14 -10 28 0 q14 10 28 0 l0 6 h-196z"/></g>';
+        '</g><g fill="#bfe6ff" opacity=".8" class="waves"><path d="M40 226 q14 -10 28 0 q14 10 28 0 q14 -10 28 0 q14 10 28 0 q14 -10 28 0 q14 10 28 0 q14 -10 28 0 q14 10 28 0 q14 10 28 0 q14 -10 28 0 l0 6 h-252z"/></g>';
     } },
     crow: { w: 10, vb: '0 0 210 130', draw: function () {
       var wing = function (fill, edge) {
         return '<path d="M126 60 C112 34 92 14 62 6 L68 16 L52 14 L62 24 L46 26 L58 34 L42 40 L56 46 C80 56 100 62 114 66Z" fill="' + fill + '" stroke="' + edge + '" stroke-width="2" stroke-linejoin="round"/>' +
           '<path d="M118 58 C104 40 88 26 70 18 M110 62 C96 48 80 38 64 32" stroke="#3a3445" stroke-width="1.6" fill="none" opacity=".8"/>';
       };
-      return '<g class="flap" style="transform-origin:122px 62px;animation-delay:-.1s"><g transform="translate(10 -4)">' + wing('#120f16', '#4a4458') + '</g></g>' +
+      return '<g class="float"><g class="flap" style="transform-origin:122px 62px;animation-delay:-.1s"><g transform="translate(10 -4)">' + wing('#120f16', '#4a4458') + '</g></g>' +
         '<path d="M48 66 L8 56 L14 70 L6 84 L48 76Z" fill="#17131c" stroke="#5a5368" stroke-width="2" stroke-linejoin="round"/>' +
         '<path d="M44 66 C62 54 112 52 142 58 C152 48 166 44 176 48 C184 51 188 56 190 60 L208 66 L188 70 C180 76 164 78 150 76 C122 88 82 88 58 80 C50 78 44 74 44 66Z" fill="#241f2e" stroke="#5a5368" stroke-width="2.5" stroke-linejoin="round"/>' +
         '<path d="M190 60 L208 66 L190 66Z" fill="#3c3c44"/><path d="M190 66 L208 66 L188 70Z" fill="#2a2a30"/>' +
         '<circle cx="178" cy="56" r="3.4" fill="#ff2b2b"/><circle cx="178" cy="56" r="8" fill="#ff2b2b" opacity=".3"/>' +
         '<path d="M150 62 C130 60 100 62 70 70" stroke="#3a3445" stroke-width="2" fill="none" opacity=".7"/>' +
         '<g stroke="#3c3c44" stroke-width="2.5" stroke-linecap="round"><path d="M112 84 L104 96 M104 96 L98 98 M104 96 L106 102"/><path d="M124 84 L118 94 M118 94 L112 96 M118 94 L120 100"/></g>' +
-        '<g class="flap" style="transform-origin:122px 62px">' + wing('#2a2433', '#6a6280') + '</g>';
+        '<g class="flap" style="transform-origin:122px 62px">' + wing('#2a2433', '#6a6280') + '</g></g>';
     } },
-    eyes: { w: 7, vb: '0 0 140 50', draw: function () {
-      var e = function (cx) { return '<ellipse cx="' + cx + '" cy="25" rx="26" ry="15" fill="#ff1a1a" opacity=".22"/><path d="M' + (cx - 17) + ' 28 Q' + cx + ' 8 ' + (cx + 17) + ' 28 Q' + cx + ' 36 ' + (cx - 17) + ' 28Z" fill="#ff2020"/><ellipse cx="' + cx + '" cy="24" rx="2.6" ry="8" fill="#150000"/>'; };
-      return e(36) + e(104);
+    // Horreur : yeux rouges qui s'ouvrent dans le noir, pupilles fendues qui regardent autour
+    eyes: { w: 8, vb: '0 0 150 56', draw: function () {
+      var e = function (cx) {
+        return '<ellipse cx="' + cx + '" cy="28" rx="30" ry="18" fill="#ff1a1a" opacity=".18"/>' +
+          '<path d="M' + (cx - 20) + ' 30 Q' + cx + ' 8 ' + (cx + 20) + ' 30 Q' + cx + ' 40 ' + (cx - 20) + ' 30Z" fill="#c4000a"/>' +
+          '<path d="M' + (cx - 14) + ' 28 Q' + cx + ' 14 ' + (cx + 14) + ' 28 Q' + cx + ' 34 ' + (cx - 14) + ' 28Z" fill="#ffb000"/>' +
+          '<g class="dart"><ellipse cx="' + cx + '" cy="26" rx="2.6" ry="9" fill="#120000"/><circle cx="' + (cx + 4) + '" cy="21" r="1.6" fill="#fff" opacity=".8"/></g>' +
+          '<path d="M' + (cx - 20) + ' 30 Q' + cx + ' 8 ' + (cx + 20) + ' 30" stroke="#300" stroke-width="2.5" fill="none"/>';
+      };
+      return e(38) + e(112);
     } },
     butterfly: { w: 6, vb: '0 0 100 90', draw: function () {
       // vu de dessus, tête vers l'avant (vers la droite) et légèrement relevée : il vole dans le sens où il avance
@@ -177,23 +227,44 @@
         '<ellipse cx="50" cy="44" rx="3.4" ry="15" fill="#5a1236"/><circle cx="50" cy="28" r="4" fill="#5a1236"/><path d="M48 26 Q42 14 36 12 M52 26 Q58 14 64 12" stroke="#5a1236" stroke-width="2" fill="none"/></g>';
     } },
     // GTA VI : voiture de sport rose néon (traînée de vitesse) et hélico de police avec projecteur
-    car: { w: 20, vb: '0 0 330 110', draw: function () {
-      return '<g stroke-linecap="round" opacity=".8"><path d="M0 52 H60" stroke="#ff3fa4" stroke-width="4" stroke-dasharray="14 10"/><path d="M10 70 H70" stroke="#00e5ff" stroke-width="3" stroke-dasharray="10 12"/></g>' +
-        '<ellipse cx="200" cy="100" rx="120" ry="7" fill="#ff3fa4" opacity=".35"/>' +
-        '<path d="M78 82 C78 66 92 60 112 58 L160 40 C178 33 214 32 238 40 L276 56 C298 59 316 64 318 76 L318 86 H78Z" fill="#ff3fa4" stroke="#5a0b38" stroke-width="4" stroke-linejoin="round"/>' +
-        '<path d="M166 46 C182 40 210 39 230 44 L258 58 H150Z" fill="#7ff6ff" stroke="#5a0b38" stroke-width="3" stroke-linejoin="round"/><line x1="204" y1="41" x2="204" y2="58" stroke="#5a0b38" stroke-width="3"/>' +
-        '<path d="M90 70 H310" stroke="#ffd1ea" stroke-width="3" opacity=".7"/><rect x="304" y="66" width="12" height="7" rx="2" fill="#fff6b0"/><rect x="80" y="64" width="9" height="8" rx="2" fill="#ff2b4a"/>' +
-        '<path d="M80 58 L74 46 H96 L104 58" fill="#5a0b38"/>' +
-        '<g><circle cx="128" cy="86" r="17" fill="#1a1022"/><circle cx="128" cy="86" r="8" fill="#c9c3d6"/><circle cx="272" cy="86" r="17" fill="#1a1022"/><circle cx="272" cy="86" r="8" fill="#c9c3d6"/></g>';
+    // GTA VI : voiture de sport néon, roues qui tournent, phares et lueur sous la caisse
+    car: { w: 21, vb: '0 0 360 130', draw: function () {
+      var wheel = function (cx) {
+        return '<g transform="translate(' + cx + ' 96)"><circle r="19" fill="#120a18"/><circle r="12" fill="#c9c3d6"/>' +
+          '<g class="spinf"><circle r="12" fill="none"/><path d="M0 -11 L3 -3 L11 -2 L4 3 L6 11 L0 6 L-6 11 L-4 3 L-11 -2 L-3 -3Z" fill="#7a7290"/></g><circle r="3" fill="#ff3fa4"/></g>';
+      };
+      return '<defs><linearGradient id="ps-cb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff7ac4"/><stop offset=".55" stop-color="#ff3fa4"/><stop offset="1" stop-color="#a0136a"/></linearGradient>' +
+        '<linearGradient id="ps-cg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d9fbff"/><stop offset="1" stop-color="#3fb8d8"/></linearGradient>' +
+        '<linearGradient id="ps-hl" x1="0" x2="1"><stop offset="0" stop-color="#fff6c8" stop-opacity=".7"/><stop offset="1" stop-color="#fff6c8" stop-opacity="0"/></linearGradient></defs>' +
+        '<g stroke-linecap="round" opacity=".8"><path d="M0 60 H66" stroke="#ff3fa4" stroke-width="4" stroke-dasharray="16 10"/><path d="M14 80 H76" stroke="#00e5ff" stroke-width="3" stroke-dasharray="10 12"/></g>' +
+        '<ellipse class="pulse" cx="210" cy="116" rx="130" ry="8" fill="#ff3fa4" opacity=".5"/>' +
+        '<path d="M330 74 L360 62 V96 L330 86Z" fill="url(#ps-hl)"/>' +
+        '<g class="jig">' +
+        '<path d="M84 92 C82 78 92 70 112 66 L162 46 C182 38 220 36 246 44 L288 62 C312 65 330 70 332 82 L332 94 H84Z" fill="url(#ps-cb)" stroke="#4a0a30" stroke-width="3.5" stroke-linejoin="round"/>' +
+        '<path d="M170 50 C186 43 214 42 236 48 L266 64 H156Z" fill="url(#ps-cg2)" stroke="#4a0a30" stroke-width="3" stroke-linejoin="round"/><path d="M212 44 L210 64" stroke="#4a0a30" stroke-width="3"/>' +
+        '<path d="M176 52 C188 48 200 47 206 47 L188 62 H166Z" fill="#fff" opacity=".35"/>' +
+        '<path d="M96 78 H320" stroke="#ffd1ea" stroke-width="2.5" opacity=".7"/><path d="M240 82 L268 82 L262 90 H236Z" fill="#4a0a30" opacity=".6"/>' +
+        '<path d="M86 62 L78 48 H104 L112 62" fill="#4a0a30"/>' +
+        '<rect x="320" y="72" width="12" height="7" rx="2" fill="#fff6b0"/><rect x="86" y="68" width="9" height="9" rx="2" fill="#ff2b4a"/>' +
+        '</g>' + wheel(132) + wheel(282);
     } },
-    heli: { w: 13, vb: '0 0 240 150', draw: function () {
-      return '<path d="M120 64 L60 150 H210 L160 64Z" fill="#fff6c8" opacity=".14"/>' +
-        '<line x1="20" y1="10" x2="210" y2="10" stroke="#2a2a35" stroke-width="5" stroke-linecap="round" class="wing"/><rect x="112" y="10" width="8" height="16" fill="#2a2a35"/>' +
-        '<path d="M14 40 H96" stroke="#1d2a5c" stroke-width="10" stroke-linecap="round"/><path d="M6 26 L18 52" stroke="#2a2a35" stroke-width="5" stroke-linecap="round"/>' +
-        '<path d="M90 30 H170 C196 30 214 46 214 62 C214 76 198 84 176 84 H104 C94 84 88 76 88 66Z" fill="#f2f4fa" stroke="#1d2a5c" stroke-width="4"/>' +
-        '<path d="M88 52 H214" stroke="#1d2a5c" stroke-width="10"/><path d="M172 36 C192 38 206 48 208 60 H172Z" fill="#7ff6ff" stroke="#1d2a5c" stroke-width="3"/>' +
-        '<rect x="122" y="22" width="12" height="8" rx="2" fill="#ff2b4a"/><rect x="136" y="22" width="12" height="8" rx="2" fill="#2b6bff"/>' +
-        '<path d="M100 96 H200 M120 84 V96 M180 84 V96" stroke="#2a2a35" stroke-width="5" stroke-linecap="round"/>';
+    // GTA VI : hélico de police, rotors qui tournent, gyrophares et projecteur qui balaie
+    heli: { w: 14, vb: '0 0 270 170', draw: function () {
+      return '<defs><linearGradient id="ps-hb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#c9d1e6"/></linearGradient>' +
+        '<linearGradient id="ps-sl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff6c8" stop-opacity=".5"/><stop offset="1" stop-color="#fff6c8" stop-opacity="0"/></linearGradient></defs>' +
+        '<g class="scan" style="transform-origin:190px 92px"><path d="M190 92 L150 170 H230Z" fill="url(#ps-sl)"/></g>' +
+        '<g class="float">' +
+        '<path d="M18 46 H104" stroke="#1d2a5c" stroke-width="10" stroke-linecap="round"/><path d="M16 46 L8 34" stroke="#1d2a5c" stroke-width="6" stroke-linecap="round"/>' +
+        '<g transform="translate(14 40)"><ellipse class="rotor" cx="0" cy="0" rx="4" ry="16" fill="#9aa4c0" opacity=".6"/></g>' +
+        '<path d="M96 34 H176 C204 34 222 50 222 68 C222 82 206 90 182 90 H110 C100 90 94 82 94 72Z" fill="url(#ps-hb)" stroke="#1d2a5c" stroke-width="3.5"/>' +
+        '<path d="M94 58 H222" stroke="#1d2a5c" stroke-width="11"/><text x="120" y="62" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="9" fill="#fff" letter-spacing="1">POLICE</text>' +
+        '<path d="M178 40 C198 42 212 52 214 64 H178Z" fill="#7ff6ff" stroke="#1d2a5c" stroke-width="2.5"/><path d="M184 44 C194 46 202 52 204 58 H186Z" fill="#fff" opacity=".45"/>' +
+        '<rect class="blink" x="128" y="26" width="13" height="8" rx="2" fill="#ff2b4a"/><rect class="blink2" x="143" y="26" width="13" height="8" rx="2" fill="#2b6bff"/>' +
+        '<circle cx="190" cy="90" r="5" fill="#fff6c8"/>' +
+        '<path d="M106 102 H206 M126 90 V102 M186 90 V102" stroke="#2a2a35" stroke-width="5" stroke-linecap="round"/>' +
+        '<rect x="134" y="14" width="8" height="14" fill="#2a2a35"/>' +
+        '<g transform="translate(138 14)"><ellipse class="rotor" cx="0" cy="0" rx="112" ry="5" fill="#2a2a35" opacity=".55"/></g><circle cx="138" cy="14" r="4" fill="#2a2a35"/>' +
+        '</g>';
     } },
     // R.E.P.O. : petit robot qui trottine en portant un sac de butin
     robot: { w: 8, vb: '0 0 150 160', draw: function () {
@@ -220,13 +291,27 @@
         '</g>' + leg('leg-a', 76);
     } },
     // Battle Royale : bus volant suspendu à son ballon
-    bus: { w: 18, vb: '0 0 300 200', draw: function () {
-      return '<ellipse cx="150" cy="44" rx="78" ry="40" fill="#3fa9ff" stroke="#16084a" stroke-width="4"/><path d="M80 44 H220" stroke="#b14bff" stroke-width="10"/>' +
-        '<g stroke="#16084a" stroke-width="3"><line x1="98" y1="78" x2="90" y2="112"/><line x1="202" y1="78" x2="210" y2="112"/><line x1="150" y1="84" x2="150" y2="112"/></g>' +
-        '<rect x="56" y="112" width="190" height="62" rx="14" fill="#3f8cff" stroke="#16084a" stroke-width="4"/>' +
-        '<g fill="#bfe6ff" stroke="#16084a" stroke-width="2.5"><rect x="70" y="122" width="32" height="24" rx="4"/><rect x="110" y="122" width="32" height="24" rx="4"/><rect x="150" y="122" width="32" height="24" rx="4"/><rect x="190" y="122" width="44" height="24" rx="4"/></g>' +
-        '<path d="M56 154 H246" stroke="#ffe14d" stroke-width="5"/><g fill="#16084a"><circle cx="92" cy="176" r="12"/><circle cx="212" cy="176" r="12"/></g>' +
-        '<g stroke="#9fdcff" stroke-width="3" stroke-linecap="round" opacity=".7"><line x1="10" y1="130" x2="44" y2="130"/><line x1="2" y1="150" x2="40" y2="150"/></g>';
+    // Battle Royale : bus de combat sous sa montgolfière, flamme du brûleur, ballon à fuseaux
+    bus: { w: 18, vb: '0 0 300 250', draw: function () {
+      return '<defs><linearGradient id="ps-ba" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#2c7fe0"/><stop offset=".5" stop-color="#5fc0ff"/><stop offset="1" stop-color="#2c7fe0"/></linearGradient>' +
+        '<linearGradient id="ps-bb" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7a2fd0"/><stop offset=".5" stop-color="#c06bff"/><stop offset="1" stop-color="#7a2fd0"/></linearGradient>' +
+        '<linearGradient id="ps-bv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5fa8ff"/><stop offset="1" stop-color="#2f6bd6"/></linearGradient>' +
+        '<linearGradient id="ps-fl" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff7a00"/><stop offset=".6" stop-color="#ffd23f"/><stop offset="1" stop-color="#fff6c8"/></linearGradient></defs>' +
+        '<g class="sway" style="transform-origin:150px 10px">' +
+        '<path d="M150 8 C96 8 66 46 72 82 C78 108 112 128 128 140 H172 C188 128 222 108 228 82 C234 46 204 8 150 8Z" fill="url(#ps-ba)" stroke="#16084a" stroke-width="4"/>' +
+        '<path d="M150 8 C126 10 112 50 116 82 C120 108 130 128 136 140 H150Z M150 8 C174 10 188 50 184 82 C180 108 170 128 164 140 H150Z" fill="url(#ps-bb)" opacity=".9"/>' +
+        '<path d="M150 8 C96 8 66 46 72 82 C78 108 112 128 128 140 H172 C188 128 222 108 228 82 C234 46 204 8 150 8Z" fill="none" stroke="#16084a" stroke-width="4"/>' +
+        '<path d="M98 40 C108 26 124 18 140 16" stroke="#fff" stroke-width="5" fill="none" opacity=".45" stroke-linecap="round"/>' +
+        '<path d="M80 78 C120 92 180 92 220 78" stroke="#ffe14d" stroke-width="6" fill="none"/>' +
+        '<rect x="136" y="140" width="28" height="10" rx="2" fill="#4a4a5a"/>' +
+        '<g class="flame"><path d="M150 142 C134 132 138 114 150 98 C162 114 166 132 150 142Z" fill="url(#ps-fl)"/><path d="M150 140 C144 134 145 124 150 116 C155 124 156 134 150 140Z" fill="#fff6c8"/></g>' +
+        '<g stroke="#16084a" stroke-width="2.5"><line x1="130" y1="142" x2="92" y2="176"/><line x1="170" y1="142" x2="208" y2="176"/><line x1="150" y1="150" x2="150" y2="176"/></g>' +
+        '<rect x="56" y="176" width="190" height="56" rx="14" fill="url(#ps-bv)" stroke="#16084a" stroke-width="4"/>' +
+        '<g fill="#bfe6ff" stroke="#16084a" stroke-width="2.5"><rect x="70" y="186" width="30" height="22" rx="4"/><rect x="108" y="186" width="30" height="22" rx="4"/><rect x="146" y="186" width="30" height="22" rx="4"/><rect x="186" y="186" width="46" height="22" rx="4"/></g>' +
+        '<g fill="#fff" opacity=".5"><path d="M74 189 h10 l-8 16 h-2z"/><path d="M190 189 h12 l-10 16 h-2z"/></g>' +
+        '<path d="M56 216 H246" stroke="#ffe14d" stroke-width="5"/><rect x="236" y="196" width="10" height="8" rx="2" fill="#fff6b0"/>' +
+        '<g fill="#16084a"><circle cx="92" cy="234" r="12"/><circle cx="212" cy="234" r="12"/></g><g fill="#8a8aa0"><circle cx="92" cy="234" r="5"/><circle cx="212" cy="234" r="5"/></g>' +
+        '</g>';
     } },
     // Dark fantasy : dragon qui bat des ailes
     dragon: { w: 22, vb: '0 0 360 200', draw: function () {
@@ -235,7 +320,7 @@
           '<path d="M175 22 L115 2 M175 22 L82 24 M175 22 L70 60" stroke="' + rib + '" stroke-width="3" stroke-linecap="round"/>' +
           '<path d="M185 95 L205 55 L175 22" stroke="' + rib + '" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M175 22 L180 12" stroke="#d4b06a" stroke-width="3" stroke-linecap="round"/>';
       };
-      return '<g class="flap" style="transform-origin:180px 98px;opacity:.75">' + '<g transform="translate(22 -4)">' + wing('#3a1610', '#1e0c06') + '</g></g>' +
+      return '<g class="float"><g class="flap" style="transform-origin:180px 98px;opacity:.75">' + '<g transform="translate(22 -4)">' + wing('#3a1610', '#1e0c06') + '</g></g>' +
         '<path d="M130 100 C98 96 66 104 36 116 L30 126 C64 118 98 114 132 118Z" fill="#4a2a1c" stroke="#120c04" stroke-width="3" stroke-linejoin="round"/>' +
         '<path d="M36 110 L8 104 L22 120 L6 134 L38 124Z" fill="#7a2a14" stroke="#120c04" stroke-width="3" stroke-linejoin="round"/>' +
         '<path d="M150 116 L138 140 L154 144 L164 120Z M212 116 L222 136 L236 134 L226 114Z" fill="#3a2016" stroke="#120c04" stroke-width="3" stroke-linejoin="round"/>' +
@@ -247,8 +332,8 @@
         '<path d="M282 62 C296 54 312 56 326 62 L346 68 L330 74 L342 80 L322 84 C308 86 294 84 284 80Z" fill="#4a2a1c" stroke="#120c04" stroke-width="3.5" stroke-linejoin="round"/>' +
         '<path d="M292 60 L280 36 L302 58 Z M302 58 L300 32 L312 58Z" fill="#d4b06a" stroke="#120c04" stroke-width="2" stroke-linejoin="round"/>' +
         '<circle cx="310" cy="66" r="3.4" fill="#ffb347"/><circle cx="310" cy="66" r="8" fill="#ff7a1a" opacity=".3"/>' +
-        '<path d="M344 74 C352 70 358 76 356 82 C352 78 348 80 344 78Z" fill="#ff7a1a" opacity=".85"/>' +
-        '<g class="flap" style="transform-origin:180px 98px">' + wing('#6b2a1a', '#2a1008') + '</g>';
+        '<g class="flamel"><path d="M344 74 C356 66 372 72 380 78 C370 80 360 84 344 80Z" fill="#ff7a1a" opacity=".9"/><path d="M346 76 C354 72 364 75 368 78 C362 79 354 80 346 79Z" fill="#ffd23f"/></g>' +
+        '<g class="flap" style="transform-origin:180px 98px">' + wing('#6b2a1a', '#2a1008') + '</g></g>';
     } },
     // Pleine lune : loup qui court
     wolf: { w: 16.5, vb: '0 0 312 140', draw: function () {
@@ -292,9 +377,9 @@
     } },
     // Pokémon : Poké Ball qui roule
     pokeball: { w: 6, vb: '0 0 100 100', draw: function () {
-      return '<g class="spin"><circle cx="50" cy="50" r="44" fill="#fff" stroke="#222" stroke-width="5"/><path d="M6 50 A44 44 0 0 1 94 50Z" fill="#e3350d" stroke="#222" stroke-width="5"/>' +
+      return '<g class="hop"><g class="spin"><circle cx="50" cy="50" r="44" fill="#fff" stroke="#222" stroke-width="5"/><path d="M6 50 A44 44 0 0 1 94 50Z" fill="#e3350d" stroke="#222" stroke-width="5"/>' +
         '<line x1="6" y1="50" x2="94" y2="50" stroke="#222" stroke-width="7"/><circle cx="50" cy="50" r="13" fill="#fff" stroke="#222" stroke-width="6"/><circle cx="50" cy="50" r="5" fill="#eee"/>' +
-        '<ellipse cx="32" cy="28" rx="10" ry="5" transform="rotate(-35 32 28)" fill="#fff" opacity=".5"/></g>';
+        '<ellipse cx="32" cy="28" rx="10" ry="5" transform="rotate(-35 32 28)" fill="#fff" opacity=".5"/></g></g>';
     } },
     // Cosy : abeille
     bee: { w: 5.5, vb: '0 0 120 90', draw: function () {
