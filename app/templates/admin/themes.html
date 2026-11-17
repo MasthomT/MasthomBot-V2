@@ -109,13 +109,13 @@ const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').
 
 // nom, emoji, personnage qui passe sur les titres (passers.js), titre court affiché sur la carte
 const THEMES = {
-    classique:   ['Classique', '✨', null],          halloween: ['Halloween', '🎃', 'witch3d'],      zelda: ['Zelda', '🧚', 'horse3d'],
-    noel:        ['Noël', '❄️', 'sleigh3d'],           cyber: ['Cyberpunk', '🌃', 'robot3d'],       arcade: ['Arcade', '🕹️', 'invaders3d'],
-    ocean:       ['Océan', '🌊', 'whale3d'],           space: ['Espace', '🚀', 'ufo3d'],            pirate: ['Pirate', '🏴‍☠️', 'ship3d'],
-    sakura:      ['Sakura', '🌸', 'butterfly3d'],      horror: ['Horreur', '🩸', 'crow3d'],         gta6: ['GTA VI', '🌴', 'car3d'],
-    repo:        ['R.E.P.O.', '🤖', 'loot3d'],        fortnite: ['Battle Royale', '🪂', 'bbus3d'],   darkfantasy: ['Dark fantasy', '🐉', 'dragon3d'],
-    werewolf: ['Pleine lune', '🐺', 'moon3d'],   fog: ['Brouillard', '🌫️', 'flash3d'],
-    vault:       ['Post-apo', '☢️', 'drop3d'],       pokemon: ['Pokémon', '⚡', 'pokeball'],     cosy: ['Cosy', '🍃', 'bee3d'],
+    classique:   ['Classique', '✨', null],          halloween: ['Halloween', '🎃', 'witch'],      zelda: ['Zelda', '🧚', 'epona'],
+    noel:        ['Noël', '❄️', 'sleigh'],           cyber: ['Cyberpunk', '🌃', 'drone'],       arcade: ['Arcade', '🕹️', 'pacman'],
+    ocean:       ['Océan', '🌊', 'whale'],           space: ['Espace', '🚀', 'ufo'],            pirate: ['Pirate', '🏴‍☠️', 'ship'],
+    sakura:      ['Sakura', '🌸', 'butterfly'],      horror: ['Horreur', '🩸', 'crow'],         gta6: ['GTA VI', '🌴', 'car'],
+    repo:        ['R.E.P.O.', '🤖', 'carry'],        fortnite: ['Battle Royale', '🪂', 'bus'],   darkfantasy: ['Dark fantasy', '🐉', 'dragon'],
+    werewolf: ['Pleine lune', '🐺', 'wolf'],   fog: ['Brouillard', '🌫️', 'figure'],
+    vault:       ['Post-apo', '☢️', 'supply'],       pokemon: ['Pokémon', '⚡', 'pokeball'],     cosy: ['Cosy', '🍃', 'fox'],
 };
 const tName = (k) => THEMES[k] ? THEMES[k][1] + ' ' + THEMES[k][0] : k;
 let presets = {}, style = {}, autoCfg = null, autoCat = '';
@@ -131,7 +131,7 @@ function card(k) {
     const art = 'background:radial-gradient(circle at 30% 20%,' + a1 + '55,transparent 60%),linear-gradient(135deg,' + a2 + 'cc,#0b1220 75%)';
     const nameCss = 'font-family:\'' + font + '\',sans-serif;color:' + (p.color || '#fff') + ';text-shadow:0 0 10px ' + (p.glow || a1) + ',0 2px 0 rgba(0,0,0,.6)' + (k === 'arcade' ? ';font-size:15px' : '');
     let passHtml = '';
-    try { if (pass && window.Passers) passHtml = '<div class="pass">' + Passers.html(pass) + '</div>'; } catch (e) {}
+    try { if (pass && window.Passers) passHtml = '<div class="pass">' + (Passers.sprite(pass) || Passers.html(pass)) + '</div>'; } catch (e) {}
     return '<button class="theme' + (style.preset === k ? ' on' : '') + '" data-k="' + k + '">'
         + (style.preset === k ? '<span class="badge">ACTIF</span>' : '')
         + '<div class="art" style="' + art + '"><div class="name" style="' + nameCss + '">' + esc(name) + '</div>' + passHtml + '</div>'

@@ -54,18 +54,9 @@
     '@keyframes ps-slow{to{transform:rotate(360deg)}}.pass .slowspin{transform-box:fill-box;transform-origin:50% 50%;animation:ps-slow 9s linear infinite}' +
     '@keyframes ps-tent{from{transform:rotate(-10deg)}to{transform:rotate(10deg)}}.pass .tent{transform-box:fill-box;transform-origin:50% 100%;animation:ps-tent 1.3s ease-in-out infinite alternate}' +
     '@keyframes ps-bell{0%,100%{transform:scale(1,1)}50%{transform:scale(1.12,.86)}}.pass .bell{transform-box:fill-box;transform-origin:50% 100%;animation:ps-bell 1.4s ease-in-out infinite}' +
-    // éléments 3D (images) : conteneur à proportions fixes, ombre portée, animations propres aux images
-    '.pass .p3{position:relative;width:100%;height:0}.pass .p3a{position:absolute;inset:0}.pass .p3w{position:absolute;transform-origin:50% 50%}' +
-    '.pass .p3w img{display:block;width:100%;height:auto;filter:drop-shadow(0 .35vw .5vw rgba(0,0,0,.45));transform-origin:50% 80%}' +
-    '@keyframes ps-rock{from{transform:rotate(-5deg) translateY(0)}to{transform:rotate(4deg) translateY(-4%)}}.pass .rock{animation:ps-rock .32s ease-in-out infinite alternate;transform-origin:50% 90%}' +
-    '@keyframes ps-waddle{from{transform:rotate(-7deg)}to{transform:rotate(7deg)}}.pass .waddle{animation:ps-waddle .55s ease-in-out infinite alternate;transform-origin:50% 95%}' +
-    '@keyframes ps-swimh{from{transform:rotate(-4deg) translateY(0)}to{transform:rotate(4deg) translateY(-3%)}}.pass .swimh{animation:ps-swimh 1.6s ease-in-out infinite alternate}' +
-    '@keyframes ps-swayh{from{transform:rotate(-7deg)}to{transform:rotate(7deg)}}.pass .swayh{animation:ps-swayh 2s ease-in-out infinite alternate;transform-origin:50% 0}' +
-    '@keyframes ps-rollh{from{transform:rotate(-4deg)}to{transform:rotate(4deg)}}.pass .rollh{animation:ps-rollh 2.4s ease-in-out infinite alternate;transform-origin:50% 90%}' +
-    '@keyframes ps-bellh{0%,100%{transform:scale(1,1) translateY(0)}50%{transform:scale(1.06,.92) translateY(-4%)}}.pass .bellh{animation:ps-bellh 1.5s ease-in-out infinite}' +
-    '@keyframes ps-flipc{0%{transform:scaleX(1)}50%{transform:scaleX(.1)}100%{transform:scaleX(1)}}.pass .flipc{animation:ps-flipc 1.2s ease-in-out infinite}' +
-    '@keyframes ps-flutter{0%,100%{transform:scaleX(1)}50%{transform:scaleX(.55)}}.pass .flutter{animation:ps-flutter .28s ease-in-out infinite}' +
-    '.pass .p3a.float,.pass .p3a.hop,.pass .p3a.jig,.pass .p3a.wobble,.pass .p3a.slowspin,.pass .p3a.pulse{transform-box:border-box;transform-origin:50% 50%}' +
+    // sprites pixel art : gros pixels nets, lecture image par image
+    '.pass .pxs{width:100%;height:0;background-repeat:no-repeat;image-rendering:pixelated;image-rendering:crisp-edges}' +
+    '@keyframes ps-px{from{background-position:0 0}to{background-position:100% 0}}' +
     '@keyframes ps-wave{from{transform:translateX(0)}to{transform:translateX(-28px)}}.pass .waves{animation:ps-wave 1.2s linear infinite}';
   document.head.appendChild(css);
 
@@ -215,16 +206,16 @@
     crow: { w: 10, vb: '0 0 210 130', draw: function () {
       var wing = function (fill, edge) {
         return '<path d="M126 60 C112 34 92 14 62 6 L68 16 L52 14 L62 24 L46 26 L58 34 L42 40 L56 46 C80 56 100 62 114 66Z" fill="' + fill + '" stroke="' + edge + '" stroke-width="2" stroke-linejoin="round"/>' +
-          '<path d="M118 58 C104 40 88 26 70 18 M110 62 C96 48 80 38 64 32" stroke="#3a3445" stroke-width="1.6" fill="none" opacity=".8"/>';
+          '<path d="M118 58 C104 40 88 26 70 18 M110 62 C96 48 80 38 64 32" stroke="#6a6088" stroke-width="1.6" fill="none" opacity=".8"/>';
       };
-      return '<g class="float"><g class="flap" style="transform-origin:122px 62px;animation-delay:-.1s"><g transform="translate(10 -4)">' + wing('#120f16', '#4a4458') + '</g></g>' +
-        '<path d="M48 66 L8 56 L14 70 L6 84 L48 76Z" fill="#17131c" stroke="#5a5368" stroke-width="2" stroke-linejoin="round"/>' +
-        '<path d="M44 66 C62 54 112 52 142 58 C152 48 166 44 176 48 C184 51 188 56 190 60 L208 66 L188 70 C180 76 164 78 150 76 C122 88 82 88 58 80 C50 78 44 74 44 66Z" fill="#241f2e" stroke="#5a5368" stroke-width="2.5" stroke-linejoin="round"/>' +
+      return '<g class="float"><g class="flap" style="transform-origin:122px 62px;animation-delay:-.1s"><g transform="translate(10 -4)">' + wing('#2e2740', '#7a7098') + '</g></g>' +
+        '<path d="M48 66 L8 56 L14 70 L6 84 L48 76Z" fill="#342c48" stroke="#9a90b8" stroke-width="2" stroke-linejoin="round"/>' +
+        '<path d="M44 66 C62 54 112 52 142 58 C152 48 166 44 176 48 C184 51 188 56 190 60 L208 66 L188 70 C180 76 164 78 150 76 C122 88 82 88 58 80 C50 78 44 74 44 66Z" fill="#463d5c" stroke="#9a90b8" stroke-width="2.5" stroke-linejoin="round"/>' +
         '<path d="M190 60 L208 66 L190 66Z" fill="#3c3c44"/><path d="M190 66 L208 66 L188 70Z" fill="#2a2a30"/>' +
         '<circle cx="178" cy="56" r="3.4" fill="#ff2b2b"/><circle cx="178" cy="56" r="8" fill="#ff2b2b" opacity=".3"/>' +
-        '<path d="M150 62 C130 60 100 62 70 70" stroke="#3a3445" stroke-width="2" fill="none" opacity=".7"/>' +
+        '<path d="M150 62 C130 60 100 62 70 70" stroke="#6a6088" stroke-width="2" fill="none" opacity=".7"/>' +
         '<g stroke="#3c3c44" stroke-width="2.5" stroke-linecap="round"><path d="M112 84 L104 96 M104 96 L98 98 M104 96 L106 102"/><path d="M124 84 L118 94 M118 94 L112 96 M118 94 L120 100"/></g>' +
-        '<g class="flap" style="transform-origin:122px 62px">' + wing('#2a2433', '#6a6280') + '</g></g>';
+        '<g class="flap" style="transform-origin:122px 62px">' + wing('#564a70', '#a69cc4') + '</g></g>';
     } },
     // Horreur : yeux rouges qui s'ouvrent dans le noir, pupilles fendues qui regardent autour
     eyes: { w: 8, vb: '0 0 150 56', draw: function () {
@@ -1200,116 +1191,17 @@
     } }
   };
 
-  // ── Éléments en 3D : illustrations Fluent Emoji 3D de Microsoft (licence MIT), dans /static/passers3d/ ──
-  // face : côté vers lequel regarde l'illustration d'origine ('L' gauche, 'R' droite, 'F' de face : jamais retournée)
-  // parts : [image, x %, y %, largeur %, rotation°, classe d'animation, délai s] ; ar = hauteur / largeur ; m = façon de se déplacer (voir META)
-  var BASE3D = '/static/passers3d/';
-  try { BASE3D = new URL('passers3d/', document.currentScript.src).href; } catch (e) {}
-  var P = function (f, x, y, w, r, c, dl) { return [f, x, y, w, r || 0, c || '', dl || 0]; };
-  var IMG3D = {
-    // Zelda
-    horse3d:   { w: 11, ar: 1, face: 'L', anim: 'rock', parts: [P('horse', 0, 0, 100)], m: { ground: 1, dur: 6500 } },
-    eagle3d:   { w: 9, ar: 1, face: 'L', anim: 'float', parts: [P('eagle', 0, 0, 100)], m: { dur: 9000 } },
-    fairy3d:   { w: 6, ar: 1, face: 'F', anim: 'float', parts: [P('person_fairy', 0, 0, 100), P('glowing_star', 70, 4, 22, 0, 'tw'), P('glowing_star', 6, 60, 16, 0, 'tw', .5)], m: { dur: 10000, amp: 5, waves: 3 } },
-    // Halloween
-    witch3d:   { w: 13, ar: .72, face: 'R', anim: 'float', parts: [P('broom', 0, -6, 100, 58), P('woman_mage', 28, 0, 46)], m: { dur: 9000 } },
-    ghost3d:   { w: 7, ar: 1, face: 'F', anim: 'float', parts: [P('ghost', 0, 0, 100)], m: { dur: 11000, amp: 5, waves: 3 } },
-    bats3d:    { w: 16, ar: .6, face: 'L', parts: [P('bat', 0, 24, 26, 0, 'float'), P('bat', 26, 0, 20, 0, 'float', .3), P('bat', 46, 28, 30, 0, 'float', .6), P('bat', 76, 6, 22, 0, 'float', .9)], m: { dur: 7500, amp: 5, waves: 3 } },
-    pumpkin3d: { w: 7, ar: 1, face: 'F', anim: 'hop', parts: [P('jack_o_lantern', 0, 0, 100)], m: { ground: 1, dur: 9000 } },
-    spider3d:  { w: 6, ar: 1, face: 'F', anim: 'sway', parts: [P('spider', 0, 0, 100)], m: { spot: 'drop', dur: 7000 } },
-    // Noël
-    sleigh3d:  { w: 26, ar: .62, face: 'L', anim: 'float', parts: [P('deer', 0, 12, 24, 0, 'rock'), P('deer', 21, 12, 24, 0, 'rock', .2), P('sled', 44, 16, 46), P('mx_claus', 54, 4, 26), P('glowing_star', 88, 34, 10, 0, 'tw'), P('glowing_star', 92, 14, 7, 0, 'tw', .5)], m: { dur: 10000, y: [6, 30] } },
-    snowsled3d:{ w: 10, ar: 1.2, face: 'L', anim: 'jig', parts: [P('sled', 8, 46, 86), P('snowman_without_snow', 15, 0, 70)], m: { ground: 1, dur: 7000 } },
-    flakes3d:  { w: 14, ar: .6, face: 'F', parts: [P('snowflake', 0, 10, 34, 0, 'slowspin'), P('snowflake', 40, 0, 22, 0, 'slowspin', 3), P('snowflake', 68, 30, 30, 0, 'slowspin', 6)], m: { dur: 14000, amp: 3 } },
-    penguin3d: { w: 7, ar: 1, face: 'F', anim: 'waddle', parts: [P('penguin', 0, 0, 100)], m: { ground: 1, dur: 11000 } },
-    // Cyberpunk
-    robot3d:   { w: 7, ar: 1, face: 'F', anim: 'float', parts: [P('robot', 0, 0, 100)], m: { dur: 10000 } },
-    monorail3d:{ w: 14, ar: 1, face: 'L', anim: 'jig', parts: [P('monorail', 0, 0, 100)], m: { ground: 1, dur: 5000 } },
-    volts3d:   { w: 12, ar: .55, face: 'F', parts: [P('high_voltage', 0, 10, 34, 0, 'blink'), P('high_voltage', 34, 0, 30, 0, 'blink2'), P('high_voltage', 66, 16, 30, 0, 'blink')], m: { spot: 'fade', dur: 5000 } },
-    // Arcade
-    invaders3d:{ w: 16, ar: .7, face: 'F', parts: [0, 1, 2, 3].map(function (i) { return P('alien_monster', i * 25, 0, 22, 0, 'hop', i * .15); }).concat([0, 1, 2, 3].map(function (i) { return P('alien_monster', i * 25 + 6, 48, 18, 0, 'hop', .3 + i * .15); })), m: { dur: 9000, amp: 2 } },
-    mushroom3d:{ w: 6, ar: 1, face: 'F', anim: 'hop', parts: [P('mushroom', 0, 0, 100)], m: { ground: 1, dur: 7000 } },
-    star3d:    { w: 6, ar: 1, face: 'F', anim: 'slowspin', parts: [P('glowing_star', 0, 0, 100)], m: { dur: 8000, amp: 6, waves: 3 } },
-    joystick3d:{ w: 7, ar: 1, face: 'F', anim: 'pulse', parts: [P('joystick', 0, 0, 100)], m: { spot: 'fade', dur: 5000 } },
-    // Océan
-    whale3d:   { w: 12, ar: 1, face: 'L', anim: 'swimh', parts: [P('spouting_whale', 0, 0, 100)], m: { dur: 13000, amp: 1.5 } },
-    turtle3d:  { w: 8, ar: 1, face: 'L', anim: 'float', parts: [P('turtle', 0, 0, 100)], m: { dur: 13000, amp: 2 } },
-    fish3d:    { w: 14, ar: .7, face: 'L', parts: [P('tropical_fish', 0, 30, 30, 0, 'float'), P('tropical_fish', 34, 0, 24, 0, 'float', .4), P('tropical_fish', 62, 40, 28, 0, 'float', .8)], m: { dur: 9000, amp: 3 } },
-    jelly3d:   { w: 6, ar: 1, face: 'F', anim: 'bellh', parts: [P('jellyfish', 0, 0, 100)], m: { dur: 15000, amp: 4 } },
-    dolphin3d: { w: 8, ar: 1, face: 'L', anim: 'float', parts: [P('dolphin', 0, 0, 100)], m: { dur: 8000, amp: 7, waves: 4 } },
-    octopus3d: { w: 7, ar: 1, face: 'F', anim: 'float', parts: [P('octopus', 0, 0, 100)], m: { dur: 13000, amp: 4 } },
-    // Espace
-    ufo3d:     { w: 9, ar: 1, face: 'F', anim: 'wobble', parts: [P('flying_saucer', 0, 0, 100)], m: { dur: 9500 } },
-    astro3d:   { w: 7, ar: 1, face: 'F', anim: 'slowspin', parts: [P('astronaut', 0, 0, 100)], m: { dur: 16000, amp: 3 } },
-    comet3d:   { w: 9, ar: 1, face: 'L', parts: [P('comet', 0, 0, 100, 45, 'pulse')], m: { dur: 4500, drift: 20 } },
-    rocket3d:  { w: 8, ar: 1, face: 'R', parts: [P('rocket', 0, 0, 100, 45, 'jig')], m: { dur: 6000 } },
-    sat3d:     { w: 8, ar: 1, face: 'F', anim: 'slowspin', parts: [P('satellite', 0, 0, 100)], m: { dur: 15000, amp: 1 } },
-    // Pirate
-    ship3d:    { w: 12, ar: 1, face: 'F', anim: 'rollh', parts: [P('sailboat', 0, 0, 100), P('pirate_flag', 43, -4, 26, 0, 'flag')], m: { dur: 15000, amp: 1, y: [40, 60] } },
-    parrot3d:  { w: 7, ar: 1, face: 'L', anim: 'float', parts: [P('parrot', 0, 0, 100)], m: { dur: 8000, amp: 4, waves: 3 } },
-    kraken3d:  { w: 10, ar: 1, face: 'F', anim: 'wobble', parts: [P('octopus', 0, 0, 100)], m: { spot: 'rise', dur: 7000 } },
-    coins3d:   { w: 12, ar: .5, face: 'F', parts: [P('coin', 0, 10, 26, 0, 'flipc'), P('coin', 26, 0, 22, 0, 'flipc', .3), P('coin', 50, 20, 24, 0, 'flipc', .6), P('coin', 76, 4, 22, 0, 'flipc', .9)], m: { dur: 9000, amp: 3 } },
-    // Sakura
-    butterfly3d:{ w: 6, ar: 1, face: 'R', parts: [P('butterfly', 0, 0, 100, 70, 'flutter')], m: { dur: 9500, waves: 6 } },
-    blossom3d: { w: 14, ar: .55, face: 'F', parts: [P('cherry_blossom', 0, 20, 26, 0, 'slowspin'), P('cherry_blossom', 30, 0, 20, 0, 'slowspin', 2), P('cherry_blossom', 54, 30, 22, 0, 'slowspin', 4), P('cherry_blossom', 80, 6, 18, 0, 'slowspin', 6)], m: { dur: 13000, amp: 3 } },
-    lantern3d: { w: 5, ar: 1, face: 'F', anim: 'swayh', parts: [P('red_paper_lantern', 0, 0, 100)], m: { dur: 15000, amp: 2 } },
-    dove3d:    { w: 7, ar: 1, face: 'L', anim: 'float', parts: [P('dove', 0, 0, 100)], m: { dur: 9000, amp: 3 } },
-    // Horreur
-    crow3d:    { w: 7, ar: 1, face: 'R', anim: 'float', parts: [P('blackbird', 0, 0, 100)], m: { dur: 8500, amp: 3 } },
-    zombie3d:  { w: 8, ar: 1, face: 'F', anim: 'waddle', parts: [P('man_zombie', 0, 0, 100)], m: { ground: 1, dur: 17000 } },
-    skull3d:   { w: 8, ar: 1, face: 'F', anim: 'pulse', parts: [P('skull', 0, 0, 100)], m: { spot: 'fade', dur: 5000, glow: '#ff1a1a' } },
-    coffin3d:  { w: 7, ar: 1, face: 'F', anim: 'jig', parts: [P('coffin', 0, 0, 100)], m: { spot: 'rise', dur: 6500 } },
-    // GTA VI
-    car3d:     { w: 11, ar: 1, face: 'L', anim: 'jig', parts: [P('automobile', 0, 0, 100)], m: { ground: 1, dur: 4800 } },
-    heli3d:    { w: 10, ar: 1, face: 'L', anim: 'float', parts: [P('helicopter', 0, 0, 100)], m: { dur: 9000, y: [4, 22] } },
-    boat3d:    { w: 11, ar: 1, face: 'L', anim: 'rock', parts: [P('speedboat', 0, 0, 100)], m: { ground: 1, dur: 5500 } },
-    flamingo3d:{ w: 7, ar: 1, face: 'L', anim: 'waddle', parts: [P('flamingo', 0, 0, 100)], m: { ground: 1, dur: 12000 } },
-    plane3d:   { w: 9, ar: 1, face: 'R', parts: [P('small_airplane', 0, 0, 100, 40, 'float')], m: { dur: 9000, y: [4, 20] } },
-    // R.E.P.O.
-    repobot3d: { w: 7, ar: 1, face: 'F', anim: 'float', parts: [P('robot', 0, 0, 100)], m: { dur: 9000 } },
-    loot3d:    { w: 10, ar: .9, face: 'F', anim: 'float', parts: [P('money_bag', 20, 0, 60), P('gem_stone', 0, 50, 34, -15, 'tw'), P('gem_stone', 66, 54, 30, 15, 'tw', .5)], m: { dur: 10000 } },
-    cart3d:    { w: 9, ar: 1, face: 'L', anim: 'jig', parts: [P('shopping_cart', 0, 0, 100), P('money_bag', 24, 6, 36), P('gem_stone', 52, 18, 22)], m: { ground: 1, dur: 8000 } },
-    ogre3d:    { w: 9, ar: 1, face: 'F', anim: 'pulse', parts: [P('ogre', 0, 0, 100)], m: { spot: 'fade', dur: 5500, glow: '#ff3b3b' } },
-    // Battle Royale
-    bbus3d:    { w: 12, ar: 1.4, face: 'L', anim: 'swayh', parts: [P('parachute', 6, 0, 88), P('bus', 0, 38, 100)], m: { dur: 11000, y: [2, 18] } },
-    llama3d:   { w: 8, ar: 1, face: 'L', anim: 'hop', parts: [P('llama', 0, 0, 100)], m: { ground: 1, dur: 8000 } },
-    chute3d:   { w: 8, ar: 1, face: 'F', anim: 'swayh', parts: [P('parachute', 0, 0, 100)], m: { dur: 11000, drift: 18, y: [2, 18] } },
-    trophy3d:  { w: 7, ar: 1, face: 'F', anim: 'pulse', parts: [P('trophy', 0, 0, 100), P('glowing_star', 0, 0, 24, 0, 'tw'), P('glowing_star', 76, 10, 20, 0, 'tw', .5)], m: { spot: 'fade', dur: 5500 } },
-    // Dark fantasy
-    dragon3d:  { w: 11, ar: 1, face: 'L', anim: 'float', parts: [P('dragon', 0, 0, 100)], m: { dur: 10000, amp: 4 } },
-    bat3d:     { w: 9, ar: 1, face: 'L', anim: 'float', parts: [P('bat', 0, 0, 100)], m: { dur: 8000, amp: 5, waves: 3 } },
-    castle3d:  { w: 14, ar: 1, face: 'F', parts: [P('castle', 0, 0, 100)], m: { spot: 'rise', dur: 8000 } },
-    crystal3d: { w: 7, ar: 1, face: 'F', anim: 'pulse', parts: [P('crystal_ball', 0, 0, 100)], m: { spot: 'fade', dur: 5500, glow: '#b48cff' } },
-    // Pleine lune
-    moon3d:    { w: 13, ar: 1, face: 'F', parts: [P('full_moon', 0, 0, 100, 0, 'pulse')], m: { spot: 'rise', dur: 9000, glow: '#fff3b0' } },
-    owl3d:     { w: 7, ar: 1, face: 'F', anim: 'float', parts: [P('owl', 0, 0, 100)], m: { dur: 9000, amp: 3 } },
-    wolf3d:    { w: 9, ar: 1, face: 'F', parts: [P('wolf', 0, 0, 100)], m: { spot: 'fade', dur: 5500, glow: '#9db4ff' } },
-    // Brouillard
-    flash3d:   { w: 7, ar: 1, face: 'F', anim: 'pulse', parts: [P('flashlight', 0, 0, 100)], m: { spot: 'fade', dur: 5500, glow: '#fff6d8' } },
-    radio3d:   { w: 8, ar: 1, face: 'F', anim: 'jig', parts: [P('radio', 0, 0, 100)], m: { spot: 'fade', dur: 5500 } },
-    siren3d:   { w: 7, ar: 1, face: 'F', parts: [P('police_car_light', 0, 0, 100, 0, 'blink')], m: { spot: 'fade', dur: 5000, glow: '#ff2b2b' } },
-    // Post-apo
-    drop3d:    { w: 9, ar: 1.25, face: 'F', anim: 'swayh', parts: [P('parachute', 0, 0, 100), P('package', 28, 58, 44)], m: { dur: 14000, drift: 28, y: [0, 12] } },
-    rad3d:     { w: 7, ar: 1, face: 'F', anim: 'slowspin', parts: [P('radioactive', 0, 0, 100)], m: { spot: 'fade', dur: 6000, glow: '#3cff6a' } },
-    truck3d:   { w: 11, ar: 1, face: 'L', anim: 'jig', parts: [P('pickup_truck', 0, 0, 100)], m: { ground: 1, dur: 5500 } },
-    // Pokémon
-    biker3d:   { w: 9, ar: 1, face: 'L', anim: 'jig', parts: [P('person_biking', 0, 0, 100)], m: { ground: 1, dur: 7500 } },
-    birds3d:   { w: 15, ar: .65, face: 'L', parts: [P('bird', 0, 30, 24, 0, 'float'), P('bird', 26, 0, 18, 0, 'float', .4), P('bird', 48, 36, 24, 0, 'float', .7), P('bird', 76, 8, 20, 0, 'float', .2)], m: { dur: 9000, amp: 3, y: [4, 30] } },
-    volt3d:    { w: 6, ar: 1, face: 'F', parts: [P('high_voltage', 0, 0, 100, 0, 'blink')], m: { spot: 'fade', dur: 4500, glow: '#ffcb05' } },
-    // Cosy
-    bee3d:     { w: 6, ar: 1, face: 'L', anim: 'float', parts: [P('honeybee', 0, 0, 100)], m: { dur: 9000, amp: 4, waves: 4 } },
-    ladybug3d: { w: 5, ar: 1, face: 'R', parts: [P('lady_beetle', 0, 0, 100, 90, 'float')], m: { dur: 9000, amp: 4, waves: 3 } },
-    snail3d:   { w: 7, ar: 1, face: 'L', anim: 'jig', parts: [P('snail', 0, 0, 100)], m: { ground: 1, dur: 22000 } },
-    rabbit3d:  { w: 7, ar: 1, face: 'L', anim: 'hop', parts: [P('rabbit', 0, 0, 100)], m: { ground: 1, dur: 8000 } },
-    hedgehog3d:{ w: 7, ar: 1, face: 'L', anim: 'jig', parts: [P('hedgehog', 0, 0, 100)], m: { ground: 1, dur: 12000 } },
-    chipmunk3d:{ w: 6, ar: 1, face: 'L', anim: 'hop', parts: [P('chipmunk', 0, 0, 100)], m: { ground: 1, dur: 7500 } }
-  };
-  function build3d(s) {
-    var inner = s.parts.map(function (p) {
-      return '<div class="p3w" style="left:' + p[1] + '%;top:' + (p[2] / s.ar) + '%;width:' + p[3] + '%;transform:rotate(' + p[4] + 'deg)">' +
-        '<img class="' + p[5] + '" style="animation-delay:-' + p[6] + 's" src="' + BASE3D + p[0] + '.webp" alt="" draggable="false"></div>';
-    }).join('');
-    return '<div class="p3" style="padding-bottom:' + (s.ar * 100) + '%"><div class="p3a ' + (s.anim || '') + '">' + inner + '</div></div>';
+  // ── Sprites pixel art : chaque élément est capturé image par image depuis son dessin animé (12 images par cycle),
+  // pixellisé (palette commune, contour sombre) et rangé en planche dans /static/passers_px/<nom>.png.
+  // Un pixel d'art fait ART_VW vw (≈ 3,5 px sur un écran de 1920 px). Données : [images, durée du cycle ms, largeur, hauteur].
+  var BASEPX = '/static/passers_px/';
+  try { BASEPX = new URL('passers_px/', document.currentScript.src).href; } catch (e) {}
+  var ART_VW = 3.5 / 19.2;
+  var PX = {"epona":[12,1200,84,57],"loftwing":[12,1200,100,47],"pinkfairy":[12,1200,41,20],"witch":[12,1200,94,48],"bats":[12,1200,86,28],"pumpkin":[12,1200,36,41],"sleigh":[12,1200,145,43],"snowmansled":[12,1200,65,49],"snowflakes":[12,1200,77,34],"penguin":[12,1200,62,20],"drone":[12,1200,57,31],"flycar":[12,1200,95,33],"hologram":[12,1200,72,60],"pacman":[12,1200,112,20],"invaders":[12,1200,72,41],"mushroom":[12,1200,32,37],"whale":[12,1200,120,51],"turtle":[12,1200,64,36],"fish":[12,1200,61,24],"jellyfish":[12,1200,35,56],"dolphins":[12,1200,84,36],"ufo":[12,1200,60,44],"astronaut":[12,1200,53,53],"comet":[12,1200,85,20],"rocket":[12,1200,79,32],"satellite":[12,1200,78,30],"ship":[12,1200,106,78],"parrot":[12,1200,58,27],"kraken":[12,1200,151,80],"bottle":[12,1200,71,25],"butterfly":[12,1200,27,29],"branch":[12,1200,94,42],"lantern":[12,1200,36,58],"crane":[12,1200,58,28],"crow":[12,1200,56,29],"shambler":[12,1200,30,61],"eyes":[12,1200,42,14],"hand":[12,1200,41,59],"doll":[12,1200,39,57],"car":[12,1200,116,31],"heli":[12,1200,68,45],"boat":[12,1200,102,28],"flamingo":[12,1200,91,28],"plane":[12,1200,158,32],"robot":[12,1200,36,48],"carry":[12,1200,79,58],"cart":[12,1200,65,43],"monster":[12,1200,68,46],"bus":[12,1200,83,84],"llama":[12,1200,51,63],"glider":[12,1200,66,47],"chest":[12,1200,42,50],"dragon":[12,1200,131,53],"knight":[12,1200,88,88],"giantbat":[12,1200,57,31],"wisps":[12,1200,71,22],"wolf":[12,1200,91,41],"moon":[12,1200,84,80],"owl":[12,1200,56,32],"hunter":[12,1200,31,61],"figure":[12,1200,52,57],"siren":[12,1200,45,73],"radio":[12,1200,40,58],"supply":[12,1200,51,59],"buggy":[12,1200,89,42],"assistbot":[12,1200,47,51],"pokeball":[12,1200,34,37],"balls":[12,1200,76,24],"cyclist":[12,1200,61,48],"birds":[12,1200,82,28],"bee":[12,1200,28,23],"fox":[12,1200,66,33],"ladybug":[12,1200,32,25],"patchballoon":[12,1200,51,67]};
+  function buildPx(k) {
+    var p = PX[k];
+    return '<div class="pxs" style="padding-bottom:' + (p[3] / p[2] * 100) + '%;background-image:url(' + BASEPX + k + '.png);background-size:' + (p[0] * 100) + '% 100%;' +
+      'animation:ps-px ' + p[1] + 'ms steps(' + p[0] + ', jump-none) infinite"></div>';
   }
 
   // Un passage : entre à gauche ou à droite, traverse l'écran avec un léger balancement vertical, puis disparaît
@@ -1338,12 +1230,12 @@
   function sizeVh(d, scale) { var p = d.vb.split(' '); return d.w * (scale || 1) * (+p[3] / +p[2]) * 16 / 9; }
 
   function fly(container, kind, opts) {
-    var s3 = IMG3D[kind], d = s3 ? { w: s3.w, vb: '0 0 100 ' + (s3.ar * 100) } : DRAW[kind]; if (!d || !container) return;
+    var px = PX[kind], d = px ? { w: px[2] * ART_VW, vb: '0 0 ' + px[2] + ' ' + px[3] } : DRAW[kind]; if (!d || !container) return;
     opts = opts || {};
-    var m = s3 ? (s3.m || {}) : (META[kind] || {}), scale = opts.scale || 1, wv = d.w * scale, hv = sizeVh(d, scale);
-    var body = s3 ? build3d(s3) : svg(d.vb, d.draw());
-    // retourné quand il va vers la gauche ; une illustration 3D tournée vers la gauche est retournée quand elle va vers la droite
-    var flipFor = function (goingLeft) { return s3 ? (s3.face === 'F' ? false : (s3.face === 'L') !== goingLeft) : goingLeft; };
+    var m = META[kind] || {}, scale = opts.scale || 1, wv = d.w * scale, hv = sizeVh(d, scale);
+    var body = px ? buildPx(kind) : svg(DRAW[kind].vb, DRAW[kind].draw());
+    // tous les dessins regardent vers la droite : retournés quand ils vont vers la gauche
+    var flipFor = function (goingLeft) { return goingLeft; };
     var el = document.createElement('div'), dur = opts.duration || m.dur || 9500;
     el.style.width = wv + 'vw';
     if (m.spot) {                                            // sur place
@@ -1389,5 +1281,5 @@
     a.onfinish = function () { el.remove(); };
     setTimeout(function () { el.remove(); }, dur + 1500);
   }
-  window.Passers = { specs: IMG3D, fly: fly, kinds: Object.keys(DRAW).concat(Object.keys(IMG3D)), html: function (k) { if (IMG3D[k]) return build3d(IMG3D[k]); var d = DRAW[k]; return svg(d.vb, d.draw()); } };
+  window.Passers = { fly: fly, kinds: Object.keys(DRAW), sprite: function (k) { return PX[k] ? buildPx(k) : null; }, html: function (k) { var d = DRAW[k]; return svg(d.vb, d.draw()); } };
 })();
