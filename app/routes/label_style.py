@@ -75,6 +75,42 @@ PRESETS = {
     "gta6": {"preset": "gta6", "font": "Bebas Neue", "weight": "400", "size": "", "spacing": "2",
              "color": "#fff1f8", "glow": "#ff3fa4", "icon_color": "#ffb347", "icon_set": "gta6",
              "w_accent": "#ff3fa4", "w_accent2": "#7b5cff", "w_font": "Bebas Neue", "until": ""},
+    # R.E.P.O. : jaune et noir industriel, petits robots qui trimballent le butin
+    "repo": {"preset": "repo", "font": "Russo One", "weight": "400", "size": "", "spacing": "2",
+        "color": "#fff6cc", "glow": "#ffb000", "icon_color": "#ffd400", "icon_set": "repo",
+        "w_accent": "#ffd400", "w_accent2": "#ff5a1f", "w_font": "Russo One", "until": ""},
+    # Battle Royale (Fortnite) : bleu et violet électrique, tempête, bus volant
+    "fortnite": {"preset": "fortnite", "font": "Luckiest Guy", "weight": "400", "size": "", "spacing": "1",
+        "color": "#ffffff", "glow": "#3fa9ff", "icon_color": "#ffd23f", "icon_set": "fortnite",
+        "w_accent": "#3fa9ff", "w_accent2": "#b14bff", "w_font": "Luckiest Guy", "until": ""},
+    # Dark fantasy (Elden Ring, Lies of P, Witcher, BG3) : or terni, cendre, braises
+    "darkfantasy": {"preset": "darkfantasy", "font": "Cinzel", "weight": "700", "size": "", "spacing": "2",
+        "color": "#f3e6c4", "glow": "#d48a2a", "icon_color": "#d4b06a", "icon_set": "darkfantasy",
+        "w_accent": "#d4b06a", "w_accent2": "#8a1c1c", "w_font": "Cinzel", "until": ""},
+    # Clair Obscur : Expedition 33 : noir et or Belle Époque, pétales rouges
+    "clairobscur": {"preset": "clairobscur", "font": "Cormorant Garamond", "weight": "700", "size": "", "spacing": "2",
+        "color": "#f6ead2", "glow": "#c8102e", "icon_color": "#e8c27a", "icon_set": "clairobscur",
+        "w_accent": "#e8c27a", "w_accent2": "#b3122e", "w_font": "Cormorant Garamond", "until": ""},
+    # Pleine lune (Dead by Daylight, Lycans) : bleu nuit, lune, loup qui court
+    "werewolf": {"preset": "werewolf", "font": "Metal Mania", "weight": "400", "size": "", "spacing": "1",
+        "color": "#eef2ff", "glow": "#7d97ff", "icon_color": "#c9d6ff", "icon_set": "werewolf",
+        "w_accent": "#9db4ff", "w_accent2": "#b3122e", "w_font": "Metal Mania", "until": ""},
+    # Brouillard (Silent Hill, Hellraiser) : gris rouille, brume, cendres
+    "fog": {"preset": "fog", "font": "IM Fell English", "weight": "400", "size": "", "spacing": "1",
+        "color": "#e6e1d8", "glow": "#8c8c8c", "icon_color": "#b5562b", "icon_set": "fog",
+        "w_accent": "#b5562b", "w_accent2": "#5c5c5c", "w_font": "IM Fell English", "until": ""},
+    # Post-apo (Fallout, ARC Raiders, Helldivers) : terminal vert, radiations, largages
+    "vault": {"preset": "vault", "font": "VT323", "weight": "400", "size": "", "spacing": "1",
+        "color": "#c8ffd2", "glow": "#3cff6a", "icon_color": "#3cff6a", "icon_set": "vault",
+        "w_accent": "#3cff6a", "w_accent2": "#ffb000", "w_font": "VT323", "until": ""},
+    # Pokémon : rouge, jaune et bleu, Poké Balls qui roulent
+    "pokemon": {"preset": "pokemon", "font": "Bungee", "weight": "400", "size": "", "spacing": "1",
+        "color": "#fff8d6", "glow": "#2a75bb", "icon_color": "#ffcb05", "icon_set": "pokemon",
+        "w_accent": "#e3350d", "w_accent2": "#ffcb05", "w_font": "Bungee", "until": ""},
+    # Cosy (Dreamlight Valley, Animal Crossing, Planet Zoo, Grounded) : pastels, feuilles, abeilles
+    "cosy": {"preset": "cosy", "font": "Baloo 2", "weight": "700", "size": "", "spacing": "1",
+        "color": "#fffaf0", "glow": "#7cc68d", "icon_color": "#ffb4a2", "icon_set": "cosy",
+        "w_accent": "#7cc68d", "w_accent2": "#ffb4a2", "w_font": "Baloo 2", "until": ""},
 }
 
 # Suggestions (n'importe quelle police Google Fonts peut être saisie à la main)
@@ -294,7 +330,8 @@ async def admin_label_style_save(payload: StylePayload):
             date.fromisoformat(data["until"])
         except ValueError:
             raise HTTPException(status_code=400, detail="La date de fin doit être au format AAAA-MM-JJ.")
-    if data["icon_set"] not in ("default", "halloween", "zelda", "noel", "cyber", "arcade", "ocean", "space", "pirate", "sakura", "horror", "gta6"):
+    if data["icon_set"] not in ("default", "halloween", "zelda", "noel", "cyber", "arcade", "ocean", "space", "pirate", "sakura", "horror", "gta6",
+                                 "repo", "fortnite", "darkfantasy", "clairobscur", "werewolf", "fog", "vault", "pokemon", "cosy"):
         raise HTTPException(status_code=400, detail="Jeu d'icônes inconnu.")
     await _ensure()
     async with get_db_connection() as db:

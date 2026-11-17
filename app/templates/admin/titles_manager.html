@@ -364,7 +364,7 @@ $('addRule').addEventListener('click', () => { rules.push({ match: '', screen: '
 $('dbgHint').textContent = location.origin + '/overlay/titre/auto?debug=1';
 
 // ── thème : un clic = titres + labels + widgets (même réglage que la page Labels) ──
-const THEMES = [['classique', 'Classique'], ['halloween', '🎃 Halloween'], ['zelda', '🧚 Zelda'], ['noel', '❄️ Noël'], ['cyber', '🌃 Cyberpunk'], ['arcade', '🕹️ Arcade'], ['ocean', '🌊 Océan'], ['space', '🚀 Espace'], ['pirate', '🏴‍☠️ Pirate'], ['sakura', '🌸 Sakura'], ['horror', '🩸 Horreur'], ['gta6', '🌴 GTA VI']];
+const THEMES = [['classique', 'Classique'], ['halloween', '🎃 Halloween'], ['zelda', '🧚 Zelda'], ['noel', '❄️ Noël'], ['cyber', '🌃 Cyberpunk'], ['arcade', '🕹️ Arcade'], ['ocean', '🌊 Océan'], ['space', '🚀 Espace'], ['pirate', '🏴‍☠️ Pirate'], ['sakura', '🌸 Sakura'], ['horror', '🩸 Horreur'], ['gta6', '🌴 GTA VI'], ['repo', '🤖 R.E.P.O.'], ['fortnite', '🪂 Battle Royale'], ['darkfantasy', '🐉 Dark fantasy'], ['clairobscur', '🎨 Clair Obscur'], ['werewolf', '🐺 Pleine lune'], ['fog', '🌫️ Brouillard'], ['vault', '☢️ Post-apo'], ['pokemon', '⚡ Pokémon'], ['cosy', '🍃 Cosy']];
 function renderThemeBar() {
     const cur = theme.preset || 'classique';
     $('themeBar').innerHTML = THEMES.map(([k, l]) => '<button class="tab' + (cur === k ? ' active' : '') + '" data-th="' + k + '">' + l + '</button>').join('');

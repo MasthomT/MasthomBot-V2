@@ -15,7 +15,11 @@
     '.pass .wingy{transform-box:fill-box;transform-origin:50% 100%;animation:ps-flapy .3s ease-in-out infinite alternate}' +
     '@keyframes ps-chomp{0%,49%{opacity:1}50%,100%{opacity:0}}' +
     '.pass .mouth-open{animation:ps-chomp .36s steps(1) infinite}' +
-    '.pass .mouth-shut{animation:ps-chomp .36s steps(1) infinite reverse}';
+    '.pass .mouth-shut{animation:ps-chomp .36s steps(1) infinite reverse}' +
+    '@keyframes ps-legA{from{transform:rotate(-18deg)}to{transform:rotate(18deg)}}@keyframes ps-legB{from{transform:rotate(18deg)}to{transform:rotate(-18deg)}}' +
+    '.pass .leg-a,.pass .leg-b{transform-box:fill-box;transform-origin:50% 0}.pass .leg-a{animation:ps-legA .25s ease-in-out infinite alternate}.pass .leg-b{animation:ps-legB .25s ease-in-out infinite alternate}' +
+    '@keyframes ps-bob{from{transform:translateY(0)}to{transform:translateY(-3px)}}.pass .bob{animation:ps-bob .25s ease-in-out infinite alternate}' +
+    '@keyframes ps-spin{to{transform:rotate(360deg)}}.pass .spin{transform-box:fill-box;transform-origin:50% 50%;animation:ps-spin .9s linear infinite}';
   document.head.appendChild(css);
 
   var svg = function (vb, inner) { return '<svg viewBox="' + vb + '" xmlns="' + NS + '">' + inner + '</svg>'; };
@@ -125,6 +129,76 @@
         '<path d="M88 52 H214" stroke="#1d2a5c" stroke-width="10"/><path d="M172 36 C192 38 206 48 208 60 H172Z" fill="#7ff6ff" stroke="#1d2a5c" stroke-width="3"/>' +
         '<rect x="122" y="22" width="12" height="8" rx="2" fill="#ff2b4a"/><rect x="136" y="22" width="12" height="8" rx="2" fill="#2b6bff"/>' +
         '<path d="M100 96 H200 M120 84 V96 M180 84 V96" stroke="#2a2a35" stroke-width="5" stroke-linecap="round"/>';
+    } },
+    // R.E.P.O. : petit robot qui trottine en portant un sac de butin
+    robot: { w: 8, vb: '0 0 120 130', draw: function () {
+      return '<g class="bob"><rect x="30" y="30" width="52" height="46" rx="10" fill="#ffd400" stroke="#1a1400" stroke-width="4"/>' +
+        '<rect x="40" y="40" width="32" height="18" rx="5" fill="#1a1400"/><circle cx="50" cy="49" r="4" fill="#6bf0ff"/><circle cx="63" cy="49" r="4" fill="#6bf0ff"/>' +
+        '<line x1="56" y1="30" x2="56" y2="16" stroke="#1a1400" stroke-width="4"/><circle cx="56" cy="13" r="5" fill="#ff5a1f"/>' +
+        '<path d="M82 52 L100 44" stroke="#1a1400" stroke-width="5" stroke-linecap="round"/>' +
+        '<path d="M96 36 C88 24 112 18 112 36 C118 44 116 64 104 66 C90 68 86 50 96 36Z" fill="#c9a04a" stroke="#5a3a10" stroke-width="3"/><text x="98" y="57" font-size="14" font-weight="bold" fill="#5a3a10">$</text></g>' +
+        '<g stroke="#1a1400" stroke-width="6" stroke-linecap="round"><line class="leg-a" x1="44" y1="76" x2="40" y2="104"/><line class="leg-b" x1="68" y1="76" x2="72" y2="104"/></g>' +
+        '<g fill="#1a1400"><rect x="30" y="102" width="20" height="8" rx="3"/><rect x="62" y="102" width="20" height="8" rx="3"/></g>';
+    } },
+    // Battle Royale : bus volant suspendu à son ballon
+    bus: { w: 18, vb: '0 0 300 200', draw: function () {
+      return '<ellipse cx="150" cy="44" rx="78" ry="40" fill="#3fa9ff" stroke="#16084a" stroke-width="4"/><path d="M80 44 H220" stroke="#b14bff" stroke-width="10"/>' +
+        '<g stroke="#16084a" stroke-width="3"><line x1="98" y1="78" x2="90" y2="112"/><line x1="202" y1="78" x2="210" y2="112"/><line x1="150" y1="84" x2="150" y2="112"/></g>' +
+        '<rect x="56" y="112" width="190" height="62" rx="14" fill="#3f8cff" stroke="#16084a" stroke-width="4"/>' +
+        '<g fill="#bfe6ff" stroke="#16084a" stroke-width="2.5"><rect x="70" y="122" width="32" height="24" rx="4"/><rect x="110" y="122" width="32" height="24" rx="4"/><rect x="150" y="122" width="32" height="24" rx="4"/><rect x="190" y="122" width="44" height="24" rx="4"/></g>' +
+        '<path d="M56 154 H246" stroke="#ffe14d" stroke-width="5"/><g fill="#16084a"><circle cx="92" cy="176" r="12"/><circle cx="212" cy="176" r="12"/></g>' +
+        '<g stroke="#9fdcff" stroke-width="3" stroke-linecap="round" opacity=".7"><line x1="10" y1="130" x2="44" y2="130"/><line x1="2" y1="150" x2="40" y2="150"/></g>';
+    } },
+    // Dark fantasy : dragon qui bat des ailes
+    dragon: { w: 20, vb: '0 0 320 170', draw: function () {
+      return '<path class="wingy" d="M140 78 C110 10 170 -6 214 18 C190 30 178 52 174 80Z" fill="#3a2418" stroke="#120c04" stroke-width="3"/>' +
+        '<path d="M10 92 C40 80 70 92 96 90" stroke="#2a1a10" stroke-width="10" fill="none" stroke-linecap="round"/><path d="M4 92 L18 80 L20 100Z" fill="#2a1a10"/>' +
+        '<path d="M92 92 C100 66 176 62 222 78 C244 86 252 96 244 106 C220 120 130 124 96 108Z" fill="#4a2e1e" stroke="#120c04" stroke-width="4"/>' +
+        '<path d="M224 82 C236 60 262 56 284 66 L306 70 L290 82 L300 90 L276 92 C262 96 246 96 236 92Z" fill="#4a2e1e" stroke="#120c04" stroke-width="4"/>' +
+        '<path d="M262 62 L270 44 L276 64 M276 62 L290 48 L288 68" stroke="#d4b06a" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="276" cy="74" r="4" fill="#ffb347"/>' +
+        '<path d="M306 76 C320 70 330 82 318 86" stroke="#ff7a1a" stroke-width="5" fill="none" opacity=".8"/>' +
+        '<path class="wingy" d="M150 92 C150 140 210 156 240 136 C214 128 196 112 186 92Z" fill="#2a1a10" stroke="#120c04" stroke-width="3"/>';
+    } },
+    // Clair Obscur : pinceau qui trace un coup de peinture dorée
+    brush: { w: 22, vb: '0 0 360 80', draw: function () {
+      return '<path d="M0 46 C60 24 120 62 190 40 C220 30 240 34 252 40" stroke="#e8c27a" stroke-width="14" fill="none" stroke-linecap="round" opacity=".85"/>' +
+        '<path d="M0 50 C70 36 130 66 200 46" stroke="#c8102e" stroke-width="4" fill="none" stroke-linecap="round" opacity=".7"/>' +
+        '<path d="M248 30 C262 24 276 30 280 40 C276 50 262 56 248 50 C242 44 242 36 248 30Z" fill="#1a1008"/>' +
+        '<rect x="278" y="34" width="20" height="12" fill="#c9a04a" stroke="#5a3a10" stroke-width="2"/>' +
+        '<path d="M298 36 L356 30 Q360 40 356 50 L298 44Z" fill="#140a06" stroke="#e8c27a" stroke-width="2"/>';
+    } },
+    // Pleine lune : loup qui court
+    wolf: { w: 15, vb: '0 0 260 120', draw: function () {
+      return '<path d="M28 60 C10 50 0 62 4 70 C20 66 26 70 34 68Z" fill="#2c3354"/>' +
+        '<path d="M30 62 C40 40 130 34 180 44 C198 34 212 26 222 26 L232 14 L236 30 C246 34 254 42 256 50 L240 54 C232 60 222 62 212 60 C200 74 170 80 120 80 C80 80 46 78 30 62Z" fill="#2c3354" stroke="#0a1030" stroke-width="3"/>' +
+        '<circle cx="236" cy="40" r="3" fill="#ffd54a"/><circle cx="236" cy="40" r="8" fill="#ffd54a" opacity=".25"/>' +
+        '<g stroke="#2c3354" stroke-width="9" stroke-linecap="round"><line class="leg-a" x1="70" y1="76" x2="54" y2="110"/><line class="leg-b" x1="90" y1="76" x2="104" y2="108"/><line class="leg-b" x1="168" y1="74" x2="152" y2="108"/><line class="leg-a" x1="186" y1="72" x2="202" y2="106"/></g>';
+    } },
+    // Brouillard : nappe de brume qui dérive lentement
+    fog: { w: 70, vb: '0 0 600 160', draw: function () {
+      return '<defs><filter id="ps-fogb" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="18"/></filter></defs>' +
+        '<g filter="url(#ps-fogb)" fill="#d8d4cc" opacity=".55"><ellipse cx="140" cy="90" rx="140" ry="40"/><ellipse cx="320" cy="70" rx="170" ry="50"/><ellipse cx="480" cy="95" rx="120" ry="36"/></g>';
+    } },
+    // Post-apo : caisse de ravitaillement sous parachute
+    supply: { w: 9, vb: '0 0 140 180', draw: function () {
+      return '<path d="M10 56 C10 10 130 10 130 56 C110 46 90 50 70 56 C50 50 30 46 10 56Z" fill="#ffb000" stroke="#3a2a00" stroke-width="3"/>' +
+        '<path d="M50 52 C56 30 84 30 90 52" fill="#3cff6a" opacity=".35"/>' +
+        '<g stroke="#c8ffd2" stroke-width="2"><line x1="12" y1="56" x2="46" y2="120"/><line x1="128" y1="56" x2="94" y2="120"/><line x1="70" y1="56" x2="70" y2="120"/></g>' +
+        '<rect x="40" y="120" width="60" height="48" rx="4" fill="#3d4a2c" stroke="#0b1a06" stroke-width="3"/><path d="M40 120 L100 168 M100 120 L40 168" stroke="#2a3420" stroke-width="3"/>' +
+        '<circle cx="70" cy="144" r="11" fill="#ffd400" stroke="#0b1a06" stroke-width="2"/><path d="M70 144 L64 135 A11 11 0 0 1 76 135Z M70 144 L80 148 A11 11 0 0 1 74 154Z M70 144 L60 148 A11 11 0 0 0 66 154Z" fill="#0b1a06"/>';
+    } },
+    // Pokémon : Poké Ball qui roule
+    pokeball: { w: 6, vb: '0 0 100 100', draw: function () {
+      return '<g class="spin"><circle cx="50" cy="50" r="44" fill="#fff" stroke="#222" stroke-width="5"/><path d="M6 50 A44 44 0 0 1 94 50Z" fill="#e3350d" stroke="#222" stroke-width="5"/>' +
+        '<line x1="6" y1="50" x2="94" y2="50" stroke="#222" stroke-width="7"/><circle cx="50" cy="50" r="13" fill="#fff" stroke="#222" stroke-width="6"/><circle cx="50" cy="50" r="5" fill="#eee"/>' +
+        '<ellipse cx="32" cy="28" rx="10" ry="5" transform="rotate(-35 32 28)" fill="#fff" opacity=".5"/></g>';
+    } },
+    // Cosy : abeille
+    bee: { w: 5, vb: '0 0 100 80', draw: function () {
+      return '<g class="wingy" opacity=".8"><ellipse cx="44" cy="24" rx="14" ry="20" fill="#e8f7ff" stroke="#7aa" stroke-width="2"/><ellipse cx="60" cy="26" rx="12" ry="17" fill="#e8f7ff" stroke="#7aa" stroke-width="2"/></g>' +
+        '<ellipse cx="52" cy="52" rx="32" ry="20" fill="#ffd23f" stroke="#3a2a10" stroke-width="3"/>' +
+        '<path d="M40 34 Q36 52 40 70 M56 33 Q52 52 56 71" stroke="#3a2a10" stroke-width="7" fill="none"/>' +
+        '<path d="M20 52 L8 52" stroke="#3a2a10" stroke-width="3"/><circle cx="76" cy="46" r="3" fill="#3a2a10"/>';
     } }
   };
 
@@ -139,18 +213,19 @@
       var ea = ey.animate([{ opacity: 0 }, { opacity: 1, offset: .15 }, { opacity: 1, offset: .5 }, { opacity: .1, offset: .54 }, { opacity: 1, offset: .58 }, { opacity: 1, offset: .8 }, { opacity: 0 }], { duration: 5200, fill: 'forwards' });
       ea.onfinish = function () { ey.remove(); }; setTimeout(function () { ey.remove(); }, 6500); return;
     }
-    var rtl = Math.random() < 0.5, dur = opts.duration || (kind === 'comet' ? 4200 : kind === 'car' ? 4800 : kind === 'ship' ? 15000 : 9500);
+    var rtl = Math.random() < 0.5, dur = opts.duration || ({ comet: 4200, car: 4800, wolf: 5200, pokeball: 6000, robot: 11000, ship: 15000, fog: 26000, supply: 14000 }[kind] || 9500);
     var el = document.createElement('div');
     el.className = 'pass' + (rtl ? ' rtl' : '');
     el.style.width = (d.w * (opts.scale || 1)) + 'vw';
     el.innerHTML = '<div class="dir">' + svg(d.vb, d.draw()) + '</div>';
     container.appendChild(el);
-    var y0 = (opts.y != null ? opts.y : kind === 'car' ? 76 + Math.random() * 8 : 8 + Math.random() * 56),
-        amp = kind === 'car' ? 0.3 : kind === 'ship' || kind === 'whale' ? 1.2 : 4;   // la voiture roule en bas, sans tanguer
+    var GROUND = { car: 1, wolf: 1, robot: 1, pokeball: 1 };   // ceux-là roulent / marchent en bas de l'écran, sans tanguer
+    var y0 = (opts.y != null ? opts.y : GROUND[kind] ? 76 + Math.random() * 8 : kind === 'fog' ? 50 + Math.random() * 30 : kind === 'supply' ? 2 + Math.random() * 12 : 8 + Math.random() * 56),
+        amp = GROUND[kind] ? 0.3 : kind === 'ship' || kind === 'whale' || kind === 'fog' ? 1.2 : 4;
     var x0 = rtl ? 112 : -(d.w + 6), x1 = rtl ? -(d.w + 6) : 112;
     var frames = [];
     for (var i = 0; i <= 6; i++) {
-      var t = i / 6, x = x0 + (x1 - x0) * t, y = y0 + Math.sin(t * Math.PI * (kind === 'butterfly' ? 6 : 2)) * amp + (kind === 'comet' ? t * 26 : 0);
+      var t = i / 6, x = x0 + (x1 - x0) * t, y = y0 + Math.sin(t * Math.PI * (kind === 'butterfly' ? 6 : 2)) * amp + (kind === 'comet' ? t * 26 : kind === 'supply' ? t * 30 : 0);
       frames.push({ transform: 'translate3d(' + x + 'vw,' + y + 'vh,0) rotate(' + (kind === 'comet' ? (rtl ? 12 : -12) : 0) + 'deg)', offset: t });
     }
     var a = el.animate(frames, { duration: dur, easing: 'linear', fill: 'forwards' });
