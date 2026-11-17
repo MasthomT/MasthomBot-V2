@@ -9,8 +9,9 @@
         '.navi{position:fixed;left:0;top:0;width:3.4vw;height:3.4vw;pointer-events:none;z-index:6;will-change:transform}',
         '.navi .in{position:absolute;inset:0}',
         '.navi.ltr .in{transform:scaleX(-1)}',
-        '.navi .halo{position:absolute;left:-60%;top:-60%;width:220%;height:220%;border-radius:50%;',
-        'background:radial-gradient(circle,rgba(190,240,255,.85) 0,rgba(130,210,255,.45) 22%,rgba(110,200,255,.14) 48%,rgba(110,200,255,0) 70%)}',
+        // halo discret : plus petit et plus transparent (il débordait trop autour de la fée)
+        '.navi .halo{position:absolute;left:-25%;top:-25%;width:150%;height:150%;border-radius:50%;',
+        'background:radial-gradient(circle,rgba(200,242,255,.45) 0,rgba(140,214,255,.2) 28%,rgba(120,205,255,.05) 52%,rgba(120,205,255,0) 68%)}',
         '.navi .orb{position:absolute;left:30%;top:30%;width:40%;height:40%;border-radius:50%;',
         'background:radial-gradient(circle,#fff 0,#fff 35%,#c4f4ff 65%,#8fdcff 100%)}',
         '.navi .wing{position:absolute;top:8%;width:46%;height:52%;opacity:.9;',

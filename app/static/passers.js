@@ -427,25 +427,51 @@
         '<g class="mouth-shut">' + legs(B2, '#8a4a24') + hoof(B2) + '<path d="M184 160 L176 168 M134 158 L142 166" stroke="#f5ecd8" stroke-width="7" stroke-linecap="round"/></g>' +
         '</g>';
     } },
-    // Zelda : grand oiseau écarlate (Skyward Sword), longues plumes de queue, ailes qui battent depuis l'épaule
-    loftwing: { w: 18, vb: '0 0 300 170', draw: function () {
-      var wing = function (fill, band, edge) {
-        return '<path d="M184 78 C170 42 140 14 90 4 L100 18 L76 16 L90 30 L66 32 L84 44 L62 50 L82 58 C120 72 150 82 170 88Z" fill="' + fill + '" stroke="' + edge + '" stroke-width="2.5" stroke-linejoin="round"/>' +
-          '<path d="M178 76 C160 50 136 32 104 22 C130 40 150 60 160 84Z" fill="' + band + '"/>' +
-          '<path d="M100 18 L120 34 M90 30 L114 44 M84 44 L110 54" stroke="' + edge + '" stroke-width="1.6" opacity=".7"/>';
+// Zelda : Loftwing écarlate (Skyward Sword) — ailes en couches de plumes, huppe, bec crochu, longues plumes de queue
+    loftwing: { w: 21, vb: '0 -50 320 240', draw: function () {
+      var fea = function (bx, by, ang, len, wd, fill, edge) {
+        var a = ang * Math.PI / 180, cx = bx + Math.cos(a) * len / 2, cy = by + Math.sin(a) * len / 2;
+        return '<ellipse cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" rx="' + (len / 2) + '" ry="' + (wd / 2) + '" transform="rotate(' + ang + ' ' + cx.toFixed(1) + ' ' + cy.toFixed(1) + ')" fill="' + fill + '" stroke="' + edge + '" stroke-width="2"/>';
       };
-      return '<defs><linearGradient id="ps-lw" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e8434f"/><stop offset="1" stop-color="#9c1a2a"/></linearGradient></defs>' +
+      var wing = function (dark) {
+        var P1 = dark ? '#4a0a14' : '#7a1224', P2 = dark ? '#5a0e1a' : '#a01a2e', CV = dark ? '#6a1420' : '#d42a3c', ED = '#2a0408', o = '';
+        // rémiges primaires en éventail depuis le poignet, pointes claires
+        for (var i = 0; i < 6; i++) { var an = 196 + i * 9; o += fea(142 - i * 2, 40 + i * 1.5, an, 78 - i * 4, 15, P1, ED); }
+        for (var j = 0; j < 6; j++) { var an2 = 196 + j * 9, a2 = an2 * Math.PI / 180, L = 78 - j * 4; o += '<ellipse cx="' + (142 - j * 2 + Math.cos(a2) * (L - 8)).toFixed(1) + '" cy="' + (40 + j * 1.5 + Math.sin(a2) * (L - 8)).toFixed(1) + '" rx="5" ry="3.5" transform="rotate(' + an2 + ' ' + (142 - j * 2 + Math.cos(a2) * (L - 8)).toFixed(1) + ' ' + (40 + j * 1.5 + Math.sin(a2) * (L - 8)).toFixed(1) + ')" fill="' + (dark ? '#7a4a4a' : '#f2c4b4') + '"/>'; }
+        // rémiges secondaires le long du bras
+        for (var k = 0; k < 6; k++) o += fea(150 + k * 7, 48 + k * 6, 192 + k * 4, 52 - k * 3, 17, P2, ED);
+        // couvertures (dessus de l'aile), bord festonné
+        o += '<path d="M190 84 C176 56 158 38 138 30 C130 40 130 54 140 62 C146 58 152 62 152 68 C160 64 166 70 166 76 C174 72 180 78 180 84Z" fill="' + CV + '" stroke="' + ED + '" stroke-width="2.5" stroke-linejoin="round"/>' +
+          '<path d="M184 78 C172 58 158 44 142 36" stroke="' + (dark ? '#8a2a34' : '#ff7a84') + '" stroke-width="4" fill="none" stroke-linecap="round" opacity=".8"/>';
+        return '<g transform="translate(186 84) scale(1.45) translate(-186 -84)">' + o + '</g>';
+      };
+      return '<defs><linearGradient id="ps-lb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e83a4a"/><stop offset=".6" stop-color="#c41e30"/><stop offset="1" stop-color="#8a1222"/></linearGradient></defs>' +
         '<g class="float">' +
-        '<g class="flap" style="transform-origin:180px 80px;animation-delay:-.12s"><g transform="translate(14 -6)">' + wing('#7a1422', '#a8323e', '#3a0810') + '</g></g>' +
-        '<path d="M80 80 C54 70 28 62 4 64 C26 72 48 82 72 90Z" fill="#f2c94c" stroke="#7a5a10" stroke-width="2" stroke-linejoin="round"/>' +
-        '<path d="M80 86 C54 88 28 92 6 102 C28 102 52 98 74 96Z" fill="#c8283c" stroke="#5a0a14" stroke-width="2" stroke-linejoin="round"/>' +
-        '<path d="M82 90 C60 102 40 114 22 130 C44 122 64 110 84 98Z" fill="#3a6ad8" stroke="#122a6a" stroke-width="2" stroke-linejoin="round"/>' +
-        '<path d="M70 82 C100 66 170 62 210 70 C222 60 238 56 250 60 C262 64 268 72 270 78 L268 90 C262 98 246 100 232 96 C200 108 140 108 100 98 C84 94 74 90 70 82Z" fill="url(#ps-lw)" stroke="#3a0810" stroke-width="3" stroke-linejoin="round"/>' +
-        '<path d="M112 98 C150 104 200 104 236 94 C226 88 210 88 200 90 C170 94 140 96 112 98Z" fill="#f6e7c8"/>' +
-        '<path d="M246 60 L238 38 L250 54 L254 34 L258 58Z" fill="#f2c94c" stroke="#7a5a10" stroke-width="1.5" stroke-linejoin="round"/>' +
-        '<path d="M268 76 L296 84 L268 92 C264 88 264 80 268 76Z" fill="#f2c94c" stroke="#7a5a10" stroke-width="2" stroke-linejoin="round"/><path d="M270 84 H292" stroke="#7a5a10" stroke-width="1.5"/>' +
-        '<circle cx="254" cy="72" r="5" fill="#fff"/><circle cx="256" cy="72" r="2.8" fill="#1a1a1a"/><circle cx="257" cy="71" r="1" fill="#fff"/>' +
-        '<g class="flap" style="transform-origin:180px 80px">' + wing('url(#ps-lw)', '#f2a0a8', '#3a0810') + '</g>' +
+        '<g class="flap" style="transform-origin:186px 84px;animation-delay:-.12s"><g transform="translate(16 -8)">' + wing(true) + '</g></g>' +
+        // longues plumes de queue
+        '<path d="M86 94 C60 80 32 70 4 70 C20 78 30 82 40 84 C30 86 20 88 12 92 C40 94 62 98 84 102Z" fill="#f2c94c" stroke="#7a5a10" stroke-width="2" stroke-linejoin="round"/><path d="M84 96 C60 86 34 78 12 76" stroke="#b8860b" stroke-width="1.6" fill="none"/>' +
+        '<path d="M86 100 C62 102 36 106 8 114 C26 116 50 114 84 108Z" fill="#f6ead2" stroke="#8a7a5a" stroke-width="2" stroke-linejoin="round"/><path d="M14 113 C10 114 6 114 4 114 L10 118Z" fill="#c41e30"/>' +
+        '<path d="M88 104 C66 116 46 128 26 146 C50 140 70 128 90 112Z" fill="#3a6ad8" stroke="#122a6a" stroke-width="2" stroke-linejoin="round"/><path d="M86 108 C68 120 50 132 32 142" stroke="#8ab4ff" stroke-width="1.6" fill="none"/>' +
+        // corps
+        '<path d="M78 98 C96 74 150 66 196 72 C214 60 236 56 252 62 C266 68 272 78 272 88 L270 98 C262 108 246 112 230 108 C196 122 130 124 98 112 C86 108 78 104 78 98Z" fill="url(#ps-lb)" stroke="#3a0810" stroke-width="3" stroke-linejoin="round"/>' +
+        // poitrail crème en écailles
+        '<path d="M190 108 C210 116 238 114 254 102 C250 92 236 88 222 90 C206 92 194 98 190 108Z" fill="#f6ead2" stroke="#8a6a4a" stroke-width="1.5"/>' +
+        '<path d="M200 104 q5 4 10 0 q5 4 10 0 q5 4 10 0 q5 4 10 0 M206 110 q5 4 10 0 q5 4 10 0 q5 4 10 0" stroke="#c8a888" stroke-width="1.4" fill="none"/>' +
+        '<path d="M110 90 C140 80 176 78 200 80" stroke="#ff7a84" stroke-width="3" fill="none" opacity=".6" stroke-linecap="round"/>' +
+        // pattes repliées
+        '<path d="M150 116 L142 128 M150 128 L138 132 M160 116 L156 130 M156 130 L146 136" stroke="#e8b84a" stroke-width="3.5" stroke-linecap="round"/>' +
+        // tête bien détachée : cou plus sombre et crâne arrondi
+        '<path d="M228 74 C230 60 242 52 256 54 C270 56 278 68 276 82 C274 94 262 100 248 98 C238 96 230 88 228 74Z" fill="#d42a3c" stroke="#3a0810" stroke-width="3"/>' +
+        '<path d="M232 96 C226 88 224 78 228 70" stroke="#8a1222" stroke-width="4" fill="none" stroke-linecap="round"/>' +
+        '<path d="M244 58 C252 56 262 58 268 64" stroke="#ff8a94" stroke-width="3" fill="none" stroke-linecap="round" opacity=".8"/>' +
+        // huppe
+        '<path d="M248 62 C238 54 224 48 208 46 C220 52 228 56 234 60 C222 58 212 60 204 64 C220 64 234 66 246 68Z" fill="#ff6a3a" stroke="#7a1a08" stroke-width="2" stroke-linejoin="round"/>' +
+        // tête : marque blanche, œil cerclé, bec crochu
+        '<path d="M262 80 C254 86 242 86 232 82" stroke="#f6ead2" stroke-width="4" fill="none" stroke-linecap="round"/>' +
+        '<circle cx="256" cy="74" r="7.5" fill="#fff" stroke="#3a0810" stroke-width="1.5"/><circle cx="257.5" cy="74" r="4" fill="#1a1a1a"/><circle cx="259" cy="72.5" r="1.4" fill="#fff"/>' +
+        '<path d="M270 78 C284 74 300 80 304 94 C296 90 286 88 272 92Z" fill="#f2c94c" stroke="#7a5a10" stroke-width="2" stroke-linejoin="round"/>' +
+        '<path d="M272 92 C282 92 290 94 294 99 C284 102 276 100 270 97Z" fill="#d9a62c" stroke="#7a5a10" stroke-width="2" stroke-linejoin="round"/>' +
+        '<g class="flap" style="transform-origin:186px 84px">' + wing(false) + '</g>' +
         '</g>';
     } },
     // Zelda : petite fée rose lumineuse, ailes translucides et traînée d'étincelles
@@ -454,7 +480,7 @@
         sp += '<circle class="tw" style="animation-delay:-' + p[2] + 's" cx="' + p[0] + '" cy="' + p[1] + '" r="' + (1.6 + i * .5) + '" fill="#ffd1ec"/>';
       });
       return '<defs><radialGradient id="ps-pf"><stop offset="0" stop-color="#fff"/><stop offset=".35" stop-color="#ffb8e0"/><stop offset="1" stop-color="#ff5fb4" stop-opacity="0"/></radialGradient></defs>' + sp +
-        '<g class="float"><circle class="pulse" cx="104" cy="42" r="30" fill="url(#ps-pf)"/>' +
+        '<g class="float"><circle class="pulse" cx="104" cy="42" r="16" fill="url(#ps-pf)" opacity=".6"/>' +
         '<g class="hinge" style="transform-origin:104px 42px"><path d="M104 42 C94 20 80 18 78 30 C76 40 92 44 104 42Z M104 42 C114 20 128 18 130 30 C132 40 116 44 104 42Z" fill="#ffe6f6" fill-opacity=".75" stroke="#ff9fd2" stroke-width="1.5"/>' +
         '<path d="M104 44 C96 56 86 60 84 54 C82 48 94 46 104 44Z M104 44 C112 56 122 60 124 54 C126 48 114 46 104 44Z" fill="#ffe6f6" fill-opacity=".6" stroke="#ff9fd2" stroke-width="1.2"/></g>' +
         '<circle cx="104" cy="42" r="8" fill="#fff"/></g>';
