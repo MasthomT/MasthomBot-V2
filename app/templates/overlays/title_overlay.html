@@ -259,7 +259,7 @@
       sub: '#c8ffd2', substroke: '0', subfilter: 'drop-shadow(0 0 .45vw rgba(60,255,106,.9))',
       msg: '#c8ffd2', msgsh: '0 0 .5vw rgba(60,255,106,.85)',
       num: '#7dff9a', numsh: '0 0 .7vw rgba(60,255,106,.95), 0 0 1.5vw rgba(60,255,106,.5)', em: '#ffb000', emsh: '0 0 .6vw rgba(255,176,0,.9)' },
-    pokemon: { font: 'Bungee', text: 'Bungee', w: 400, ls: '.03em', k: 1.01, subk: .85, fx: 'sparks', pass: ['pokeball', 'balls', 'cyclist', 'birds'],
+    pokemon: { font: 'Bungee', text: 'Bungee', w: 400, ls: '.03em', k: 1.01, subk: .85, fx: 'sparks', pass: ['pokeball', 'superball', 'hyperball', 'masterball', 'cyclist', 'birds'],
       grad: 'linear-gradient(to bottom,#fff8c2 0%,#ffcb05 55%,#f0a800 100%)',
       filter: _ol('#2a75bb', .2) + ' drop-shadow(.3vw .3vw 0 #0f2f5c) drop-shadow(0 0 .8vw rgba(255,203,5,.5))',
       sub: '#ffffff', substroke: '.1vw #e3350d', subfilter: 'drop-shadow(.14vw .14vw 0 #7a1a05)',
@@ -342,7 +342,13 @@
   function startPass(kinds) {
     clearInterval(passTimer); clearTimeout(startPass.first);
     if (!kinds || !kinds.length || !window.Passers) return;
-    const go = () => Passers.fly($('fx'), kinds[passIdx++ % kinds.length]);
+    // ordre aléatoire, jamais deux fois de suite le même élément
+    let last = null;
+    const go = () => {
+      let k = kinds[Math.floor(Math.random() * kinds.length)];
+      if (kinds.length > 1) while (k === last) k = kinds[Math.floor(Math.random() * kinds.length)];
+      last = k; Passers.fly($('fx'), k);
+    };
     startPass.first = setTimeout(go, 2200);
     passTimer = setInterval(go, 11000);
   }

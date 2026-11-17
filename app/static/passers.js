@@ -62,6 +62,12 @@
 
   var svg = function (vb, inner) { return '<svg viewBox="' + vb + '" xmlns="' + NS + '">' + inner + '</svg>'; };
 
+  // Balle Pokémon : moitié haute colorée, décor propre à chaque balle, bouton central, reflet ; roule en rebondissant
+  var pokeBall = function (top, deco) {
+    return '<g class="hop"><g class="spin"><circle cx="50" cy="50" r="44" fill="#fff" stroke="#222" stroke-width="5"/><path d="M6 50 A44 44 0 0 1 94 50Z" fill="' + top + '" stroke="#222" stroke-width="5"/>' + deco +
+      '<line x1="6" y1="50" x2="94" y2="50" stroke="#222" stroke-width="7"/><circle cx="50" cy="50" r="13" fill="#fff" stroke="#222" stroke-width="6"/><circle cx="50" cy="50" r="5" fill="#eee"/>' +
+      '<ellipse cx="32" cy="28" rx="10" ry="5" transform="rotate(-35 32 28)" fill="#fff" opacity=".5"/></g></g>';
+  };
   // ── dessins (tous tournés vers la droite) ──
   var DRAW = {
     sleigh: { w: 26, vb: '0 0 430 150', draw: function () {
@@ -385,12 +391,8 @@
         '<g fill="#1a1a1a" transform="rotate(180 80 162)"><circle cx="80" cy="162" r="2.2"/><path d="M80 162 L75 153.5 A10 10 0 0 1 85 153.5Z"/><path d="M80 162 L89.5 165 A10 10 0 0 1 84.5 170.5Z"/><path d="M80 162 L75.5 170.5 A10 10 0 0 1 70.5 165Z"/></g>';
       return '<g class="sway" style="transform-origin:80px 6px">' + drop + '</g>';
     } },
-    // Pokémon : Poké Ball qui roule
-    pokeball: { w: 6, vb: '0 0 100 100', draw: function () {
-      return '<g class="hop"><g class="spin"><circle cx="50" cy="50" r="44" fill="#fff" stroke="#222" stroke-width="5"/><path d="M6 50 A44 44 0 0 1 94 50Z" fill="#e3350d" stroke="#222" stroke-width="5"/>' +
-        '<line x1="6" y1="50" x2="94" y2="50" stroke="#222" stroke-width="7"/><circle cx="50" cy="50" r="13" fill="#fff" stroke="#222" stroke-width="6"/><circle cx="50" cy="50" r="5" fill="#eee"/>' +
-        '<ellipse cx="32" cy="28" rx="10" ry="5" transform="rotate(-35 32 28)" fill="#fff" opacity=".5"/></g></g>';
-    } },
+// Pokémon : Poké Ball qui roule en rebondissant
+    pokeball: { w: 8, vb: '0 0 100 100', draw: function () { return pokeBall('#e3350d', ''); } },
     // Cosy : abeille
     bee: { w: 5.5, vb: '0 0 120 90', draw: function () {
       return '<defs><clipPath id="ps-beeb"><ellipse cx="52" cy="54" rx="30" ry="22"/></clipPath></defs>' +
@@ -1268,7 +1270,13 @@
         '<path d="M64 204 H106 M65 212 H105 M75 196 V224 M85 196 V224 M95 196 V224" stroke="#8a5a2a" stroke-width="1.6"/>' +
         '<circle cx="78" cy="190" r="6" fill="#f5cba7"/><circle cx="94" cy="191" r="5.5" fill="#d9a07a"/>' +
         '</g>';
-    } }
+    } },
+    // Pokémon : Super Ball (bleue à bandes rouges)
+    superball: { w: 8, vb: '0 0 100 100', draw: function () { return pokeBall('#2a6ad8', '<path d="M22 22 L36 38 M78 22 L64 38" stroke="#e3350d" stroke-width="9" stroke-linecap="round"/>'); } },
+    // Pokémon : Hyper Ball (noire à bandes jaunes)
+    hyperball: { w: 8, vb: '0 0 100 100', draw: function () { return pokeBall('#2a2a2e', '<path d="M34 9 V40 M66 9 V40" stroke="#ffcb05" stroke-width="10" stroke-linecap="round"/>'); } },
+    // Pokémon : Master Ball (violette, pastilles roses et « M »)
+    masterball: { w: 8, vb: '0 0 100 100', draw: function () { return pokeBall('#7a3fd0', '<circle cx="28" cy="30" r="7" fill="#ff7ad8"/><circle cx="72" cy="30" r="7" fill="#ff7ad8"/><text x="50" y="36" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="18" fill="#fff">M</text>'); } }
   };
 
   // ── Sprites pixel art : chaque élément est capturé image par image depuis son dessin animé (12 images par cycle),
@@ -1277,7 +1285,7 @@
   var BASEPX = '/static/passers_px/';
   try { BASEPX = new URL('passers_px/', document.currentScript.src).href; } catch (e) {}
   var ART_VW = 3.5 / 19.2;
-  var PX = {"epona":[12,1200,84,57],"loftwing":[12,1200,100,47],"pinkfairy":[12,1200,41,20],"witch":[12,1200,94,48],"bats":[12,1200,86,28],"pumpkin":[12,1200,36,41],"sleigh":[12,1200,145,43],"snowmansled":[12,1200,65,49],"snowflakes":[12,1200,77,34],"penguin":[12,1200,62,20],"drone":[12,1200,57,31],"flycar":[12,1200,95,33],"hologram":[12,1200,72,60],"pacman":[12,1200,112,20],"invaders":[12,1200,72,41],"mushroom":[12,1200,32,37],"whale":[12,1200,120,51],"turtle":[12,1200,64,36],"fish":[12,1200,61,24],"jellyfish":[12,1200,35,56],"dolphins":[12,1200,84,36],"ufo":[12,1200,60,44],"astronaut":[12,1200,53,53],"comet":[12,1200,85,20],"rocket":[12,1200,79,32],"satellite":[12,1200,78,30],"ship":[12,1200,106,78],"parrot":[12,1200,58,27],"kraken":[12,1200,151,80],"bottle":[12,1200,71,25],"butterfly":[12,1200,27,29],"lantern":[12,1200,36,58],"crane":[12,1200,58,28],"crow":[12,1200,56,29],"shambler":[12,1200,30,61],"eyes":[12,1200,42,14],"hand":[12,1200,41,59],"doll":[12,1200,39,57],"car":[12,1200,116,31],"heli":[12,1200,68,45],"boat":[12,1200,102,28],"flamingo":[12,1200,91,28],"plane":[12,1200,158,32],"robot":[12,1200,36,48],"carry":[12,1200,79,58],"cart":[12,1200,65,43],"monster":[12,1200,68,46],"bus":[12,1200,83,84],"llama":[12,1200,51,63],"glider":[12,1200,66,47],"dragon":[12,1200,131,53],"knight":[12,1200,88,88],"giantbat":[12,1200,57,31],"wisps":[12,1200,71,22],"wolf":[12,1200,91,41],"moon":[12,1200,84,80],"owl":[12,1200,56,32],"hunter":[12,1200,31,61],"figure":[12,1200,52,57],"siren":[12,1200,45,73],"radio":[12,1200,40,58],"supply":[12,1200,51,59],"buggy":[12,1200,89,42],"assistbot":[12,1200,47,51],"pokeball":[12,1200,34,37],"balls":[12,1200,76,24],"cyclist":[12,1200,61,48],"birds":[12,1200,82,28],"bee":[12,1200,28,23],"fox":[12,1200,66,33],"ladybug":[12,1200,32,25],"patchballoon":[12,1200,51,67]};
+  var PX = {"epona":[12,1200,84,57],"loftwing":[12,1200,100,47],"pinkfairy":[12,1200,41,20],"witch":[12,1200,94,48],"bats":[12,1200,86,28],"pumpkin":[12,1200,36,41],"sleigh":[12,1200,145,43],"snowmansled":[12,1200,65,49],"snowflakes":[12,1200,77,34],"penguin":[12,1200,62,20],"drone":[12,1200,57,31],"flycar":[12,1200,95,33],"hologram":[12,1200,72,60],"pacman":[12,1200,112,20],"invaders":[12,1200,72,41],"mushroom":[12,1200,32,37],"whale":[12,1200,120,51],"turtle":[12,1200,64,36],"fish":[12,1200,61,24],"jellyfish":[12,1200,35,56],"dolphins":[12,1200,84,36],"ufo":[12,1200,60,44],"astronaut":[12,1200,53,53],"comet":[12,1200,85,20],"rocket":[12,1200,79,32],"satellite":[12,1200,78,30],"ship":[12,1200,106,78],"parrot":[12,1200,58,27],"kraken":[12,1200,151,80],"bottle":[12,1200,71,25],"butterfly":[12,1200,27,29],"lantern":[12,1200,36,58],"crane":[12,1200,58,28],"crow":[12,1200,56,29],"shambler":[12,1200,30,61],"eyes":[12,1200,42,14],"hand":[12,1200,41,59],"doll":[12,1200,39,57],"car":[12,1200,116,31],"heli":[12,1200,68,45],"boat":[12,1200,102,28],"flamingo":[12,1200,91,28],"plane":[12,1200,158,32],"robot":[12,1200,36,48],"carry":[12,1200,79,58],"cart":[12,1200,65,43],"monster":[12,1200,68,46],"bus":[12,1200,83,84],"llama":[12,1200,51,63],"glider":[12,1200,66,47],"dragon":[12,1200,131,53],"knight":[12,1200,88,88],"giantbat":[12,1200,57,31],"wisps":[12,1200,71,22],"wolf":[12,1200,91,41],"moon":[12,1200,84,80],"owl":[12,1200,56,32],"hunter":[12,1200,31,61],"figure":[12,1200,52,57],"siren":[12,1200,45,73],"radio":[12,1200,40,58],"supply":[12,1200,51,59],"buggy":[12,1200,89,42],"assistbot":[12,1200,47,51],"pokeball":[12,1200,34,37],"cyclist":[12,1200,61,48],"birds":[12,1200,82,28],"bee":[12,1200,28,23],"fox":[12,1200,66,33],"ladybug":[12,1200,32,25],"patchballoon":[12,1200,51,67]};
   function buildPx(k) {
     var p = PX[k];
     return '<div class="pxs" style="padding-bottom:' + (p[3] / p[2] * 100) + '%;background-image:url(' + BASEPX + k + '.png);background-size:' + (p[0] * 100) + '% 100%;' +
@@ -1291,6 +1299,7 @@
   //   dur (ms), amp (tangage vertical en vh), waves (nombre d'ondulations), y : [min, max] de la hauteur (vh), drift : descente en vh
   var META = {
     comet: { dur: 4200, drift: 26, tilt: 12 }, car: { ground: 1, dur: 4800 }, wolf: { ground: 1, dur: 5200 }, pokeball: { ground: 1, dur: 6000 },
+    superball: { ground: 1, dur: 5600 }, hyperball: { ground: 1, dur: 5200 }, masterball: { ground: 1, dur: 6400 },
     robot: { ground: 1, dur: 11000 }, ship: { dur: 15000, amp: 1.2, y: [40, 58] }, fog: { dur: 26000, amp: 1.2, y: [50, 80] }, supply: { dur: 14000, drift: 30, y: [2, 14] },
     whale: { amp: 1.2, dur: 13000 }, butterfly: { waves: 6 }, eyes: { spot: 'fade', dur: 5200, glow: '#ff1a1a', blink: 1 },
     epona: { ground: 1, dur: 6500 }, pumpkin: { ground: 1, dur: 9000 }, snowmansled: { ground: 1, dur: 7000 }, penguin: { ground: 1, dur: 8000 },
