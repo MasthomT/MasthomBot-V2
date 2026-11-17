@@ -937,46 +937,60 @@
         '<g stroke="#e4ddee" stroke-width="3" stroke-linecap="round"><path d="M162 82 L178 76 M162 82 L180 84 M161 84 L176 94"/></g>' +
         '</g>';
     } },
-    // Battle Royale : lama piñata violet à franges colorées qui bondit
-    llama: { w: 10, vb: '0 0 190 190', draw: function () {
-      var fr = function (y, c) { return '<path d="M44 ' + y + ' q6 6 12 0 q6 6 12 0 q6 6 12 0 q6 6 12 0 q6 6 12 0 q6 6 12 0 q6 6 12 0 q6 6 12 0 V' + (y - 10) + ' H44Z" fill="' + c + '"/>'; };
-      return '<ellipse cx="96" cy="184" rx="50" ry="5" fill="#000" opacity=".3"/>' +
+    // Battle Royale : lama piñata à franges colorées, long cou, museau allongé et grandes oreilles, qui bondit
+    llama: { w: 10, vb: '0 -20 210 220', draw: function () {
+      var fr = function (x, y, w, c) { var d = 'M' + x + ' ' + y; for (var i = 0; i < w / 10; i++) d += ' q5 6 10 0'; return '<path d="' + d + ' V' + (y - 9) + ' H' + x + 'Z" fill="' + c + '"/>'; };
+      var cols = ['#ff4fd8', '#ffd23f', '#3fd1ff', '#5bff6b'];
+      var body = ''; cols.forEach(function (c, i) { body += fr(36, 96 + i * 13, 110, c); });
+      var neck = ''; cols.forEach(function (c, i) { neck += fr(132, 48 + i * 12, 30, c); });
+      return '<ellipse cx="96" cy="194" rx="56" ry="5" fill="#000" opacity=".3"/>' +
         '<g class="hop" style="animation-duration:.7s">' +
-        '<g fill="#7a3fd0" stroke="#2a0a5a" stroke-width="2.5"><rect x="54" y="132" width="14" height="44" rx="5"/><rect x="128" y="132" width="14" height="44" rx="5"/></g>' +
-        '<path d="M40 100 C40 80 60 74 100 74 C130 74 150 80 150 100 V136 H40Z" fill="#8a4ae0" stroke="#2a0a5a" stroke-width="3"/>' +
-        fr(96, '#ff4fd8') + fr(110, '#ffd23f') + fr(124, '#3fd1ff') + fr(138, '#5bff6b') +
-        '<path d="M40 100 C40 80 60 74 100 74 C130 74 150 80 150 100 V136 H40Z" fill="none" stroke="#2a0a5a" stroke-width="3"/>' +
-        '<path d="M30 92 C20 90 14 98 18 106 C24 102 30 100 38 100" fill="#8a4ae0" stroke="#2a0a5a" stroke-width="2.5"/>' +
-        '<path d="M128 80 C126 56 132 36 140 26 L164 26 C170 40 168 60 160 80Z" fill="#8a4ae0" stroke="#2a0a5a" stroke-width="3"/>' +
-        '<path d="M136 26 C136 12 150 6 162 10 C176 14 182 24 178 34 C172 40 160 40 150 38 C142 36 136 32 136 26Z" fill="#8a4ae0" stroke="#2a0a5a" stroke-width="3"/>' +
-        '<path d="M142 12 L138 -6 L150 8Z M154 9 L156 -8 L162 10Z" fill="#8a4ae0" stroke="#2a0a5a" stroke-width="2.5" stroke-linejoin="round"/>' +
-        '<circle cx="160" cy="22" r="5" fill="#fff"/><circle cx="162" cy="22" r="3" fill="#1a1a1a"/><path d="M172 30 Q176 32 178 30" stroke="#2a0a5a" stroke-width="2" fill="none"/>' +
-        '<path d="M140 46 H164 M138 58 H162" stroke="#ff4fd8" stroke-width="5"/>' +
+        '<g fill="#4a2490" stroke="#2a0a5a" stroke-width="2.5"><rect x="62" y="136" width="12" height="44" rx="5"/><rect x="138" y="136" width="12" height="44" rx="5"/></g><g fill="#6a34c0" stroke="#2a0a5a" stroke-width="2.5"><rect x="44" y="136" width="13" height="46" rx="5"/><rect x="120" y="136" width="13" height="46" rx="5"/></g>' +
+        '<path d="M30 92 C20 88 12 96 16 106 C22 102 28 100 36 100" fill="#8a4ae0" stroke="#2a0a5a" stroke-width="2.5"/>' +
+        '<path d="M34 96 C34 80 54 74 96 74 C130 74 150 80 150 96 V142 H34Z" fill="#8a4ae0" stroke="#2a0a5a" stroke-width="3"/>' + body +
+        '<path d="M34 96 C34 80 54 74 96 74 C130 74 150 80 150 96 V142 H34Z" fill="none" stroke="#2a0a5a" stroke-width="3"/>' +
+        '<path d="M128 90 L132 22 H164 L162 90Z" fill="#8a4ae0" stroke="#2a0a5a" stroke-width="3" stroke-linejoin="round"/>' + neck +
+        '<path d="M128 90 L132 22 H164 L162 90Z" fill="none" stroke="#2a0a5a" stroke-width="3" stroke-linejoin="round"/>' +
+        '<path d="M140 2 C134 -10 136 -20 144 -22 C150 -14 150 -4 148 4Z M156 2 C156 -12 162 -20 170 -18 C172 -8 168 0 162 6Z" fill="#8a4ae0" stroke="#2a0a5a" stroke-width="2.5" stroke-linejoin="round"/>' +
+        '<path d="M142 -2 C140 -10 141 -16 144 -18 M160 0 C162 -8 165 -14 168 -15" stroke="#ff4fd8" stroke-width="3" fill="none" stroke-linecap="round"/>' +
+        '<path d="M128 26 C126 10 138 0 154 2 C166 4 176 10 190 18 C200 24 202 34 194 38 C182 42 166 42 150 42 C136 42 128 36 128 26Z" fill="#8a4ae0" stroke="#2a0a5a" stroke-width="3" stroke-linejoin="round"/>' +
+        '<path d="M178 22 C190 24 198 28 200 34 C192 38 184 38 176 36Z" fill="#b47aff"/><circle cx="196" cy="30" r="2.4" fill="#2a0a5a"/><path d="M186 38 Q192 40 198 37" stroke="#2a0a5a" stroke-width="2" fill="none"/>' +
+        '<circle cx="158" cy="18" r="7" fill="#fff" stroke="#2a0a5a" stroke-width="2"/><circle cx="160" cy="18" r="4" fill="#1a1a1a"/><circle cx="161.5" cy="16.5" r="1.4" fill="#fff"/>' +
+        '<path d="M134 8 C140 4 148 4 154 6" stroke="#ff4fd8" stroke-width="4" fill="none" stroke-linecap="round"/>' +
         '</g>';
     } },
-    // Battle Royale : joueur suspendu à son planeur coloré
-    glider: { w: 12, vb: '0 0 230 170', draw: function () {
-      return '<g class="sway" style="transform-origin:115px 40px">' +
-        '<path d="M10 54 L120 14 L224 50 L120 40Z" fill="#ff3fa4" stroke="#3a0a2a" stroke-width="3" stroke-linejoin="round"/>' +
-        '<path d="M120 14 L120 40 L224 50Z" fill="#ffd23f" stroke="#3a0a2a" stroke-width="3" stroke-linejoin="round"/><path d="M10 54 L120 14 L70 46Z" fill="#3fd1ff"/>' +
-        '<path d="M60 48 L114 98 M180 48 L126 98" stroke="#3a3a4a" stroke-width="2.5"/>' +
-        '<rect x="104" y="94" width="32" height="8" rx="3" fill="#3a3a4a"/>' +
-        '<path d="M110 100 L108 112 M130 100 L132 112" stroke="#f5cba7" stroke-width="7" stroke-linecap="round"/>' +
-        '<circle cx="120" cy="114" r="11" fill="#f5cba7" stroke="#5a3a2a" stroke-width="2"/><path d="M110 110 C112 100 128 100 130 110Z" fill="#3a2a1a"/>' +
-        '<path d="M112 124 H128 L132 146 H108Z" fill="#3a8a5a" stroke="#1a3a2a" stroke-width="2"/>' +
-        '<path d="M112 146 L102 162 M128 146 L140 160" stroke="#2a3a6a" stroke-width="8" stroke-linecap="round"/>' +
+// Battle Royale : joueur qui descend sous un parachute à panneaux colorés
+    glider: { w: 10, vb: '0 0 180 230', draw: function () {
+      var cols = ['#3fd1ff', '#ff3fa4', '#ffd23f', '#5bff6b', '#b14bff', '#ff8a1a'];
+      var gores = ''; for (var i = 0; i < 6; i++) {
+        var x0 = 14 + i * 25.3, x1 = x0 + 25.3, mx = (x0 + x1) / 2;
+        gores += '<path d="M90 10 C' + (90 + (x0 - 90) * .7) + ' 12 ' + x0 + ' 40 ' + x0 + ' 80 Q' + mx + ' 70 ' + x1 + ' 80 C' + x1 + ' 40 ' + (90 + (x1 - 90) * .7) + ' 12 90 10Z" fill="' + cols[i] + '" stroke="#16084a" stroke-width="2.5" stroke-linejoin="round"/>';
+      }
+      return '<g class="sway" style="transform-origin:90px 10px">' + gores +
+        '<path d="M30 30 C44 18 62 12 80 11" stroke="#fff" stroke-width="5" fill="none" opacity=".5" stroke-linecap="round"/>' +
+        '<g stroke="#e6e1f0" stroke-width="1.6"><line x1="14" y1="80" x2="82" y2="150"/><line x1="40" y1="80" x2="84" y2="148"/><line x1="65" y1="80" x2="86" y2="146"/><line x1="115" y1="80" x2="94" y2="146"/><line x1="140" y1="80" x2="96" y2="148"/><line x1="166" y1="80" x2="98" y2="150"/></g>' +
+        '<path d="M80 150 L84 158 M100 150 L96 158" stroke="#3a3a4a" stroke-width="3"/>' +
+        '<path d="M80 156 L74 172 M100 156 L106 172" stroke="#f5cba7" stroke-width="7" stroke-linecap="round"/>' +
+        '<rect x="78" y="166" width="24" height="30" rx="6" fill="#3a8a5a" stroke="#1a3a2a" stroke-width="2"/><path d="M80 176 H100" stroke="#ffd23f" stroke-width="3"/>' +
+        '<circle cx="90" cy="158" r="11" fill="#f5cba7" stroke="#5a3a2a" stroke-width="2"/><path d="M79 155 C80 144 100 144 101 155 C96 151 86 151 79 155Z" fill="#3a2a1a"/><circle cx="94" cy="158" r="1.8" fill="#1a1a1a"/>' +
+        '<path d="M84 196 L78 218 M96 196 L104 216" stroke="#2a3a6a" stroke-width="8" stroke-linecap="round"/><path d="M74 220 H84 M102 218 H112" stroke="#1a1a1a" stroke-width="5" stroke-linecap="round"/>' +
         '</g>';
     } },
-    // Battle Royale : coffre doré qui brille, couvercle entrouvert et étincelles (sur place)
-    chest: { w: 9, vb: '0 0 160 150', draw: function () {
-      return '<defs><linearGradient id="ps-ch" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe680"/><stop offset="1" stop-color="#c8860b"/></linearGradient>' +
-        '<radialGradient id="ps-cr"><stop offset="0" stop-color="#fff6c8" stop-opacity=".9"/><stop offset="1" stop-color="#ffd23f" stop-opacity="0"/></radialGradient></defs>' +
-        '<g class="pulse"><path d="M80 70 L20 0 H50Z M80 70 L70 -4 H96Z M80 70 L118 0 H146Z" fill="#fff6c8" opacity=".5"/><circle cx="80" cy="70" r="70" fill="url(#ps-cr)"/></g>' +
-        '<path d="M22 84 H138 V138 C138 142 134 146 130 146 H30 C26 146 22 142 22 138Z" fill="url(#ps-ch)" stroke="#6b4a00" stroke-width="3"/>' +
-        '<g transform="rotate(-14 22 76)"><path d="M22 76 C22 54 48 44 80 44 C112 44 138 54 138 76Z" fill="url(#ps-ch)" stroke="#6b4a00" stroke-width="3"/><path d="M56 48 V76 M104 48 V76" stroke="#8a5a00" stroke-width="5"/></g>' +
-        '<path d="M56 84 V146 M104 84 V146" stroke="#8a5a00" stroke-width="5"/><path d="M22 100 H138" stroke="#8a5a00" stroke-width="3"/>' +
-        '<rect x="70" y="92" width="20" height="22" rx="4" fill="#ffd23f" stroke="#6b4a00" stroke-width="2.5"/><circle cx="80" cy="102" r="3" fill="#6b4a00"/>' +
-        '<g fill="#fff6c8"><path class="tw" d="M40 30 l3 7 7 3 -7 3 -3 7 -3 -7 -7 -3 7 -3z"/><path class="tw" style="animation-delay:-.4s" d="M124 22 l3 7 7 3 -7 3 -3 7 -3 -7 -7 -3 7 -3z"/><path class="tw" style="animation-delay:-.7s" d="M86 12 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2z"/></g>';
+    // Battle Royale : coffre doré vu de face, couvercle grand ouvert, intérieur qui rayonne (sur place)
+    chest: { w: 9, vb: '0 0 170 170', draw: function () {
+      return '<defs><linearGradient id="ps-cg3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe680"/><stop offset="1" stop-color="#d4930f"/></linearGradient>' +
+        '<linearGradient id="ps-ray" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#fff6c8" stop-opacity=".9"/><stop offset="1" stop-color="#fff6c8" stop-opacity="0"/></linearGradient></defs>' +
+        '<g class="pulse"><path d="M60 80 L34 4 H58Z M80 78 L74 0 H98Z M104 80 L118 4 H142Z" fill="url(#ps-ray)"/></g>' +
+        '<path d="M28 82 L40 40 H130 L142 82Z" fill="#7a4a0a" stroke="#4a2a00" stroke-width="3" stroke-linejoin="round"/>' +
+        '<path d="M40 40 C40 28 130 28 130 40" fill="url(#ps-cg3)" stroke="#4a2a00" stroke-width="3"/>' +
+        '<path d="M46 76 L54 46 H116 L124 76Z" fill="#fff3b0" opacity=".85"/><path d="M58 72 L64 52 H106 L112 72Z" fill="#ffffff" opacity=".7"/>' +
+        '<path d="M70 40 L66 82 M100 40 L104 82" stroke="#b8860b" stroke-width="5"/>' +
+        '<rect x="24" y="82" width="122" height="68" rx="6" fill="url(#ps-cg3)" stroke="#4a2a00" stroke-width="3"/>' +
+        '<path d="M24 96 H146" stroke="#b8860b" stroke-width="4"/><path d="M58 82 V150 M112 82 V150" stroke="#b8860b" stroke-width="6"/>' +
+        '<path d="M24 150 H146" stroke="#4a2a00" stroke-width="3"/>' +
+        '<rect x="74" y="96" width="22" height="26" rx="5" fill="#ffd23f" stroke="#4a2a00" stroke-width="2.5"/><path d="M85 104 V114" stroke="#4a2a00" stroke-width="3" stroke-linecap="round"/><circle cx="85" cy="104" r="3" fill="#4a2a00"/>' +
+        '<path d="M32 88 H50" stroke="#fffbe0" stroke-width="3" opacity=".8" stroke-linecap="round"/>' +
+        '<g fill="#fff6c8"><path class="tw" d="M30 30 l3 7 7 3 -7 3 -3 7 -3 -7 -7 -3 7 -3z"/><path class="tw" style="animation-delay:-.4s" d="M140 22 l3 7 7 3 -7 3 -3 7 -3 -7 -7 -3 7 -3z"/><path class="tw" style="animation-delay:-.7s" d="M86 12 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2z"/></g>';
     } },
     // Dark fantasy : chevalier en armure au galop, bannière au vent
     knight: { w: 18, vb: '0 -80 310 270', draw: function () {
