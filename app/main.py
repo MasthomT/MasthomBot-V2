@@ -50,6 +50,7 @@ from app.services.discord_mod_service import discord_mod_bot, start_discord_mod_
 from app.services.tiktok_monitor import tiktok_monitor_routine
 from app.services.youtube_monitor import youtube_monitor_routine
 from app.services.clip_discord_service import clip_monitor_routine
+from app.services.automation_service import scene_watch_routine
 from app.services.ai_service import felix_vision_loop
 from app.services.bot_health_service import (
     init_bot_health_table,
@@ -109,6 +110,7 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(youtube_monitor_routine())
     asyncio.create_task(birthday_check_routine())
     asyncio.create_task(clip_monitor_routine())
+    asyncio.create_task(scene_watch_routine())
     asyncio.create_task(felix_vision_loop())
 
     # 3. L'overlay Node.js (server.js) est lancé par son propre service systemd

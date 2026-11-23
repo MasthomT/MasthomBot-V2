@@ -122,7 +122,7 @@
              + num('delay', 'Délai avant l\'envoi (secondes)', r.delay, 'max="120" step="0.5"')
              + num('cooldown', 'Attente minimale entre deux envois (secondes)', r.cooldown)
              + (t.value ? num('min_value', t.value.label, r.min_value) : '')
-             + (t.text ? '<label class="block"><span class="text-slate-400">' + esc(t.text.label) + '</span><input data-f="text_filter" maxlength="100" value="' + esc(r.text_filter) + '" class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm"></label>' : '');
+             + (t.text ? '<label class="block"><span class="text-slate-400">' + esc(t.text.label) + '</span><input data-f="text_filter" maxlength="100" value="' + esc(r.text_filter) + '"' + (t.key === 'scene' ? ' list="obs-scenes" placeholder="ex. ON BREAK"' : '') + ' class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm"></label>' : '');
     }
     function collect(el) {
         const q = (f) => el.querySelector('[data-f="' + f + '"]');
@@ -209,6 +209,8 @@
         const { ok, j } = await api('GET', '/admin/api/automations');
         if (!ok) return;
         triggers = j.triggers; rules = j.rules;
+        let dl = $('obs-scenes'); if (!dl) { dl = document.createElement('datalist'); dl.id = 'obs-scenes'; document.body.appendChild(dl); }
+        dl.innerHTML = (j.scenes || []).map(n => '<option value="' + esc(n) + '"></option>').join('');
         $('newTrigger').innerHTML = groupedOptions('raid_out');
         $('cards').innerHTML = rules.map(card).join('') || '<p class="text-slate-500 text-sm">Aucune automatisation. Choisis un déclencheur en haut et clique sur « Nouvelle automatisation ».</p>';
         bind();

@@ -72,6 +72,12 @@ TRIGGERS = {
                       "vars": {}, "sample": {}, "value": None, "text": None, "default": "🔴 C'est parti, le live commence ! Installez-vous ! 💜"},
     "stream_offline": {"group": "Live", "label": "Fin de live", "icon": "fa-circle-stop", "description": "Le live se termine.",
                        "vars": {}, "sample": {}, "value": None, "text": None, "default": "👋 Fin du live, merci d'être passés ! À bientôt ! 💜"},
+    "scene": {"group": "OBS", "label": "Changement de scène OBS", "icon": "fa-clapperboard",
+              "description": "Quand tu passes sur une scène dans OBS (ex. ON BREAK). Seulement pendant le live.",
+              "vars": {"scene": "scène affichée", "previous": "scène d'avant"},
+              "sample": {"scene": "ON BREAK", "previous": "CHATTING/GAMING"},
+              "value": None, "text": ("scene", "Nom exact de la scène (vide = toutes)"),
+              "default": "☕ Petite pause, je reviens vite ! Restez dans le coin 💜"},
 }
 
 _ready = False
@@ -354,3 +360,64 @@ async def on_eventsub(sub_type: str, event: dict, broadcaster_id: str):
             await dispatch(tr[0], tr[1])
     except Exception as e:
         logger.error(f"❌ [AUTOMATISATION] {sub_type} : {e}")
+
+
+# ── Changements de scène OBS ─────────────────────────────────────────────────
+
+SCENE_POLL = 1.5   # secondes ; /api/obs-scene de server.js est une simple lecture en mémoire (aucun appel à OBS)
+
+
+async def _is_live() -> bool:
+    try:
+        async with get_db_connection() as db:
+            c = await db.execute("SELECT COALESCE(personal_last_live_id, '') AS live FROM settings LIMIT 1")
+            row = await c.fetchone()
+        return bool(row and row["live"])
+    except Exception:
+        return False
+
+
+async def current_scene() -> str:
+    """Nom de la scène OBS à l'antenne ('' si OBS n'est pas connecté)."""
+    import aiohttp
+    from app.core.config import settings
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.get(f"{settings.OVERLAY_NODE_URL}/api/obs-scene", timeout=aiohttp.ClientTimeout(total=3)) as r:
+                d = await r.json()
+        return (d.get("scene") or "") if d.get("connected") else ""
+    except Exception:
+        return ""
+
+
+KNOWN_SCENES = ["BEGGIN", "INTRO", "CHATTING/GAMING", "ON BREAK", "END"]   # scènes des boutons du Stream Deck
+_seen_scenes: list[str] = []
+
+
+async def scene_names() -> list[str]:
+    """Suggestions pour le filtre de scène : scènes connues + celles vues depuis le démarrage + la scène actuelle."""
+    cur = await current_scene()
+    out = []
+    for n in KNOWN_SCENES + _seen_scenes + ([cur] if cur else []):
+        if n and n not in out:
+            out.append(n)
+    return out
+
+
+async def scene_watch_routine():
+    """Surveille la scène OBS et déclenche les automatisations « Changement de scène » (pendant le live)."""
+    last = None                       # None = pas encore de relevé : le premier ne déclenche rien
+    while True:
+        try:
+            scene = await current_scene()
+            if scene:                 # OBS déconnecté : on garde la dernière scène connue
+                if last is not None and scene != last:
+                    if await _is_live():
+                        asyncio.create_task(dispatch("scene", {"scene": scene, "previous": last}))
+                    logger.info(f"🎬 [AUTOMATISATION] Scène OBS : {last} → {scene}")
+                last = scene
+                if scene not in _seen_scenes:
+                    _seen_scenes.append(scene)
+        except Exception as e:
+            logger.error(f"❌ [AUTOMATISATION] Surveillance des scènes : {e}")
+        await asyncio.sleep(SCENE_POLL)
