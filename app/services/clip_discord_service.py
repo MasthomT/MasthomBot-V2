@@ -2,7 +2,7 @@
 clip_discord_service.py
 
 Surveille en continu les nouveaux clips Twitch et les poste sur Discord
-dès qu'ils sont créés (polling toutes les 60s).
+dès qu'ils sont créés (polling toutes les 20s).
 """
 
 import asyncio
@@ -14,10 +14,9 @@ from app.core.config import settings
 
 logger = logging.getLogger("masthbot.clip_discord")
 
-POLL_INTERVAL = 60   # secondes entre chaque vérification
+POLL_INTERVAL = 20   # secondes entre chaque vérification
 LOOKBACK_DAYS  = 30  # fenêtre de recherche — couvre les 30 derniers jours
 WINDOW_DAYS    = 7   # Twitch limite chaque requête à une semaine : on découpe
-MIN_AGE        = timedelta(minutes=3)  # laisse à Twitch le temps d'indexer les clips proches, pour garder l'ordre
 
 
 MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août",
@@ -146,7 +145,7 @@ async def _post_clip(session, webhook_url: str, clip: dict, creator_info: dict):
 
 
 async def clip_monitor_routine():
-    """Boucle principale : vérifie les nouveaux clips toutes les 60s."""
+    """Boucle principale : vérifie les nouveaux clips toutes les 20s."""
     await _init_table()
 
     broadcaster_id = settings.TWITCH_BROADCASTER_ID
@@ -158,7 +157,7 @@ async def clip_monitor_routine():
         logger.warning("⚠️ [CLIP_DISCORD] Config incomplète — monitor désactivé.")
         return
 
-    logger.info("🎬 [CLIP_DISCORD] Monitor démarré — vérification toutes les 60s.")
+    logger.info("🎬 [CLIP_DISCORD] Monitor démarré — vérification toutes les 20s.")
 
     while True:
         try:
@@ -174,11 +173,9 @@ async def clip_monitor_routine():
                         rows = await (await conn.execute("SELECT clip_id FROM discord_notified_clips")).fetchall()
                         already_seen = {r["clip_id"] for r in rows}
 
-                    ready_before = (datetime.now(timezone.utc) - MIN_AGE).strftime('%Y-%m-%dT%H:%M:%SZ')
                     new_clips = [c for c in clips
                                  if c["id"] not in already_seen
-                                 and not _is_ignored(c)
-                                 and c.get("created_at", "") <= ready_before]
+                                 and not _is_ignored(c)]
 
                     if new_clips:
                         # Du plus ancien au plus récent
