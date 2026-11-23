@@ -16,6 +16,27 @@ logger = logging.getLogger("masthbot.clip_discord")
 
 POLL_INTERVAL = 60   # secondes entre chaque vérification
 LOOKBACK_DAYS  = 30  # fenêtre de recherche — couvre les 30 derniers jours
+WINDOW_DAYS    = 7   # Twitch limite chaque requête à une semaine : on découpe
+MIN_AGE        = timedelta(minutes=3)  # laisse à Twitch le temps d'indexer les clips proches, pour garder l'ordre
+
+
+MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août",
+        "septembre", "octobre", "novembre", "décembre"]
+
+
+def clip_message(clip: dict) -> str:
+    """Contenu du message Discord : date de création du clip (heure de Paris) puis le lien."""
+    try:
+        from zoneinfo import ZoneInfo
+        d = datetime.fromisoformat(clip["created_at"].replace("Z", "+00:00")).astimezone(ZoneInfo("Europe/Paris"))
+        return f"📅 {d.day} {MOIS[d.month - 1]} {d.year}\n{clip['url']}"
+    except Exception:
+        return clip["url"]
+
+
+def _is_ignored(clip: dict) -> bool:
+    """Clips automatiques d'inStreamly : jamais envoyés sur Discord."""
+    return "instreamly" in (clip.get("title") or "").lower()
 
 
 async def _init_table():
@@ -29,10 +50,24 @@ async def _init_table():
 
 
 async def _fetch_recent_clips(session, headers: dict, broadcaster_id: str, since: datetime) -> list:
-    """Récupère tous les clips créés depuis `since` (pagination automatique)."""
+    """Récupère tous les clips créés depuis `since`, par tranches d'une semaine.
+    Sans ended_at, Twitch ne renvoie que la semaine qui suit started_at."""
+    now = datetime.now(timezone.utc)
+    clips: dict = {}
+    start = since
+    while start < now:
+        end = min(start + timedelta(days=WINDOW_DAYS), now)
+        for c in await _fetch_window(session, headers, broadcaster_id, start, end):
+            clips[c["id"]] = c
+        start = end
+    return list(clips.values())
+
+
+async def _fetch_window(session, headers: dict, broadcaster_id: str, start: datetime, end: datetime) -> list:
     all_clips: list = []
     cursor: str | None = None
-    started_at = since.strftime('%Y-%m-%dT%H:%M:%SZ')
+    started_at = start.strftime('%Y-%m-%dT%H:%M:%SZ')
+    ended_at = end.strftime('%Y-%m-%dT%H:%M:%SZ')
 
     while True:
         url = (
@@ -40,6 +75,7 @@ async def _fetch_recent_clips(session, headers: dict, broadcaster_id: str, since
             f"?broadcaster_id={broadcaster_id}"
             f"&first=100"
             f"&started_at={started_at}"
+            f"&ended_at={ended_at}"
         )
         if cursor:
             url += f"&after={cursor}"
@@ -52,7 +88,7 @@ async def _fetch_recent_clips(session, headers: dict, broadcaster_id: str, since
                 page = body.get("data", [])
                 all_clips.extend(page)
                 cursor = body.get("pagination", {}).get("cursor")
-                if not cursor or len(page) < 100:
+                if not cursor or not page:
                     break
         except Exception as e:
             logger.error(f"❌ [CLIP_DISCORD] Impossible de récupérer les clips : {e}")
@@ -87,7 +123,7 @@ async def _post_clip(session, webhook_url: str, clip: dict, creator_info: dict):
     thread_name = (clip.get("title") or f"Clip de {creator_name}")[:100]
 
     payload = {
-        "content":     clip["url"],
+        "content":     clip_message(clip),
         "username":    creator_name,
         "avatar_url":  avatar,
         "thread_name": thread_name,
@@ -138,7 +174,11 @@ async def clip_monitor_routine():
                         rows = await (await conn.execute("SELECT clip_id FROM discord_notified_clips")).fetchall()
                         already_seen = {r["clip_id"] for r in rows}
 
-                    new_clips = [c for c in clips if c["id"] not in already_seen]
+                    ready_before = (datetime.now(timezone.utc) - MIN_AGE).strftime('%Y-%m-%dT%H:%M:%SZ')
+                    new_clips = [c for c in clips
+                                 if c["id"] not in already_seen
+                                 and not _is_ignored(c)
+                                 and c.get("created_at", "") <= ready_before]
 
                     if new_clips:
                         # Du plus ancien au plus récent
