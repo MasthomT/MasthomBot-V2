@@ -119,7 +119,8 @@ SOUNDS_DIR = "static/commands/sounds"      # mêmes dossiers que les commandes (
 IMAGES_DIR = "static/commands/images"
 SOUND_EXT = {".mp3", ".wav", ".ogg"}
 IMAGE_EXT = {".gif", ".png", ".jpg", ".jpeg", ".webp", ".mp4", ".webm"}
-DATA_KEYS = ("messages", "mode", "gap", "delay", "cooldown", "min_value", "text_filter", "do_chat", "sound", "image")
+DATA_KEYS = ("messages", "mode", "gap", "delay", "cooldown", "min_value", "text_filter", "do_chat", "sound", "image",
+             "sound_delay", "image_delay")
 
 
 def _defaults(trigger: str | None) -> dict:
@@ -127,7 +128,7 @@ def _defaults(trigger: str | None) -> dict:
     # mode : « all » = tous les messages à la suite (espacés de `gap` secondes), « random » = un seul tiré au hasard
     # Actions (cumulables) : message(s) dans le t'chat (do_chat), son joué sur l'overlay, image / vidéo affichée sur l'overlay
     return {"messages": [t["default"]] if t else [], "mode": "all", "gap": 1.5, "delay": 1.0, "cooldown": 30, "min_value": 0,
-            "text_filter": "", "do_chat": True, "sound": "", "image": ""}
+            "text_filter": "", "do_chat": True, "sound": "", "image": "", "sound_delay": 0.0, "image_delay": 0.0}
 
 
 def media_files() -> dict:
@@ -187,16 +188,19 @@ def clean_rule(raw: dict) -> dict:
     try:
         gap = float(raw.get("gap", 1.5))
         delay = float(raw.get("delay", 1))
+        sound_delay = float(raw.get("sound_delay", 0) or 0)
+        image_delay = float(raw.get("image_delay", 0) or 0)
         cooldown = int(raw.get("cooldown", 30))
         min_value = int(raw.get("min_value", 0) or 0)
     except (TypeError, ValueError):
         raise ValueError("Délai, attente et seuil doivent être des nombres.")
-    if not 0 <= gap <= 30 or not 0 <= delay <= 120 or not 0 <= cooldown <= 86400 or not 0 <= min_value <= 10_000_000:
+    if not 0 <= gap <= 30 or not 0 <= delay <= 120 or not 0 <= sound_delay <= 120 or not 0 <= image_delay <= 120 or not 0 <= cooldown <= 86400 or not 0 <= min_value <= 10_000_000:
         raise ValueError("Valeur hors limites (délai ≤ 120 s, attente ≤ 24 h).")
     return {"name": name, "enabled": bool(raw.get("enabled", True)), "trigger": trigger,
             "data": {"messages": msgs, "mode": mode, "gap": gap, "delay": delay, "cooldown": cooldown, "min_value": min_value,
                      "text_filter": str(raw.get("text_filter") or "").strip()[:100],
-                     "do_chat": do_chat, "sound": sound, "image": image}}
+                     "do_chat": do_chat, "sound": sound, "image": image,
+                     "sound_delay": sound_delay, "image_delay": image_delay}}
 
 
 async def create_rule(trigger: str, name: str = "") -> dict:
@@ -299,26 +303,49 @@ async def _overlay(kind: str, filename: str) -> bool:
 
 
 async def _send(rule: dict, values: dict, test: bool = False) -> bool:
-    """Exécute les actions de la règle : son, image, puis message(s) — tous à la suite (« all ») ou un seul au hasard (« random »)."""
+    """Exécute les actions de la règle en parallèle, chacune après son propre délai (compté depuis le déclencheur) :
+    son, image, et message(s) — tous à la suite (« all ») ou un seul au hasard (« random »)."""
     from app.services import alerts_service
-    ok_all = True
-    for kind, key, label in (("sound", "sound", "son"), ("image", "image", "image")):
-        if rule.get(key):
-            ok = await _overlay(kind, rule[key])
-            ok_all = ok_all and ok
-            await _log(rule["name"], ("test · " if test else "") + ("" if ok else "NON ENVOYÉ (overlay injoignable) · ") + f"{label} : {rule[key]}")
-    if not rule.get("do_chat", True) or not rule.get("messages"):
+    tag = "test · " if test else ""
+
+    async def media(kind: str, label: str, delay: float) -> bool:
+        if delay > 0:
+            await asyncio.sleep(delay)
+        ok = await _overlay(kind, rule[kind])
+        await _log(rule["name"], tag + ("" if ok else "NON ENVOYÉ (overlay injoignable) · ") + f"{label} : {rule[kind]}")
+        return ok
+
+    async def chat() -> bool:
+        if float(rule.get("delay", 0) or 0) > 0:
+            await asyncio.sleep(float(rule["delay"]))
+        messages = list(rule["messages"]) if rule.get("mode", "all") == "all" else [random.choice(rule["messages"])]
+        ok_all = True
+        for i, template in enumerate(messages):
+            if i:
+                await asyncio.sleep(float(rule.get("gap", 1.5)))      # petit écart : Twitch limite le rythme des messages
+            text = render(template, values)
+            sent = await alerts_service.send_chat(text)
+            ok_all = ok_all and sent
+            await _log(rule["name"], tag + ("" if sent else "NON ENVOYÉ (bot non connecté au chat) · ") + text)
+            logger.info(f"⚡ [AUTOMATISATION] « {rule['name']} » → {'envoyé' if sent else 'échec'} : {text}")
         return ok_all
-    messages = list(rule["messages"]) if rule.get("mode", "all") == "all" else [random.choice(rule["messages"])]
-    for i, template in enumerate(messages):
-        if i:
-            await asyncio.sleep(float(rule.get("gap", 1.5)))      # petit écart : Twitch limite le rythme des messages
-        text = render(template, values)
-        sent = await alerts_service.send_chat(text)
-        ok_all = ok_all and sent
-        await _log(rule["name"], ("test · " if test else "") + ("" if sent else "NON ENVOYÉ (bot non connecté au chat) · ") + text)
-        logger.info(f"⚡ [AUTOMATISATION] « {rule['name']} » → {'envoyé' if sent else 'échec'} : {text}")
-    return ok_all
+
+    jobs = []
+    if rule.get("sound"):
+        jobs.append(media("sound", "son", float(rule.get("sound_delay", 0) or 0)))
+    if rule.get("image"):
+        jobs.append(media("image", "image", float(rule.get("image_delay", 0) or 0)))
+    if rule.get("do_chat", True) and rule.get("messages"):
+        jobs.append(chat())
+    results = await asyncio.gather(*jobs, return_exceptions=True)
+    return all(r is True for r in results)
+
+
+async def _run(rule: dict, values: dict):
+    try:
+        await _send(rule, values)
+    except Exception as e:
+        logger.error(f"❌ [AUTOMATISATION] « {rule['name']} » : {e}")
 
 
 async def dispatch(trigger: str, values: dict):
@@ -331,28 +358,26 @@ async def dispatch(trigger: str, values: dict):
         if time.time() - _last_fire.get(rule["id"], 0) < rule["cooldown"]:
             continue
         _last_fire[rule["id"]] = time.time()
-        try:
-            if rule["delay"] > 0:
-                await asyncio.sleep(rule["delay"])
-            await _send(rule, values)
-        except Exception as e:
-            logger.error(f"❌ [AUTOMATISATION] « {rule['name']} » : {e}")
+        asyncio.create_task(_run(rule, values))          # chaque automatisation à part : un délai n'en retarde pas une autre
 
 
 async def test_rule(raw: dict) -> dict:
-    """Envoie vraiment le premier message dans le t'chat avec des valeurs d'exemple (règle telle qu'elle est éditée)."""
+    """Fait vraiment les actions cochées (valeurs d'exemple), en respectant les délais."""
     clean = clean_rule(raw)
     rule = dict(clean["data"], name=clean["name"], trigger=clean["trigger"])
     values = TRIGGERS[clean["trigger"]]["sample"]
-    sent = await _send(rule, values, test=True)
     done = []
     if rule.get("sound"):
-        done.append("son joué")
+        done.append("son" + (f" dans {rule['sound_delay']:g} s" if rule["sound_delay"] else ""))
     if rule.get("image"):
-        done.append("image affichée")
-    if rule.get("do_chat"):
+        done.append("image" + (f" dans {rule['image_delay']:g} s" if rule["image_delay"] else ""))
+    if rule.get("do_chat") and rule.get("messages"):
         n = len(rule["messages"]) if rule.get("mode") == "all" else 1
-        done.append(f"{n} message(s) envoyé(s) dans le t'chat")
+        done.append(f"{n} message(s) dans le t'chat" + (f" dans {rule['delay']:g} s" if rule["delay"] else ""))
+    if max(rule["sound_delay"], rule["image_delay"], rule["delay"]) > 0:
+        asyncio.create_task(_send(rule, values, test=True))
+        return {"ok": True, "message": "Test lancé : " + ", ".join(done) + ". Résultat dans « Derniers envois »."}
+    sent = await _send(rule, values, test=True)
     return {"ok": sent, "message": ("Test : " + ", ".join(done) + ".") if sent else "Échec : bot non connecté au chat ou overlay injoignable (voir le journal)."}
 
 

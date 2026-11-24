@@ -77,7 +77,10 @@
     function mediaBlock(kind, r) {  // choix du fichier + aperçu + envoi d'un nouveau fichier
         const files = kind === 'sound' ? media.sounds : media.images, cur = r[kind] || '';
         const opts = '<option value="">— choisis un fichier —</option>' + files.map(f => '<option' + (f === cur ? ' selected' : '') + '>' + esc(f) + '</option>').join('');
+        const dk = kind + '_delay';
         return '<div class="flex flex-wrap items-center gap-2">'
+          + '<label class="flex items-center gap-2 text-xs text-slate-400" title="Compté depuis le déclencheur (ex. le changement de scène)"><i class="fas fa-hourglass-half"></i>après'
+          + '<input data-f="' + dk + '" type="number" min="0" max="120" step="0.5" value="' + esc(r[dk] || 0) + '" class="input-dark w-20 rounded-lg px-2 py-2 text-sm">s</label>'
           + '<select data-f="' + kind + '" class="input-dark rounded-lg px-3 py-2 text-sm flex-1 min-w-[14rem]">' + opts + '</select>'
           + (kind === 'sound' ? '<button class="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold" data-play title="Écouter ici"><i class="fas fa-play mr-1"></i>Écouter</button>' : '')
           + '<label class="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold cursor-pointer"><i class="fas fa-upload mr-1"></i>Envoyer un fichier'
@@ -124,7 +127,7 @@
           + '<div class="rounded-xl border border-slate-700/70 p-4 mb-3' + (actOn(r, 'image') ? '' : ' hidden') + '" data-blk="image"><div class="text-xs text-slate-300 font-bold mb-2"><i class="fas fa-image mr-1 text-indigo-400"></i>Image / vidéo</div>' + mediaBlock('image', r) + '</div>'
           + '<div class="rounded-xl border border-slate-700/70 p-4' + (actOn(r, 'do_chat') ? '' : ' hidden') + '" data-blk="do_chat"><div data-vars>' + chatVars(r) + '</div>'
           + '<div class="space-y-2" data-msgs>' + r.messages.map(msgRow).join('') + '</div>'
-          + '<button class="mt-3 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold" data-add><i class="fas fa-plus mr-1"></i>Ajouter un message</button></div>'
+          + '<button class="mt-3 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold" data-add><i class="fas fa-plus mr-1"></i>Ajouter un message</button>' + msgOpts(r) + '</div>'
           + '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-5 text-xs" data-conds>' + conds(r) + '</div>'
           + '<div class="flex flex-wrap items-center gap-3 mt-5">'
           + '<button class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold" data-save><i class="fas fa-save mr-2"></i>Enregistrer</button>'
@@ -145,14 +148,18 @@
     function conds(r) {
         const t = trig(r.trigger);
         const num = (f, label, v, extra) => '<label class="block"><span class="text-slate-400">' + label + '</span><input data-f="' + f + '" type="number" min="0" ' + (extra || '') + ' value="' + esc(v) + '" class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm"></label>';
-        return '<label class="block"><span class="text-slate-400">Plusieurs messages :</span><select data-f="mode" class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm">'
-             + '<option value="all"' + (r.mode !== 'random' ? ' selected' : '') + '>les envoyer tous, à la suite</option>'
-             + '<option value="random"' + (r.mode === 'random' ? ' selected' : '') + '>en envoyer un seul, au hasard</option></select></label>'
-             + num('gap', 'Écart entre deux messages (secondes)', r.gap, 'max="30" step="0.5"')
-             + num('delay', 'Délai avant l\'envoi (secondes)', r.delay, 'max="120" step="0.5"')
-             + num('cooldown', 'Attente minimale entre deux envois (secondes)', r.cooldown)
+        return num('cooldown', 'Attente minimale entre deux envois (secondes)', r.cooldown)
              + (t.value ? num('min_value', t.value.label, r.min_value) : '')
              + (t.text ? '<label class="block"><span class="text-slate-400">' + esc(t.text.label) + '</span><input data-f="text_filter" maxlength="100" value="' + esc(r.text_filter) + '"' + (t.key === 'scene' ? ' list="obs-scenes" placeholder="ex. ON BREAK"' : '') + ' class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm"></label>' : '');
+    }
+    function msgOpts(r) {          // réglages propres aux messages (dans le bloc message)
+        const num = (f, label, v, extra) => '<label class="block"><span class="text-slate-400">' + label + '</span><input data-f="' + f + '" type="number" min="0" ' + (extra || '') + ' value="' + esc(v) + '" class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm"></label>';
+        return '<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4 text-xs">'
+             + num('delay', 'Envoyer après (secondes)', r.delay, 'max="120" step="0.5" title="Compté depuis le déclencheur (ex. le changement de scène)"')
+             + '<label class="block"><span class="text-slate-400">Plusieurs messages :</span><select data-f="mode" class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm">'
+             + '<option value="all"' + (r.mode !== 'random' ? ' selected' : '') + '>les envoyer tous, à la suite</option>'
+             + '<option value="random"' + (r.mode === 'random' ? ' selected' : '') + '>en envoyer un seul, au hasard</option></select></label>'
+             + num('gap', 'Écart entre deux messages (secondes)', r.gap, 'max="30" step="0.5"') + '</div>';
     }
     function collect(el) {
         const q = (f) => el.querySelector('[data-f="' + f + '"]');
@@ -163,13 +170,17 @@
             delay: parseFloat(q('delay').value || 0), cooldown: parseInt(q('cooldown').value || 0, 10),
             min_value: q('min_value') ? parseInt(q('min_value').value || 0, 10) : 0,
             text_filter: q('text_filter') ? q('text_filter').value : '',
-            do_chat: el.querySelector('[data-act="do_chat"]').checked,
+            do_chat: el.querySelector('[data-act="do_chat"]').checked && el.querySelectorAll('[data-m]').length > 0,
             sound: el.querySelector('[data-act="sound"]').checked ? q('sound').value : '',
             image: el.querySelector('[data-act="image"]').checked ? q('image').value : '',
+            sound_delay: parseFloat(q('sound_delay').value || 0), image_delay: parseFloat(q('image_delay').value || 0),
         };
     }
     function bindMsgs(el) {
-        const rmBind = (row) => row.querySelector('[data-rm]').addEventListener('click', () => { if (el.querySelectorAll('[data-msg]').length > 1) row.remove(); });
+        const rmBind = (row) => row.querySelector('[data-rm]').addEventListener('click', () => {
+            row.remove();
+            if (!el.querySelectorAll('[data-msg]').length) setAct(el, 'do_chat', false);   // plus aucun message : action « Message » décochée
+        });
         el.querySelectorAll('[data-msg]').forEach(rmBind);
         el.querySelector('[data-add]').onclick = () => {
             const d = document.createElement('div'); d.innerHTML = msgRow(''); const row = d.firstChild;
@@ -182,12 +193,15 @@
             t.value = t.value.slice(0, s) + v + t.value.slice(e2); t.focus(); t.selectionStart = t.selectionEnd = s + v.length;
         });
     }
+    function setAct(el, k, on) {
+        const cb = el.querySelector('[data-act="' + k + '"]'), chip = el.querySelector('[data-chip="' + k + '"]');
+        cb.checked = on;
+        chip.className = chip.className.replace(/border-indigo-500 bg-indigo-500\/15 text-indigo-200|border-slate-600 text-slate-400/, on ? 'border-indigo-500 bg-indigo-500/15 text-indigo-200' : 'border-slate-600 text-slate-400');
+        el.querySelector('[data-blk="' + k + '"]').classList.toggle('hidden', !on);
+        if (k === 'do_chat' && on && !el.querySelectorAll('[data-msg]').length) el.querySelector('[data-add]').click();   // re-coché sans message : une ligne vide
+    }
     function bindActs(el) {
-        el.querySelectorAll('[data-act]').forEach(cb => cb.addEventListener('change', () => {
-            const k = cb.dataset.act, chip = el.querySelector('[data-chip="' + k + '"]');
-            chip.className = chip.className.replace(/border-indigo-500 bg-indigo-500\/15 text-indigo-200|border-slate-600 text-slate-400/, cb.checked ? 'border-indigo-500 bg-indigo-500/15 text-indigo-200' : 'border-slate-600 text-slate-400');
-            el.querySelector('[data-blk="' + k + '"]').classList.toggle('hidden', !cb.checked);
-        }));
+        el.querySelectorAll('[data-act]').forEach(cb => cb.addEventListener('change', () => setAct(el, cb.dataset.act, cb.checked)));
         const prev = el.querySelector('[data-prev]'), imgSel = el.querySelector('[data-f="image"]');
         const showPrev = () => { prev.innerHTML = imgPreview(imgSel.value); };
         imgSel.addEventListener('change', showPrev); showPrev();
@@ -236,7 +250,7 @@
                 const old = rules.find(x => x.id == id) || {}, oldT = trig(old.trigger), t = trig(e.target.value);
                 const cur = collect(el);
                 const isOriginal = oldT && cur.messages.length === 1 && cur.messages[0].trim() === oldT.default;
-                if (isOriginal || cur.messages.every(m => !m.trim())) cur.messages = [t.default];   // message non modifié : on met celui du nouveau déclencheur
+                if (cur.do_chat && (isOriginal || cur.messages.every(m => !m.trim()))) cur.messages = [t.default];   // message non modifié : on met celui du nouveau déclencheur
                 const r2 = Object.assign({}, old, cur, { id: Number(id), trigger: e.target.value });
                 el.querySelector('[data-detail]').innerHTML = detail(r2);
                 el.querySelector('[data-vars]').innerHTML = chatVars(r2);
