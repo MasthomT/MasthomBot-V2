@@ -2,7 +2,7 @@
 <div id="ro-root">
     <div class="flex flex-wrap items-start justify-between gap-4 mb-5">
         <p class="text-slate-400 max-w-3xl">Choisis une récompense, son image ou sa vidéo (et un son si tu veux), puis <strong>place-la et redimensionne-la</strong> directement sur l'écran ci-dessous. Quand un viewer la prend, elle apparaît à cet endroit sur l'overlay.
-            Pour l'afficher dans OBS : <strong>Overlays OBS › Scène OBS</strong>, coche le widget <strong>« Récompenses de points de chaîne »</strong> dans tes scènes.</p>
+            Pour l'afficher dans OBS : <strong>Overlays OBS › Scène OBS</strong>, coche le widget <strong>« Récompenses de points de chaîne »</strong> dans tes scènes. Le son des vidéos (et le son en plus) sort alors par la source OBS de la scène, comme les autres widgets.</p>
     </div>
 
     <div class="grid grid-cols-1 xl:grid-cols-[18rem_1fr] gap-5">
@@ -27,7 +27,7 @@
                         <label class="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold cursor-pointer whitespace-nowrap"><i class="fas fa-upload mr-1"></i>Envoyer<input type="file" class="hidden" data-roup="image" accept=".gif,.png,.jpg,.jpeg,.webp,.mp4,.webm"></label></div></label>
                     <label class="block"><span class="text-slate-400">Son en plus (facultatif ; une vidéo garde son propre son)</span>
                         <div class="flex gap-2 mt-1"><select id="ro-sound" class="input-dark flex-1 min-w-0 rounded-lg px-3 py-2 text-sm"></select>
-                        <button id="ro-play" class="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold" title="Écouter ici"><i class="fas fa-play"></i></button>
+                        <button id="ro-play" class="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold" title="Écouter le son ici"><i class="fas fa-play"></i></button>
                         <label class="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold cursor-pointer whitespace-nowrap"><i class="fas fa-upload mr-1"></i>Envoyer<input type="file" class="hidden" data-roup="sound" accept=".mp3,.wav,.ogg"></label></div></label>
                     <label class="block"><span class="text-slate-400">Durée d'affichage (secondes ; 0 = toute la vidéo / tout le son)</span><input id="ro-duration" type="number" min="0" max="120" step="0.5" class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm"></label>
                     <label class="block"><span class="text-slate-400">Volume (vidéo et son) : <strong id="ro-volv"></strong></span><input id="ro-volume" type="range" min="0" max="100" class="w-full mt-3"></label>
@@ -37,6 +37,7 @@
                 <div class="flex flex-wrap items-center gap-2 mb-2 text-xs">
                     <button id="ro-shot" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold"><i class="fas fa-camera mr-1"></i>Fond : capture de la scène OBS</button>
                     <button id="ro-center" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold"><i class="fas fa-crosshairs mr-1"></i>Centrer</button>
+                    <button id="ro-listen" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold hidden" title="Rejoue la vidéo avec son son, ici"><i class="fas fa-volume-high mr-1"></i>Écouter la vidéo</button>
                     <button id="ro-native" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold" title="Remet les proportions de l'image / vidéo"><i class="fas fa-expand mr-1"></i>Proportions d'origine</button>
                     <label class="flex items-center gap-1.5 text-slate-400"><input type="checkbox" id="ro-ratio" checked> garder les proportions</label>
                     <span class="flex-1"></span>
@@ -105,11 +106,12 @@
     }
     // Aperçu dans la boîte + proportions de l'image / vidéo
     function preview() {
-        const f = $('ro-media').value; natural = null;
+        const f = $('ro-media').value; natural = null; $('ro-listen').classList.add('hidden');
         if (!f) { $('ro-prev').innerHTML = '<div class="w-full h-full flex items-center justify-center text-slate-300 text-xs bg-slate-900/60">son seul</div>'; return; }
         const u = '/static/commands/images/' + encodeURIComponent(f);
         if (/\.(mp4|webm)$/i.test(f)) {
             $('ro-prev').innerHTML = '<video src="' + u + '" class="w-full h-full object-contain" muted autoplay loop></video>';
+            $('ro-listen').classList.remove('hidden');
             const v = $('ro-prev').querySelector('video'); v.onloadedmetadata = () => { natural = v.videoWidth / v.videoHeight; };
         } else {
             $('ro-prev').innerHTML = '<img src="' + u + '" class="w-full h-full object-contain">';
@@ -146,6 +148,11 @@
     $('ro-center').onclick = () => { cur.x = Math.round((W - cur.w) / 2); cur.y = Math.round((H - cur.h) / 2); draw(); };
     $('ro-native').onclick = () => { if (natural) { cur.h = Math.round(cur.w / natural); draw(); } };
     $('ro-media').onchange = () => { preview(); setTimeout(() => { if (natural) { cur.h = Math.round(cur.w / natural); draw(); } }, 400); };
+    $('ro-listen').onclick = () => {          // l'aperçu est muet par défaut : on le rejoue avec le son (au volume réglé)
+        const v = $('ro-prev').querySelector('video'); if (!v) return;
+        v.loop = false; v.currentTime = 0; v.muted = false; v.volume = $('ro-volume').value / 100; v.play().catch(() => {});
+        v.onended = () => { v.muted = true; v.loop = true; v.play().catch(() => {}); };
+    };
     $('ro-volume').oninput = () => { $('ro-volv').textContent = $('ro-volume').value + ' %'; };
     $('ro-filter').oninput = list;
     let audio = null;
