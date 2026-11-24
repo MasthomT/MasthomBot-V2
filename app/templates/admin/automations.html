@@ -86,16 +86,7 @@
           + '<label class="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold cursor-pointer"><i class="fas fa-upload mr-1"></i>Envoyer un fichier'
           + '<input type="file" class="hidden" data-up="' + kind + '" accept="' + (kind === 'sound' ? '.mp3,.wav,.ogg' : '.gif,.png,.jpg,.jpeg,.webp,.mp4,.webm') + '"></label></div>'
           + (kind === 'image' ? '<div class="mt-2" data-prev></div>' : '')
-          + '<p class="text-[11px] text-slate-500 mt-1">' + (kind === 'sound' ? soundHelp() : 'Affiché 8 secondes sur l\'overlay Alertes d\'OBS (gif, png, jpg, webp, mp4, webm).') + '</p>';
-    }
-    let soundOverlay = 0;
-    function soundHelp() {         // état de l'overlay audio seul (/overlay/sons)
-        const url = location.origin + '/overlay/sons';
-        return (soundOverlay
-            ? '<span class="text-emerald-400"><i class="fas fa-circle-check mr-1"></i>Joué par l\'overlay « Sons des automatisations » (audio seul), ouvert dans OBS.</span>'
-            : '<span class="text-amber-400"><i class="fas fa-triangle-exclamation mr-1"></i>Overlay « Sons des automatisations » pas ouvert dans OBS : le son passe en attendant par l\'overlay Alertes des commandes.</span>')
-            + '<br>Source navigateur à ajouter dans OBS, dans une scène présente partout (aucun visuel) : '
-            + '<code class="text-indigo-300 select-all">' + esc(url) + '</code> · mp3, wav, ogg.';
+          + '<p class="text-[11px] text-slate-500 mt-1">' + (kind === 'sound' ? 'Joué sur l\'overlay Alertes d\'OBS (mp3, wav, ogg).' : 'Affiché 8 secondes sur l\'overlay Alertes d\'OBS (gif, png, jpg, webp, mp4, webm).') + '</p>';
     }
     function imgPreview(f) {
         if (!f) return '';
@@ -297,7 +288,7 @@
     async function load() {
         const { ok, j } = await api('GET', '/admin/api/automations');
         if (!ok) return;
-        triggers = j.triggers; rules = j.rules; media = j.media || media; soundOverlay = j.sound_overlay || 0;
+        triggers = j.triggers; rules = j.rules; media = j.media || media;
         let dl = $('obs-scenes'); if (!dl) { dl = document.createElement('datalist'); dl.id = 'obs-scenes'; document.body.appendChild(dl); }
         dl.innerHTML = (j.scenes || []).map(n => '<option value="' + esc(n) + '"></option>').join('');
         $('newTrigger').innerHTML = groupedOptions('raid_out');
