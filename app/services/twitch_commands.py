@@ -112,6 +112,11 @@ class ChatCommandsMixin:
         client_id = os.getenv("TWITCH_CLIENT_ID", getattr(self._http, 'client_id', ''))
         headers = {"Client-ID": client_id, "Authorization": f"Bearer {self.master_token}"}
 
+        # Aucun lien ni titre = le dernier clip, en sautant les « Clip by inStreamly »
+        if not slug and not query:
+            from app.services.shoutout_service import latest_clip_id
+            slug = await latest_clip_id()
+
         # Résoudre le slug depuis le lien ou la recherche
         resolved_slug = slug
         if slug and "twitch.tv" in slug:
