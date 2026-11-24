@@ -288,6 +288,23 @@ def _matches(rule: dict, values: dict) -> bool:
     return True
 
 
+# Overlay audio seul (/overlay/sons) : une source OBS sans visuel, présente dans toutes les scènes.
+# Les sons des automatisations y passent ; s'il n'est pas ouvert dans OBS, repli sur l'overlay Alertes des commandes.
+sound_listeners: list[asyncio.Queue] = []
+
+
+def sound_overlay_connected() -> int:
+    return len(sound_listeners)
+
+
+async def _play_sound(filename: str) -> bool:
+    if sound_listeners:
+        for q in list(sound_listeners):
+            q.put_nowait({"type": "sound", "file": filename})
+        return True
+    return await _overlay("sound", filename)
+
+
 async def _overlay(kind: str, filename: str) -> bool:
     """Joue un son / affiche une image sur l'overlay Alertes (même canal que les commandes)."""
     import aiohttp
@@ -311,7 +328,7 @@ async def _send(rule: dict, values: dict, test: bool = False) -> bool:
     async def media(kind: str, label: str, delay: float) -> bool:
         if delay > 0:
             await asyncio.sleep(delay)
-        ok = await _overlay(kind, rule[kind])
+        ok = await (_play_sound(rule[kind]) if kind == "sound" else _overlay(kind, rule[kind]))
         await _log(rule["name"], tag + ("" if ok else "NON ENVOYÉ (overlay injoignable) · ") + f"{label} : {rule[kind]}")
         return ok
 

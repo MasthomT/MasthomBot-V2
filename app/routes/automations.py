@@ -18,7 +18,7 @@ async def automations_page(request: Request):
 
 @router.get("/admin/api/automations")
 async def automations_get():
-    return {"triggers": A.catalog(), "rules": await A.list_rules(), "log": await A.get_log(), "scenes": await A.scene_names(), "media": A.media_files()}
+    return {"triggers": A.catalog(), "rules": await A.list_rules(), "log": await A.get_log(), "scenes": await A.scene_names(), "media": A.media_files(), "sound_overlay": A.sound_overlay_connected()}
 
 
 class CreatePayload(BaseModel):
