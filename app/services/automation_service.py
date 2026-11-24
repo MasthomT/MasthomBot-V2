@@ -522,6 +522,12 @@ def translate(sub_type: str, event: dict, broadcaster_id: str) -> tuple[str, dic
 async def on_eventsub(sub_type: str, event: dict, broadcaster_id: str):
     """Appelé pour chaque notification EventSub (en tâche de fond : ne ralentit jamais le traitement normal)."""
     try:
+        if sub_type == "channel.channel_points_custom_reward_redemption.add":   # overlay « Récompenses »
+            from app.services import reward_overlay_service
+            await reward_overlay_service.on_redemption(((event or {}).get("reward") or {}).get("title", ""), (event or {}).get("user_name", ""))
+    except Exception as e:
+        logger.error(f"❌ [OVERLAY RÉCOMPENSES] {e}")
+    try:
         tr = translate(sub_type, event or {}, broadcaster_id)
         if tr:
             await dispatch(tr[0], tr[1])

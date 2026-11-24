@@ -1,0 +1,194 @@
+{# Panneau « Overlay » (inclus dans admin/rewards_manager.html). Ids préfixés ro- #}
+<div id="ro-root">
+    <div class="flex flex-wrap items-start justify-between gap-4 mb-5">
+        <p class="text-slate-400 max-w-3xl">Choisis une récompense, son image ou sa vidéo (et un son si tu veux), puis <strong>place-la et redimensionne-la</strong> directement sur l'écran ci-dessous. Quand un viewer la prend, elle apparaît à cet endroit sur l'overlay.
+            Pour l'afficher dans OBS : <strong>Overlays OBS › Scène OBS</strong>, coche le widget <strong>« Récompenses de points de chaîne »</strong> dans tes scènes.</p>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-[18rem_1fr] gap-5">
+        <!-- Liste des récompenses -->
+        <section class="config-card rounded-2xl p-3 max-h-[46rem] overflow-y-auto">
+            <input id="ro-filter" placeholder="Filtrer…" class="input-dark w-full rounded-lg px-3 py-2 text-sm mb-2">
+            <div id="ro-list" class="space-y-1"></div>
+        </section>
+
+        <!-- Éditeur -->
+        <section class="config-card rounded-2xl p-5 min-w-0">
+            <div id="ro-empty" class="text-slate-500 text-sm">← Choisis une récompense dans la liste.</div>
+            <div id="ro-editor" class="hidden">
+                <div class="flex flex-wrap items-center gap-3 mb-4">
+                    <h2 id="ro-title" class="text-lg font-extrabold text-white flex-1 min-w-0 truncate"></h2>
+                    <label class="flex items-center gap-2 text-sm font-bold text-slate-200"><input type="checkbox" id="ro-enabled" checked> Activée</label>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 text-xs mb-4">
+                    <label class="block"><span class="text-slate-400">Image / vidéo (gif, png, jpg, webp, mp4, webm)</span>
+                        <div class="flex gap-2 mt-1"><select id="ro-media" class="input-dark flex-1 min-w-0 rounded-lg px-3 py-2 text-sm"></select>
+                        <label class="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold cursor-pointer whitespace-nowrap"><i class="fas fa-upload mr-1"></i>Envoyer<input type="file" class="hidden" data-roup="image" accept=".gif,.png,.jpg,.jpeg,.webp,.mp4,.webm"></label></div></label>
+                    <label class="block"><span class="text-slate-400">Son en plus (facultatif ; une vidéo garde son propre son)</span>
+                        <div class="flex gap-2 mt-1"><select id="ro-sound" class="input-dark flex-1 min-w-0 rounded-lg px-3 py-2 text-sm"></select>
+                        <button id="ro-play" class="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold" title="Écouter ici"><i class="fas fa-play"></i></button>
+                        <label class="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold cursor-pointer whitespace-nowrap"><i class="fas fa-upload mr-1"></i>Envoyer<input type="file" class="hidden" data-roup="sound" accept=".mp3,.wav,.ogg"></label></div></label>
+                    <label class="block"><span class="text-slate-400">Durée d'affichage (secondes ; 0 = toute la vidéo / tout le son)</span><input id="ro-duration" type="number" min="0" max="120" step="0.5" class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm"></label>
+                    <label class="block"><span class="text-slate-400">Volume (vidéo et son) : <strong id="ro-volv"></strong></span><input id="ro-volume" type="range" min="0" max="100" class="w-full mt-3"></label>
+                </div>
+
+                <!-- Zone de placement : écran 1920×1080 à l'échelle -->
+                <div class="flex flex-wrap items-center gap-2 mb-2 text-xs">
+                    <button id="ro-shot" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold"><i class="fas fa-camera mr-1"></i>Fond : capture de la scène OBS</button>
+                    <button id="ro-center" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold"><i class="fas fa-crosshairs mr-1"></i>Centrer</button>
+                    <button id="ro-native" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold" title="Remet les proportions de l'image / vidéo"><i class="fas fa-expand mr-1"></i>Proportions d'origine</button>
+                    <label class="flex items-center gap-1.5 text-slate-400"><input type="checkbox" id="ro-ratio" checked> garder les proportions</label>
+                    <span class="flex-1"></span>
+                    <span class="text-slate-500">X <input id="ro-x" type="number" class="input-dark w-16 rounded px-1.5 py-1"> Y <input id="ro-y" type="number" class="input-dark w-16 rounded px-1.5 py-1">
+                        L <input id="ro-w" type="number" class="input-dark w-16 rounded px-1.5 py-1"> H <input id="ro-h" type="number" class="input-dark w-16 rounded px-1.5 py-1"></span>
+                </div>
+                <div id="ro-stage" class="relative w-full rounded-xl overflow-hidden select-none" style="aspect-ratio:16/9;background:repeating-conic-gradient(#1e293b 0 25%,#273449 0 50%) 0 0/24px 24px;">
+                    <img id="ro-bg" class="absolute inset-0 w-full h-full object-cover opacity-80 hidden" alt="">
+                    <div id="ro-box" class="absolute ring-2 ring-indigo-400 cursor-move" style="box-shadow:0 0 0 9999px rgba(15,23,42,.25)">
+                        <div id="ro-prev" class="w-full h-full pointer-events-none"></div>
+                        <div id="ro-handle" class="absolute -right-2 -bottom-2 w-5 h-5 rounded-full bg-indigo-500 border-2 border-white cursor-nwse-resize"></div>
+                        <div id="ro-dim" class="absolute left-1 top-1 px-1.5 py-0.5 rounded bg-black/70 text-[10px] text-white pointer-events-none"></div>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-3 mt-4">
+                    <button id="ro-save" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold"><i class="fas fa-save mr-2"></i>Enregistrer</button>
+                    <button id="ro-test" class="px-4 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-sm font-bold" title="L'affiche vraiment sur l'overlay (réglage en cours, même non enregistré)"><i class="fas fa-play mr-2"></i>Tester sur l'overlay</button>
+                    <button id="ro-del" class="px-3 py-2.5 rounded-xl bg-slate-700 hover:bg-red-600 text-sm" title="Retirer le visuel de cette récompense"><i class="fas fa-trash"></i></button>
+                    <span id="ro-msg" class="text-xs"></span>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+
+<script>
+(function () {
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+    const W = 1920, H = 1080;
+    let rewards = [], visuals = {}, media = { images: [], sounds: [] }, cur = null, natural = null;
+
+    const say = (t, ok) => { $('ro-msg').className = 'text-xs ' + (ok === false ? 'text-amber-400' : 'text-emerald-400'); $('ro-msg').textContent = t || ''; };
+    const key = (t) => (t || '').trim().toLowerCase();
+    const opts = (list, v, ph) => '<option value="">' + ph + '</option>' + list.map(f => '<option' + (f === v ? ' selected' : '') + '>' + esc(f) + '</option>').join('');
+
+    async function load() {
+        const [a, b] = await Promise.all([fetch('/admin/api/rewards/overview').then(r => r.json()).catch(() => ({})),
+                                          fetch('/admin/api/reward-overlay').then(r => r.json()).catch(() => ({}))]);
+        rewards = (a.rewards || []).map(r => r.title);
+        visuals = {}; (b.visuals || []).forEach(v => visuals[key(v.title)] = v);
+        Object.values(visuals).forEach(v => { if (!rewards.some(t => key(t) === key(v.title))) rewards.push(v.title); });   // récompense supprimée sur Twitch : visuel gardé
+        media = b.media || media;
+        list();
+    }
+    function list() {
+        const q = $('ro-filter').value.toLowerCase();
+        $('ro-list').innerHTML = rewards.filter(t => t.toLowerCase().includes(q)).map(t => {
+            const v = visuals[key(t)];
+            return '<button class="w-full text-left px-3 py-2 rounded-lg text-sm flex items-center gap-2 ' + (cur && key(cur.title) === key(t) ? 'bg-indigo-500/20 text-white' : 'hover:bg-slate-800 text-slate-300') + '" data-t="' + esc(t) + '">'
+                + '<i class="fas ' + (v ? (v.enabled ? 'fa-image text-emerald-400' : 'fa-image text-slate-500') : 'fa-plus text-slate-600') + ' w-4"></i><span class="truncate">' + esc(t) + '</span></button>';
+        }).join('');
+        $('ro-list').querySelectorAll('[data-t]').forEach(b => b.onclick = () => open(b.dataset.t));
+    }
+    function open(title) {
+        const v = visuals[key(title)];
+        cur = v ? Object.assign({}, v) : { title, media: '', sound: '', x: 660, y: 240, w: 600, h: 600, duration: 6, volume: 100, enabled: true };
+        $('ro-empty').classList.add('hidden'); $('ro-editor').classList.remove('hidden');
+        $('ro-title').textContent = title + (v ? '' : ' — pas encore de visuel');
+        $('ro-enabled').checked = cur.enabled;
+        $('ro-media').innerHTML = opts(media.images, cur.media, '— aucune —');
+        $('ro-sound').innerHTML = opts(media.sounds, cur.sound, '— aucun —');
+        $('ro-duration').value = cur.duration; $('ro-volume').value = cur.volume; $('ro-volv').textContent = cur.volume + ' %';
+        say(''); preview(); draw(); list();
+    }
+    // Aperçu dans la boîte + proportions de l'image / vidéo
+    function preview() {
+        const f = $('ro-media').value; natural = null;
+        if (!f) { $('ro-prev').innerHTML = '<div class="w-full h-full flex items-center justify-center text-slate-300 text-xs bg-slate-900/60">son seul</div>'; return; }
+        const u = '/static/commands/images/' + encodeURIComponent(f);
+        if (/\.(mp4|webm)$/i.test(f)) {
+            $('ro-prev').innerHTML = '<video src="' + u + '" class="w-full h-full object-contain" muted autoplay loop></video>';
+            const v = $('ro-prev').querySelector('video'); v.onloadedmetadata = () => { natural = v.videoWidth / v.videoHeight; };
+        } else {
+            $('ro-prev').innerHTML = '<img src="' + u + '" class="w-full h-full object-contain">';
+            const i = $('ro-prev').querySelector('img'); i.onload = () => { natural = i.naturalWidth / i.naturalHeight; };
+        }
+    }
+    function draw() {
+        const b = $('ro-box');
+        b.style.left = (cur.x / W * 100) + '%'; b.style.top = (cur.y / H * 100) + '%';
+        b.style.width = (cur.w / W * 100) + '%'; b.style.height = (cur.h / H * 100) + '%';
+        $('ro-dim').textContent = Math.round(cur.w) + ' × ' + Math.round(cur.h);
+        ['x', 'y', 'w', 'h'].forEach(k => { if (document.activeElement !== $('ro-' + k)) $('ro-' + k).value = Math.round(cur[k]); });
+    }
+    // Glisser pour déplacer, poignée pour redimensionner (coordonnées de l'écran 1920×1080)
+    function drag(e, mode) {
+        e.preventDefault(); e.stopPropagation();
+        const rect = $('ro-stage').getBoundingClientRect(), sx = W / rect.width, sy = H / rect.height;
+        const p0 = { x: e.clientX, y: e.clientY }, c0 = Object.assign({}, cur), ratio = c0.w / c0.h;
+        const move = (ev) => {
+            const dx = (ev.clientX - p0.x) * sx, dy = (ev.clientY - p0.y) * sy;
+            if (mode === 'move') { cur.x = Math.round(c0.x + dx); cur.y = Math.round(c0.y + dy); }
+            else {
+                cur.w = Math.max(40, Math.round(c0.w + dx));
+                cur.h = $('ro-ratio').checked ? Math.max(40, Math.round(cur.w / ratio)) : Math.max(40, Math.round(c0.h + dy));
+            }
+            draw();
+        };
+        const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+        window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+    }
+    $('ro-box').addEventListener('pointerdown', (e) => drag(e, 'move'));
+    $('ro-handle').addEventListener('pointerdown', (e) => drag(e, 'resize'));
+    ['x', 'y', 'w', 'h'].forEach(k => $('ro-' + k).addEventListener('input', (e) => { const n = parseInt(e.target.value, 10); if (!isNaN(n)) { cur[k] = n; draw(); } }));
+    $('ro-center').onclick = () => { cur.x = Math.round((W - cur.w) / 2); cur.y = Math.round((H - cur.h) / 2); draw(); };
+    $('ro-native').onclick = () => { if (natural) { cur.h = Math.round(cur.w / natural); draw(); } };
+    $('ro-media').onchange = () => { preview(); setTimeout(() => { if (natural) { cur.h = Math.round(cur.w / natural); draw(); } }, 400); };
+    $('ro-volume').oninput = () => { $('ro-volv').textContent = $('ro-volume').value + ' %'; };
+    $('ro-filter').oninput = list;
+    let audio = null;
+    $('ro-play').onclick = () => { const f = $('ro-sound').value; if (!f) return; if (audio) audio.pause(); audio = new Audio('/static/commands/sounds/' + encodeURIComponent(f)); audio.volume = $('ro-volume').value / 100; audio.play().catch(() => {}); };
+    $('ro-shot').onclick = async () => {
+        say('Capture d\'OBS…');
+        const j = await fetch('/admin/api/reward-overlay/screenshot').then(r => r.json()).catch(() => ({}));
+        if (!j.image) return say('OBS ne répond pas (fermé ?).', false);
+        $('ro-bg').src = j.image.startsWith('data:') ? j.image : 'data:image/jpeg;base64,' + j.image; $('ro-bg').classList.remove('hidden'); say('');
+    };
+    document.querySelectorAll('[data-roup]').forEach(inp => inp.addEventListener('change', async () => {
+        const file = inp.files[0]; if (!file) return;
+        const kind = inp.dataset.roup, fd = new FormData(); fd.append('file', file);
+        const r = await fetch('/api/admin/commands/upload/' + kind, { method: 'POST', body: fd }); const j = await r.json().catch(() => ({}));
+        inp.value = '';
+        if (!r.ok) return say(j.error || 'Envoi impossible', false);
+        const lst = kind === 'image' ? media.images : media.sounds; if (!lst.includes(j.filename)) { lst.push(j.filename); lst.sort(); }
+        const sel = kind === 'image' ? $('ro-media') : $('ro-sound');
+        sel.innerHTML = opts(lst, j.filename, kind === 'image' ? '— aucune —' : '— aucun —');
+        if (kind === 'image') $('ro-media').onchange();
+        say('Fichier envoyé : ' + j.filename + ' (pense à enregistrer)');
+    }));
+    const body = () => Object.assign({}, cur, { media: $('ro-media').value, sound: $('ro-sound').value, duration: parseFloat($('ro-duration').value || 0),
+                                               volume: parseInt($('ro-volume').value, 10), enabled: $('ro-enabled').checked });
+    async function send(method, url, b) {
+        const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined });
+        return { ok: r.ok, j: await r.json().catch(() => ({})) };
+    }
+    $('ro-save').onclick = async () => {
+        const { ok, j } = await send('PUT', '/admin/api/reward-overlay', body());
+        if (!ok) return say(j.detail || 'Erreur', false);
+        visuals[key(j.visual.title)] = j.visual; cur = Object.assign({}, j.visual);
+        $('ro-title').textContent = cur.title; say('Enregistré ✓'); list();
+    };
+    $('ro-test').onclick = async () => {
+        const { ok, j } = await send('POST', '/admin/api/reward-overlay/test', body());
+        say(ok ? 'Envoyé sur l\'overlay (visible si le widget est dans la scène OBS affichée).' : (j.detail || 'Erreur'), ok);
+    };
+    $('ro-del').onclick = async () => {
+        if (!visuals[key(cur.title)] || !confirm('Retirer le visuel de « ' + cur.title + ' » ?')) return;
+        await send('DELETE', '/admin/api/reward-overlay?title=' + encodeURIComponent(cur.title));
+        delete visuals[key(cur.title)]; open(cur.title); say('Visuel retiré.');
+    };
+    load();
+})();
+</script>

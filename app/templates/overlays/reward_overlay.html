@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Récompenses de points de chaîne</title>
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+  /* Scène de référence 1920×1080, mise à l'échelle de la source */
+  #stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+  .rw { position: absolute; opacity: 0; transition: opacity .35s ease, transform .35s ease; transform: scale(.92); }
+  .rw.on { opacity: 1; transform: scale(1); }
+  .rw img, .rw video { width: 100%; height: 100%; object-fit: contain; display: block; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+// Overlay « Récompenses de points de chaîne » : réglages (média, position, taille, durée) dans /admin/rewards › Overlay.
+// Pas de connexion permanente (OBS sature vers 6 connexions par serveur) : petites requêtes régulières.
+(function () {
+  const stage = document.getElementById('stage');
+  const NODE = location.protocol + '//' + location.hostname + ':3005';   // médias servis par le serveur des overlays
+  const fit = () => { stage.style.transform = 'scale(' + (window.innerWidth / 1920) + ',' + (window.innerHeight / 1080) + ')'; };
+  fit(); window.addEventListener('resize', fit);
+
+  let last = 0, busy = false;
+  const queue = [];
+
+  function play(ev) {
+    return new Promise((done) => {
+      let finished = false, box = null, audio = null, timer = null;
+      const end = () => {
+        if (finished) return; finished = true; clearTimeout(timer);
+        if (box) { box.classList.remove('on'); setTimeout(() => box.remove(), 400); }
+        setTimeout(done, 450);
+      };
+      const vol = Math.max(0, Math.min(100, ev.volume ?? 100)) / 100;
+      if (ev.media) {
+        box = document.createElement('div'); box.className = 'rw';
+        Object.assign(box.style, { left: ev.x + 'px', top: ev.y + 'px', width: ev.w + 'px', height: ev.h + 'px' });
+        const url = NODE + '/static/commands/images/' + encodeURIComponent(ev.media);
+        if (/\.(mp4|webm)$/i.test(ev.media)) {
+          const v = document.createElement('video');
+          v.src = url; v.autoplay = true; v.playsInline = true; v.volume = vol;
+          v.onended = () => { if (!ev.duration) end(); };
+          v.onerror = end;
+          box.appendChild(v);
+          v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });   // si le son est refusé : au moins l'image
+        } else {
+          const img = document.createElement('img'); img.src = url; img.onerror = end; box.appendChild(img);
+        }
+        stage.appendChild(box);
+        requestAnimationFrame(() => requestAnimationFrame(() => box.classList.add('on')));
+      }
+      if (ev.sound) {
+        audio = new Audio(NODE + '/static/commands/sounds/' + encodeURIComponent(ev.sound));
+        audio.volume = vol; audio.play().catch(() => {});
+        if (!ev.media) audio.onended = end;
+      }
+      const isVideo = ev.media && /\.(mp4|webm)$/i.test(ev.media);
+      const secs = ev.duration > 0 ? ev.duration : (isVideo || (!ev.media && ev.sound) ? 60 : 6);   // filet de sécurité
+      timer = setTimeout(end, secs * 1000);
+    });
+  }
+
+  async function pump() {
+    if (busy) return; busy = true;
+    while (queue.length) await play(queue.shift());      // une récompense après l'autre
+    busy = false;
+  }
+
+  async function poll() {
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 4000);
+    try {
+      const r = await fetch('/api/reward-overlay/events?after=' + last + '&t=' + Date.now(), { cache: 'no-store', signal: ctl.signal });
+      const j = await r.json();
+      if (last) j.events.forEach(e => queue.push(e));
+      last = j.last || last;
+      pump();
+    } catch (e) { /* serveur indisponible : on réessaie */ }
+    clearTimeout(t);
+    setTimeout(poll, 700);
+  }
+  poll();
+})();
+</script>
+</body>
+</html>
