@@ -22,7 +22,7 @@
         <header class="mb-8 flex flex-wrap items-start justify-between gap-4">
             <div>
                 <h1 class="text-3xl font-extrabold text-white tracking-tight">Automatisations</h1>
-                <p class="text-slate-400 mt-1 max-w-3xl">« Quand ça arrive, le bot écrit ce message dans le t'chat. » Crée autant d'automatisations que tu veux : choisis le déclencheur, les conditions et les messages.</p>
+                <p class="text-slate-400 mt-1 max-w-3xl">« Quand ça arrive, le bot écrit un message dans le t'chat, joue un son ou affiche une image. » Crée autant d'automatisations que tu veux : choisis le déclencheur, les conditions et les actions.</p>
             </div>
             <div class="flex items-center gap-2">
                 <select id="newTrigger" class="input-dark rounded-xl px-3 py-2.5 text-sm"></select>
@@ -42,7 +42,7 @@
 (function () {
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-    let triggers = [], rules = [], lastFocus = null;
+    let triggers = [], rules = [], lastFocus = null, media = { sounds: [], images: [] };
     const trig = (k) => triggers.find(t => t.key === k);
 
     async function api(method, url, body) {
@@ -62,21 +62,45 @@
     }
     function detail(r) {            // partie qui dépend du déclencheur : description, variables, conditions
         const t = trig(r.trigger);
-        let h = '<p class="text-xs text-slate-400">' + esc(t.description) + '</p>'
+        return '<p class="text-xs text-slate-400">' + esc(t.description) + '</p>'
           + (t.note ? '<p class="text-[11px] text-amber-400 mt-1"><i class="fas fa-triangle-exclamation mr-1"></i>' + esc(t.note) + '</p>' : '');
-        h += '<div class="text-xs text-slate-400 mt-4 mb-2">Messages'
+    }
+    function chatVars(r) {          // en-tête du bloc message : variables du déclencheur
+        const t = trig(r.trigger);
+        return '<div class="text-xs text-slate-400 mb-2">Messages'
            + (Object.keys(t.vars).length ? ' — variables à cliquer :' : '') + '</div>'
            + '<div class="flex flex-wrap gap-2 mb-3">' + Object.entries(t.vars).map(([k, d]) =>
                 '<button class="px-2 py-1 rounded-md bg-indigo-500/15 text-indigo-300 text-[11px] font-bold" data-var="' + k + '" title="' + esc(d) + '">{' + k + '}</button>').join('') + '</div>';
-        return h;
+    }
+    const ACTS = [['do_chat', 'fa-comment-dots', 'Message dans le t\'chat'], ['sound', 'fa-volume-high', 'Son'], ['image', 'fa-image', 'Image / vidéo']];
+    function actOn(r, k) { return k === 'do_chat' ? r.do_chat !== false : !!r[k]; }
+    function mediaBlock(kind, r) {  // choix du fichier + aperçu + envoi d'un nouveau fichier
+        const files = kind === 'sound' ? media.sounds : media.images, cur = r[kind] || '';
+        const opts = '<option value="">— choisis un fichier —</option>' + files.map(f => '<option' + (f === cur ? ' selected' : '') + '>' + esc(f) + '</option>').join('');
+        return '<div class="flex flex-wrap items-center gap-2">'
+          + '<select data-f="' + kind + '" class="input-dark rounded-lg px-3 py-2 text-sm flex-1 min-w-[14rem]">' + opts + '</select>'
+          + (kind === 'sound' ? '<button class="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold" data-play title="Écouter ici"><i class="fas fa-play mr-1"></i>Écouter</button>' : '')
+          + '<label class="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold cursor-pointer"><i class="fas fa-upload mr-1"></i>Envoyer un fichier'
+          + '<input type="file" class="hidden" data-up="' + kind + '" accept="' + (kind === 'sound' ? '.mp3,.wav,.ogg' : '.gif,.png,.jpg,.jpeg,.webp,.mp4,.webm') + '"></label></div>'
+          + (kind === 'image' ? '<div class="mt-2" data-prev></div>' : '')
+          + '<p class="text-[11px] text-slate-500 mt-1">' + (kind === 'sound' ? 'Joué sur l\'overlay Alertes d\'OBS (mp3, wav, ogg).' : 'Affiché 8 secondes sur l\'overlay Alertes d\'OBS (gif, png, jpg, webp, mp4, webm).') + '</p>';
+    }
+    function imgPreview(f) {
+        if (!f) return '';
+        const u = '/static/commands/images/' + encodeURIComponent(f);
+        return /\.(mp4|webm)$/i.test(f) ? '<video src="' + u + '" class="h-24 rounded-lg" muted autoplay loop></video>' : '<img src="' + u + '" class="h-24 rounded-lg">';
     }
     function summary(r) {
         const t = trig(r.trigger);
-        const first = (r.messages[0] || '').replace(/\s+/g, ' ');
+        const parts = [];
+        if (r.sound) parts.push('🔊 ' + r.sound);
+        if (r.image) parts.push('🖼️ ' + r.image);
+        if (r.do_chat !== false && r.messages[0]) parts.push(r.messages[0].replace(/\s+/g, ' '));
+        const first = parts.join(' · ');
         return '<i class="fas ' + esc(t.icon) + ' w-5 text-center ' + (r.enabled ? 'text-indigo-400' : 'text-slate-600') + '"></i>'
           + '<span class="font-bold text-sm ' + (r.enabled ? 'text-white' : 'text-slate-500') + ' shrink-0 max-w-[16rem] truncate">' + esc(r.name) + '</span>'
           + '<span class="text-[11px] text-slate-500 shrink-0 hidden md:inline">' + esc(t.label) + '</span>'
-          + '<span class="text-xs text-slate-400 truncate flex-1 min-w-0">' + esc(first) + (r.messages.length > 1 ? ' <span class="text-slate-500">(+' + (r.messages.length - 1) + ')</span>' : '') + '</span>'
+          + '<span class="text-xs text-slate-400 truncate flex-1 min-w-0">' + esc(first) + (r.do_chat !== false && r.messages.length > 1 ? ' <span class="text-slate-500">(+' + (r.messages.length - 1) + ')</span>' : '') + '</span>'
           + '<label class="flex items-center gap-1.5 text-[11px] font-bold shrink-0 ' + (r.enabled ? 'text-emerald-400' : 'text-slate-500') + '" data-sw title="Activer / désactiver">'
           + '<input type="checkbox" data-sumsw ' + (r.enabled ? 'checked' : '') + '>' + (r.enabled ? 'Activée' : 'Désactivée') + '</label>'
           + '<i class="fas fa-chevron-down text-slate-500 text-xs transition-transform" data-chev></i>';
@@ -93,12 +117,18 @@
           + '<label class="block text-xs mb-3"><span class="text-slate-400">Déclencheur — quand ça arrive…</span>'
           + '<select data-f="trigger" class="input-dark w-full md:w-96 rounded-lg px-3 py-2 mt-1 text-sm">' + groupedOptions(r.trigger) + '</select></label>'
           + '<div data-detail>' + detail(r) + '</div>'
+          + '<div class="text-xs text-slate-400 mt-4 mb-2">Que faire ? <span class="text-slate-500">(tu peux en cocher plusieurs)</span></div>'
+          + '<div class="flex flex-wrap gap-2 mb-4">' + ACTS.map(([k, ic, lb]) => '<label class="chip flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-bold ' + (actOn(r, k) ? 'border-indigo-500 bg-indigo-500/15 text-indigo-200' : 'border-slate-600 text-slate-400') + '" data-chip="' + k + '">'
+                + '<input type="checkbox" class="hidden" data-act="' + k + '"' + (actOn(r, k) ? ' checked' : '') + '><i class="fas ' + ic + '"></i>' + lb + '</label>').join('') + '</div>'
+          + '<div class="rounded-xl border border-slate-700/70 p-4 mb-3' + (actOn(r, 'sound') ? '' : ' hidden') + '" data-blk="sound"><div class="text-xs text-slate-300 font-bold mb-2"><i class="fas fa-volume-high mr-1 text-indigo-400"></i>Son</div>' + mediaBlock('sound', r) + '</div>'
+          + '<div class="rounded-xl border border-slate-700/70 p-4 mb-3' + (actOn(r, 'image') ? '' : ' hidden') + '" data-blk="image"><div class="text-xs text-slate-300 font-bold mb-2"><i class="fas fa-image mr-1 text-indigo-400"></i>Image / vidéo</div>' + mediaBlock('image', r) + '</div>'
+          + '<div class="rounded-xl border border-slate-700/70 p-4' + (actOn(r, 'do_chat') ? '' : ' hidden') + '" data-blk="do_chat"><div data-vars>' + chatVars(r) + '</div>'
           + '<div class="space-y-2" data-msgs>' + r.messages.map(msgRow).join('') + '</div>'
-          + '<button class="mt-3 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold" data-add><i class="fas fa-plus mr-1"></i>Ajouter un message</button>'
+          + '<button class="mt-3 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold" data-add><i class="fas fa-plus mr-1"></i>Ajouter un message</button></div>'
           + '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-5 text-xs" data-conds>' + conds(r) + '</div>'
           + '<div class="flex flex-wrap items-center gap-3 mt-5">'
           + '<button class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold" data-save><i class="fas fa-save mr-2"></i>Enregistrer</button>'
-          + '<button class="px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-sm font-bold" data-test title="Écrit vraiment le premier message dans ton t\'chat, avec des valeurs d\'exemple"><i class="fas fa-paper-plane mr-2"></i>Tester dans le t\'chat</button>'
+          + '<button class="px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-sm font-bold" data-test title="Fait vraiment les actions cochées (message dans ton t\'chat avec des valeurs d\'exemple, son, image sur OBS)"><i class="fas fa-paper-plane mr-2"></i>Tester</button>'
           + '<button class="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-sm" data-dup title="Dupliquer"><i class="fas fa-copy"></i></button>'
           + '<button class="px-3 py-2 rounded-xl bg-slate-700 hover:bg-red-600 text-sm" data-del title="Supprimer"><i class="fas fa-trash"></i></button>'
           + '<button class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm text-slate-300" data-close title="Fermer sans enregistrer"><i class="fas fa-chevron-up mr-1"></i>Fermer</button>'
@@ -133,6 +163,9 @@
             delay: parseFloat(q('delay').value || 0), cooldown: parseInt(q('cooldown').value || 0, 10),
             min_value: q('min_value') ? parseInt(q('min_value').value || 0, 10) : 0,
             text_filter: q('text_filter') ? q('text_filter').value : '',
+            do_chat: el.querySelector('[data-act="do_chat"]').checked,
+            sound: el.querySelector('[data-act="sound"]').checked ? q('sound').value : '',
+            image: el.querySelector('[data-act="image"]').checked ? q('image').value : '',
         };
     }
     function bindMsgs(el) {
@@ -148,6 +181,37 @@
             const s = t.selectionStart ?? t.value.length, e2 = t.selectionEnd ?? s, v = '{' + b.dataset.var + '}';
             t.value = t.value.slice(0, s) + v + t.value.slice(e2); t.focus(); t.selectionStart = t.selectionEnd = s + v.length;
         });
+    }
+    function bindActs(el) {
+        el.querySelectorAll('[data-act]').forEach(cb => cb.addEventListener('change', () => {
+            const k = cb.dataset.act, chip = el.querySelector('[data-chip="' + k + '"]');
+            chip.className = chip.className.replace(/border-indigo-500 bg-indigo-500\/15 text-indigo-200|border-slate-600 text-slate-400/, cb.checked ? 'border-indigo-500 bg-indigo-500/15 text-indigo-200' : 'border-slate-600 text-slate-400');
+            el.querySelector('[data-blk="' + k + '"]').classList.toggle('hidden', !cb.checked);
+        }));
+        const prev = el.querySelector('[data-prev]'), imgSel = el.querySelector('[data-f="image"]');
+        const showPrev = () => { prev.innerHTML = imgPreview(imgSel.value); };
+        imgSel.addEventListener('change', showPrev); showPrev();
+        let audio = null;
+        el.querySelector('[data-play]').addEventListener('click', () => {
+            const f = el.querySelector('[data-f="sound"]').value; if (!f) return;
+            if (audio) audio.pause();
+            audio = new Audio('/static/commands/sounds/' + encodeURIComponent(f)); audio.play().catch(() => {});
+        });
+        el.querySelectorAll('[data-up]').forEach(inp => inp.addEventListener('change', async () => {
+            const file = inp.files[0]; if (!file) return;
+            const kind = inp.dataset.up, fd = new FormData(); fd.append('file', file);
+            const r = await fetch('/api/admin/commands/upload/' + kind, { method: 'POST', body: fd });
+            const j = await r.json().catch(() => ({}));
+            const out = el.querySelector('[data-out]');
+            if (!r.ok) { out.className = 'text-xs text-amber-400'; out.textContent = j.error || 'Envoi impossible'; return; }
+            const list = kind === 'sound' ? media.sounds : media.images;
+            if (!list.includes(j.filename)) { list.push(j.filename); list.sort(); }
+            const sel = el.querySelector('[data-f="' + kind + '"]');
+            sel.innerHTML = '<option value="">— choisis un fichier —</option>' + list.map(f => '<option>' + esc(f) + '</option>').join('');
+            sel.value = j.filename; if (kind === 'image') showPrev();
+            out.className = 'text-xs text-emerald-400'; out.textContent = 'Fichier envoyé : ' + j.filename + ' (pense à enregistrer)';
+            inp.value = '';
+        }));
     }
     function bind() {
         $('cards').querySelectorAll('[data-id]').forEach(el => {
@@ -167,6 +231,7 @@
                 else { e.target.checked = !e.target.checked; }
             });
             bindMsgs(el);
+            bindActs(el);
             el.querySelector('[data-f="trigger"]').addEventListener('change', (e) => {      // autre déclencheur : variables, conditions et message d'origine changent
                 const old = rules.find(x => x.id == id) || {}, oldT = trig(old.trigger), t = trig(e.target.value);
                 const cur = collect(el);
@@ -174,6 +239,7 @@
                 if (isOriginal || cur.messages.every(m => !m.trim())) cur.messages = [t.default];   // message non modifié : on met celui du nouveau déclencheur
                 const r2 = Object.assign({}, old, cur, { id: Number(id), trigger: e.target.value });
                 el.querySelector('[data-detail]').innerHTML = detail(r2);
+                el.querySelector('[data-vars]').innerHTML = chatVars(r2);
                 el.querySelector('[data-msgs]').innerHTML = cur.messages.map(msgRow).join('');
                 el.querySelector('[data-conds]').innerHTML = conds(r2);
                 el.querySelector('[data-icon]').className = 'fas ' + t.icon + ' text-indigo-400 text-lg';
@@ -208,7 +274,7 @@
     async function load() {
         const { ok, j } = await api('GET', '/admin/api/automations');
         if (!ok) return;
-        triggers = j.triggers; rules = j.rules;
+        triggers = j.triggers; rules = j.rules; media = j.media || media;
         let dl = $('obs-scenes'); if (!dl) { dl = document.createElement('datalist'); dl.id = 'obs-scenes'; document.body.appendChild(dl); }
         dl.innerHTML = (j.scenes || []).map(n => '<option value="' + esc(n) + '"></option>').join('');
         $('newTrigger').innerHTML = groupedOptions('raid_out');

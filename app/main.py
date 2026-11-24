@@ -187,6 +187,12 @@ async def admin_auth_exception_handler(request: Request, exc: HTTPException):
 # MONTAGE DES DOSSIERS ET ROUTES
 # ==========================================
 
+# Sons et images des commandes / automatisations (dossier static/ à la racine, servi aussi par server.js) :
+# monté AVANT /static pour que les aperçus des pages admin fonctionnent.
+commands_media = os.path.join(BASE_DIR, "static", "commands")
+if os.path.isdir(commands_media):
+    app.mount("/static/commands", StaticFiles(directory=commands_media), name="commands_media")
+
 static_path = os.path.join(BASE_DIR, "app", "static")
 if os.path.exists(static_path):
     app.mount("/static", StaticFiles(directory="app/static"), name="static")

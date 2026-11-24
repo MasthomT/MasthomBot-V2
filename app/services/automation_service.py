@@ -115,10 +115,25 @@ async def _ensure():
     _ready = True
 
 
-def _defaults(trigger: str) -> dict:
-    t = TRIGGERS[trigger]
+SOUNDS_DIR = "static/commands/sounds"      # mêmes dossiers que les commandes (servis par server.js, overlay /alerts)
+IMAGES_DIR = "static/commands/images"
+SOUND_EXT = {".mp3", ".wav", ".ogg"}
+IMAGE_EXT = {".gif", ".png", ".jpg", ".jpeg", ".webp", ".mp4", ".webm"}
+DATA_KEYS = ("messages", "mode", "gap", "delay", "cooldown", "min_value", "text_filter", "do_chat", "sound", "image")
+
+
+def _defaults(trigger: str | None) -> dict:
+    t = TRIGGERS.get(trigger) if trigger else None
     # mode : « all » = tous les messages à la suite (espacés de `gap` secondes), « random » = un seul tiré au hasard
-    return {"messages": [t["default"]], "mode": "all", "gap": 1.5, "delay": 1.0, "cooldown": 30, "min_value": 0, "text_filter": ""}
+    # Actions (cumulables) : message(s) dans le t'chat (do_chat), son joué sur l'overlay, image / vidéo affichée sur l'overlay
+    return {"messages": [t["default"]] if t else [], "mode": "all", "gap": 1.5, "delay": 1.0, "cooldown": 30, "min_value": 0,
+            "text_filter": "", "do_chat": True, "sound": "", "image": ""}
+
+
+def media_files() -> dict:
+    import os
+    ls = lambda d, ext: sorted(f for f in os.listdir(d) if os.path.splitext(f)[1].lower() in ext) if os.path.isdir(d) else []
+    return {"sounds": ls(SOUNDS_DIR, SOUND_EXT), "images": ls(IMAGES_DIR, IMAGE_EXT)}
 
 
 def _row_to_rule(r) -> dict:
@@ -126,7 +141,7 @@ def _row_to_rule(r) -> dict:
         data = json.loads(r["data"])
     except Exception:
         data = {}
-    rule = _defaults(r["trigger"]) if r["trigger"] in TRIGGERS else {"messages": [], "mode": "all", "gap": 1.5, "delay": 1.0, "cooldown": 30, "min_value": 0, "text_filter": ""}
+    rule = _defaults(r["trigger"])
     rule.update({k: v for k, v in data.items() if k in rule})
     rule.update({"id": r["id"], "name": r["name"], "enabled": bool(r["enabled"]), "trigger": r["trigger"]})
     return rule
@@ -152,8 +167,18 @@ def clean_rule(raw: dict) -> dict:
         raise ValueError("Déclencheur inconnu.")
     name = str(raw.get("name") or "").strip()[:80] or TRIGGERS[trigger]["label"]
     msgs = [str(m).strip()[:450] for m in (raw.get("messages") or []) if str(m).strip()]
-    if not msgs:
-        raise ValueError("Écris au moins un message (ou désactive l'automatisation).")
+    do_chat = bool(raw.get("do_chat", True))
+    files = media_files()
+    sound = str(raw.get("sound") or "").strip()
+    image = str(raw.get("image") or "").strip()
+    if sound and sound not in files["sounds"]:
+        raise ValueError(f"Son introuvable : {sound}")
+    if image and image not in files["images"]:
+        raise ValueError(f"Image introuvable : {image}")
+    if do_chat and not msgs:
+        raise ValueError("Écris au moins un message, ou décoche « Message dans le t'chat ».")
+    if not do_chat and not sound and not image:
+        raise ValueError("Choisis au moins une action : un message, un son ou une image.")
     if len(msgs) > 10:
         raise ValueError("10 messages au maximum.")
     mode = raw.get("mode", "all")
@@ -170,7 +195,8 @@ def clean_rule(raw: dict) -> dict:
         raise ValueError("Valeur hors limites (délai ≤ 120 s, attente ≤ 24 h).")
     return {"name": name, "enabled": bool(raw.get("enabled", True)), "trigger": trigger,
             "data": {"messages": msgs, "mode": mode, "gap": gap, "delay": delay, "cooldown": cooldown, "min_value": min_value,
-                     "text_filter": str(raw.get("text_filter") or "").strip()[:100]}}
+                     "text_filter": str(raw.get("text_filter") or "").strip()[:100],
+                     "do_chat": do_chat, "sound": sound, "image": image}}
 
 
 async def create_rule(trigger: str, name: str = "") -> dict:
@@ -215,7 +241,7 @@ async def duplicate_rule(rule_id: int) -> dict | None:
     async with get_db_connection() as db:
         c = await db.execute("INSERT INTO automation_rules (name, enabled, trigger, data) VALUES ($1, FALSE, $2, $3) RETURNING id",
                              ((r["name"] + " (copie)")[:80], r["trigger"], json.dumps(
-                                 {k: r[k] for k in ("messages", "mode", "gap", "delay", "cooldown", "min_value", "text_filter")}, ensure_ascii=False)))
+                                 {k: r[k] for k in DATA_KEYS}, ensure_ascii=False)))
         row = await c.fetchone()
     return await get_rule(row["id"])
 
@@ -258,11 +284,32 @@ def _matches(rule: dict, values: dict) -> bool:
     return True
 
 
+async def _overlay(kind: str, filename: str) -> bool:
+    """Joue un son / affiche une image sur l'overlay Alertes (même canal que les commandes)."""
+    import aiohttp
+    from app.core.config import settings
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.post(f"{settings.OVERLAY_NODE_URL}/api/trigger", json={"type": kind, "details": {"filename": filename}},
+                              timeout=aiohttp.ClientTimeout(total=3)) as r:
+                return r.status == 200
+    except Exception as e:
+        logger.warning(f"⚠️ [AUTOMATISATION] Overlay ({kind}) : {e}")
+        return False
+
+
 async def _send(rule: dict, values: dict, test: bool = False) -> bool:
-    """Envoie les messages de la règle : tous à la suite (mode « all ») ou un seul au hasard (mode « random »)."""
+    """Exécute les actions de la règle : son, image, puis message(s) — tous à la suite (« all ») ou un seul au hasard (« random »)."""
     from app.services import alerts_service
-    messages = list(rule["messages"]) if rule.get("mode", "all") == "all" else [random.choice(rule["messages"])]
     ok_all = True
+    for kind, key, label in (("sound", "sound", "son"), ("image", "image", "image")):
+        if rule.get(key):
+            ok = await _overlay(kind, rule[key])
+            ok_all = ok_all and ok
+            await _log(rule["name"], ("test · " if test else "") + ("" if ok else "NON ENVOYÉ (overlay injoignable) · ") + f"{label} : {rule[key]}")
+    if not rule.get("do_chat", True) or not rule.get("messages"):
+        return ok_all
+    messages = list(rule["messages"]) if rule.get("mode", "all") == "all" else [random.choice(rule["messages"])]
     for i, template in enumerate(messages):
         if i:
             await asyncio.sleep(float(rule.get("gap", 1.5)))      # petit écart : Twitch limite le rythme des messages
@@ -298,8 +345,15 @@ async def test_rule(raw: dict) -> dict:
     rule = dict(clean["data"], name=clean["name"], trigger=clean["trigger"])
     values = TRIGGERS[clean["trigger"]]["sample"]
     sent = await _send(rule, values, test=True)
-    n = len(rule["messages"]) if rule.get("mode") == "all" else 1
-    return {"ok": sent, "message": (f"{n} message(s) envoyé(s) dans le t'chat avec des valeurs d'exemple.") if sent else "Le bot n'est pas connecté au chat."}
+    done = []
+    if rule.get("sound"):
+        done.append("son joué")
+    if rule.get("image"):
+        done.append("image affichée")
+    if rule.get("do_chat"):
+        n = len(rule["messages"]) if rule.get("mode") == "all" else 1
+        done.append(f"{n} message(s) envoyé(s) dans le t'chat")
+    return {"ok": sent, "message": ("Test : " + ", ".join(done) + ".") if sent else "Échec : bot non connecté au chat ou overlay injoignable (voir le journal)."}
 
 
 # ── Traduction des événements EventSub ───────────────────────────────────────
