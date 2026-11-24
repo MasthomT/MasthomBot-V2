@@ -46,12 +46,13 @@
             <div class="config-card rounded-2xl overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead class="text-[11px] uppercase tracking-widest text-slate-500">
-                        <tr class="text-left"><th class="p-3"></th><th class="p-3">Récompense</th><th class="p-3">Prix</th><th class="p-3">État</th><th class="p-3">Limites</th><th class="p-3">Géré par</th></tr>
+                        <tr class="text-left"><th class="p-3"></th><th class="p-3">Récompense</th><th class="p-3">Prix</th><th class="p-3">État</th><th class="p-3">Limites</th><th class="p-3">Géré par</th><th class="p-3"></th></tr>
                     </thead>
                     <tbody id="ov-rows"></tbody>
                 </table>
             </div>
-            <p class="text-xs text-slate-500 mt-3">Twitch ne laisse le bot modifier que les récompenses qu'il a créées lui-même. Les autres se règlent dans le tableau de bord Twitch.</p>
+            <p class="text-xs text-slate-500 mt-3">Twitch ne laisse le bot modifier que les récompenses qu'il a créées lui-même. Pour reprendre la main sur une autre, clique « Cloner pour le bot » : le bot en crée une copie, tu supprimes l'original dans le <a id="ov-dash" target="_blank" class="text-indigo-300 underline">tableau de bord Twitch</a>, puis « Finaliser » lui redonne le vrai nom.
+            L'image personnalisée ne suit pas (Twitch ne laisse pas l'envoyer par l'API) et l'identifiant change : un son lancé par Streamer.bot sur cette récompense est à rebrancher (ou à refaire dans <a href="/admin/automatisations" class="text-indigo-300 underline">Automatisations</a> › Récompense, qui repère par le titre).</p>
         </section>
 
         <!-- First / Deuz / Troiz -->
@@ -108,9 +109,67 @@
                  + '<td class="p-3 text-slate-300">' + r.cost.toLocaleString('fr-FR') + ' pts</td>'
                  + '<td class="p-3">' + state + '</td>'
                  + '<td class="p-3 text-slate-400 text-xs">' + esc(limits(r)) + '</td>'
-                 + '<td class="p-3">' + by + '</td></tr>';
-        }).join('') || '<tr><td colspan="6" class="p-6 text-center text-slate-500">Aucune récompense.</td></tr>';
+                 + '<td class="p-3">' + by + '</td>'
+                 + '<td class="p-3 text-right whitespace-nowrap">' + actions(r) + '</td></tr>'
+                 + (editing === r.id ? '<tr class="bg-slate-900/60"><td colspan="7" class="p-4">' + editForm(r) + '</td></tr>' : '')
+                 + (r.clone_pending ? '<tr class="bg-amber-500/5"><td></td><td colspan="6" class="px-3 pb-3 text-xs text-amber-300"><i class="fas fa-circle-info mr-1"></i>Copie prête (désactivée, nom provisoire « ' + esc(r.title) + ' ⧉ »). Supprime maintenant l\'original dans le <a href="' + esc(dashUrl) + '" target="_blank" class="underline">tableau de bord Twitch</a>, puis clique « Finaliser ».</td></tr>' : '');
+        }).join('') || '<tr><td colspan="7" class="p-6 text-center text-slate-500">Aucune récompense.</td></tr>';
+        bindRows();
     }
+    let editing = null, dashUrl = '#';
+    const btn = (cls, act, id, label, title) => '<button class="px-2.5 py-1.5 rounded-lg text-xs font-bold ' + cls + '" data-act="' + act + '" data-id="' + esc(id) + '"' + (title ? ' title="' + esc(title) + '"' : '') + '>' + label + '</button>';
+    function actions(r) {
+        if (r.clone_pending) return btn('bg-emerald-600 hover:bg-emerald-500 text-white', 'finalize', r.id, '<i class="fas fa-check mr-1"></i>Finaliser', 'À faire après avoir supprimé l\'original sur Twitch')
+            + ' ' + btn('bg-slate-700 hover:bg-red-600', 'cancel', r.id, 'Annuler', 'Supprime la copie, garde l\'original');
+        if (!r.manageable) return btn('bg-slate-700 hover:bg-indigo-600', 'clone', r.id, '<i class="fas fa-clone mr-1"></i>Cloner pour le bot');
+        if (/^Podium/.test(r.handler || '')) return '<a href="#podium" class="text-xs text-indigo-300 underline">Réglages</a>';
+        if (/^Aura/.test(r.handler || '')) return '<a href="#aura" class="text-xs text-indigo-300 underline">Réglages</a>';
+        return btn('bg-indigo-600 hover:bg-indigo-500 text-white', 'edit', r.id, '<i class="fas fa-pen mr-1"></i>Modifier');
+    }
+    function editForm(r) {
+        const inp = (f, label, v, type, extra) => '<label class="block text-xs"><span class="text-slate-400">' + label + '</span><input data-e="' + f + '" type="' + (type || 'text') + '" value="' + esc(v ?? '') + '" ' + (extra || '') + ' class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm"></label>';
+        const chk = (f, label, v) => '<label class="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" data-e="' + f + '"' + (v ? ' checked' : '') + '>' + label + '</label>';
+        return '<div class="grid grid-cols-1 md:grid-cols-3 gap-3" data-form="' + esc(r.id) + '">'
+            + inp('title', 'Titre (45 caractères max.)', r.title, 'text', 'maxlength="45"')
+            + inp('cost', 'Prix (points)', r.cost, 'number', 'min="1"')
+            + inp('color', 'Couleur de fond', r.color || '#9147ff', 'color', 'style="height:2.4rem;padding:2px"')
+            + '<label class="block text-xs md:col-span-3"><span class="text-slate-400">Description (affichée aux viewers)</span><textarea data-e="prompt" maxlength="200" rows="2" class="input-dark w-full rounded-lg px-3 py-2 mt-1 text-sm">' + esc(r.prompt) + '</textarea></label>'
+            + inp('max_per_stream', 'Max par stream (0 = illimité)', r.max_per_stream || 0, 'number', 'min="0"')
+            + inp('max_per_user', 'Max par viewer et par stream (0 = illimité)', r.max_per_user || 0, 'number', 'min="0"')
+            + inp('cooldown_min', 'Attente entre deux utilisations (minutes, 0 = aucune)', r.cooldown ? Math.round(r.cooldown / 60) : 0, 'number', 'min="0" max="10080"')
+            + '<div class="flex flex-wrap gap-4 items-center md:col-span-3">' + chk('enabled', 'Active', r.enabled) + chk('paused', 'En pause', r.paused) + chk('user_input', 'Le viewer doit écrire un message', r.user_input)
+            + '<span class="flex-1"></span><span class="text-xs" data-eout></span>'
+            + btn('bg-slate-700 hover:bg-slate-600', 'editclose', r.id, 'Fermer') + ' ' + btn('bg-indigo-600 hover:bg-indigo-500 text-white', 'save', r.id, '<i class="fas fa-save mr-1"></i>Enregistrer sur Twitch') + '</div></div>';
+    }
+    async function call(method, url, body) {
+        const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+        return { ok: res.ok, j: await res.json().catch(() => ({})) };
+    }
+    function bindRows() {
+        $('ov-rows').querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', async () => {
+            const id = b.dataset.id, r = all.find(x => x.id === id), act = b.dataset.act;
+            if (act === 'edit') { editing = id; return render(); }
+            if (act === 'editclose') { editing = null; return render(); }
+            if (act === 'clone' && !confirm('Cloner « ' + r.title + ' » pour le bot ?\n\nLe bot crée une copie désactivée. Ensuite tu supprimes l\'original dans le tableau de bord Twitch, puis tu cliques « Finaliser ».\n\nL\'image personnalisée ne suit pas, et ce qui est branché sur l\'ancienne récompense ailleurs (Streamer.bot…) est à rebrancher.')) return;
+            if (act === 'cancel' && !confirm('Supprimer la copie de « ' + r.title + ' » ? L\'original reste tel quel.')) return;
+            let res;
+            if (act === 'save') {
+                const f = $('ov-rows').querySelector('[data-form="' + id + '"]'), v = (k) => f.querySelector('[data-e="' + k + '"]');
+                res = await call('PUT', '/admin/api/rewards/' + id, { title: v('title').value, cost: v('cost').value, color: v('color').value, prompt: v('prompt').value,
+                    max_per_stream: v('max_per_stream').value, max_per_user: v('max_per_user').value, cooldown: (parseInt(v('cooldown_min').value || 0, 10) * 60),
+                    enabled: v('enabled').checked, paused: v('paused').checked, user_input: v('user_input').checked });
+                const out = f.querySelector('[data-eout]');
+                if (!res.ok) { out.className = 'text-xs text-amber-400'; out.textContent = res.j.detail || 'Erreur'; return; }
+                editing = null; return loadOverview();
+            }
+            b.disabled = true;
+            res = await call('POST', '/admin/api/rewards/' + id + '/clone' + (act === 'clone' ? '' : '/' + act));
+            if (!res.ok) { alert(res.j.detail || 'Erreur'); b.disabled = false; return; }
+            if (act === 'finalize') alert('« ' + r.title + ' » est maintenant gérée par le bot. Tu peux la modifier ici.');
+            loadOverview();
+        }));
+    }
+    fetch('/admin/api/rewards/dashboard-url').then(r => r.json()).then(j => { dashUrl = j.url; $('ov-dash').href = j.url; }).catch(() => {});
     async function loadOverview() {
         $('ov-count').textContent = 'Chargement…';
         const res = await fetch('/admin/api/rewards/overview');

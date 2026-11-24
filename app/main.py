@@ -111,6 +111,8 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(birthday_check_routine())
     asyncio.create_task(clip_monitor_routine())
     asyncio.create_task(scene_watch_routine())
+    from app.services.reward_clone_service import load_aliases as _load_reward_aliases
+    asyncio.create_task(_load_reward_aliases())
     asyncio.create_task(felix_vision_loop())
 
     # 3. L'overlay Node.js (server.js) est lancé par son propre service systemd

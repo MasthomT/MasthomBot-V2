@@ -80,7 +80,8 @@ class ModerationService:
                     # pas de sanction si le lien correspond bien à la plateforme prévue pour
                     # cette récompense précise — sinon (ex: lien YouTube dans "TikTok Replay"),
                     # on retombe sur la modération normale ci-dessous.
-                    allowed_domains = REWARD_LINK_RULES.get(reward_id) if reward_id else None
+                    from app.services.reward_clone_service import resolve as _rw_resolve   # copies faites par le bot (même règle)
+                    allowed_domains = _rw_resolve(REWARD_LINK_RULES).get(reward_id) if reward_id else None
                     if allowed_domains and any(d in text_lower for d in allowed_domains):
                         return False
 

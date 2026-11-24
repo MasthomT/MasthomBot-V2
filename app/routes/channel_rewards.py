@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app.core.security import require_admin
-from app.services import podium_service
+from app.services import podium_service, reward_clone_service as RC
 
 logger = logging.getLogger("masthbot.channel_rewards")
 router = APIRouter(tags=["channel_rewards"], dependencies=[Depends(require_admin)])
@@ -47,14 +47,19 @@ async def admin_rewards_overview():
     from app.services import aura_service
     aura_cfg = await aura_service.get_config()
     podium_ids = {c["reward_id"]: f"Podium · {c['title']}" for c in await podium_service.get_config() if c["reward_id"]}
+    known_ids = RC.resolve(KNOWN_BY_ID)
+    pend = await RC.pending()
+    clone_ids = {p["clone_id"] for p in pend.values()}
 
     rewards = []
     for r in data.get("data", []):
+        if r["id"] in clone_ids:          # copie en attente : affichée sur la ligne de l'original
+            continue
         ms = r.get("max_per_stream_setting") or {}
         mu = r.get("max_per_user_per_stream_setting") or {}
         cd = r.get("global_cooldown_setting") or {}
         img = r.get("image") or r.get("default_image") or {}
-        handler = (podium_ids.get(r["id"]) or KNOWN_BY_ID.get(r["id"])
+        handler = (podium_ids.get(r["id"]) or known_ids.get(r["id"])
                    or KNOWN_BY_TITLE.get((r.get("title") or "").lower())
                    or ("Aura (bot)" if aura_cfg["enabled"] and (r["id"] == aura_cfg["reward_id"] or (not aura_cfg["reward_id"] and (r.get("title") or "").strip().lower() == aura_cfg["reward_title"].strip().lower())) else None))
         rewards.append({
@@ -71,6 +76,47 @@ async def admin_rewards_overview():
             "user_input": bool(r.get("is_user_input_required")),
             "manageable": r["id"] in manageable,
             "handler": handler,
+            "prompt": r.get("prompt") or "",
+            "clone_pending": r["id"] in pend,
         })
     rewards.sort(key=lambda x: (not x["enabled"], x["title"].lower()))
     return {"rewards": rewards}
+
+
+# ── Clonage (pour que le bot puisse gérer une récompense créée sur Twitch) et modification ──
+
+def _run(coro_fn):
+    async def inner(*a, **k):
+        try:
+            return await coro_fn(*a, **k)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    return inner
+
+
+@router.post("/admin/api/rewards/{reward_id}/clone")
+async def admin_reward_clone(reward_id: str):
+    return await _run(RC.clone)(reward_id)
+
+
+@router.post("/admin/api/rewards/{reward_id}/clone/finalize")
+async def admin_reward_clone_finalize(reward_id: str):
+    return await _run(RC.finalize)(reward_id)
+
+
+@router.post("/admin/api/rewards/{reward_id}/clone/cancel")
+async def admin_reward_clone_cancel(reward_id: str):
+    return await _run(RC.cancel)(reward_id)
+
+
+@router.put("/admin/api/rewards/{reward_id}")
+async def admin_reward_edit(reward_id: str, payload: dict):
+    r = await _run(RC.edit)(reward_id, payload or {})
+    return {"status": "ok", "title": r.get("title")}
+
+
+@router.get("/admin/api/rewards/dashboard-url")
+async def admin_reward_dashboard_url():
+    from app.core.config import settings
+    login = settings.TWITCH_CHANNEL.replace("#", "").lower()
+    return {"url": f"https://dashboard.twitch.tv/u/{login}/viewer-rewards/channel-points/rewards"}

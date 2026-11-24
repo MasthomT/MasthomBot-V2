@@ -557,7 +557,8 @@ class MasthbotTwitch(ChatCommandsMixin, TimersMixin, commands.Bot):
         if cfg is not None and not cfg.get("enabled", True):
             return False
         # Récompense de points de chaîne « TikTok Replay » : un viewer peut déclencher le lecteur sans être modo.
-        if key == "play" and message.tags and message.tags.get("custom-reward-id") == "093cceb1-3c5e-4e8e-bc16-7f27ff6a2d2b":
+        from app.services.reward_clone_service import same as _rw_same    # ou sa copie faite par le bot
+        if key == "play" and message.tags and _rw_same(message.tags.get("custom-reward-id"), "093cceb1-3c5e-4e8e-bc16-7f27ff6a2d2b"):
             return True
         if cfg is None or not enforces_role(key):
             return True
