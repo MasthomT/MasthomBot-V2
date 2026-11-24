@@ -119,6 +119,10 @@
     let editing = null, dashUrl = '#';
     const btn = (cls, act, id, label, title) => '<button class="px-2.5 py-1.5 rounded-lg text-xs font-bold ' + cls + '" data-act="' + act + '" data-id="' + esc(id) + '"' + (title ? ' title="' + esc(title) + '"' : '') + '>' + label + '</button>';
     function actions(r) {
+        const auto = '<a href="/admin/automatisations#reward=' + encodeURIComponent(r.title) + '" class="px-2.5 py-1.5 rounded-lg text-xs font-bold mr-1 ' + (r.automations ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30' : 'bg-slate-700 hover:bg-slate-600') + '" title="Son, image, message, étapes OBS / Twitch quand un viewer prend cette récompense"><i class="fas fa-bolt mr-1"></i>Actions' + (r.automations ? ' (' + r.automations + ')' : '') + '</a>';
+        return auto + actionsMain(r);
+    }
+    function actionsMain(r) {
         if (r.clone_pending) return btn('bg-emerald-600 hover:bg-emerald-500 text-white', 'finalize', r.id, '<i class="fas fa-check mr-1"></i>Finaliser', 'À faire après avoir supprimé l\'original sur Twitch')
             + ' ' + btn('bg-slate-700 hover:bg-red-600', 'cancel', r.id, 'Annuler', 'Supprime la copie, garde l\'original');
         if (!r.manageable) return btn('bg-slate-700 hover:bg-indigo-600', 'clone', r.id, '<i class="fas fa-clone mr-1"></i>Cloner pour le bot');

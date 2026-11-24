@@ -42,7 +42,7 @@
 (function () {
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-    let triggers = [], rules = [], lastFocus = null, media = { sounds: [], images: [] };
+    let triggers = [], rules = [], lastFocus = null, media = { sounds: [], images: [] }, stepTypes = {}, obs = null;
     const trig = (k) => triggers.find(t => t.key === k);
 
     async function api(method, url, body) {
@@ -72,8 +72,55 @@
            + '<div class="flex flex-wrap gap-2 mb-3">' + Object.entries(t.vars).map(([k, d]) =>
                 '<button class="px-2 py-1 rounded-md bg-indigo-500/15 text-indigo-300 text-[11px] font-bold" data-var="' + k + '" title="' + esc(d) + '">{' + k + '}</button>').join('') + '</div>';
     }
-    const ACTS = [['do_chat', 'fa-comment-dots', 'Message dans le t\'chat'], ['sound', 'fa-volume-high', 'Son'], ['image', 'fa-image', 'Image / vidéo']];
-    function actOn(r, k) { return k === 'do_chat' ? r.do_chat !== false : !!r[k]; }
+    const ACTS = [['do_chat', 'fa-comment-dots', 'Message dans le t\'chat'], ['sound', 'fa-volume-high', 'Son'], ['image', 'fa-image', 'Image / vidéo'], ['steps', 'fa-sliders', 'Étapes OBS / Twitch']];
+    function actOn(r, k) { return k === 'do_chat' ? r.do_chat !== false : k === 'steps' ? !!(r.steps && r.steps.length) : !!r[k]; }
+    // ── Étapes OBS / Twitch (comme Streamer.bot) ──
+    const opt = (list, cur, ph) => '<option value="">' + esc(ph) + '</option>' + list.map(n => '<option' + (n === cur ? ' selected' : '') + '>' + esc(n) + '</option>').join('')
+        + (cur && !list.includes(cur) ? '<option selected>' + esc(cur) + '</option>' : '');
+    function stepFields(st) {
+        const t = st.type, o = obs || { scenes: [], items: {}, inputs: [] };
+        const sel = (f, list, ph) => '<select data-s="' + f + '" class="input-dark rounded-lg px-2 py-2 text-sm min-w-[11rem]">' + opt(list, st[f] || '', ph) + '</select>';
+        const num = (f, label, v, extra) => '<label class="flex items-center gap-1.5 text-xs text-slate-400">' + label + '<input data-s="' + f + '" type="number" min="0" ' + (extra || '') + ' value="' + esc(v ?? 0) + '" class="input-dark w-20 rounded-lg px-2 py-2 text-sm"></label>';
+        let h = '';
+        if (t === 'show' || t === 'hide') h += sel('scene', Object.keys(o.items), '— scène ou groupe —') + sel('source', o.items[st.scene] || [], '— source —');
+        if (t === 'scene') h += sel('scene', o.scenes, '— scène —');
+        if (t === 'filter_on' || t === 'filter_off') h += sel('source', o.inputs.concat(o.scenes), '— source —') + '<input data-s="filter" list="flt-' + esc(st._k) + '" value="' + esc(st.filter || '') + '" placeholder="nom du filtre" class="input-dark rounded-lg px-2 py-2 text-sm w-44"><datalist id="flt-' + esc(st._k) + '"></datalist>';
+        if (t === 'mute' || t === 'unmute') h += sel('source', o.inputs, '— source audio —');
+        if (t === 'timeout') h += '<label class="flex items-center gap-1.5 text-xs text-slate-400">viewer<input data-s="target" value="' + esc(st.target || '{input}') + '" class="input-dark w-32 rounded-lg px-2 py-2 text-sm" title="{input} = pseudo écrit par le viewer dans la récompense"></label>' + num('seconds', 'durée (s)', st.seconds || 60, 'max="1209600"');
+        if (t === 'show' || t === 'filter_on' || t === 'mute') h += num('duration', 'puis revenir après (s, 0 = jamais)', st.duration, 'max="3600" step="0.5"');
+        return h;
+    }
+    let stepKey = 0;
+    function stepRow(st) {
+        st = Object.assign({ type: 'show', delay: 0 }, st); st._k = ++stepKey;
+        return '<div class="flex flex-wrap items-center gap-2 p-2 rounded-lg bg-slate-900/50" data-step="' + st._k + '">'
+            + '<select data-s="type" class="input-dark rounded-lg px-2 py-2 text-sm">' + Object.entries(stepTypes).map(([k, l]) => '<option value="' + k + '"' + (k === st.type ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select>'
+            + '<span class="contents" data-sf>' + stepFields(st) + '</span>'
+            + '<label class="flex items-center gap-1.5 text-xs text-slate-400"><i class="fas fa-hourglass-half"></i>après<input data-s="delay" type="number" min="0" max="600" step="0.5" value="' + esc(st.delay || 0) + '" class="input-dark w-20 rounded-lg px-2 py-2 text-sm">s</label>'
+            + '<button class="ml-auto px-2.5 py-2 rounded-lg bg-slate-700 hover:bg-red-600 text-xs" data-srm title="Supprimer cette étape"><i class="fas fa-trash"></i></button></div>';
+    }
+    function readStep(row) {
+        const v = (f) => { const e = row.querySelector('[data-s="' + f + '"]'); return e ? e.value : ''; };
+        return { type: v('type'), scene: v('scene'), source: v('source'), filter: v('filter'), target: v('target'),
+                 seconds: parseInt(v('seconds') || 0, 10), delay: parseFloat(v('delay') || 0), duration: parseFloat(v('duration') || 0) };
+    }
+    function bindStep(el, row) {
+        const refresh = () => { const st = readStep(row); st._k = row.dataset.step; row.querySelector('[data-sf]').innerHTML = stepFields(st); wire(); };
+        const loadFilters = async () => {
+            const src = row.querySelector('[data-s="source"]'), dl = row.querySelector('datalist');
+            if (!src || !dl || !src.value) return;
+            const { j } = await api('GET', '/admin/api/automations/obs/filters?source=' + encodeURIComponent(src.value));
+            dl.innerHTML = (j.filters || []).map(f => '<option value="' + esc(f) + '"></option>').join('');
+        };
+        function wire() {
+            const sc = row.querySelector('[data-s="scene"]'), src = row.querySelector('[data-s="source"]');
+            if (sc && row.querySelector('[data-s="type"]').value.match(/show|hide/)) sc.onchange = refresh;
+            if (src && row.querySelector('datalist')) { src.onchange = loadFilters; loadFilters(); }
+        }
+        row.querySelector('[data-s="type"]').onchange = refresh;
+        row.querySelector('[data-srm]').onclick = () => { row.remove(); if (!el.querySelectorAll('[data-step]').length) setAct(el, 'steps', false); };
+        wire();
+    }
     function mediaBlock(kind, r) {  // choix du fichier + aperçu + envoi d'un nouveau fichier
         const files = kind === 'sound' ? media.sounds : media.images, cur = r[kind] || '';
         const opts = '<option value="">— choisis un fichier —</option>' + files.map(f => '<option' + (f === cur ? ' selected' : '') + '>' + esc(f) + '</option>').join('');
@@ -98,6 +145,7 @@
         const parts = [];
         if (r.sound) parts.push('🔊 ' + r.sound);
         if (r.image) parts.push('🖼️ ' + r.image);
+        if (r.steps && r.steps.length) parts.push('⚙️ ' + r.steps.length + ' étape(s)');
         if (r.do_chat !== false && r.messages[0]) parts.push(r.messages[0].replace(/\s+/g, ' '));
         const first = parts.join(' · ');
         return '<i class="fas ' + esc(t.icon) + ' w-5 text-center ' + (r.enabled ? 'text-indigo-400' : 'text-slate-600') + '"></i>'
@@ -125,6 +173,10 @@
                 + '<input type="checkbox" class="hidden" data-act="' + k + '"' + (actOn(r, k) ? ' checked' : '') + '><i class="fas ' + ic + '"></i>' + lb + '</label>').join('') + '</div>'
           + '<div class="rounded-xl border border-slate-700/70 p-4 mb-3' + (actOn(r, 'sound') ? '' : ' hidden') + '" data-blk="sound"><div class="text-xs text-slate-300 font-bold mb-2"><i class="fas fa-volume-high mr-1 text-indigo-400"></i>Son</div>' + mediaBlock('sound', r) + '</div>'
           + '<div class="rounded-xl border border-slate-700/70 p-4 mb-3' + (actOn(r, 'image') ? '' : ' hidden') + '" data-blk="image"><div class="text-xs text-slate-300 font-bold mb-2"><i class="fas fa-image mr-1 text-indigo-400"></i>Image / vidéo</div>' + mediaBlock('image', r) + '</div>'
+          + '<div class="rounded-xl border border-slate-700/70 p-4 mb-3' + (actOn(r, 'steps') ? '' : ' hidden') + '" data-blk="steps"><div class="text-xs text-slate-300 font-bold mb-1"><i class="fas fa-sliders mr-1 text-indigo-400"></i>Étapes OBS / Twitch</div>'
+          + '<p class="text-[11px] text-slate-500 mb-2">Comme sur Streamer.bot : afficher une vidéo de récompense (elle repart du début), changer de scène, activer un filtre, couper un son, timeout du viewer écrit dans la récompense ({input})… Chaque étape a son délai, compté depuis le déclencheur.</p>'
+          + '<div class="space-y-2" data-steps>' + (r.steps || []).map(stepRow).join('') + '</div>'
+          + '<button class="mt-2 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold" data-sadd><i class="fas fa-plus mr-1"></i>Ajouter une étape</button></div>'
           + '<div class="rounded-xl border border-slate-700/70 p-4' + (actOn(r, 'do_chat') ? '' : ' hidden') + '" data-blk="do_chat"><div data-vars>' + chatVars(r) + '</div>'
           + '<div class="space-y-2" data-msgs>' + r.messages.map(msgRow).join('') + '</div>'
           + '<button class="mt-3 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold" data-add><i class="fas fa-plus mr-1"></i>Ajouter un message</button>' + msgOpts(r) + '</div>'
@@ -174,6 +226,7 @@
             sound: el.querySelector('[data-act="sound"]').checked ? q('sound').value : '',
             image: el.querySelector('[data-act="image"]').checked ? q('image').value : '',
             sound_delay: parseFloat(q('sound_delay').value || 0), image_delay: parseFloat(q('image_delay').value || 0),
+            steps: el.querySelector('[data-act="steps"]').checked ? [...el.querySelectorAll('[data-step]')].map(readStep) : [],
         };
     }
     function bindMsgs(el) {
@@ -199,9 +252,15 @@
         chip.className = chip.className.replace(/border-indigo-500 bg-indigo-500\/15 text-indigo-200|border-slate-600 text-slate-400/, on ? 'border-indigo-500 bg-indigo-500/15 text-indigo-200' : 'border-slate-600 text-slate-400');
         el.querySelector('[data-blk="' + k + '"]').classList.toggle('hidden', !on);
         if (k === 'do_chat' && on && !el.querySelectorAll('[data-msg]').length) el.querySelector('[data-add]').click();   // re-coché sans message : une ligne vide
+        if (k === 'steps' && on && !el.querySelectorAll('[data-step]').length) el.querySelector('[data-sadd]').click();
     }
     function bindActs(el) {
         el.querySelectorAll('[data-act]').forEach(cb => cb.addEventListener('change', () => setAct(el, cb.dataset.act, cb.checked)));
+        el.querySelectorAll('[data-step]').forEach(row => bindStep(el, row));
+        el.querySelector('[data-sadd]').onclick = () => {
+            const d = document.createElement('div'); d.innerHTML = stepRow({ type: 'show' }); const row = d.firstChild;
+            el.querySelector('[data-steps]').appendChild(row); bindStep(el, row);
+        };
         const prev = el.querySelector('[data-prev]'), imgSel = el.querySelector('[data-f="image"]');
         const showPrev = () => { prev.innerHTML = imgPreview(imgSel.value); };
         imgSel.addEventListener('change', showPrev); showPrev();
@@ -288,7 +347,8 @@
     async function load() {
         const { ok, j } = await api('GET', '/admin/api/automations');
         if (!ok) return;
-        triggers = j.triggers; rules = j.rules; media = j.media || media;
+        triggers = j.triggers; rules = j.rules; media = j.media || media; stepTypes = j.step_types || {};
+        if (!obs) { const o = await api('GET', '/admin/api/automations/obs'); obs = o.ok ? o.j : null; }
         let dl = $('obs-scenes'); if (!dl) { dl = document.createElement('datalist'); dl.id = 'obs-scenes'; document.body.appendChild(dl); }
         dl.innerHTML = (j.scenes || []).map(n => '<option value="' + esc(n) + '"></option>').join('');
         $('newTrigger').innerHTML = groupedOptions('raid_out');
@@ -301,7 +361,22 @@
         const el = j.rule && $('cards').querySelector('[data-id="' + j.rule.id + '"]');
         if (el) { openOnly(el); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
     });
-    load();
+    // Arrivée depuis la page Récompenses (#reward=Titre) : ouvre l'automatisation de cette récompense, ou en prépare une
+    async function fromReward() {
+        const m = location.hash.match(/^#reward=(.+)$/); if (!m) return;
+        const title = decodeURIComponent(m[1]); history.replaceState(null, '', location.pathname);
+        let rule = rules.find(r => r.trigger === 'reward' && (r.text_filter || '').trim().toLowerCase() === title.trim().toLowerCase());
+        if (!rule) {
+            const { ok, j } = await api('POST', '/admin/api/automations', { trigger: 'reward', name: 'Récompense · ' + title });
+            if (!ok) return;
+            // créée DÉSACTIVÉE, filtrée sur ce titre : rien ne part tant que tu ne l'as pas réglée et activée
+            await api('PUT', '/admin/api/automations/' + j.rule.id, { rule: Object.assign({}, j.rule, { text_filter: title, enabled: false }) });
+            await load(); rule = rules.find(r => r.id === j.rule.id);
+        }
+        const el = rule && $('cards').querySelector('[data-id="' + rule.id + '"]');
+        if (el) { openOnly(el); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    }
+    load().then(fromReward);
 })();
 </script>
 </body>

@@ -48,6 +48,12 @@ async def admin_rewards_overview():
     aura_cfg = await aura_service.get_config()
     podium_ids = {c["reward_id"]: f"Podium · {c['title']}" for c in await podium_service.get_config() if c["reward_id"]}
     known_ids = RC.resolve(KNOWN_BY_ID)
+    from app.services import automation_service
+    n_auto: dict[str, int] = {}
+    for rule in await automation_service.list_rules():       # automatisations « Récompense » visant un titre précis
+        if rule["trigger"] == "reward" and rule["text_filter"].strip():
+            k = rule["text_filter"].strip().lower()
+            n_auto[k] = n_auto.get(k, 0) + 1
     pend = await RC.pending()
     clone_ids = {p["clone_id"] for p in pend.values()}
 
@@ -78,6 +84,7 @@ async def admin_rewards_overview():
             "handler": handler,
             "prompt": r.get("prompt") or "",
             "clone_pending": r["id"] in pend,
+            "automations": n_auto.get((r.get("title") or "").strip().lower(), 0),
         })
     rewards.sort(key=lambda x: (not x["enabled"], x["title"].lower()))
     return {"rewards": rewards}

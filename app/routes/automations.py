@@ -18,7 +18,7 @@ async def automations_page(request: Request):
 
 @router.get("/admin/api/automations")
 async def automations_get():
-    return {"triggers": A.catalog(), "rules": await A.list_rules(), "log": await A.get_log(), "scenes": await A.scene_names(), "media": A.media_files()}
+    return {"triggers": A.catalog(), "rules": await A.list_rules(), "log": await A.get_log(), "scenes": await A.scene_names(), "media": A.media_files(), "step_types": A.STEP_TYPES}
 
 
 class CreatePayload(BaseModel):
@@ -69,3 +69,16 @@ async def automations_duplicate(rule_id: int):
 async def automations_delete(rule_id: int):
     await A.delete_rule(rule_id)
     return {"ok": True}
+
+
+@router.get("/admin/api/automations/obs")
+async def automations_obs(force: bool = False):
+    """Scènes, sources (y compris dans les groupes) et médias OBS pour les menus des étapes."""
+    from app.services import obs_catalog
+    return await obs_catalog.catalog(force=force)
+
+
+@router.get("/admin/api/automations/obs/filters")
+async def automations_obs_filters(source: str):
+    from app.services import obs_catalog
+    return {"filters": await obs_catalog.filters(source)}

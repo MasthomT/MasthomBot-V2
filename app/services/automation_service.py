@@ -120,7 +120,18 @@ IMAGES_DIR = "static/commands/images"
 SOUND_EXT = {".mp3", ".wav", ".ogg"}
 IMAGE_EXT = {".gif", ".png", ".jpg", ".jpeg", ".webp", ".mp4", ".webm"}
 DATA_KEYS = ("messages", "mode", "gap", "delay", "cooldown", "min_value", "text_filter", "do_chat", "sound", "image",
-             "sound_delay", "image_delay")
+             "sound_delay", "image_delay", "steps")
+# Étapes « comme Streamer.bot » : actions OBS et Twitch, chacune avec son délai (et une durée pour revenir en arrière)
+STEP_TYPES = {
+    "show":       "Afficher une source OBS",
+    "hide":       "Masquer une source OBS",
+    "scene":      "Changer de scène OBS",
+    "filter_on":  "Activer un filtre OBS",
+    "filter_off": "Désactiver un filtre OBS",
+    "mute":       "Couper le son d'une source OBS",
+    "unmute":     "Rétablir le son d'une source OBS",
+    "timeout":    "Timeout d'un viewer (Twitch)",
+}
 
 
 def _defaults(trigger: str | None) -> dict:
@@ -128,13 +139,45 @@ def _defaults(trigger: str | None) -> dict:
     # mode : « all » = tous les messages à la suite (espacés de `gap` secondes), « random » = un seul tiré au hasard
     # Actions (cumulables) : message(s) dans le t'chat (do_chat), son joué sur l'overlay, image / vidéo affichée sur l'overlay
     return {"messages": [t["default"]] if t else [], "mode": "all", "gap": 1.5, "delay": 1.0, "cooldown": 30, "min_value": 0,
-            "text_filter": "", "do_chat": True, "sound": "", "image": "", "sound_delay": 0.0, "image_delay": 0.0}
+            "text_filter": "", "do_chat": True, "sound": "", "image": "", "sound_delay": 0.0, "image_delay": 0.0, "steps": []}
 
 
 def media_files() -> dict:
     import os
     ls = lambda d, ext: sorted(f for f in os.listdir(d) if os.path.splitext(f)[1].lower() in ext) if os.path.isdir(d) else []
     return {"sounds": ls(SOUNDS_DIR, SOUND_EXT), "images": ls(IMAGES_DIR, IMAGE_EXT)}
+
+
+def clean_steps(raw_steps: list) -> list[dict]:
+    if len(raw_steps) > 10:
+        raise ValueError("10 étapes au maximum.")
+    out = []
+    for i, st in enumerate(raw_steps, 1):
+        t = st.get("type")
+        if t not in STEP_TYPES:
+            raise ValueError(f"Étape {i} : type inconnu.")
+        try:
+            delay = float(st.get("delay") or 0)
+            duration = float(st.get("duration") or 0)
+            seconds = int(st.get("seconds") or 0)
+        except (TypeError, ValueError):
+            raise ValueError(f"Étape {i} : délai, durée et secondes doivent être des nombres.")
+        if not 0 <= delay <= 600 or not 0 <= duration <= 3600:
+            raise ValueError(f"Étape {i} : délai (≤ 10 min) ou durée (≤ 1 h) hors limites.")
+        c = {"type": t, "delay": delay, "duration": duration,
+             "scene": str(st.get("scene") or "").strip()[:120], "source": str(st.get("source") or "").strip()[:120],
+             "filter": str(st.get("filter") or "").strip()[:120], "seconds": seconds,
+             "target": str(st.get("target") or "").strip()[:60]}
+        need = {"show": ("scene", "source"), "hide": ("scene", "source"), "scene": ("scene",),
+                "filter_on": ("source", "filter"), "filter_off": ("source", "filter"),
+                "mute": ("source",), "unmute": ("source",), "timeout": ("target",)}[t]
+        miss = [k for k in need if not c[k]]
+        if miss:
+            raise ValueError(f"Étape {i} ({STEP_TYPES[t]}) : choisis " + " et ".join({"scene": "la scène", "source": "la source", "filter": "le filtre", "target": "le viewer"}[k] for k in miss) + ".")
+        if t == "timeout" and not 1 <= seconds <= 1209600:
+            raise ValueError(f"Étape {i} : durée du timeout entre 1 s et 14 jours.")
+        out.append(c)
+    return out
 
 
 def _row_to_rule(r) -> dict:
@@ -178,8 +221,9 @@ def clean_rule(raw: dict) -> dict:
         raise ValueError(f"Image introuvable : {image}")
     if do_chat and not msgs:
         raise ValueError("Écris au moins un message, ou décoche « Message dans le t'chat ».")
-    if not do_chat and not sound and not image:
-        raise ValueError("Choisis au moins une action : un message, un son ou une image.")
+    steps = clean_steps(raw.get("steps") or [])
+    if not do_chat and not sound and not image and not steps:
+        raise ValueError("Choisis au moins une action : un message, un son, une image ou une étape OBS / Twitch.")
     if len(msgs) > 10:
         raise ValueError("10 messages au maximum.")
     mode = raw.get("mode", "all")
@@ -200,7 +244,7 @@ def clean_rule(raw: dict) -> dict:
             "data": {"messages": msgs, "mode": mode, "gap": gap, "delay": delay, "cooldown": cooldown, "min_value": min_value,
                      "text_filter": str(raw.get("text_filter") or "").strip()[:100],
                      "do_chat": do_chat, "sound": sound, "image": image,
-                     "sound_delay": sound_delay, "image_delay": image_delay}}
+                     "sound_delay": sound_delay, "image_delay": image_delay, "steps": steps}}
 
 
 async def create_rule(trigger: str, name: str = "") -> dict:
@@ -330,7 +374,32 @@ async def _send(rule: dict, values: dict, test: bool = False) -> bool:
             logger.info(f"⚡ [AUTOMATISATION] « {rule['name']} » → {'envoyé' if sent else 'échec'} : {text}")
         return ok_all
 
-    jobs = []
+    async def step_job(st: dict) -> bool:
+        from app.services import obs_catalog
+        if st["delay"] > 0:
+            await asyncio.sleep(st["delay"])
+        try:
+            if st["type"] == "timeout":
+                who = render(st["target"], values).strip().lstrip("@")
+                if test:                                  # un test ne sanctionne personne
+                    done = f"timeout de {who or '?'} ({st['seconds']} s) simulé"
+                else:
+                    done = await _timeout(who, st["seconds"], f"Automatisation « {rule['name']} »")
+            else:
+                done = await obs_catalog.run_step(st)
+                undo = {"show": "hide", "filter_on": "filter_off", "mute": "unmute"}.get(st["type"])
+                if undo and st["duration"] > 0:          # revenir en arrière après la durée choisie
+                    await asyncio.sleep(st["duration"])
+                    await obs_catalog.run_step(dict(st, type=undo))
+                    done += f" ({st['duration']:g} s)"
+            await _log(rule["name"], tag + done)
+            return True
+        except Exception as e:
+            await _log(rule["name"], tag + f"ÉCHEC {STEP_TYPES[st['type']]} : {e}")
+            logger.warning(f"⚠️ [AUTOMATISATION] « {rule['name']} » étape {st['type']} : {e}")
+            return False
+
+    jobs = [step_job(st) for st in rule.get("steps") or []]
     if rule.get("sound"):
         jobs.append(media("sound", "son", float(rule.get("sound_delay", 0) or 0)))
     if rule.get("image"):
@@ -339,6 +408,23 @@ async def _send(rule: dict, values: dict, test: bool = False) -> bool:
         jobs.append(chat())
     results = await asyncio.gather(*jobs, return_exceptions=True)
     return all(r is True for r in results)
+
+
+async def _timeout(login: str, seconds: int, reason: str) -> str:
+    """Timeout Twitch d'un viewer par son pseudo (compte de la chaîne, comme les autres actions de modération)."""
+    from app.services import podium_service as P
+    if not login or " " in login:
+        raise RuntimeError(f"pseudo invalide : « {login} »")
+    _, _, broadcaster = P._creds()
+    st, data = await P._helix("GET", "/users", {"login": login.lower()})
+    users = data.get("data") or []
+    if st != 200 or not users:
+        raise RuntimeError(f"viewer introuvable : {login}")
+    st, data = await P._helix("POST", "/moderation/bans", {"broadcaster_id": broadcaster, "moderator_id": broadcaster},
+                              {"data": {"user_id": users[0]["id"], "duration": seconds, "reason": reason[:500]}})
+    if st != 200:
+        raise RuntimeError(data.get("message") or f"Twitch a répondu {st}")
+    return f"timeout {users[0]['display_name']} ({seconds} s)"
 
 
 async def _run(rule: dict, values: dict):
@@ -374,7 +460,9 @@ async def test_rule(raw: dict) -> dict:
     if rule.get("do_chat") and rule.get("messages"):
         n = len(rule["messages"]) if rule.get("mode") == "all" else 1
         done.append(f"{n} message(s) dans le t'chat" + (f" dans {rule['delay']:g} s" if rule["delay"] else ""))
-    if max(rule["sound_delay"], rule["image_delay"], rule["delay"]) > 0:
+    if rule.get("steps"):
+        done.append(f"{len(rule['steps'])} étape(s) OBS / Twitch")
+    if rule.get("steps") or max(rule["sound_delay"], rule["image_delay"], rule["delay"]) > 0:
         asyncio.create_task(_send(rule, values, test=True))
         return {"ok": True, "message": "Test lancé : " + ", ".join(done) + ". Résultat dans « Derniers envois »."}
     sent = await _send(rule, values, test=True)
