@@ -86,7 +86,7 @@
           + '<label class="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold cursor-pointer"><i class="fas fa-upload mr-1"></i>Envoyer un fichier'
           + '<input type="file" class="hidden" data-up="' + kind + '" accept="' + (kind === 'sound' ? '.mp3,.wav,.ogg' : '.gif,.png,.jpg,.jpeg,.webp,.mp4,.webm') + '"></label></div>'
           + (kind === 'image' ? '<div class="mt-2" data-prev></div>' : '')
-          + '<p class="text-[11px] text-slate-500 mt-1">' + (kind === 'sound' ? 'Joué sur l\'overlay Alertes d\'OBS (mp3, wav, ogg).' : 'Affiché 8 secondes sur l\'overlay Alertes d\'OBS (gif, png, jpg, webp, mp4, webm).') + '</p>';
+          + '<p class="text-[11px] text-slate-500 mt-1">' + (kind === 'sound' ? 'Joué dans le widget « Alertes des commandes » de tes scènes (Overlays OBS), comme les sons des commandes · mp3, wav, ogg.' : 'Affiché 8 secondes dans le widget « Alertes des commandes » de tes scènes (Overlays OBS) · gif, png, jpg, webp, mp4, webm.') + '</p>';
     }
     function imgPreview(f) {
         if (!f) return '';
