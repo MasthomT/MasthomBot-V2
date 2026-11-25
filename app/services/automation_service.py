@@ -128,6 +128,7 @@ STEP_TYPES = {
     "message":    "Envoyer un message dans le t'chat",
     "timer":      "Lancer le minuteur à l'écran",
     "timer_stop": "Effacer le minuteur de l'écran",
+    "bomb":       "Lancer La Bombe (TNT) sur un viewer au hasard",
 }
 
 
@@ -169,7 +170,7 @@ def clean_steps(raw_steps: list) -> list[dict]:
              "text": str(st.get("text") or "").strip()[:450]}
         need = {"show": ("scene", "source"), "hide": ("scene", "source"), "scene": ("scene",),
                 "filter_on": ("source", "filter"), "filter_off": ("source", "filter"),
-                "mute": ("source",), "unmute": ("source",), "timeout": ("target",), "timer": (), "timer_stop": (), "message": ("text",)}[t]
+                "mute": ("source",), "unmute": ("source",), "timeout": ("target",), "timer": (), "timer_stop": (), "message": ("text",), "bomb": ()}[t]
         miss = [k for k in need if not c[k]]
         if miss:
             raise ValueError(f"Étape {i} ({STEP_TYPES[t]}) : choisis " + " et ".join({"scene": "la scène", "source": "la source", "filter": "le filtre", "target": "le viewer", "text": "le texte du message"}[k] for k in miss) + ".")
@@ -390,7 +391,10 @@ async def _send(rule: dict, values: dict, test: bool = False, log=None) -> bool:
         if st["delay"] > 0:
             await asyncio.sleep(st["delay"])
         try:
-            if st["type"] == "message":
+            if st["type"] == "bomb":
+                from app.services import bomb_service
+                done = "La Bombe : " + await bomb_service.start(values.get("user") or "Quelqu'un", test=test)
+            elif st["type"] == "message":
                 from app.services import alerts_service
                 text = render(st["text"], values)
                 sent = await alerts_service.send_chat(text)

@@ -34,7 +34,7 @@ from slowapi.errors import RateLimitExceeded
 from app.core.rate_limit import limiter
 
 # --- IMPORT DES ROUTES ---
-from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, rewards, admin_vips, api_deck, labels_routes, admin_commands, wheel, scene, podium, channel_rewards, label_style, alerts_admin, overlays_hub, titles, aura, mod_guard, automations, reward_overlay
+from app.routes import admin, viewers, api, announcements, clips, stats, public, overlays, rewards, admin_vips, api_deck, labels_routes, admin_commands, wheel, scene, podium, channel_rewards, label_style, alerts_admin, overlays_hub, titles, aura, mod_guard, automations, reward_overlay, bomb
 from app.routes.credits import router as credits_router
 from app.routes.admin_auth import router as admin_auth_router
 from app.routes.admin_discord_mod import router as admin_discord_mod_router
@@ -200,6 +200,8 @@ if os.path.exists(static_path):
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Branchement des Routes
+app.include_router(bomb.public)
+app.include_router(bomb.admin)
 app.include_router(public.router)
 app.include_router(admin.router)
 app.include_router(viewers.router)

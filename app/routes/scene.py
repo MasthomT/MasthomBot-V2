@@ -71,6 +71,7 @@ STATIC_WIDGETS = [
     _w("tiktok",       "Vidéo (TikTok / YouTube / Instagram)",                        "Écran", "{NODE}/shoutout?only=tiktok", 1414, 108, 486, 864, z=5),
     _w("alertes",      "Alertes des commandes (images / sons)", "Écran", "{NODE}/alerts",          **FULL, z=6),
     _w("recompenses",  "Récompenses de points de chaîne", "Écran", "/overlay/recompenses", **FULL, z=25),
+    _w("bombe",        "La Bombe (TNT)", "Écran", "/overlay/bombe", **FULL, z=26),
     _w("anniversaire", "Anniversaire",              "Écran", "/overlay/anniversaire",  **FULL, z=20),
     _w("emotes",       "Mur d'emotes",              "Écran", "/overlay/emotes",        **FULL, z=3),
     _w("clips",        "Clips du mois (vote)",      "Écran", "/overlay/clips",         **FULL, z=7),

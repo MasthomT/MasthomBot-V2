@@ -222,6 +222,12 @@ class MasthbotTwitch(ChatCommandsMixin, TimersMixin, commands.Bot):
             note_chatter(message.author.name, message.author.display_name or message.author.name)
         except Exception:
             pass
+        if content_lower.startswith("!coupe"):      # « La Bombe » : la cible coupe un fil
+            try:
+                from app.services import bomb_service
+                await bomb_service.on_chat(message.author.name, message.author.display_name or message.author.name, content_clean)
+            except Exception as e:
+                logger.error(f"❌ [BOMBE] !coupe : {e}")
         username = message.author.name.lower()
         display_name = message.author.display_name or message.author.name
         config = await self.get_db_config()

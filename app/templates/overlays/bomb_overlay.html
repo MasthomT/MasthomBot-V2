@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>La Bombe</title>
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; font-family: 'Segoe UI', system-ui, sans-serif; }
+  #stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+  #wrap { position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%) scale(.85); transform-origin: 50% 100%;
+          display: flex; align-items: center; gap: 36px; opacity: 0; transition: opacity .4s ease, transform .4s ease; }
+  #wrap.on { opacity: 1; transform: translateX(-50%) scale(1); }
+  #panel { width: 520px; background: rgba(15,15,20,.88); border: 3px solid #E24B4A; border-radius: 22px; padding: 22px 26px; color: #fff; }
+  .small { font-size: 22px; color: #D3D1C7; }
+  #target { font-size: 54px; font-weight: 800; margin: 2px 0 10px; color: #FFD27A; text-shadow: 0 3px 0 #000; word-break: break-all; }
+  .cmd { font-family: Consolas, monospace; font-size: 26px; background: #000; padding: 4px 12px; border-radius: 8px; display: inline-block; margin-top: 4px; }
+  #log { margin-top: 14px; font-size: 22px; line-height: 1.35; min-height: 92px; }
+  #log div { margin-bottom: 4px; }
+  .ok { color: #97C459; } .warn { color: #EF9F27; } .boom { color: #F09595; }
+  @keyframes shake { 0%,100%{transform:translate(0,0)} 25%{transform:translate(-6px,2px)} 75%{transform:translate(6px,-2px)} }
+  @keyframes boom { 0%{transform:scale(.2);opacity:1} 100%{transform:scale(2.8);opacity:0} }
+  @keyframes blink { 50% { opacity: .2 } }
+  .urgent { animation: shake .12s infinite; }
+  .bm { transform-origin: 170px 120px; animation: boom .9s ease-out forwards; }
+  .led { animation: blink 1s steps(1) infinite; }
+  @keyframes pop { 0%{transform:scale(.1)} 60%{transform:scale(1.15)} 100%{transform:scale(1)} }
+  @keyframes flick { 50%{transform:scale(1.06) rotate(4deg)} }
+  .pop { transform-origin: 170px 120px; animation: pop .45s ease-out, flick .25s .45s infinite; }
+  #result { position: absolute; left: 0; right: 0; top: -110px; text-align: center; font-size: 84px; font-weight: 900; color: #fff;
+            text-shadow: 0 6px 0 #000, 0 0 30px rgba(0,0,0,.6); opacity: 0; transition: opacity .3s; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="wrap">
+    <div id="result"></div>
+    <svg id="svg" width="760" height="560" viewBox="0 0 340 250">
+      <g id="bomb">
+        <rect x="40" y="40" width="260" height="34" rx="6" fill="#A32D2D"/>
+        <rect x="40" y="78" width="260" height="34" rx="6" fill="#E24B4A"/>
+        <rect x="40" y="116" width="260" height="34" rx="6" fill="#A32D2D"/>
+        <rect x="40" y="154" width="260" height="34" rx="6" fill="#E24B4A"/>
+        <text x="46" y="63" font-size="13" font-weight="700" fill="#FCEBEB">TNT</text>
+        <text x="46" y="177" font-size="13" font-weight="700" fill="#FCEBEB">TNT</text>
+        <rect x="78" y="34" width="14" height="160" fill="#B4B2A9"/>
+        <rect x="250" y="34" width="14" height="160" fill="#B4B2A9"/>
+        <rect x="110" y="70" width="120" height="88" rx="6" fill="#2C2C2A"/>
+        <rect x="120" y="80" width="100" height="40" rx="3" fill="#501313"/>
+        <text id="cd" x="170" y="109" text-anchor="middle" font-family="Consolas, monospace" font-size="26" fill="#F09595">00:30</text>
+        <circle class="led" cx="128" cy="140" r="5" fill="#E24B4A"/>
+        <text x="140" y="144" font-size="11" fill="#B4B2A9">ARMÉE</text>
+        <g id="wires"></g>
+      </g>
+      <g id="ex" style="display:none">
+        <circle class="bm" cx="170" cy="120" r="70" fill="#EF9F27"/>
+        <g class="pop"><polygon points="170,5 186,62 228,20 212,78 270,62 228,104 285,120 228,136 270,177 212,162 228,220 186,178 170,235 154,178 113,220 128,162 70,178 112,136 55,120 112,104 70,62 128,78 112,20 154,62" fill="#E24B4A"/>
+        <polygon points="170,35 182,77 212,46 202,88 244,78 213,108 255,120 213,132 244,162 202,152 212,194 182,163 170,205 158,163 128,194 138,152 96,163 127,132 85,120 127,108 96,78 138,88 127,46 158,77" fill="#EF9F27"/>
+        <polygon points="170,70 178,95 199,80 191,105 218,105 196,120 218,135 191,135 199,160 178,145 170,170 162,145 141,160 149,135 122,135 144,120 122,105 149,105 141,80 162,95" fill="#FAEEDA"/></g>
+      </g>
+    </svg>
+    <div id="panel">
+      <div class="small" id="sender">Quelqu'un a posé une bombe sur</div>
+      <div id="target">…</div>
+      <div class="small">Coupe un fil dans le t'chat :</div>
+      <div class="cmd">!coupe &lt;couleur&gt;</div>
+      <div id="log"></div>
+    </div>
+  </div>
+</div>
+<script>
+// Overlay « La Bombe » : état lu par petites requêtes (pas de connexion permanente, OBS sature vers 6 connexions).
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const stage = $('stage');
+  const fit = () => { stage.style.transform = 'scale(' + (innerWidth / 1920) + ',' + (innerHeight / 1080) + ')'; };
+  fit(); addEventListener('resize', fit);
+  const HEX = { rouge: '#E24B4A', bleu: '#378ADD', vert: '#639922', jaune: '#EF9F27', blanc: '#D3D1C7', violet: '#7F77DD' };
+  const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+
+  // Sons générés (pas de fichier) : tic-tac, coupure, explosion
+  let ctx = null;
+  const ac = () => { try { ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); if (ctx.state === 'suspended') ctx.resume(); } catch (e) {} return ctx; };
+  function beep(freq, dur, vol) {
+    const c = ac(); if (!c) return;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = 'square'; o.frequency.value = freq; g.gain.value = vol || .08;
+    g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + dur);
+    o.connect(g).connect(c.destination); o.start(); o.stop(c.currentTime + dur);
+  }
+  function explosion() {
+    const c = ac(); if (!c) return;
+    const len = c.sampleRate * 1.6, buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5);
+    const src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+    f.type = 'lowpass'; f.frequency.value = 900; g.gain.value = .9;
+    src.buffer = buf; src.connect(f).connect(g).connect(c.destination); src.start();
+  }
+
+  let st = { active: false, version: -1 }, at = 0, shownVersion = -1, lastSec = null, lastCut = 0, lastResult = '';
+
+  function drawWires(wires) {
+    $('wires').innerHTML = wires.map((w, i) => {
+      const y = 40 + i * 28, x2 = 300 + (i % 2 ? 14 : 0), y1 = 84 + i * 12;
+      const d = 'M230 ' + y1 + ' C 265 ' + y1 + ', 280 ' + y + ', ' + x2 + ' ' + (y + 4);
+      return '<path d="' + d + '" fill="none" stroke="' + HEX[w.color] + '" stroke-width="6" stroke-linecap="round"'
+           + (w.cut ? ' stroke-dasharray="30 14" opacity=".35"' : '') + '/>';
+    }).join('');
+  }
+  function remaining() {
+    if (!st.active) return 0;
+    if (st.result) return st.remaining;
+    return Math.max(0, st.remaining - (performance.now() - at) / 1000 * st.speed);
+  }
+  function render() {
+    const wrap = $('wrap');
+    if (!st.active) { wrap.classList.remove('on'); return; }
+    wrap.classList.add('on');
+    if (shownVersion !== st.version) {
+      shownVersion = st.version;
+      $('sender').textContent = (st.sender || 'Quelqu\'un') + ' a posé une bombe sur';
+      $('target').textContent = st.target;
+      drawWires(st.wires);
+      $('log').innerHTML = st.log.slice(-3).reverse().map(l => '<div class="' + (l.kind || '') + '">' + esc(l.text) + '</div>').join('');
+      const cuts = st.wires.filter(w => w.cut).length;
+      if (cuts > lastCut) beep(220, .15, .15);
+      lastCut = cuts;
+      if (st.result !== lastResult) {
+        lastResult = st.result;
+        const r = $('result');
+        if (st.result === 'boom') { $('bomb').style.display = 'none'; $('ex').style.display = ''; explosion(); r.textContent = '💥 BOUM !'; r.style.opacity = 1; }
+        else if (st.result === 'defused') { $('bomb').classList.remove('urgent'); r.textContent = '✅ DÉSAMORCÉE'; r.style.opacity = 1; }
+        else { $('bomb').style.display = ''; $('ex').style.display = 'none'; r.style.opacity = 0; }
+      }
+    }
+  }
+  function frame() {
+    if (st.active && !st.result) {
+      const s = remaining(), sec = Math.ceil(s);
+      $('cd').textContent = st.scrambled ? ('??:' + String(Math.floor(Math.random() * 99)).padStart(2, '0')) : ('00:' + String(sec).padStart(2, '0'));
+      $('bomb').classList.toggle('urgent', s <= 10);
+      if (sec !== lastSec) { lastSec = sec; if (sec > 0) beep(s <= 10 ? 1320 : 880, .06); }
+    }
+    requestAnimationFrame(frame);
+  }
+  async function poll() {
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 3000);
+    try {
+      const r = await fetch('/api/bomb/state?t=' + Date.now(), { cache: 'no-store', signal: ctl.signal });
+      const j = await r.json();
+      if (j.active && !st.active) { lastCut = 0; lastResult = ''; lastSec = null; $('bomb').style.display = ''; $('ex').style.display = 'none'; $('result').style.opacity = 0; }
+      st = j; at = performance.now();
+      render();
+    } catch (e) { /* serveur indisponible : on réessaie */ }
+    clearTimeout(t);
+    setTimeout(poll, st.active ? 300 : 900);
+  }
+  frame(); poll();
+})();
+</script>
+</body>
+</html>
