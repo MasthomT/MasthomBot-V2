@@ -55,7 +55,20 @@ async def admin_rewards_overview():
             k = rule["text_filter"].strip().lower()
             n_auto[k] = n_auto.get(k, 0) + 1
     pend = await RC.pending()
-    clone_ids = {p["clone_id"] for p in pend.values()}
+    # Original déjà supprimé sur Twitch mais « Finaliser » pas cliqué : on finalise tout seul, sinon la copie
+    # (désactivée, nom provisoire) resterait cachée et la récompense semblerait avoir disparu.
+    present = {r["id"] for r in data.get("data", [])}
+    orphans = [oid for oid, p in pend.items() if oid not in present and p["clone_id"] in present]
+    for oid in orphans:
+        try:
+            await RC.finalize(oid)
+        except ValueError as e:
+            logger.warning(f"🎁 [REWARDS] Finalisation automatique impossible pour {pend[oid]['title']} : {e}")
+    if orphans:
+        status, data = await podium_service._helix("GET", "/channel_points/custom_rewards", {"broadcaster_id": broadcaster})
+        pend = await RC.pending()
+    present = {r["id"] for r in data.get("data", [])}
+    clone_ids = {p["clone_id"] for oid, p in pend.items() if oid in present}   # copie cachée seulement si l'original est là
 
     rewards = []
     for r in data.get("data", []):
