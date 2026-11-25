@@ -1,4 +1,4 @@
-"""Overlay « Récompenses de points de chaîne » (/overlay/recompenses) et ses réglages (page Récompenses › Overlay).
+"""Overlay « Récompenses de points de chaîne » (/overlay/recompenses) et ses réglages (page Récompenses › Actions).
 Voir app/services/reward_overlay_service.py."""
 import asyncio
 
@@ -28,8 +28,8 @@ async def reward_overlay_events(after: int = 0):
 
 @admin.get("/admin/api/reward-overlay")
 async def reward_overlay_settings():
-    from app.services.automation_service import media_files
-    return {"visuals": await R.list_visuals(), "media": media_files()}
+    from app.services.automation_service import media_files, STEP_TYPES
+    return {"visuals": await R.list_visuals(), "media": media_files(), "step_types": STEP_TYPES, "log": R.recent()}
 
 
 @admin.put("/admin/api/reward-overlay")
@@ -48,13 +48,16 @@ async def reward_overlay_delete(title: str):
 
 @admin.post("/admin/api/reward-overlay/test")
 async def reward_overlay_test(payload: dict):
-    """Affiche le réglage EN COURS (pas forcément enregistré) sur l'overlay, comme si un viewer avait pris la récompense."""
+    """Fait le réglage EN COURS (pas forcément enregistré) comme si « Test » avait pris la récompense (timeout simulé)."""
     try:
         v = R.clean(dict(payload or {}, enabled=True))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    R.push(v, "Test", test=True)
-    return {"ok": True}
+    R.fire(v, {"user": "Test", "reward": v["title"], "input": "Test", "cost": 0}, test=True)
+    done = [x for x, on in (("image / vidéo", v["media"]), ("son", v["sound"]), (f"{len(v['messages'])} message(s)", v["messages"]),
+                            (f"{len(v['steps'])} étape(s) OBS / Twitch", v["steps"])) if on]
+    note = " L'image / vidéo n'apparaît que si le widget est dans la scène OBS affichée." if v["media"] else ""
+    return {"ok": True, "message": "Test lancé : " + ", ".join(done) + "." + note}
 
 
 @admin.get("/admin/api/reward-overlay/screenshot")

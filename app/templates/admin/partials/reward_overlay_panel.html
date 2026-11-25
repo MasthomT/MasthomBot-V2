@@ -1,8 +1,9 @@
-{# Panneau « Overlay » (inclus dans admin/rewards_manager.html). Ids préfixés ro- #}
+{# Panneau « Actions » (inclus dans admin/rewards_manager.html) : ce que fait chaque récompense quand un viewer la prend.
+   Indépendant des automatisations. Ids préfixés ro- #}
 <div id="ro-root">
     <div class="flex flex-wrap items-start justify-between gap-4 mb-5">
-        <p class="text-slate-400 max-w-3xl">Choisis une récompense, son image ou sa vidéo (et un son si tu veux), puis <strong>place-la et redimensionne-la</strong> directement sur l'écran ci-dessous. Quand un viewer la prend, elle apparaît à cet endroit sur l'overlay.
-            Pour l'afficher dans OBS : <strong>Overlays OBS › Scène OBS</strong>, coche le widget <strong>« Récompenses de points de chaîne »</strong> dans tes scènes. Le son des vidéos (et le son en plus) sort alors par la source OBS de la scène, comme les autres widgets.</p>
+        <p class="text-slate-400 max-w-3xl">Choisis une récompense et ce qu'elle fait quand un viewer la prend : <strong>image / vidéo</strong> (placée et redimensionnée directement sur l'écran ci-dessous), <strong>son</strong>, <strong>message dans le t'chat</strong> et <strong>étapes OBS / Twitch</strong> (afficher une source, changer de scène, timeout…). Tout se règle ici, sans passer par les automatisations.
+            Pour voir l'image / vidéo dans OBS : <strong>Overlays OBS › Scène OBS</strong>, coche le widget <strong>« Récompenses de points de chaîne »</strong> dans tes scènes. Le son des vidéos (et le son en plus) sort alors par la source OBS de la scène, comme les autres widgets.</p>
     </div>
 
     <div class="grid grid-cols-1 xl:grid-cols-[18rem_1fr] gap-5">
@@ -34,6 +35,7 @@
                 </div>
 
                 <!-- Zone de placement : écran 1920×1080 à l'échelle -->
+                <div id="ro-place">
                 <div class="flex flex-wrap items-center gap-2 mb-2 text-xs">
                     <button id="ro-shot" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold"><i class="fas fa-camera mr-1"></i>Fond : capture de la scène OBS</button>
                     <button id="ro-center" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold"><i class="fas fa-crosshairs mr-1"></i>Centrer</button>
@@ -52,12 +54,37 @@
                         <div id="ro-dim" class="absolute left-1 top-1 px-1.5 py-0.5 rounded bg-black/70 text-[10px] text-white pointer-events-none"></div>
                     </div>
                 </div>
+                </div>
+
+                <!-- Message(s) dans le t'chat -->
+                <div class="rounded-xl border border-slate-700/70 p-4 mt-4">
+                    <div class="flex flex-wrap items-center gap-3 mb-2">
+                        <div class="text-xs text-slate-300 font-bold flex-1"><i class="fas fa-comment-dots mr-1 text-indigo-400"></i>Message(s) dans le t'chat <span class="font-normal text-slate-500">— un par ligne, envoyés à la suite ; vide = aucun</span></div>
+                        <label class="flex items-center gap-1.5 text-xs text-slate-400"><i class="fas fa-hourglass-half"></i>après<input id="ro-cdelay" type="number" min="0" max="120" step="0.5" class="input-dark w-20 rounded-lg px-2 py-1.5 text-sm">s</label>
+                    </div>
+                    <textarea id="ro-msgs" rows="2" class="input-dark w-full rounded-lg px-3 py-2 text-sm" placeholder="ex. Hey salut {user} !"></textarea>
+                    <div class="text-[11px] text-slate-500 mt-1">Variables : <code>{user}</code> pseudo · <code>{input}</code> texte écrit par le viewer · <code>{reward}</code> titre · <code>{cost}</code> prix</div>
+                </div>
+
+                <!-- Étapes OBS / Twitch -->
+                <div class="rounded-xl border border-slate-700/70 p-4 mt-4">
+                    <div class="flex flex-wrap items-center gap-3 mb-2">
+                        <div class="text-xs text-slate-300 font-bold flex-1"><i class="fas fa-sliders mr-1 text-indigo-400"></i>Étapes OBS / Twitch <span class="font-normal text-slate-500">— chacune avec son délai, comptés depuis le moment où le viewer prend la récompense</span></div>
+                        <button id="ro-sadd" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold"><i class="fas fa-plus mr-1"></i>Ajouter une étape</button>
+                    </div>
+                    <div id="ro-steps" class="space-y-2"></div>
+                    <div id="ro-obswarn" class="text-[11px] text-amber-400 mt-1 hidden">OBS ne répond pas : listes de scènes / sources vides (OBS fermé ?).</div>
+                </div>
 
                 <div class="flex flex-wrap items-center gap-3 mt-4">
                     <button id="ro-save" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold"><i class="fas fa-save mr-2"></i>Enregistrer</button>
-                    <button id="ro-test" class="px-4 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-sm font-bold" title="L'affiche vraiment sur l'overlay (réglage en cours, même non enregistré)"><i class="fas fa-play mr-2"></i>Tester sur l'overlay</button>
-                    <button id="ro-del" class="px-3 py-2.5 rounded-xl bg-slate-700 hover:bg-red-600 text-sm" title="Retirer le visuel de cette récompense"><i class="fas fa-trash"></i></button>
+                    <button id="ro-test" class="px-4 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-sm font-bold" title="Fait vraiment tout (réglage en cours, même non enregistré) avec le pseudo « Test » ; un timeout est seulement simulé"><i class="fas fa-play mr-2"></i>Tester</button>
+                    <button id="ro-del" class="px-3 py-2.5 rounded-xl bg-slate-700 hover:bg-red-600 text-sm" title="Retirer toutes les actions de cette récompense"><i class="fas fa-trash"></i></button>
                     <span id="ro-msg" class="text-xs"></span>
+                </div>
+                <div class="mt-5">
+                    <div class="text-xs text-slate-400 font-bold mb-1">Derniers envois <button id="ro-logr" class="ml-2 text-indigo-300 underline font-normal">actualiser</button></div>
+                    <div id="ro-log" class="text-[11px] text-slate-500 space-y-0.5 max-h-40 overflow-y-auto"></div>
                 </div>
             </div>
         </section>
@@ -69,7 +96,7 @@
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
     const W = 1920, H = 1080;
-    let rewards = [], visuals = {}, media = { images: [], sounds: [] }, cur = null, natural = null;
+    let rewards = [], visuals = {}, media = { images: [], sounds: [] }, cur = null, natural = null, stepTypes = {}, obs = null;
 
     const say = (t, ok) => { $('ro-msg').className = 'text-xs ' + (ok === false ? 'text-amber-400' : 'text-emerald-400'); $('ro-msg').textContent = t || ''; };
     const key = (t) => (t || '').trim().toLowerCase();
@@ -81,23 +108,32 @@
         rewards = (a.rewards || []).map(r => r.title);
         visuals = {}; (b.visuals || []).forEach(v => visuals[key(v.title)] = v);
         Object.values(visuals).forEach(v => { if (!rewards.some(t => key(t) === key(v.title))) rewards.push(v.title); });   // récompense supprimée sur Twitch : visuel gardé
-        media = b.media || media;
+        media = b.media || media; stepTypes = b.step_types || {}; showLog(b.log);
         list();
+        if (pendingOpen) { open(pendingOpen); pendingOpen = null; }
+        if (!obs) fetch('/admin/api/automations/obs').then(r => r.json()).then(o => { obs = o; $('ro-obswarn').classList.toggle('hidden', !!o.connected); if (cur) drawSteps(readSteps()); }).catch(() => {});
     }
+    let pendingOpen = null;
+    // Ouverture depuis le bouton « Actions » de la vue d'ensemble
+    window.roOpen = (title) => { if (rewards.length) open(title); else pendingOpen = title; };
+    const showLog = (l) => { $('ro-log').innerHTML = (l || []).map(x => '<div>' + esc(x) + '</div>').join('') || 'Rien pour l\'instant.'; };
+    $('ro-logr').onclick = () => fetch('/admin/api/reward-overlay').then(r => r.json()).then(b => showLog(b.log)).catch(() => {});
     function list() {
         const q = $('ro-filter').value.toLowerCase();
         $('ro-list').innerHTML = rewards.filter(t => t.toLowerCase().includes(q)).map(t => {
             const v = visuals[key(t)];
             return '<button class="w-full text-left px-3 py-2 rounded-lg text-sm flex items-center gap-2 ' + (cur && key(cur.title) === key(t) ? 'bg-indigo-500/20 text-white' : 'hover:bg-slate-800 text-slate-300') + '" data-t="' + esc(t) + '">'
-                + '<i class="fas ' + (v ? (v.enabled ? 'fa-image text-emerald-400' : 'fa-image text-slate-500') : 'fa-plus text-slate-600') + ' w-4"></i><span class="truncate">' + esc(t) + '</span></button>';
+                + '<i class="fas ' + (v ? (v.enabled ? 'fa-bolt text-emerald-400' : 'fa-bolt text-slate-500') : 'fa-plus text-slate-600') + ' w-4"></i><span class="truncate">' + esc(t) + '</span></button>';
         }).join('');
         $('ro-list').querySelectorAll('[data-t]').forEach(b => b.onclick = () => open(b.dataset.t));
     }
     function open(title) {
         const v = visuals[key(title)];
-        cur = v ? Object.assign({}, v) : { title, media: '', sound: '', x: 660, y: 240, w: 600, h: 600, duration: 6, volume: 100, enabled: true };
+        cur = v ? Object.assign({}, v) : { title, media: '', sound: '', x: 660, y: 240, w: 600, h: 600, duration: 6, volume: 100, enabled: true, messages: [], chat_delay: 0, steps: [] };
         $('ro-empty').classList.add('hidden'); $('ro-editor').classList.remove('hidden');
-        $('ro-title').textContent = title + (v ? '' : ' — pas encore de visuel');
+        $('ro-title').textContent = title + (v ? '' : ' — rien de réglé pour l\'instant');
+        $('ro-msgs').value = (cur.messages || []).join('\n'); $('ro-cdelay').value = cur.chat_delay || 0;
+        drawSteps(cur.steps || []);
         $('ro-enabled').checked = cur.enabled;
         $('ro-media').innerHTML = opts(media.images, cur.media, '— aucune —');
         $('ro-sound').innerHTML = opts(media.sounds, cur.sound, '— aucun —');
@@ -107,6 +143,7 @@
     // Aperçu dans la boîte + proportions de l'image / vidéo
     function preview() {
         const f = $('ro-media').value; natural = null; $('ro-listen').classList.add('hidden');
+        $('ro-place').classList.toggle('hidden', !f);
         if (!f) { $('ro-prev').innerHTML = '<div class="w-full h-full flex items-center justify-center text-slate-300 text-xs bg-slate-900/60">son seul</div>'; return; }
         const u = '/static/commands/images/' + encodeURIComponent(f);
         if (/\.(mp4|webm)$/i.test(f)) {
@@ -175,7 +212,62 @@
         if (kind === 'image') $('ro-media').onchange();
         say('Fichier envoyé : ' + j.filename + ' (pense à enregistrer)');
     }));
-    const body = () => Object.assign({}, cur, { media: $('ro-media').value, sound: $('ro-sound').value, duration: parseFloat($('ro-duration').value || 0),
+
+    // ── Étapes OBS / Twitch (même moteur que les automatisations, réglées ici pour la récompense) ──
+    const opt = (list, c, ph) => '<option value="">' + esc(ph) + '</option>' + list.map(n => '<option' + (n === c ? ' selected' : '') + '>' + esc(n) + '</option>').join('')
+        + (c && !list.includes(c) ? '<option selected>' + esc(c) + '</option>' : '');
+    let stepKey = 0;
+    function stepFields(st) {
+        const t = st.type, o = obs || { scenes: [], items: {}, inputs: [] };
+        const sel = (f, l, ph) => '<select data-s="' + f + '" class="input-dark rounded-lg px-2 py-2 text-sm min-w-[11rem]">' + opt(l, st[f] || '', ph) + '</select>';
+        const num = (f, label, v, extra) => '<label class="flex items-center gap-1.5 text-xs text-slate-400">' + label + '<input data-s="' + f + '" type="number" min="0" ' + (extra || '') + ' value="' + esc(v ?? 0) + '" class="input-dark w-20 rounded-lg px-2 py-2 text-sm"></label>';
+        let h = '';
+        if (t === 'show' || t === 'hide') h += sel('scene', Object.keys(o.items || {}), '— scène ou groupe —') + sel('source', (o.items || {})[st.scene] || [], '— source —');
+        if (t === 'scene') h += sel('scene', o.scenes || [], '— scène —');
+        if (t === 'filter_on' || t === 'filter_off') h += sel('source', (o.inputs || []).concat(o.scenes || []), '— source —') + '<input data-s="filter" list="roflt-' + st._k + '" value="' + esc(st.filter || '') + '" placeholder="nom du filtre" class="input-dark rounded-lg px-2 py-2 text-sm w-44"><datalist id="roflt-' + st._k + '"></datalist>';
+        if (t === 'mute' || t === 'unmute') h += sel('source', o.inputs || [], '— source audio —');
+        if (t === 'timeout') h += '<label class="flex items-center gap-1.5 text-xs text-slate-400">viewer<input data-s="target" value="' + esc(st.target || '{input}') + '" class="input-dark w-32 rounded-lg px-2 py-2 text-sm" title="{input} = pseudo écrit par le viewer dans la récompense"></label>' + num('seconds', 'durée (s)', st.seconds || 60, 'max="1209600"');
+        if (t === 'show' || t === 'filter_on' || t === 'mute') h += num('duration', 'puis revenir après (s, 0 = jamais)', st.duration, 'max="3600" step="0.5"');
+        return h;
+    }
+    function stepRow(st) {
+        st = Object.assign({ type: 'show', delay: 0 }, st); st._k = ++stepKey;
+        return '<div class="flex flex-wrap items-center gap-2 p-2 rounded-lg bg-slate-900/50" data-step="' + st._k + '">'
+            + '<select data-s="type" class="input-dark rounded-lg px-2 py-2 text-sm">' + Object.entries(stepTypes).map(([k, l]) => '<option value="' + k + '"' + (k === st.type ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select>'
+            + '<span class="contents" data-sf>' + stepFields(st) + '</span>'
+            + '<label class="flex items-center gap-1.5 text-xs text-slate-400"><i class="fas fa-hourglass-half"></i>après<input data-s="delay" type="number" min="0" max="600" step="0.5" value="' + esc(st.delay || 0) + '" class="input-dark w-20 rounded-lg px-2 py-2 text-sm">s</label>'
+            + '<button class="ml-auto px-2.5 py-2 rounded-lg bg-slate-700 hover:bg-red-600 text-xs" data-srm title="Supprimer cette étape"><i class="fas fa-trash"></i></button></div>';
+    }
+    function readStep(row) {
+        const v = (f) => { const e = row.querySelector('[data-s="' + f + '"]'); return e ? e.value : ''; };
+        return { type: v('type'), scene: v('scene'), source: v('source'), filter: v('filter'), target: v('target'),
+                 seconds: parseInt(v('seconds') || 0, 10), delay: parseFloat(v('delay') || 0), duration: parseFloat(v('duration') || 0) };
+    }
+    const readSteps = () => [...$('ro-steps').querySelectorAll('[data-step]')].map(readStep);
+    function bindStep(row) {
+        const refresh = () => { const st = readStep(row); st._k = row.dataset.step; row.querySelector('[data-sf]').innerHTML = stepFields(st); wire(); };
+        const loadFilters = async () => {
+            const src = row.querySelector('[data-s="source"]'), dl = row.querySelector('datalist');
+            if (!src || !dl || !src.value) return;
+            const j = await fetch('/admin/api/automations/obs/filters?source=' + encodeURIComponent(src.value)).then(r => r.json()).catch(() => ({}));
+            dl.innerHTML = (j.filters || []).map(f => '<option value="' + esc(f) + '"></option>').join('');
+        };
+        function wire() {
+            const sc = row.querySelector('[data-s="scene"]'), src = row.querySelector('[data-s="source"]');
+            if (sc && /show|hide/.test(row.querySelector('[data-s="type"]').value)) sc.onchange = refresh;
+            if (src && row.querySelector('datalist')) { src.onchange = loadFilters; loadFilters(); }
+        }
+        row.querySelector('[data-s="type"]').onchange = refresh;
+        row.querySelector('[data-srm]').onclick = () => row.remove();
+        wire();
+    }
+    function drawSteps(steps) {
+        $('ro-steps').innerHTML = steps.map(stepRow).join('');
+        $('ro-steps').querySelectorAll('[data-step]').forEach(bindStep);
+    }
+    $('ro-sadd').onclick = () => { const d = document.createElement('div'); d.innerHTML = stepRow({ type: 'show' }); const row = d.firstChild; $('ro-steps').appendChild(row); bindStep(row); };
+    const body = () => Object.assign({}, cur, {
+        messages: $('ro-msgs').value.split('\n').map(x => x.trim()).filter(Boolean), chat_delay: parseFloat($('ro-cdelay').value || 0), steps: readSteps(), media: $('ro-media').value, sound: $('ro-sound').value, duration: parseFloat($('ro-duration').value || 0),
                                                volume: parseInt($('ro-volume').value, 10), enabled: $('ro-enabled').checked });
     async function send(method, url, b) {
         const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined });
@@ -189,12 +281,13 @@
     };
     $('ro-test').onclick = async () => {
         const { ok, j } = await send('POST', '/admin/api/reward-overlay/test', body());
-        say(ok ? 'Envoyé sur l\'overlay (visible si le widget est dans la scène OBS affichée).' : (j.detail || 'Erreur'), ok);
+        say(ok ? (j.message || 'Test lancé.') : (j.detail || 'Erreur'), ok);
+        if (ok) setTimeout(() => $('ro-logr').click(), 2500);
     };
     $('ro-del').onclick = async () => {
-        if (!visuals[key(cur.title)] || !confirm('Retirer le visuel de « ' + cur.title + ' » ?')) return;
+        if (!visuals[key(cur.title)] || !confirm('Retirer toutes les actions de « ' + cur.title + ' » ?')) return;
         await send('DELETE', '/admin/api/reward-overlay?title=' + encodeURIComponent(cur.title));
-        delete visuals[key(cur.title)]; open(cur.title); say('Visuel retiré.');
+        delete visuals[key(cur.title)]; open(cur.title); say('Actions retirées.');
     };
     load();
 })();

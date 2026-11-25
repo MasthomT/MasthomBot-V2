@@ -361,22 +361,7 @@
         const el = j.rule && $('cards').querySelector('[data-id="' + j.rule.id + '"]');
         if (el) { openOnly(el); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
     });
-    // Arrivée depuis la page Récompenses (#reward=Titre) : ouvre l'automatisation de cette récompense, ou en prépare une
-    async function fromReward() {
-        const m = location.hash.match(/^#reward=(.+)$/); if (!m) return;
-        const title = decodeURIComponent(m[1]); history.replaceState(null, '', location.pathname);
-        let rule = rules.find(r => r.trigger === 'reward' && (r.text_filter || '').trim().toLowerCase() === title.trim().toLowerCase());
-        if (!rule) {
-            const { ok, j } = await api('POST', '/admin/api/automations', { trigger: 'reward', name: 'Récompense · ' + title });
-            if (!ok) return;
-            // créée DÉSACTIVÉE, filtrée sur ce titre : rien ne part tant que tu ne l'as pas réglée et activée
-            await api('PUT', '/admin/api/automations/' + j.rule.id, { rule: Object.assign({}, j.rule, { text_filter: title, enabled: false }) });
-            await load(); rule = rules.find(r => r.id === j.rule.id);
-        }
-        const el = rule && $('cards').querySelector('[data-id="' + rule.id + '"]');
-        if (el) { openOnly(el); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-    }
-    load().then(fromReward);
+    load();
 })();
 </script>
 </body>

@@ -33,7 +33,7 @@
             <div class="tab" data-tab="overview"><i class="fas fa-list mr-2"></i>Vue d'ensemble</div>
             <div class="tab" data-tab="podium"><i class="fas fa-ranking-star mr-2"></i>First / Deuz / Troiz</div>
             <div class="tab" data-tab="aura"><i class="fas fa-palette mr-2"></i>Aura</div>
-            <div class="tab" data-tab="overlay"><i class="fas fa-display mr-2"></i>Overlay</div>
+            <div class="tab" data-tab="overlay"><i class="fas fa-bolt mr-2"></i>Actions (vidéo, son, message, OBS)</div>
         </nav>
 
         <!-- Vue d'ensemble -->
@@ -125,7 +125,8 @@
     let editing = null, dashUrl = '#';
     const btn = (cls, act, id, label, title) => '<button class="px-2.5 py-1.5 rounded-lg text-xs font-bold ' + cls + '" data-act="' + act + '" data-id="' + esc(id) + '"' + (title ? ' title="' + esc(title) + '"' : '') + '>' + label + '</button>';
     function actions(r) {
-        const auto = '<a href="/admin/automatisations#reward=' + encodeURIComponent(r.title) + '" class="px-2.5 py-1.5 rounded-lg text-xs font-bold mr-1 ' + (r.automations ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30' : 'bg-slate-700 hover:bg-slate-600') + '" title="Son, image, message, étapes OBS / Twitch quand un viewer prend cette récompense"><i class="fas fa-bolt mr-1"></i>Actions' + (r.automations ? ' (' + r.automations + ')' : '') + '</a>';
+        const n = (r.actions || []).length;
+        const auto = '<button data-ract="' + esc(r.title) + '" class="px-2.5 py-1.5 rounded-lg text-xs font-bold mr-1 ' + (n ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30' : 'bg-slate-700 hover:bg-slate-600') + '" title="' + esc(n ? 'Fait : ' + r.actions.join(', ') : 'Vidéo, son, message, étapes OBS / Twitch quand un viewer prend cette récompense') + '"><i class="fas fa-bolt mr-1"></i>Actions' + (n ? ' · ' + esc(r.actions.join(', ')) : '') + '</button>';
         return auto + actionsMain(r);
     }
     function actionsMain(r) {
@@ -156,6 +157,7 @@
         return { ok: res.ok, j: await res.json().catch(() => ({})) };
     }
     function bindRows() {
+        $('ov-rows').querySelectorAll('[data-ract]').forEach(b => b.onclick = () => { showTab('overlay'); window.roOpen && window.roOpen(b.dataset.ract); window.scrollTo({ top: 0, behavior: 'smooth' }); });
         $('ov-rows').querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', async () => {
             const id = b.dataset.id, r = all.find(x => x.id === id), act = b.dataset.act;
             if (act === 'edit') { editing = id; return render(); }

@@ -48,12 +48,8 @@ async def admin_rewards_overview():
     aura_cfg = await aura_service.get_config()
     podium_ids = {c["reward_id"]: f"Podium · {c['title']}" for c in await podium_service.get_config() if c["reward_id"]}
     known_ids = RC.resolve(KNOWN_BY_ID)
-    from app.services import automation_service
-    n_auto: dict[str, int] = {}
-    for rule in await automation_service.list_rules():       # automatisations « Récompense » visant un titre précis
-        if rule["trigger"] == "reward" and rule["text_filter"].strip():
-            k = rule["text_filter"].strip().lower()
-            n_auto[k] = n_auto.get(k, 0) + 1
+    from app.services import reward_overlay_service
+    actions = {v["title"].strip().lower(): v for v in await reward_overlay_service.list_visuals()}
     pend = await RC.pending()
     # Original déjà supprimé sur Twitch mais « Finaliser » pas cliqué : on finalise tout seul, sinon la copie
     # (désactivée, nom provisoire) resterait cachée et la récompense semblerait avoir disparu.
@@ -97,10 +93,26 @@ async def admin_rewards_overview():
             "handler": handler,
             "prompt": r.get("prompt") or "",
             "clone_pending": r["id"] in pend,
-            "automations": n_auto.get((r.get("title") or "").strip().lower(), 0),
+            "actions": _summary(actions.get((r.get("title") or "").strip().lower())),
         })
     rewards.sort(key=lambda x: (not x["enabled"], x["title"].lower()))
     return {"rewards": rewards}
+
+
+def _summary(v: dict | None) -> list[str]:
+    """Ce que fait la récompense (page Récompenses › Actions), en court."""
+    if not v:
+        return []
+    out = []
+    if v.get("media"):
+        out.append("vidéo" if v["media"].lower().endswith((".mp4", ".webm")) else "image")
+    if v.get("sound"):
+        out.append("son")
+    if v.get("messages"):
+        out.append("message")
+    if v.get("steps"):
+        out.append(f"{len(v['steps'])} étape(s)")
+    return out + ([] if v.get("enabled", True) else ["désactivé"])
 
 
 # ── Clonage (pour que le bot puisse gérer une récompense créée sur Twitch) et modification ──

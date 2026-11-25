@@ -1,7 +1,7 @@
 """Automatisations : « quand ce déclencheur arrive (et que les conditions sont remplies), le bot écrit ce message dans le t'chat ».
 
-Chaque automatisation créée dans /admin/automatisations a : un déclencheur (raid lancé, follow, sub, bits, récompense,
-début / fin de live…), des conditions (seuil, titre de récompense), un ou plusieurs messages (un est tiré au hasard),
+Chaque automatisation créée dans /admin/automatisations a : un déclencheur (raid lancé, follow, sub, bits,
+début / fin de live…), des conditions (seuil, nom de scène), un ou plusieurs messages (un est tiré au hasard),
 un délai et une attente minimale entre deux envois.
 
 Les événements arrivent d'EventSub (`on_eventsub`) ; chaque déclencheur y est traduit en variables ({user}, {viewers}…).
@@ -46,12 +46,6 @@ TRIGGERS = {
               "vars": {"user": "pseudo", "bits": "nombre de bits", "message": "message accompagnant les bits"},
               "sample": {"user": "BitsTest", "bits": 500, "message": "GG !"}, "value": ("bits", "Seulement à partir de (bits)"), "text": None,
               "default": "💎 Merci {user} pour les {bits} bits ! 💜"},
-    "reward": {"group": "Points de chaîne", "label": "Récompense de points de chaîne", "icon": "fa-trophy",
-               "description": "Quand un viewer prend une récompense (toutes, ou une seule en donnant son titre exact).",
-               "vars": {"user": "pseudo", "reward": "titre de la récompense", "input": "message écrit par le viewer", "cost": "prix en points"},
-               "sample": {"user": "ViewerTest", "reward": "Hydrate-toi", "input": "", "cost": 200},
-               "value": ("cost", "Seulement à partir de (points)"), "text": ("reward", "Titre exact de la récompense (vide = toutes)"),
-               "default": "🎯 {user} a pris « {reward} » !"},
     "ban": {"group": "Modération", "label": "Sanction (ban / timeout)", "icon": "fa-gavel", "description": "Quelqu'un est banni ou mis en timeout.",
             "vars": {"user": "pseudo sanctionné", "kind": "Ban ou Timeout", "mod": "qui a sanctionné", "reason": "raison"},
             "sample": {"user": "TrollTest", "kind": "Timeout", "mod": "ModoTest", "reason": "spam"}, "value": None, "text": None,
@@ -346,17 +340,27 @@ async def _overlay(kind: str, filename: str) -> bool:
         return False
 
 
-async def _send(rule: dict, values: dict, test: bool = False) -> bool:
+async def run_actions(rule: dict, values: dict, test: bool = False, log=None) -> bool:
+    """Même moteur, utilisé par les récompenses (page Récompenses) avec leur propre journal."""
+    try:
+        return await _send(rule, values, test=test, log=log)
+    except Exception as e:
+        logger.error(f"❌ [ACTIONS] « {rule.get('name')} » : {e}")
+        return False
+
+
+async def _send(rule: dict, values: dict, test: bool = False, log=None) -> bool:
     """Exécute les actions de la règle en parallèle, chacune après son propre délai (compté depuis le déclencheur) :
     son, image, et message(s) — tous à la suite (« all ») ou un seul au hasard (« random »)."""
     from app.services import alerts_service
     tag = "test · " if test else ""
+    _log_ = log or _log
 
     async def media(kind: str, label: str, delay: float) -> bool:
         if delay > 0:
             await asyncio.sleep(delay)
         ok = await _overlay(kind, rule[kind])
-        await _log(rule["name"], tag + ("" if ok else "NON ENVOYÉ (overlay injoignable) · ") + f"{label} : {rule[kind]}")
+        await _log_(rule["name"], tag + ("" if ok else "NON ENVOYÉ (overlay injoignable) · ") + f"{label} : {rule[kind]}")
         return ok
 
     async def chat() -> bool:
@@ -370,7 +374,7 @@ async def _send(rule: dict, values: dict, test: bool = False) -> bool:
             text = render(template, values)
             sent = await alerts_service.send_chat(text)
             ok_all = ok_all and sent
-            await _log(rule["name"], tag + ("" if sent else "NON ENVOYÉ (bot non connecté au chat) · ") + text)
+            await _log_(rule["name"], tag + ("" if sent else "NON ENVOYÉ (bot non connecté au chat) · ") + text)
             logger.info(f"⚡ [AUTOMATISATION] « {rule['name']} » → {'envoyé' if sent else 'échec'} : {text}")
         return ok_all
 
@@ -392,10 +396,10 @@ async def _send(rule: dict, values: dict, test: bool = False) -> bool:
                     await asyncio.sleep(st["duration"])
                     await obs_catalog.run_step(dict(st, type=undo))
                     done += f" ({st['duration']:g} s)"
-            await _log(rule["name"], tag + done)
+            await _log_(rule["name"], tag + done)
             return True
         except Exception as e:
-            await _log(rule["name"], tag + f"ÉCHEC {STEP_TYPES[st['type']]} : {e}")
+            await _log_(rule["name"], tag + f"ÉCHEC {STEP_TYPES[st['type']]} : {e}")
             logger.warning(f"⚠️ [AUTOMATISATION] « {rule['name']} » étape {st['type']} : {e}")
             return False
 
@@ -497,10 +501,7 @@ def translate(sub_type: str, event: dict, broadcaster_id: str) -> tuple[str, dic
     if sub_type == "channel.cheer":
         return "cheer", {"user": "Anonyme" if g("is_anonymous") else g("user_name", "Anonyme"), "bits": int(g("bits", 0) or 0),
                          "message": g("message", "")}
-    if sub_type == "channel.channel_points_custom_reward_redemption.add":
-        rw = g("reward") or {}
-        return "reward", {"user": g("user_name", "Inconnu"), "reward": rw.get("title", ""), "input": g("user_input", "") or "",
-                          "cost": int(rw.get("cost", 0) or 0)}
+    # Récompenses de points de chaîne : pas ici, elles ont leurs propres actions (page Récompenses, reward_overlay_service)
     if sub_type == "channel.ban":
         return "ban", {"user": g("user_name", "Inconnu"), "kind": "Ban" if g("is_permanent") else "Timeout",
                        "mod": g("moderator_user_name", "Modo"), "reason": g("reason") or "aucune raison"}
@@ -524,7 +525,9 @@ async def on_eventsub(sub_type: str, event: dict, broadcaster_id: str):
     try:
         if sub_type == "channel.channel_points_custom_reward_redemption.add":   # overlay « Récompenses »
             from app.services import reward_overlay_service
-            await reward_overlay_service.on_redemption(((event or {}).get("reward") or {}).get("title", ""), (event or {}).get("user_name", ""))
+            ev = event or {}
+            await reward_overlay_service.on_redemption((ev.get("reward") or {}).get("title", ""), ev.get("user_name", ""),
+                                                       ev.get("user_input", "") or "", int((ev.get("reward") or {}).get("cost", 0) or 0))
     except Exception as e:
         logger.error(f"❌ [OVERLAY RÉCOMPENSES] {e}")
     try:
