@@ -18,7 +18,29 @@ from app.core.database import get_db_connection
 logger = logging.getLogger("masthbot.reward_actions")
 
 FIELDS = ("title", "media", "sound", "x", "y", "w", "h", "duration", "volume", "enabled")
-COLS = "title, media, sound, x, y, w, h, duration, volume, enabled, messages, chat_delay, steps"
+COLS = "title, media, sound, x, y, w, h, duration, volume, enabled, messages, chat_delay, steps, chat_mode"
+
+# Viewers qui ont parlé récemment (pour {random} : « un viewer au hasard qui a parlé », comme Streamer.bot)
+_chatters: dict[str, tuple[str, float]] = {}
+CHATTER_WINDOW = 2 * 3600
+BOTS = {"streamelements", "nightbot", "streamlabs", "moobot", "fossabot", "wizebot", "sery_bot", "soundalerts", "kofistreambot"}
+
+
+def note_chatter(login: str, display: str):
+    """Appelé à chaque message du t'chat (twitch_service)."""
+    _chatters[login.lower()] = (display or login, time.time())
+    if len(_chatters) > 2000:
+        old = sorted(_chatters, key=lambda k: _chatters[k][1])[:500]
+        for k in old:
+            _chatters.pop(k, None)
+
+
+def random_chatter(exclude: str = "") -> str:
+    from app.core.config import settings
+    import random
+    now, skip = time.time(), {exclude.lower(), settings.TWITCH_BOT_USERNAME.lower()} | BOTS
+    pool = [d for k, (d, t) in _chatters.items() if now - t < CHATTER_WINDOW and k not in skip]
+    return random.choice(pool) if pool else "quelqu'un"
 _ready = False
 _events: list[dict] = []          # file circulaire des derniers événements (id croissant)
 _next_id = int(time.time() * 1000)
@@ -37,6 +59,7 @@ async def _ensure():
         await db.execute("ALTER TABLE reward_visuals ADD COLUMN IF NOT EXISTS messages TEXT NOT NULL DEFAULT '[]'")
         await db.execute("ALTER TABLE reward_visuals ADD COLUMN IF NOT EXISTS chat_delay DOUBLE PRECISION NOT NULL DEFAULT 0")
         await db.execute("ALTER TABLE reward_visuals ADD COLUMN IF NOT EXISTS steps TEXT NOT NULL DEFAULT '[]'")
+        await db.execute("ALTER TABLE reward_visuals ADD COLUMN IF NOT EXISTS chat_mode TEXT NOT NULL DEFAULT 'all'")
     _ready = True
 
 
@@ -82,8 +105,11 @@ def clean(raw: dict) -> dict:
     if sound and sound not in files["sounds"]:
         raise ValueError(f"Son introuvable : {sound}")
     msgs = [str(m).strip()[:450] for m in (raw.get("messages") or []) if str(m).strip()]
-    if len(msgs) > 10:
-        raise ValueError("10 messages au maximum.")
+    if len(msgs) > 200:
+        raise ValueError("200 messages au maximum.")
+    chat_mode = raw.get("chat_mode") or "all"
+    if chat_mode not in ("all", "random"):
+        raise ValueError("Mode d'envoi des messages inconnu.")
     if any(m.lower().startswith(("!timer", "!chrono")) for m in msgs):
         raise ValueError("Le bot ne réagit pas à ses propres messages : « !timer » écrit par le bot ne lance rien. "
                          "Utilise l'étape « Lancer le minuteur à l'écran » dans Étapes OBS / Twitch.")
@@ -105,7 +131,7 @@ def clean(raw: dict) -> dict:
         raise ValueError("Délai du message : 0 à 120 secondes.")
     return {"title": title, "media": media, "sound": sound, "x": x, "y": y, "w": w, "h": h,
             "duration": duration, "volume": volume, "enabled": bool(raw.get("enabled", True)),
-            "messages": msgs, "chat_delay": chat_delay, "steps": steps}
+            "messages": msgs, "chat_delay": chat_delay, "steps": steps, "chat_mode": chat_mode}
 
 
 async def save_visual(raw: dict) -> dict:
@@ -113,15 +139,15 @@ async def save_visual(raw: dict) -> dict:
     await _ensure()
     async with get_db_connection() as db:
         await db.execute("""INSERT INTO reward_visuals (title_key, title, media, sound, x, y, w, h, duration, volume, enabled,
-              messages, chat_delay, steps, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
+              messages, chat_delay, steps, chat_mode, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
             ON CONFLICT (title_key) DO UPDATE SET title = EXCLUDED.title, media = EXCLUDED.media, sound = EXCLUDED.sound,
               x = EXCLUDED.x, y = EXCLUDED.y, w = EXCLUDED.w, h = EXCLUDED.h, duration = EXCLUDED.duration,
               volume = EXCLUDED.volume, enabled = EXCLUDED.enabled, messages = EXCLUDED.messages,
-              chat_delay = EXCLUDED.chat_delay, steps = EXCLUDED.steps, updated_at = NOW()""",
+              chat_delay = EXCLUDED.chat_delay, steps = EXCLUDED.steps, chat_mode = EXCLUDED.chat_mode, updated_at = NOW()""",
                          (_key(v["title"]), v["title"], v["media"], v["sound"], v["x"], v["y"], v["w"], v["h"],
                           v["duration"], v["volume"], v["enabled"], json.dumps(v["messages"], ensure_ascii=False),
-                          v["chat_delay"], json.dumps(v["steps"], ensure_ascii=False)))
+                          v["chat_delay"], json.dumps(v["steps"], ensure_ascii=False), v["chat_mode"]))
     return v
 
 
@@ -168,7 +194,9 @@ def fire(v: dict, values: dict, test: bool = False):
         push(v, values.get("user", ""), test=test)
     if v.get("messages") or v.get("steps"):
         from app.services import automation_service as A
-        rule = {"name": f"Récompense « {v['title']} »", "messages": v.get("messages") or [], "mode": "all", "gap": 1.5,
+        if any("{random}" in m for m in v.get("messages") or []) or any("{random}" in (st.get("target") or "") + (st.get("label") or "") + (st.get("text") or "") for st in v.get("steps") or []):
+            values = dict(values, random=random_chatter(values.get("user", "")))      # le même viewer pour tous les messages
+        rule = {"name": f"Récompense « {v['title']} »", "messages": v.get("messages") or [], "mode": v.get("chat_mode") or "all", "gap": 1.5,
                 "delay": float(v.get("chat_delay") or 0), "do_chat": bool(v.get("messages")), "sound": "", "image": "",
                 "steps": v.get("steps") or []}
         asyncio.create_task(A.run_actions(rule, values, test=test, log=_log))

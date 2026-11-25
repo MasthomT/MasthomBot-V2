@@ -59,11 +59,12 @@
                 <!-- Message(s) dans le t'chat -->
                 <div class="rounded-xl border border-slate-700/70 p-4 mt-4">
                     <div class="flex flex-wrap items-center gap-3 mb-2">
-                        <div class="text-xs text-slate-300 font-bold flex-1"><i class="fas fa-comment-dots mr-1 text-indigo-400"></i>Message(s) dans le t'chat <span class="font-normal text-slate-500">— un par ligne, envoyés à la suite ; vide = aucun</span></div>
+                        <div class="text-xs text-slate-300 font-bold flex-1"><i class="fas fa-comment-dots mr-1 text-indigo-400"></i>Message(s) dans le t'chat <span class="font-normal text-slate-500">— un par ligne ; vide = aucun</span> <span id="ro-mcount" class="font-normal text-slate-500"></span></div>
+                        <select id="ro-cmode" class="input-dark rounded-lg px-2 py-1.5 text-xs"><option value="all">tous, à la suite</option><option value="random">un seul, au hasard</option></select>
                         <label class="flex items-center gap-1.5 text-xs text-slate-400"><i class="fas fa-hourglass-half"></i>après<input id="ro-cdelay" type="number" min="0" max="120" step="0.5" class="input-dark w-20 rounded-lg px-2 py-1.5 text-sm">s</label>
                     </div>
-                    <textarea id="ro-msgs" rows="2" class="input-dark w-full rounded-lg px-3 py-2 text-sm" placeholder="ex. Hey salut {user} !"></textarea>
-                    <div class="text-[11px] text-slate-500 mt-1">Variables : <code>{user}</code> pseudo · <code>{input}</code> texte écrit par le viewer · <code>{reward}</code> titre · <code>{cost}</code> prix</div>
+                    <textarea id="ro-msgs" rows="3" class="input-dark w-full rounded-lg px-3 py-2 text-sm" placeholder="ex. Hey salut {user} !"></textarea>
+                    <div class="text-[11px] text-slate-500 mt-1">Variables : <code>{user}</code> pseudo · <code>{random}</code> un viewer au hasard qui a parlé (2 dernières heures) · <code>{input}</code> texte écrit par le viewer · <code>{reward}</code> titre · <code>{cost}</code> prix</div>
                 </div>
 
                 <!-- Étapes OBS / Twitch -->
@@ -134,6 +135,7 @@
         $('ro-empty').classList.add('hidden'); $('ro-editor').classList.remove('hidden');
         $('ro-title').textContent = title + (v ? '' : ' — rien de réglé pour l\'instant');
         $('ro-msgs').value = (cur.messages || []).join('\n'); $('ro-cdelay').value = cur.chat_delay || 0;
+        $('ro-cmode').value = cur.chat_mode || 'all'; countMsgs();
         drawSteps(cur.steps || []);
         $('ro-enabled').checked = cur.enabled;
         $('ro-media').innerHTML = opts(media.images, cur.media, '— aucune —');
@@ -228,6 +230,7 @@
         if (t === 'filter_on' || t === 'filter_off') h += sel('source', (o.inputs || []).concat(o.scenes || []), '— source —') + '<input data-s="filter" list="roflt-' + st._k + '" value="' + esc(st.filter || '') + '" placeholder="nom du filtre" class="input-dark rounded-lg px-2 py-2 text-sm w-44"><datalist id="roflt-' + st._k + '"></datalist>';
         if (t === 'mute' || t === 'unmute') h += sel('source', o.inputs || [], '— source audio —');
         if (t === 'timeout') h += '<label class="flex items-center gap-1.5 text-xs text-slate-400">viewer<input data-s="target" value="' + esc(st.target || '{input}') + '" class="input-dark w-32 rounded-lg px-2 py-2 text-sm" title="{input} = pseudo écrit par le viewer dans la récompense"></label>' + num('seconds', 'durée (s)', st.seconds || 60, 'max="1209600"');
+        if (t === 'message') h += '<input data-s="text" value="' + esc(st.text || '') + '" placeholder="texte ({user}, {random}, {input}…)" maxlength="450" class="input-dark rounded-lg px-2 py-2 text-sm flex-1 min-w-[16rem]">';
         if (t === 'timer') h += num('minutes', 'durée (min)', st.minutes || 5, 'max="600"') + '<label class="flex items-center gap-1.5 text-xs text-slate-400">texte<input data-s="label" value="' + esc(st.label || '') + '" placeholder="OBJECTIF" class="input-dark w-36 rounded-lg px-2 py-2 text-sm" title="{user}, {input}… possibles"></label>';
         if (t === 'show' || t === 'filter_on' || t === 'mute') h += num('duration', 'puis revenir après (s, 0 = jamais)', st.duration, 'max="3600" step="0.5"');
         return h;
@@ -243,7 +246,7 @@
     function readStep(row) {
         const v = (f) => { const e = row.querySelector('[data-s="' + f + '"]'); return e ? e.value : ''; };
         return { type: v('type'), scene: v('scene'), source: v('source'), filter: v('filter'), target: v('target'),
-                 seconds: parseInt(v('seconds') || 0, 10), minutes: parseInt(v('minutes') || 0, 10), label: v('label'), delay: parseFloat(v('delay') || 0), duration: parseFloat(v('duration') || 0) };
+                 seconds: parseInt(v('seconds') || 0, 10), minutes: parseInt(v('minutes') || 0, 10), label: v('label'), text: v('text'), delay: parseFloat(v('delay') || 0), duration: parseFloat(v('duration') || 0) };
     }
     const readSteps = () => [...$('ro-steps').querySelectorAll('[data-step]')].map(readStep);
     function bindStep(row) {
@@ -267,9 +270,15 @@
         $('ro-steps').innerHTML = steps.map(stepRow).join('');
         $('ro-steps').querySelectorAll('[data-step]').forEach(bindStep);
     }
+    function countMsgs() {
+        const n = $('ro-msgs').value.split('\n').filter(x => x.trim()).length;
+        $('ro-mcount').textContent = n > 1 ? '(' + n + ' messages)' : '';
+        $('ro-msgs').rows = Math.min(14, Math.max(3, n + 1));
+    }
+    $('ro-msgs').addEventListener('input', countMsgs);
     $('ro-sadd').onclick = () => { const d = document.createElement('div'); d.innerHTML = stepRow({ type: 'show' }); const row = d.firstChild; $('ro-steps').appendChild(row); bindStep(row); };
     const body = () => Object.assign({}, cur, {
-        messages: $('ro-msgs').value.split('\n').map(x => x.trim()).filter(Boolean), chat_delay: parseFloat($('ro-cdelay').value || 0), steps: readSteps(), media: $('ro-media').value, sound: $('ro-sound').value, duration: parseFloat($('ro-duration').value || 0),
+        messages: $('ro-msgs').value.split('\n').map(x => x.trim()).filter(Boolean), chat_delay: parseFloat($('ro-cdelay').value || 0), chat_mode: $('ro-cmode').value, steps: readSteps(), media: $('ro-media').value, sound: $('ro-sound').value, duration: parseFloat($('ro-duration').value || 0),
                                                volume: parseInt($('ro-volume').value, 10), enabled: $('ro-enabled').checked });
     async function send(method, url, b) {
         const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined });

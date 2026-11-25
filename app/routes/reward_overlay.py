@@ -54,6 +54,8 @@ async def reward_overlay_test(payload: dict):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     R.fire(v, {"user": "Test", "reward": v["title"], "input": "Test", "cost": 0}, test=True)
+    if v["chat_mode"] == "random" and len(v["messages"]) > 1:
+        v = dict(v, messages=v["messages"][:1])          # pour le compte rendu : un seul message part
     done = [x for x, on in (("image / vidéo", v["media"]), ("son", v["sound"]), (f"{len(v['messages'])} message(s)", v["messages"]),
                             (f"{len(v['steps'])} étape(s) OBS / Twitch", v["steps"])) if on]
     note = " L'image / vidéo n'apparaît que si le widget est dans la scène OBS affichée." if v["media"] else ""

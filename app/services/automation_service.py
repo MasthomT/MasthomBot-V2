@@ -125,6 +125,7 @@ STEP_TYPES = {
     "mute":       "Couper le son d'une source OBS",
     "unmute":     "Rétablir le son d'une source OBS",
     "timeout":    "Timeout d'un viewer (Twitch)",
+    "message":    "Envoyer un message dans le t'chat",
     "timer":      "Lancer le minuteur à l'écran",
     "timer_stop": "Effacer le minuteur de l'écran",
 }
@@ -164,13 +165,14 @@ def clean_steps(raw_steps: list) -> list[dict]:
              "scene": str(st.get("scene") or "").strip()[:120], "source": str(st.get("source") or "").strip()[:120],
              "filter": str(st.get("filter") or "").strip()[:120], "seconds": seconds,
              "target": str(st.get("target") or "").strip()[:60],
-             "minutes": int(st.get("minutes") or 0), "label": str(st.get("label") or "").strip()[:60]}
+             "minutes": int(st.get("minutes") or 0), "label": str(st.get("label") or "").strip()[:60],
+             "text": str(st.get("text") or "").strip()[:450]}
         need = {"show": ("scene", "source"), "hide": ("scene", "source"), "scene": ("scene",),
                 "filter_on": ("source", "filter"), "filter_off": ("source", "filter"),
-                "mute": ("source",), "unmute": ("source",), "timeout": ("target",), "timer": (), "timer_stop": ()}[t]
+                "mute": ("source",), "unmute": ("source",), "timeout": ("target",), "timer": (), "timer_stop": (), "message": ("text",)}[t]
         miss = [k for k in need if not c[k]]
         if miss:
-            raise ValueError(f"Étape {i} ({STEP_TYPES[t]}) : choisis " + " et ".join({"scene": "la scène", "source": "la source", "filter": "le filtre", "target": "le viewer"}[k] for k in miss) + ".")
+            raise ValueError(f"Étape {i} ({STEP_TYPES[t]}) : choisis " + " et ".join({"scene": "la scène", "source": "la source", "filter": "le filtre", "target": "le viewer", "text": "le texte du message"}[k] for k in miss) + ".")
         if t == "timer" and not 1 <= c["minutes"] <= 600:
             raise ValueError(f"Étape {i} : durée du minuteur entre 1 et 600 minutes.")
         if t == "timeout" and not 1 <= seconds <= 1209600:
@@ -388,7 +390,12 @@ async def _send(rule: dict, values: dict, test: bool = False, log=None) -> bool:
         if st["delay"] > 0:
             await asyncio.sleep(st["delay"])
         try:
-            if st["type"] in ("timer", "timer_stop"):
+            if st["type"] == "message":
+                from app.services import alerts_service
+                text = render(st["text"], values)
+                sent = await alerts_service.send_chat(text)
+                done = ("" if sent else "NON ENVOYÉ (bot non connecté au chat) · ") + text
+            elif st["type"] in ("timer", "timer_stop"):
                 done = await _timer(st, values)
             elif st["type"] == "timeout":
                 who = render(st["target"], values).strip().lstrip("@")

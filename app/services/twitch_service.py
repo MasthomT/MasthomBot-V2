@@ -217,6 +217,11 @@ class MasthbotTwitch(ChatCommandsMixin, TimersMixin, commands.Bot):
         content_lower = content_clean.lower()
 
         await viewer_repo.ensure_viewer(str(message.author.id), message.author.name)
+        try:   # pour {random} des récompenses (un viewer au hasard qui a parlé)
+            from app.services.reward_overlay_service import note_chatter
+            note_chatter(message.author.name, message.author.display_name or message.author.name)
+        except Exception:
+            pass
         username = message.author.name.lower()
         display_name = message.author.display_name or message.author.name
         config = await self.get_db_config()
