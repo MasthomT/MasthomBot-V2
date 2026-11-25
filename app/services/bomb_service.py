@@ -16,12 +16,15 @@ import unicodedata
 logger = logging.getLogger("masthbot.bomb")
 
 START_SECONDS = 30
+DEFAULT_PLACE = {"x": 560, "y": 360, "w": 800, "h": 680}   # zone de la bombe (et de ses annonces) dans l'écran 1920×1080
 BOOM_TIMEOUT = 60          # secondes de timeout pour la cible si ça explose
 SHOW_RESULT = 7            # secondes d'affichage du résultat avant de disparaître
 COLORS = ["rouge", "bleu", "vert", "jaune", "blanc", "violet"]
 EFFECTS = ["defuse", "boom", "turbo", "plus", "scramble", "pass"]
 
 _state: dict = {"active": False, "version": 0}
+DEMO_VIEWERS = ["ViewerTest", "Croquette", "Chatonne"]
+_demo_next = False
 _queue: list[dict] = []
 _task: asyncio.Task | None = None
 
@@ -65,6 +68,8 @@ def _pick_target(exclude: set[str]) -> tuple[str, str] | None:
     now = time.time()
     skip = {e.lower() for e in exclude} | {settings.TWITCH_BOT_USERNAME.lower(), settings.TWITCH_CHANNEL.lstrip("#").lower()} | R.BOTS
     pool = [(k, d) for k, (d, t) in R._chatters.items() if now - t < R.CHATTER_WINDOW and k not in skip]
+    if not pool and (_demo_next or (_state.get("active") and _state.get("demo"))):      # démonstration : viewers fictifs si personne n'a parlé
+        pool = [(n.lower(), n) for n in DEMO_VIEWERS if n.lower() not in skip]
     return random.choice(pool) if pool else None
 
 
@@ -75,18 +80,27 @@ def state() -> dict:
     return {"active": True, "version": s["version"], "sender": s["sender"], "target": s["target_name"],
             "remaining": round(_remaining(), 2), "speed": s["speed"], "scrambled": s["scrambled"],
             "wires": [{"color": c, "cut": c in s["cut"]} for c in COLORS], "result": s.get("result", ""),
-            "log": s.get("log", []), "test": s.get("test", False)}
+            "log": s.get("log", []), "test": s.get("test", False), "fx": s.get("fx"), "place": s.get("place") or DEFAULT_PLACE}
 
 
-async def start(sender: str, test: bool = False) -> str:
-    """Pose une bombe (ou la met en attente si une autre est en cours). Renvoie un court compte rendu."""
+def _clean_place(place: dict | None) -> dict:
+    try:
+        p = {k: int(place[k]) for k in ("x", "y", "w", "h")} if place else dict(DEFAULT_PLACE)
+    except (KeyError, TypeError, ValueError):
+        p = dict(DEFAULT_PLACE)
+    return p if p["w"] >= 40 and p["h"] >= 40 else dict(DEFAULT_PLACE)
+
+
+async def start(sender: str, test: bool = False, place: dict | None = None) -> str:
+    """Pose une bombe (ou la met en attente si une autre est en cours). `place` : zone choisie dans
+    Récompenses › Actions pour la récompense qui la lance. Renvoie un court compte rendu."""
     if _state.get("active"):
-        _queue.append({"sender": sender, "test": test})
+        _queue.append({"sender": sender, "test": test, "place": place})
         return f"bombe en attente ({len(_queue)} avant elle)"
-    return await _begin(sender, test)
+    return await _begin(sender, test, place)
 
 
-async def _begin(sender: str, test: bool) -> str:
+async def _begin(sender: str, test: bool, place: dict | None = None) -> str:
     global _task
     target = _pick_target({sender})
     if not target:
@@ -99,7 +113,7 @@ async def _begin(sender: str, test: bool) -> str:
     _state.update({"active": True, "version": version, "sender": sender,
                    "target_login": target[0], "target_name": target[1], "rem0": float(START_SECONDS), "t0": time.time(),
                    "speed": 1.0, "scrambled": False, "cut": [], "map": dict(zip(COLORS, effects)), "result": "",
-                   "log": [], "test": test})
+                   "log": [], "test": test, "demo": _demo_next, "place": _clean_place(place)})
     _log(f"{sender} pose une bombe sur {target[1]} !")
     await _say(f"💣 {sender} a posé une bombe sur @{target[1]} ! Tu as {START_SECONDS} secondes pour couper le bon fil : "
                f"!coupe rouge, bleu, vert, jaune, blanc ou violet. Le t'chat peut t'aider… ou te mentir 😈")
@@ -126,7 +140,7 @@ async def _watch():
     if _queue:
         nxt = _queue.pop(0)
         await asyncio.sleep(2)
-        await _begin(nxt["sender"], nxt["test"])
+        await _begin(nxt["sender"], nxt["test"], nxt.get("place"))
 
 
 async def _explode(why: str):
@@ -160,37 +174,68 @@ async def on_chat(login: str, display: str, content: str) -> bool:
         return True
     s["cut"].append(color)
     effect, who = s["map"][color], s["target_name"]
+    s["fx"] = {"n": len(s["cut"]), "type": effect, "color": color}      # pour l'annonce animée de l'overlay
     if effect == "defuse":
         left = round(_remaining())
         _set_speed(0)
         s["result"] = "defused"
         _log(f"{who} coupe le {color} : bombe désamorcée avec {left} s restantes !", "ok")
-        await _say(f"✅ @{who} coupe le fil {color}… la bombe est DÉSAMORCÉE avec {left} secondes restantes ! Bravo 🎉")
+        await _say(f"✅ DÉSAMORCÉE ! @{who} coupe le fil {color} avec {left} secondes restantes. Bravo, tu survis 🎉")
     elif effect == "boom":
         await _explode(f"{who} a coupé le fil {color}…")
     elif effect == "turbo":
         _set_speed(2.0)
         _log(f"{who} coupe le {color} : le tic-tac s'emballe !", "warn")
-        await _say(f"⏩ Fil {color} : le compte à rebours s'emballe, il va deux fois plus vite !")
+        await _say(f"⏩ TURBO ! {who} coupe le fil {color}… le compte à rebours s'emballe et va DEUX FOIS plus vite ! Dépêche-toi 😱")
     elif effect == "plus":
         _state["rem0"] = _remaining() + 10
         _state["t0"] = time.time()
         _log(f"{who} coupe le {color} : +10 secondes, ouf.")
-        await _say(f"➕ Fil {color} : +10 secondes de sursis !")
+        await _say(f"➕ SURSIS ! {who} coupe le fil {color} et gagne 10 secondes de plus. Ouf 😮‍💨")
     elif effect == "scramble":
         s["scrambled"] = True
         _log(f"{who} coupe le {color} : le cadran devient fou !", "warn")
-        await _say(f"🌀 Fil {color} : le cadran est brouillé, plus moyen de lire le temps !")
+        await _say(f"🌀 BROUILLAGE ! {who} coupe le fil {color}… le cadran devient fou, plus moyen de lire le temps restant 👀")
     elif effect == "pass":
         nxt = _pick_target({s["sender"], s["target_login"]})
         if nxt:
             s["target_login"], s["target_name"] = nxt
+            s["fx"]["target"] = nxt[1]
             _log(f"{who} coupe le {color} : la bombe saute dans les mains de {nxt[1]} !", "warn")
-            await _say(f"🔁 Fil {color} : patate chaude ! La bombe saute dans les mains de @{nxt[1]}, à toi de couper !")
+            await _say(f"🔁 PATATE CHAUDE ! {who} coupe le fil {color} et refile la bombe à @{nxt[1]} ! C'est toi qui coupes maintenant : !coupe <couleur>")
         else:
             _state["rem0"] = _remaining() + 10
             _state["t0"] = time.time()
+            s["fx"]["type"] = "plus"
             _log(f"{who} coupe le {color} : personne pour la récupérer… +10 s.")
-            await _say(f"🔁 Fil {color} : la bombe voulait changer de mains, mais personne n'est là. +10 secondes !")
+            await _say(f"🔁 PATATE CHAUDE ratée ! {who} coupe le fil {color}, mais personne n'est là pour récupérer la bombe… +10 secondes !")
     _bump()
     return True
+
+
+async def demo(final: str = "boom", place: dict | None = None) -> str:
+    """Partie de démonstration : vraie bombe sur l'overlay (et messages du t'chat), fils coupés automatiquement
+    — d'abord les effets (+10 s, turbo, brouillage, patate chaude), puis « boom » ou « defuse ». Timeout simulé."""
+    global _demo_next
+    if _state.get("active"):
+        return "une bombe est déjà en cours"
+    _demo_next = True
+    try:
+        msg = await _begin("Démo", test=True, place=place)
+    finally:
+        _demo_next = False
+    if not _state.get("active"):
+        return msg
+
+    async def run():
+        order = ["plus", "turbo", "scramble", "pass", final]
+        for eff in order:
+            await asyncio.sleep(3.5)
+            s = _state
+            if not s.get("active") or s.get("result"):
+                return
+            color = next((c for c, e in s["map"].items() if e == eff and c not in s["cut"]), None)
+            if color:
+                await on_chat(s["target_login"], s["target_name"], "!coupe " + color)
+    asyncio.create_task(run())
+    return msg + " (démo : fils coupés automatiquement toutes les 3,5 s)"

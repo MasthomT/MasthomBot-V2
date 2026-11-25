@@ -36,6 +36,7 @@
 
                 <!-- Zone de placement : écran 1920×1080 à l'échelle -->
                 <div id="ro-place">
+                <div id="ro-placehint" class="text-xs text-amber-300 mb-2"></div>
                 <div class="flex flex-wrap items-center gap-2 mb-2 text-xs">
                     <button id="ro-shot" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold"><i class="fas fa-camera mr-1"></i>Fond : capture de la scène OBS</button>
                     <button id="ro-center" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold"><i class="fas fa-crosshairs mr-1"></i>Centrer</button>
@@ -97,7 +98,7 @@
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
     const W = 1920, H = 1080;
-    let rewards = [], visuals = {}, media = { images: [], sounds: [] }, cur = null, natural = null, stepTypes = {}, obs = null;
+    let rewards = [], rewardIds = {}, visuals = {}, media = { images: [], sounds: [] }, cur = null, natural = null, stepTypes = {}, obs = null;
 
     const say = (t, ok) => { $('ro-msg').className = 'text-xs ' + (ok === false ? 'text-amber-400' : 'text-emerald-400'); $('ro-msg').textContent = t || ''; };
     const key = (t) => (t || '').trim().toLowerCase();
@@ -107,6 +108,7 @@
         const [a, b] = await Promise.all([fetch('/admin/api/rewards/overview').then(r => r.json()).catch(() => ({})),
                                           fetch('/admin/api/reward-overlay').then(r => r.json()).catch(() => ({}))]);
         rewards = (a.rewards || []).map(r => r.title);
+        rewardIds = {}; (a.rewards || []).forEach(r => rewardIds[key(r.title)] = r.id);     // les actions suivent la récompense même renommée
         visuals = {}; (b.visuals || []).forEach(v => visuals[key(v.title)] = v);
         Object.values(visuals).forEach(v => { if (!rewards.some(t => key(t) === key(v.title))) rewards.push(v.title); });   // récompense supprimée sur Twitch : visuel gardé
         media = b.media || media; stepTypes = b.step_types || {}; showLog(b.log);
@@ -144,9 +146,15 @@
         say(''); preview(); draw(); list();
     }
     // Aperçu dans la boîte + proportions de l'image / vidéo
+    // Étape « Lancer La Bombe » : la bombe se place et se redimensionne ici, comme un visuel
+    const BOMB_SVG = '<svg viewBox="0 0 800 680" class="w-full h-full"><text x="400" y="80" text-anchor="middle" font-size="64" font-weight="900" fill="#fff" opacity=".45">annonces</text><svg x="20" y="120" width="760" height="560" viewBox="0 0 340 250"><rect x="40" y="40" width="260" height="34" rx="6" fill="#A32D2D"/><rect x="40" y="78" width="260" height="34" rx="6" fill="#E24B4A"/><rect x="40" y="116" width="260" height="34" rx="6" fill="#A32D2D"/><rect x="40" y="154" width="260" height="34" rx="6" fill="#E24B4A"/><rect x="78" y="34" width="14" height="160" fill="#B4B2A9"/><rect x="250" y="34" width="14" height="160" fill="#B4B2A9"/><rect x="110" y="70" width="120" height="88" rx="6" fill="#2C2C2A"/><rect x="120" y="80" width="100" height="40" rx="3" fill="#501313"/><text x="170" y="109" text-anchor="middle" font-family="monospace" font-size="26" fill="#F09595">00:30</text><path d="M230 84 C 265 84, 280 40, 300 44" fill="none" stroke="#E24B4A" stroke-width="6" stroke-linecap="round"/><path d="M230 96 C 265 96, 280 68, 314 72" fill="none" stroke="#378ADD" stroke-width="6" stroke-linecap="round"/><path d="M230 108 C 265 108, 280 96, 300 100" fill="none" stroke="#639922" stroke-width="6" stroke-linecap="round"/><path d="M230 120 C 265 120, 280 124, 314 128" fill="none" stroke="#EF9F27" stroke-width="6" stroke-linecap="round"/><path d="M230 132 C 265 132, 280 152, 300 156" fill="none" stroke="#D3D1C7" stroke-width="6" stroke-linecap="round"/><path d="M230 144 C 265 144, 280 180, 314 184" fill="none" stroke="#7F77DD" stroke-width="6" stroke-linecap="round"/></svg></svg>';
+    const hasBomb = () => readSteps().some(st => st.type === 'bomb');
     function preview() {
         const f = $('ro-media').value; natural = null; $('ro-listen').classList.add('hidden');
-        $('ro-place').classList.toggle('hidden', !f);
+        const bomb = !f && hasBomb();
+        $('ro-place').classList.toggle('hidden', !f && !bomb);
+        $('ro-placehint').textContent = bomb ? 'Place et redimensionne La Bombe : elle apparaîtra à cet endroit (avec ses annonces au-dessus).' : '';
+        if (bomb) { $('ro-prev').innerHTML = BOMB_SVG; natural = 800 / 680; return; }
         if (!f) { $('ro-prev').innerHTML = '<div class="w-full h-full flex items-center justify-center text-slate-300 text-xs bg-slate-900/60">son seul</div>'; return; }
         const u = '/static/commands/images/' + encodeURIComponent(f);
         if (/\.(mp4|webm)$/i.test(f)) {
@@ -262,9 +270,15 @@
             if (sc && /show|hide/.test(row.querySelector('[data-s="type"]').value)) sc.onchange = refresh;
             if (src && row.querySelector('datalist')) { src.onchange = loadFilters; loadFilters(); }
         }
-        row.querySelector('[data-s="type"]').onchange = refresh;
-        row.querySelector('[data-srm]').onclick = () => row.remove();
+        row.querySelector('[data-s="type"]').onchange = () => { refresh(); bombPlace(); };
+        row.querySelector('[data-srm]').onclick = () => { row.remove(); preview(); };
         wire();
+    }
+    // Ajout d'une étape Bombe sans image / vidéo : zone aux proportions de la bombe, à sa place habituelle
+    function bombPlace() {
+        const was = !$('ro-place').classList.contains('hidden');
+        preview();
+        if (!was && hasBomb() && !$('ro-media').value) { Object.assign(cur, { x: 560, y: 360, w: 800, h: 680 }); draw(); }
     }
     function drawSteps(steps) {
         $('ro-steps').innerHTML = steps.map(stepRow).join('');
@@ -276,8 +290,8 @@
         $('ro-msgs').rows = Math.min(14, Math.max(3, n + 1));
     }
     $('ro-msgs').addEventListener('input', countMsgs);
-    $('ro-sadd').onclick = () => { const d = document.createElement('div'); d.innerHTML = stepRow({ type: 'show' }); const row = d.firstChild; $('ro-steps').appendChild(row); bindStep(row); };
-    const body = () => Object.assign({}, cur, {
+    $('ro-sadd').onclick = () => { const d = document.createElement('div'); d.innerHTML = stepRow({ type: 'show' }); const row = d.firstChild; $('ro-steps').appendChild(row); bindStep(row); bombPlace(); };
+    const body = () => Object.assign({}, cur, { reward_id: rewardIds[key(cur.title)] || cur.reward_id || '',
         messages: $('ro-msgs').value.split('\n').map(x => x.trim()).filter(Boolean), chat_delay: parseFloat($('ro-cdelay').value || 0), chat_mode: $('ro-cmode').value, steps: readSteps(), media: $('ro-media').value, sound: $('ro-sound').value, duration: parseFloat($('ro-duration').value || 0),
                                                volume: parseInt($('ro-volume').value, 10), enabled: $('ro-enabled').checked });
     async function send(method, url, b) {

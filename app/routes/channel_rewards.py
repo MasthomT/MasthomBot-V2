@@ -49,7 +49,13 @@ async def admin_rewards_overview():
     podium_ids = {c["reward_id"]: f"Podium · {c['title']}" for c in await podium_service.get_config() if c["reward_id"]}
     known_ids = RC.resolve(KNOWN_BY_ID)
     from app.services import reward_overlay_service
-    actions = {v["title"].strip().lower(): v for v in await reward_overlay_service.list_visuals()}
+    try:      # actions rattachées par identifiant : suit les récompenses renommées directement sur Twitch
+        await reward_overlay_service.sync_titles([{"id": r["id"], "title": r.get("title", "")} for r in data.get("data", [])])
+    except Exception as e:
+        logger.warning(f"🎁 [REWARDS] Rattachement des actions : {e}")
+    visuals = await reward_overlay_service.list_visuals()
+    actions = {v["title"].strip().lower(): v for v in visuals}
+    actions_by_id = {v["reward_id"]: v for v in visuals if v.get("reward_id")}
     pend = await RC.pending()
     # Original déjà supprimé sur Twitch mais « Finaliser » pas cliqué : on finalise tout seul, sinon la copie
     # (désactivée, nom provisoire) resterait cachée et la récompense semblerait avoir disparu.
@@ -93,7 +99,7 @@ async def admin_rewards_overview():
             "handler": handler,
             "prompt": r.get("prompt") or "",
             "clone_pending": r["id"] in pend,
-            "actions": _summary(actions.get((r.get("title") or "").strip().lower())),
+            "actions": _summary(actions_by_id.get(r["id"]) or actions.get((r.get("title") or "").strip().lower())),
         })
     rewards.sort(key=lambda x: (x["cost"], x["title"].lower()))          # par prix croissant
     return {"rewards": rewards}

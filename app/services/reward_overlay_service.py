@@ -18,7 +18,7 @@ from app.core.database import get_db_connection
 logger = logging.getLogger("masthbot.reward_actions")
 
 FIELDS = ("title", "media", "sound", "x", "y", "w", "h", "duration", "volume", "enabled")
-COLS = "title, media, sound, x, y, w, h, duration, volume, enabled, messages, chat_delay, steps, chat_mode"
+COLS = "title, media, sound, x, y, w, h, duration, volume, enabled, messages, chat_delay, steps, chat_mode, reward_id"
 
 # Viewers qui ont parlé récemment (pour {random} : « un viewer au hasard qui a parlé », comme Streamer.bot)
 _chatters: dict[str, tuple[str, float]] = {}
@@ -60,6 +60,8 @@ async def _ensure():
         await db.execute("ALTER TABLE reward_visuals ADD COLUMN IF NOT EXISTS chat_delay DOUBLE PRECISION NOT NULL DEFAULT 0")
         await db.execute("ALTER TABLE reward_visuals ADD COLUMN IF NOT EXISTS steps TEXT NOT NULL DEFAULT '[]'")
         await db.execute("ALTER TABLE reward_visuals ADD COLUMN IF NOT EXISTS chat_mode TEXT NOT NULL DEFAULT 'all'")
+        # identifiant Twitch de la récompense : les actions la suivent même si elle est renommée sur Twitch
+        await db.execute("ALTER TABLE reward_visuals ADD COLUMN IF NOT EXISTS reward_id TEXT NOT NULL DEFAULT ''")
     _ready = True
 
 
@@ -84,12 +86,46 @@ async def list_visuals() -> list[dict]:
         return [_row(r) for r in await c.fetchall()]
 
 
-async def get_visual(title: str) -> dict | None:
+async def get_visual(title: str, reward_id: str = "") -> dict | None:
+    """Actions d'une récompense : par son identifiant d'abord (suit les renommages), sinon par son titre."""
     await _ensure()
     async with get_db_connection() as db:
-        c = await db.execute(f"SELECT {COLS} FROM reward_visuals WHERE title_key = $1", (_key(title),))
-        r = await c.fetchone()
+        r = None
+        if reward_id:
+            c = await db.execute(f"SELECT {COLS} FROM reward_visuals WHERE reward_id = $1", (reward_id,))
+            r = await c.fetchone()
+        if not r:
+            c = await db.execute(f"SELECT {COLS} FROM reward_visuals WHERE title_key = $1", (_key(title),))
+            r = await c.fetchone()
     return _row(r) if r else None
+
+
+async def sync_titles(rewards: list[dict]) -> int:
+    """Rattache les actions aux récompenses Twitch ({id, title}) : renseigne l'identifiant manquant (même titre),
+    et suit un renommage fait sur Twitch (même identifiant, autre titre). Renvoie le nombre de lignes mises à jour."""
+    await _ensure()
+    by_id = {r["id"]: r["title"] for r in rewards if r.get("id")}
+    by_key = {_key(r["title"]): r["id"] for r in rewards if r.get("id")}
+    n = 0
+    async with get_db_connection() as db:
+        c = await db.execute("SELECT title_key, title, reward_id FROM reward_visuals")
+        rows = [dict(x) for x in await c.fetchall()]
+        keys = {x["title_key"] for x in rows}
+        for row in rows:
+            rid = row["reward_id"]
+            if not rid and row["title_key"] in by_key:
+                await db.execute("UPDATE reward_visuals SET reward_id = $1 WHERE title_key = $2", (by_key[row["title_key"]], row["title_key"]))
+                n += 1
+            elif rid in by_id and _key(by_id[rid]) != row["title_key"]:
+                new_key = _key(by_id[rid])
+                if new_key in keys:
+                    logger.warning(f"🎁 [RÉCOMPENSE] « {row['title']} » renommée « {by_id[rid]} » sur Twitch, mais des actions existent déjà sous ce titre : rien changé")
+                    continue
+                await db.execute("UPDATE reward_visuals SET title = $1, title_key = $2 WHERE title_key = $3", (by_id[rid], new_key, row["title_key"]))
+                keys.discard(row["title_key"]); keys.add(new_key)
+                logger.info(f"🎁 [RÉCOMPENSE] Actions de « {row['title']} » rattachées au nouveau titre « {by_id[rid]} »")
+                n += 1
+    return n
 
 
 def clean(raw: dict) -> dict:
@@ -131,7 +167,8 @@ def clean(raw: dict) -> dict:
         raise ValueError("Délai du message : 0 à 120 secondes.")
     return {"title": title, "media": media, "sound": sound, "x": x, "y": y, "w": w, "h": h,
             "duration": duration, "volume": volume, "enabled": bool(raw.get("enabled", True)),
-            "messages": msgs, "chat_delay": chat_delay, "steps": steps, "chat_mode": chat_mode}
+            "messages": msgs, "chat_delay": chat_delay, "steps": steps, "chat_mode": chat_mode,
+            "reward_id": str(raw.get("reward_id") or "").strip()[:64]}
 
 
 async def save_visual(raw: dict) -> dict:
@@ -139,15 +176,16 @@ async def save_visual(raw: dict) -> dict:
     await _ensure()
     async with get_db_connection() as db:
         await db.execute("""INSERT INTO reward_visuals (title_key, title, media, sound, x, y, w, h, duration, volume, enabled,
-              messages, chat_delay, steps, chat_mode, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
+              messages, chat_delay, steps, chat_mode, reward_id, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())
             ON CONFLICT (title_key) DO UPDATE SET title = EXCLUDED.title, media = EXCLUDED.media, sound = EXCLUDED.sound,
               x = EXCLUDED.x, y = EXCLUDED.y, w = EXCLUDED.w, h = EXCLUDED.h, duration = EXCLUDED.duration,
               volume = EXCLUDED.volume, enabled = EXCLUDED.enabled, messages = EXCLUDED.messages,
-              chat_delay = EXCLUDED.chat_delay, steps = EXCLUDED.steps, chat_mode = EXCLUDED.chat_mode, updated_at = NOW()""",
+              chat_delay = EXCLUDED.chat_delay, steps = EXCLUDED.steps, chat_mode = EXCLUDED.chat_mode,
+              reward_id = CASE WHEN EXCLUDED.reward_id <> '' THEN EXCLUDED.reward_id ELSE reward_visuals.reward_id END, updated_at = NOW()""",
                          (_key(v["title"]), v["title"], v["media"], v["sound"], v["x"], v["y"], v["w"], v["h"],
                           v["duration"], v["volume"], v["enabled"], json.dumps(v["messages"], ensure_ascii=False),
-                          v["chat_delay"], json.dumps(v["steps"], ensure_ascii=False), v["chat_mode"]))
+                          v["chat_delay"], json.dumps(v["steps"], ensure_ascii=False), v["chat_mode"], v["reward_id"]))
     return v
 
 
@@ -196,13 +234,15 @@ def fire(v: dict, values: dict, test: bool = False):
         from app.services import automation_service as A
         if any("{random}" in m for m in v.get("messages") or []) or any("{random}" in (st.get("target") or "") + (st.get("label") or "") + (st.get("text") or "") for st in v.get("steps") or []):
             values = dict(values, random=random_chatter(values.get("user", "")))      # le même viewer pour tous les messages
+        if any(st.get("type") == "bomb" for st in v.get("steps") or []):      # La Bombe : placée comme le visuel
+            values = dict(values, _place={k: v.get(k) for k in ("x", "y", "w", "h")})
         rule = {"name": f"Récompense « {v['title']} »", "messages": v.get("messages") or [], "mode": v.get("chat_mode") or "all", "gap": 1.5,
                 "delay": float(v.get("chat_delay") or 0), "do_chat": bool(v.get("messages")), "sound": "", "image": "",
                 "steps": v.get("steps") or []}
         asyncio.create_task(A.run_actions(rule, values, test=test, log=_log))
 
 
-async def on_redemption(title: str, user: str, user_input: str = "", cost: int = 0):
-    v = await get_visual(title)
+async def on_redemption(title: str, user: str, user_input: str = "", cost: int = 0, reward_id: str = ""):
+    v = await get_visual(title, reward_id)
     if v and v["enabled"]:
         fire(v, {"user": user, "reward": v["title"], "input": user_input, "cost": cost})

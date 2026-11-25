@@ -393,7 +393,7 @@ async def _send(rule: dict, values: dict, test: bool = False, log=None) -> bool:
         try:
             if st["type"] == "bomb":
                 from app.services import bomb_service
-                done = "La Bombe : " + await bomb_service.start(values.get("user") or "Quelqu'un", test=test)
+                done = "La Bombe : " + await bomb_service.start(values.get("user") or "Quelqu'un", test=test, place=values.get("_place"))
             elif st["type"] == "message":
                 from app.services import alerts_service
                 text = render(st["text"], values)
@@ -567,7 +567,8 @@ async def on_eventsub(sub_type: str, event: dict, broadcaster_id: str):
             from app.services import reward_overlay_service
             ev = event or {}
             await reward_overlay_service.on_redemption((ev.get("reward") or {}).get("title", ""), ev.get("user_name", ""),
-                                                       ev.get("user_input", "") or "", int((ev.get("reward") or {}).get("cost", 0) or 0))
+                                                       ev.get("user_input", "") or "", int((ev.get("reward") or {}).get("cost", 0) or 0),
+                                                       (ev.get("reward") or {}).get("id", "") or "")
     except Exception as e:
         logger.error(f"❌ [OVERLAY RÉCOMPENSES] {e}")
     try:

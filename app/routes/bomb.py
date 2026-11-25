@@ -27,6 +27,8 @@ async def bomb_state():
 async def bomb_test(payload: dict | None = None):
     """Pose une bombe de test (timeout simulé) ; avec {"cut": "rouge"} coupe un fil à la place de la cible."""
     payload = payload or {}
+    if payload.get("demo"):
+        return {"ok": True, "message": await B.demo("defuse" if payload.get("demo") == "defuse" else "boom", payload.get("place"))}
     if payload.get("cut"):
         s = B._state
         ok = s.get("active") and await B.on_chat(s["target_login"], s["target_name"], "!coupe " + payload["cut"])

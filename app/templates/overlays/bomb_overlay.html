@@ -6,16 +6,12 @@
 <style>
   html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; font-family: 'Segoe UI', system-ui, sans-serif; }
   #stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
-  #wrap { position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%) scale(.85); transform-origin: 50% 100%;
-          display: flex; align-items: center; gap: 36px; opacity: 0; transition: opacity .4s ease, transform .4s ease; }
-  #wrap.on { opacity: 1; transform: translateX(-50%) scale(1); }
-  #panel { width: 520px; background: rgba(15,15,20,.88); border: 3px solid #E24B4A; border-radius: 22px; padding: 22px 26px; color: #fff; }
-  .small { font-size: 22px; color: #D3D1C7; }
-  #target { font-size: 54px; font-weight: 800; margin: 2px 0 10px; color: #FFD27A; text-shadow: 0 3px 0 #000; word-break: break-all; }
-  .cmd { font-family: Consolas, monospace; font-size: 26px; background: #000; padding: 4px 12px; border-radius: 8px; display: inline-block; margin-top: 4px; }
-  #log { margin-top: 14px; font-size: 22px; line-height: 1.35; min-height: 92px; }
-  #log div { margin-bottom: 4px; }
-  .ok { color: #97C459; } .warn { color: #EF9F27; } .boom { color: #F09595; }
+  /* Zone choisie dans Récompenses › Actions (x, y, largeur, hauteur dans l'écran 1920×1080) ; la bombe s'y adapte */
+  #wrap { position: absolute; left: 560px; top: 360px; width: 800px; height: 680px; }
+  #inner { position: absolute; left: 50%; top: 50%; width: 800px; height: 680px; transform: translate(-50%,-50%) scale(var(--k,1)) scale(.85);
+           opacity: 0; transition: opacity .4s ease, transform .4s ease; }
+  #wrap.on #inner { opacity: 1; transform: translate(-50%,-50%) scale(var(--k,1)); }
+  #svg { position: absolute; left: 20px; top: 120px; }
   @keyframes shake { 0%,100%{transform:translate(0,0)} 25%{transform:translate(-6px,2px)} 75%{transform:translate(6px,-2px)} }
   @keyframes boom { 0%{transform:scale(.2);opacity:1} 100%{transform:scale(2.8);opacity:0} }
   @keyframes blink { 50% { opacity: .2 } }
@@ -25,15 +21,36 @@
   @keyframes pop { 0%{transform:scale(.1)} 60%{transform:scale(1.15)} 100%{transform:scale(1)} }
   @keyframes flick { 50%{transform:scale(1.06) rotate(4deg)} }
   .pop { transform-origin: 170px 120px; animation: pop .45s ease-out, flick .25s .45s infinite; }
-  #result { position: absolute; left: 0; right: 0; top: -110px; text-align: center; font-size: 84px; font-weight: 900; color: #fff;
+  #result { position: absolute; left: -200px; right: -200px; top: 0; text-align: center; font-size: 84px; font-weight: 900; color: #fff;
             text-shadow: 0 6px 0 #000, 0 0 30px rgba(0,0,0,.6); opacity: 0; transition: opacity .3s; }
+  /* Annonce de l'effet du fil coupé (2 s au-dessus de la bombe) */
+  #fx { position: absolute; left: 50%; top: 60px; transform: translateX(-50%); white-space: nowrap; font-size: 64px; font-weight: 900;
+        color: #fff; text-shadow: 0 5px 0 #000, 0 0 24px rgba(0,0,0,.55); opacity: 0; pointer-events: none; }
+  #fx.go { animation: fxin 2.2s ease-out forwards; }
+  @keyframes fxin { 0%{opacity:0;transform:translateX(-50%) scale(.3)} 12%{opacity:1;transform:translateX(-50%) scale(1.15)}
+                    22%{transform:translateX(-50%) scale(1)} 80%{opacity:1;transform:translateX(-50%) translateY(-14px)}
+                    100%{opacity:0;transform:translateX(-50%) translateY(-30px)} }
+  #fx.turbo { color: #FF5A4E; } #fx.plus { color: #97C459; } #fx.scramble { color: #B9B3FF; } #fx.pass { color: #FFD27A; }
+  @keyframes hop { 0%,100%{transform:translateY(0)} 30%{transform:translateY(-70px) rotate(-6deg)} 60%{transform:translateY(0) rotate(4deg)} 80%{transform:translateY(-20px)} }
+  #svg.hop { animation: hop .7s ease-out; }
+  .turbo-on #cd { fill: #FF3B30; }
+  /* Turbo : traînées de vitesse qui filent vers la droite + la bombe vibre en continu */
+  #speed { opacity: 0; transition: opacity .3s; }
+  #speed line { opacity: .8; animation: streak .45s linear infinite; }
+  @keyframes streak { 0%{transform:translateX(-60px);opacity:0} 25%{opacity:.85} 100%{transform:translateX(70px);opacity:0} }
+  .turbo-on #speed { opacity: 1; }
+  @keyframes rattle { 0%,100%{transform:translate(0,0)} 25%{transform:translate(-1.5px,.8px)} 50%{transform:translate(1.2px,-.6px)} 75%{transform:translate(-.8px,-.9px)} }
+  .turbo-on #bomb:not(.urgent) { animation: rattle .09s infinite; }
+  .turbo-on .led { animation-duration: .35s; }
 </style>
 </head>
 <body>
 <div id="stage">
-  <div id="wrap">
+  <div id="wrap"><div id="inner">
     <div id="result"></div>
+    <div id="fx"></div>
     <svg id="svg" width="760" height="560" viewBox="0 0 340 250">
+      <g id="speed"><line x1="60" y1="14" x2="130" y2="14" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" style="animation-delay:-0s"/><line x1="170" y1="22" x2="260" y2="22" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" style="animation-delay:-0.2s"/><line x1="250" y1="10" x2="300" y2="10" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" style="animation-delay:-0.45s"/><line x1="5" y1="60" x2="35" y2="60" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" style="animation-delay:-0.1s"/><line x1="5" y1="130" x2="35" y2="130" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" style="animation-delay:-0.3s"/><line x1="80" y1="206" x2="160" y2="206" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" style="animation-delay:-0.15s"/><line x1="200" y1="214" x2="260" y2="214" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" style="animation-delay:-0.5s"/><line x1="120" y1="228" x2="210" y2="228" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" style="animation-delay:-0.35s"/><line x1="240" y1="236" x2="285" y2="236" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" style="animation-delay:-0.6s"/><line x1="10" y1="100" x2="35" y2="100" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" style="animation-delay:-0.7s"/></g>
       <g id="bomb">
         <rect x="40" y="40" width="260" height="34" rx="6" fill="#A32D2D"/>
         <rect x="40" y="78" width="260" height="34" rx="6" fill="#E24B4A"/>
@@ -57,13 +74,7 @@
         <polygon points="170,70 178,95 199,80 191,105 218,105 196,120 218,135 191,135 199,160 178,145 170,170 162,145 141,160 149,135 122,135 144,120 122,105 149,105 141,80 162,95" fill="#FAEEDA"/></g>
       </g>
     </svg>
-    <div id="panel">
-      <div class="small" id="sender">Quelqu'un a posé une bombe sur</div>
-      <div id="target">…</div>
-      <div class="small">Coupe un fil dans le t'chat :</div>
-      <div class="cmd">!coupe &lt;couleur&gt;</div>
-      <div id="log"></div>
-    </div>
+  </div>
   </div>
 </div>
 <script>
@@ -96,7 +107,7 @@
   }
 
   let st = { active: false, version: -1 }, at = 0, shownVersion = -1, lastSec = null, lastCut = 0, lastResult = '';
-  let lastScr = 0;
+  let lastScr = 0, lastFx = 0;
 
   function drawWires(wires) {
     $('wires').innerHTML = wires.map((w, i) => {
@@ -114,24 +125,37 @@
   function render() {
     const wrap = $('wrap');
     if (!st.active) { wrap.classList.remove('on'); return; }
+    const pl = st.place || { x: 560, y: 360, w: 800, h: 680 };
+    Object.assign(wrap.style, { left: pl.x + 'px', top: pl.y + 'px', width: pl.w + 'px', height: pl.h + 'px' });
+    wrap.style.setProperty('--k', Math.min(pl.w / 800, pl.h / 680));
     wrap.classList.add('on');
     if (shownVersion !== st.version) {
       shownVersion = st.version;
-      $('sender').textContent = (st.sender || 'Quelqu\'un') + ' a posé une bombe sur';
-      $('target').textContent = st.target;
       drawWires(st.wires);
-      $('log').innerHTML = st.log.slice(-3).reverse().map(l => '<div class="' + (l.kind || '') + '">' + esc(l.text) + '</div>').join('');
       const cuts = st.wires.filter(w => w.cut).length;
       if (cuts > lastCut) beep(220, .15, .15);
       lastCut = cuts;
+      $('svg').classList.toggle('turbo-on', st.speed > 1 && !st.result);
+      if (st.fx && st.fx.n !== lastFx) { lastFx = st.fx.n; showFx(st.fx); }
       if (st.result !== lastResult) {
         lastResult = st.result;
+        if (st.result) $('fx').className = '';         // fin de partie : l'annonce en cours s'efface (la bannière de fin prend sa place)
         const r = $('result');
         if (st.result === 'boom') { $('bomb').style.display = 'none'; $('ex').style.display = ''; explosion(); r.textContent = '💥 BOUM !'; r.style.opacity = 1; }
-        else if (st.result === 'defused') { $('bomb').classList.remove('urgent'); r.textContent = '✅ DÉSAMORCÉE'; r.style.opacity = 1; }
+        else if (st.result === 'defused') { $('bomb').classList.remove('urgent'); $('cd').textContent = '00:' + String(Math.ceil(st.remaining)).padStart(2, '0'); r.textContent = '✅ DÉSAMORCÉE'; r.style.opacity = 1; }
         else { $('bomb').style.display = ''; $('ex').style.display = 'none'; r.style.opacity = 0; }
       }
     }
+  }
+  // Annonce animée de l'effet (le désamorçage et l'explosion ont leur propre bannière)
+  const FX = { turbo: '⏩ TURBO !', plus: '➕ 10 SECONDES', scramble: '🌀 CADRAN BROUILLÉ' };
+  function showFx(fx) {
+    if (fx.type === 'defuse' || fx.type === 'boom') { $('fx').className = ''; return; }
+    const el = $('fx');
+    el.textContent = fx.type === 'pass' ? '🔁 PATATE CHAUDE → ' + (fx.target || '?') : (FX[fx.type] || '');
+    el.className = ''; void el.offsetWidth; el.className = 'go ' + fx.type;
+    if (fx.type === 'pass') { const sv = $('svg'); sv.classList.remove('hop'); void sv.offsetWidth; sv.classList.add('hop'); }
+    beep(fx.type === 'plus' ? 660 : 990, .12, .12);
   }
   function frame() {
     if (st.active && !st.result) {
@@ -152,7 +176,7 @@
     try {
       const r = await fetch('/api/bomb/state?t=' + Date.now(), { cache: 'no-store', signal: ctl.signal });
       const j = await r.json();
-      if (j.active && !st.active) { lastCut = 0; lastResult = ''; lastSec = null; $('bomb').style.display = ''; $('ex').style.display = 'none'; $('result').style.opacity = 0; }
+      if (j.active && !st.active) { lastCut = 0; lastFx = 0; lastResult = ''; lastSec = null; $('bomb').style.display = ''; $('ex').style.display = 'none'; $('result').style.opacity = 0; }
       st = j; at = performance.now();
       render();
     } catch (e) { /* serveur indisponible : on réessaie */ }
