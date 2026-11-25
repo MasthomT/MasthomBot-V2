@@ -227,6 +227,7 @@
         if (t === 'filter_on' || t === 'filter_off') h += sel('source', (o.inputs || []).concat(o.scenes || []), '— source —') + '<input data-s="filter" list="roflt-' + st._k + '" value="' + esc(st.filter || '') + '" placeholder="nom du filtre" class="input-dark rounded-lg px-2 py-2 text-sm w-44"><datalist id="roflt-' + st._k + '"></datalist>';
         if (t === 'mute' || t === 'unmute') h += sel('source', o.inputs || [], '— source audio —');
         if (t === 'timeout') h += '<label class="flex items-center gap-1.5 text-xs text-slate-400">viewer<input data-s="target" value="' + esc(st.target || '{input}') + '" class="input-dark w-32 rounded-lg px-2 py-2 text-sm" title="{input} = pseudo écrit par le viewer dans la récompense"></label>' + num('seconds', 'durée (s)', st.seconds || 60, 'max="1209600"');
+        if (t === 'timer') h += num('minutes', 'durée (min)', st.minutes || 5, 'max="600"') + '<label class="flex items-center gap-1.5 text-xs text-slate-400">texte<input data-s="label" value="' + esc(st.label || '') + '" placeholder="OBJECTIF" class="input-dark w-36 rounded-lg px-2 py-2 text-sm" title="{user}, {input}… possibles"></label>';
         if (t === 'show' || t === 'filter_on' || t === 'mute') h += num('duration', 'puis revenir après (s, 0 = jamais)', st.duration, 'max="3600" step="0.5"');
         return h;
     }
@@ -241,7 +242,7 @@
     function readStep(row) {
         const v = (f) => { const e = row.querySelector('[data-s="' + f + '"]'); return e ? e.value : ''; };
         return { type: v('type'), scene: v('scene'), source: v('source'), filter: v('filter'), target: v('target'),
-                 seconds: parseInt(v('seconds') || 0, 10), delay: parseFloat(v('delay') || 0), duration: parseFloat(v('duration') || 0) };
+                 seconds: parseInt(v('seconds') || 0, 10), minutes: parseInt(v('minutes') || 0, 10), label: v('label'), delay: parseFloat(v('delay') || 0), duration: parseFloat(v('duration') || 0) };
     }
     const readSteps = () => [...$('ro-steps').querySelectorAll('[data-step]')].map(readStep);
     function bindStep(row) {

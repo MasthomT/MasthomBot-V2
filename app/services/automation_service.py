@@ -125,6 +125,8 @@ STEP_TYPES = {
     "mute":       "Couper le son d'une source OBS",
     "unmute":     "Rétablir le son d'une source OBS",
     "timeout":    "Timeout d'un viewer (Twitch)",
+    "timer":      "Lancer le minuteur à l'écran",
+    "timer_stop": "Effacer le minuteur de l'écran",
 }
 
 
@@ -161,13 +163,16 @@ def clean_steps(raw_steps: list) -> list[dict]:
         c = {"type": t, "delay": delay, "duration": duration,
              "scene": str(st.get("scene") or "").strip()[:120], "source": str(st.get("source") or "").strip()[:120],
              "filter": str(st.get("filter") or "").strip()[:120], "seconds": seconds,
-             "target": str(st.get("target") or "").strip()[:60]}
+             "target": str(st.get("target") or "").strip()[:60],
+             "minutes": int(st.get("minutes") or 0), "label": str(st.get("label") or "").strip()[:60]}
         need = {"show": ("scene", "source"), "hide": ("scene", "source"), "scene": ("scene",),
                 "filter_on": ("source", "filter"), "filter_off": ("source", "filter"),
-                "mute": ("source",), "unmute": ("source",), "timeout": ("target",)}[t]
+                "mute": ("source",), "unmute": ("source",), "timeout": ("target",), "timer": (), "timer_stop": ()}[t]
         miss = [k for k in need if not c[k]]
         if miss:
             raise ValueError(f"Étape {i} ({STEP_TYPES[t]}) : choisis " + " et ".join({"scene": "la scène", "source": "la source", "filter": "le filtre", "target": "le viewer"}[k] for k in miss) + ".")
+        if t == "timer" and not 1 <= c["minutes"] <= 600:
+            raise ValueError(f"Étape {i} : durée du minuteur entre 1 et 600 minutes.")
         if t == "timeout" and not 1 <= seconds <= 1209600:
             raise ValueError(f"Étape {i} : durée du timeout entre 1 s et 14 jours.")
         out.append(c)
@@ -383,7 +388,9 @@ async def _send(rule: dict, values: dict, test: bool = False, log=None) -> bool:
         if st["delay"] > 0:
             await asyncio.sleep(st["delay"])
         try:
-            if st["type"] == "timeout":
+            if st["type"] in ("timer", "timer_stop"):
+                done = await _timer(st, values)
+            elif st["type"] == "timeout":
                 who = render(st["target"], values).strip().lstrip("@")
                 if test:                                  # un test ne sanctionne personne
                     done = f"timeout de {who or '?'} ({st['seconds']} s) simulé"
@@ -412,6 +419,28 @@ async def _send(rule: dict, values: dict, test: bool = False, log=None) -> bool:
         jobs.append(chat())
     results = await asyncio.gather(*jobs, return_exceptions=True)
     return all(r is True for r in results)
+
+
+async def _timer(st: dict, values: dict) -> str:
+    """Minuteur de l'overlay, comme la commande !timer (le bot ne réagit pas à ses propres messages : écrire
+    « !timer 5 » dans un message ne le lancerait pas)."""
+    import aiohttp
+    from app.core.config import settings
+    from app.services.bot_system_commands_service import msg as syscmd_msg
+    if st["type"] == "timer_stop":
+        details, text = {"action": "stop"}, await syscmd_msg("timer", "stop")
+    else:
+        label = (render(st.get("label") or "", values).strip() or "OBJECTIF").upper()
+        details = {"action": "start", "mode": "timer", "duration": st["minutes"] * 60, "label": label}
+        text = await syscmd_msg("timer", "start", minutes=st["minutes"], label=label)
+    async with aiohttp.ClientSession() as s:
+        async with s.post(f"{settings.OVERLAY_NODE_URL}/api/trigger", json={"type": "time_event", "details": details},
+                          timeout=aiohttp.ClientTimeout(total=3)) as r:
+            if r.status != 200:
+                raise RuntimeError(f"overlay injoignable ({r.status})")
+    from app.services import alerts_service
+    await alerts_service.send_chat(text)
+    return f"minuteur {st['minutes']} min « {details['label']} »" if st["type"] == "timer" else "minuteur effacé"
 
 
 async def _timeout(login: str, seconds: int, reason: str) -> str:

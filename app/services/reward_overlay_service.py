@@ -84,6 +84,9 @@ def clean(raw: dict) -> dict:
     msgs = [str(m).strip()[:450] for m in (raw.get("messages") or []) if str(m).strip()]
     if len(msgs) > 10:
         raise ValueError("10 messages au maximum.")
+    if any(m.lower().startswith(("!timer", "!chrono")) for m in msgs):
+        raise ValueError("Le bot ne réagit pas à ses propres messages : « !timer » écrit par le bot ne lance rien. "
+                         "Utilise l'étape « Lancer le minuteur à l'écran » dans Étapes OBS / Twitch.")
     steps = clean_steps(raw.get("steps") or [])
     if not media and not sound and not msgs and not steps:
         raise ValueError("Choisis au moins une action : image / vidéo, son, message dans le t'chat ou étape OBS / Twitch.")
