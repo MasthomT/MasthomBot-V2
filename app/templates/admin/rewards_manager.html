@@ -42,6 +42,7 @@
                 <input id="ov-filter" placeholder="Filtrer par nom…" class="input-dark rounded-lg px-3 py-2 text-sm w-64">
                 <label class="flex items-center gap-2 text-xs text-slate-400"><input type="checkbox" id="ov-onlyActive"> Seulement les récompenses actives</label>
                 <button id="ov-reload" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold"><i class="fas fa-rotate mr-1"></i>Actualiser</button>
+                <button id="ov-new" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold"><i class="fas fa-plus mr-1"></i>Nouvelle récompense</button>
                 <span id="ov-count" class="text-xs text-slate-500"></span>
             </div>
             <div class="config-card rounded-2xl overflow-x-auto">
@@ -53,7 +54,8 @@
                 </table>
             </div>
             <p class="text-xs text-slate-500 mt-3">Twitch ne laisse le bot modifier que les récompenses qu'il a créées lui-même. Pour reprendre la main sur une autre, clique « Cloner pour le bot » : le bot en crée une copie, tu supprimes l'original dans le <a id="ov-dash" target="_blank" class="text-indigo-300 underline">tableau de bord Twitch</a>, puis « Finaliser » lui redonne le vrai nom.
-            L'image personnalisée ne suit pas (Twitch ne laisse pas l'envoyer par l'API) et l'identifiant change : un son lancé par Streamer.bot sur cette récompense est à rebrancher (ou à refaire dans <a href="/admin/automatisations" class="text-indigo-300 underline">Automatisations</a> › Récompense, qui repère par le titre).</p>
+            L'image personnalisée ne suit pas (Twitch ne laisse pas l'envoyer par l'API) et l'identifiant change : un son lancé par Streamer.bot sur cette récompense est à rebrancher (ou à refaire dans l'onglet Actions, qui repère la récompense par son titre).
+            « Nouvelle récompense » la crée directement sur Twitch par le bot : elle est modifiable ici tout de suite (l'image se met dans le tableau de bord Twitch).</p>
         </section>
 
         <!-- First / Deuz / Troiz -->
@@ -103,7 +105,8 @@
         const only = $('ov-onlyActive').checked;
         const rows = all.filter(r => (!q || r.title.toLowerCase().includes(q)) && (!only || r.enabled));
         $('ov-count').textContent = rows.length + ' / ' + all.length + ' récompense(s)';
-        $('ov-rows').innerHTML = rows.map(r => {
+        $('ov-rows').innerHTML = (editing === 'new' ? '<tr class="bg-slate-900/60"><td colspan="7" class="p-4"><div class="text-sm font-bold text-white mb-3"><i class="fas fa-plus mr-1 text-indigo-400"></i>Nouvelle récompense</div>'
+            + editForm({ id: 'new', title: '', cost: 100, color: '#9147ff', prompt: '', enabled: true, paused: false, user_input: false }) + '</td></tr>' : '') + rows.map(r => {
             const state = r.paused ? '<span class="text-amber-400">En pause</span>' : (r.enabled ? '<span class="text-emerald-400">Active</span>' : '<span class="text-slate-500">Désactivée</span>');
             const img = r.image ? '<img src="' + esc(r.image) + '" class="w-9 h-9 rounded-lg" alt="">' : '<div class="w-9 h-9 rounded-lg" style="background:' + esc(r.color || '#334155') + '"></div>';
             const by = r.handler
@@ -150,7 +153,8 @@
             + inp('cooldown_min', 'Attente entre deux utilisations (minutes, 0 = aucune)', r.cooldown ? Math.round(r.cooldown / 60) : 0, 'number', 'min="0" max="10080"')
             + '<div class="flex flex-wrap gap-4 items-center md:col-span-3">' + chk('enabled', 'Active', r.enabled) + chk('paused', 'En pause', r.paused) + chk('user_input', 'Le viewer doit écrire un message', r.user_input)
             + '<span class="flex-1"></span><span class="text-xs" data-eout></span>'
-            + btn('bg-slate-700 hover:bg-slate-600', 'editclose', r.id, 'Fermer') + ' ' + btn('bg-indigo-600 hover:bg-indigo-500 text-white', 'save', r.id, '<i class="fas fa-save mr-1"></i>Enregistrer sur Twitch') + '</div></div>';
+            + (r.id !== 'new' ? btn('bg-slate-700 hover:bg-red-600', 'delete', r.id, '<i class="fas fa-trash mr-1"></i>Supprimer') + ' ' : '')
+            + btn('bg-slate-700 hover:bg-slate-600', 'editclose', r.id, 'Fermer') + ' ' + btn('bg-indigo-600 hover:bg-indigo-500 text-white', 'save', r.id, '<i class="fas fa-save mr-1"></i>' + (r.id === 'new' ? 'Créer sur Twitch' : 'Enregistrer sur Twitch')) + '</div></div>';
     }
     async function call(method, url, body) {
         const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
@@ -165,14 +169,24 @@
             if (act === 'clone' && !confirm('Cloner « ' + r.title + ' » pour le bot ?\n\nLe bot crée une copie désactivée. Ensuite tu supprimes l\'original dans le tableau de bord Twitch, puis tu cliques « Finaliser ».\n\nL\'image personnalisée ne suit pas, et ce qui est branché sur l\'ancienne récompense ailleurs (Streamer.bot…) est à rebrancher.')) return;
             if (act === 'cancel' && !confirm('Supprimer la copie de « ' + r.title + ' » ? L\'original reste tel quel.')) return;
             let res;
+            if (act === 'delete') {
+                if (!confirm('Supprimer « ' + r.title + ' » sur Twitch ?\n\nLes points déjà dépensés restent dépensés ; les actions réglées pour ce titre restent dans l\'onglet Actions.')) return;
+                res = await call('DELETE', '/admin/api/rewards/' + id);
+                if (!res.ok) return alert(res.j.detail || 'Erreur');
+                editing = null; return loadOverview();
+            }
             if (act === 'save') {
                 const f = $('ov-rows').querySelector('[data-form="' + id + '"]'), v = (k) => f.querySelector('[data-e="' + k + '"]');
-                res = await call('PUT', '/admin/api/rewards/' + id, { title: v('title').value, cost: v('cost').value, color: v('color').value, prompt: v('prompt').value,
+                res = await call(id === 'new' ? 'POST' : 'PUT', id === 'new' ? '/admin/api/rewards' : '/admin/api/rewards/' + id, { title: v('title').value, cost: v('cost').value, color: v('color').value, prompt: v('prompt').value,
                     max_per_stream: v('max_per_stream').value, max_per_user: v('max_per_user').value, cooldown: (parseInt(v('cooldown_min').value || 0, 10) * 60),
                     enabled: v('enabled').checked, paused: v('paused').checked, user_input: v('user_input').checked });
                 const out = f.querySelector('[data-eout]');
                 if (!res.ok) { out.className = 'text-xs text-amber-400'; out.textContent = res.j.detail || 'Erreur'; return; }
-                editing = null; return loadOverview();
+                editing = null; await loadOverview();
+                if (id === 'new' && confirm('« ' + res.j.title + ' » est créée sur Twitch.\n\nRégler maintenant ce qu\'elle fait (vidéo, son, message, OBS) ?')) {
+                    showTab('overlay'); setTimeout(() => window.roReload && window.roReload(res.j.title), 50);
+                }
+                return;
             }
             b.disabled = true;
             res = await call('POST', '/admin/api/rewards/' + id + '/clone' + (act === 'clone' ? '' : '/' + act));
@@ -193,6 +207,7 @@
     $('ov-filter').addEventListener('input', render);
     $('ov-onlyActive').addEventListener('change', render);
     $('ov-reload').addEventListener('click', loadOverview);
+    $('ov-new').addEventListener('click', () => { editing = 'new'; render(); });
     loadOverview();
 })();
 </script>

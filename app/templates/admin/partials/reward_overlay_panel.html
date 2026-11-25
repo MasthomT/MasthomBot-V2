@@ -116,6 +116,7 @@
     let pendingOpen = null;
     // Ouverture depuis le bouton « Actions » de la vue d'ensemble
     window.roOpen = (title) => { if (rewards.length) open(title); else pendingOpen = title; };
+    window.roReload = (title) => { pendingOpen = title; load(); };
     const showLog = (l) => { $('ro-log').innerHTML = (l || []).map(x => '<div>' + esc(x) + '</div>').join('') || 'Rien pour l\'instant.'; };
     $('ro-logr').onclick = () => fetch('/admin/api/reward-overlay').then(r => r.json()).then(b => showLog(b.log)).catch(() => {});
     function list() {

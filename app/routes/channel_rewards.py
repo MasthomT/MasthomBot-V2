@@ -141,6 +141,18 @@ async def admin_reward_clone_cancel(reward_id: str):
     return await _run(RC.cancel)(reward_id)
 
 
+@router.post("/admin/api/rewards")
+async def admin_reward_create(payload: dict):
+    r = await _run(RC.create)(payload or {})
+    return {"status": "ok", "id": r["id"], "title": r.get("title")}
+
+
+@router.delete("/admin/api/rewards/{reward_id}")
+async def admin_reward_delete(reward_id: str):
+    await _run(RC.delete)(reward_id)
+    return {"status": "ok"}
+
+
 @router.put("/admin/api/rewards/{reward_id}")
 async def admin_reward_edit(reward_id: str, payload: dict):
     r = await _run(RC.edit)(reward_id, payload or {})

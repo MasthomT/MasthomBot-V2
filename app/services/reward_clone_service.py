@@ -206,3 +206,27 @@ async def edit(reward_id: str, raw: dict) -> dict:
     if status != 200:
         raise ValueError("Twitch a refusé la modification : " + (data.get("message") or f"erreur {status}"))
     return data["data"][0]
+
+
+async def create(raw: dict) -> dict:
+    """Nouvelle récompense créée par le bot (donc modifiable ici ensuite)."""
+    body = clean_edit(raw)
+    body.pop("is_paused", None)                       # pas accepté à la création
+    _, _, broadcaster = P._creds()
+    status, data = await P._helix("POST", "/channel_points/custom_rewards", {"broadcaster_id": broadcaster}, body)
+    if status != 200 or not data.get("data"):
+        msg = data.get("message") or f"erreur {status}"
+        if "DUPLICATE" in msg.upper():
+            msg = "une récompense porte déjà ce titre"
+        raise ValueError("Twitch a refusé la création : " + msg)
+    logger.info(f"🎁 [REWARDS] Récompense créée : « {body['title']} » ({data['data'][0]['id']})")
+    return data["data"][0]
+
+
+async def delete(reward_id: str) -> None:
+    """Supprime une récompense créée par le bot (Twitch refuse pour les autres)."""
+    _, _, broadcaster = P._creds()
+    status, data = await P._helix("DELETE", "/channel_points/custom_rewards", {"broadcaster_id": broadcaster, "id": reward_id})
+    if status not in (200, 204):
+        raise ValueError("Twitch a refusé la suppression : " + (data.get("message") or f"erreur {status}"))
+    logger.info(f"🎁 [REWARDS] Récompense supprimée ({reward_id})")
