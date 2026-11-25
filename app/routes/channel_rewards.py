@@ -95,7 +95,7 @@ async def admin_rewards_overview():
             "clone_pending": r["id"] in pend,
             "actions": _summary(actions.get((r.get("title") or "").strip().lower())),
         })
-    rewards.sort(key=lambda x: (not x["enabled"], x["title"].lower()))
+    rewards.sort(key=lambda x: (x["cost"], x["title"].lower()))          # par prix croissant
     return {"rewards": rewards}
 
 
