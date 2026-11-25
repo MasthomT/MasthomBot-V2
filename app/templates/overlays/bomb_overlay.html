@@ -96,6 +96,7 @@
   }
 
   let st = { active: false, version: -1 }, at = 0, shownVersion = -1, lastSec = null, lastCut = 0, lastResult = '';
+  let lastScr = 0;
 
   function drawWires(wires) {
     $('wires').innerHTML = wires.map((w, i) => {
@@ -135,7 +136,12 @@
   function frame() {
     if (st.active && !st.result) {
       const s = remaining(), sec = Math.ceil(s);
-      $('cd').textContent = st.scrambled ? ('??:' + String(Math.floor(Math.random() * 99)).padStart(2, '0')) : ('00:' + String(sec).padStart(2, '0'));
+      if (!st.scrambled) $('cd').textContent = '00:' + String(sec).padStart(2, '0');
+      else if (performance.now() - lastScr > 160) {      // brouillé : SEUL le cadran affiche des chiffres faux (le reste ne change pas)
+        lastScr = performance.now();
+        const n = () => String(Math.floor(Math.random() * 100)).padStart(2, '0');
+        $('cd').textContent = n() + ':' + n();
+      }
       $('bomb').classList.toggle('urgent', s <= 10);
       if (sec !== lastSec) { lastSec = sec; if (sec > 0) beep(s <= 10 ? 1320 : 880, .06); }
     }
