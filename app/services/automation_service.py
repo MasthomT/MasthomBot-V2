@@ -128,7 +128,7 @@ STEP_TYPES = {
     "message":    "Envoyer un message dans le t'chat",
     "timer":      "Lancer le minuteur à l'écran",
     "timer_stop": "Effacer le minuteur de l'écran",
-    "bomb":       "Lancer La Bombe (TNT) sur un viewer au hasard",
+    "bomb":       "Lancer La Bombe (TNT) sur le viewer écrit dans la récompense (sinon au hasard)",
 }
 
 
@@ -393,7 +393,7 @@ async def _send(rule: dict, values: dict, test: bool = False, log=None) -> bool:
         try:
             if st["type"] == "bomb":
                 from app.services import bomb_service
-                done = "La Bombe : " + await bomb_service.start(values.get("user") or "Quelqu'un", test=test, place=values.get("_place"))
+                done = "La Bombe : " + await bomb_service.start(values.get("user") or "Quelqu'un", test=test, place=values.get("_place"), target=values.get("input") or "")
             elif st["type"] == "message":
                 from app.services import alerts_service
                 text = render(st["text"], values)

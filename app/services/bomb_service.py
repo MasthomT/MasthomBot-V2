@@ -10,6 +10,7 @@ Une seule bombe à la fois ; les suivantes attendent leur tour.
 import asyncio
 import logging
 import random
+import re
 import time
 import unicodedata
 
@@ -91,18 +92,36 @@ def _clean_place(place: dict | None) -> dict:
     return p if p["w"] >= 40 and p["h"] >= 40 else dict(DEFAULT_PLACE)
 
 
-async def start(sender: str, test: bool = False, place: dict | None = None) -> str:
+def _named_target(text: str) -> tuple[str, str] | None:
+    """Viewer écrit par celui qui lance la bombe (texte de la récompense : « @pseudo » ou « pseudo »)."""
+    from app.core.config import settings
+    from app.services import reward_overlay_service as R
+    m = re.search(r"@?([A-Za-z0-9_]{3,25})", text or "")
+    if not m:
+        return None
+    login = m.group(1).lower()
+    if login in {settings.TWITCH_BOT_USERNAME.lower(), settings.TWITCH_CHANNEL.lstrip("#").lower()} | R.BOTS:
+        return None
+    known = R._chatters.get(login)
+    return login, (known[0] if known else m.group(1))
+
+
+async def start(sender: str, test: bool = False, place: dict | None = None, target: str = "") -> str:
     """Pose une bombe (ou la met en attente si une autre est en cours). `place` : zone choisie dans
-    Récompenses › Actions pour la récompense qui la lance. Renvoie un court compte rendu."""
+    Récompenses › Actions pour la récompense qui la lance. `target` : pseudo écrit par le viewer
+    (sinon viewer au hasard). Renvoie un court compte rendu."""
     if _state.get("active"):
-        _queue.append({"sender": sender, "test": test, "place": place})
+        _queue.append({"sender": sender, "test": test, "place": place, "target": target})
         return f"bombe en attente ({len(_queue)} avant elle)"
-    return await _begin(sender, test, place)
+    return await _begin(sender, test, place, target)
 
 
-async def _begin(sender: str, test: bool, place: dict | None = None) -> str:
+async def _begin(sender: str, test: bool, place: dict | None = None, wanted: str = "") -> str:
     global _task
-    target = _pick_target({sender})
+    target = _named_target(wanted) if wanted and wanted.strip() else None
+    if wanted and wanted.strip() and not target:
+        logger.info(f"💣 [BOMBE] Pseudo saisi inutilisable ({wanted!r}) : viewer au hasard")
+    target = target or _pick_target({sender})
     if not target:
         await _say(f"💣 {sender} voulait poser une bombe… mais personne n'a parlé dans le t'chat ces 2 dernières heures. Ouf !")
         return "aucune cible (personne n'a parlé récemment)"
@@ -140,7 +159,7 @@ async def _watch():
     if _queue:
         nxt = _queue.pop(0)
         await asyncio.sleep(2)
-        await _begin(nxt["sender"], nxt["test"], nxt.get("place"))
+        await _begin(nxt["sender"], nxt["test"], nxt.get("place"), nxt.get("target", ""))
 
 
 async def _explode(why: str):
